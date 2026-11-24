@@ -127,6 +127,49 @@ func (s *BanStore) Actif(ip string, now int64) (BanRecord, bool) {
 	return r, ok && (r.Expires == 0 || r.Expires > now)
 }
 
+// Levees rend, parmi `adresses` (clés de cleBan), celles dont la dernière ligne au journal est un « unban ». Relit tout le journal ; toute erreur
+// de lecture, absence comprise, est rendue : elle ne dit jamais « levé ».
+func (s *BanStore) Levees(adresses map[string]netip.Addr) (map[string]struct{}, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.Open(s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	levees := map[string]struct{}{}
+	r := bufio.NewReaderSize(f, 256*1024)
+	var long []byte
+	var taille int
+	for {
+		morceau, err := r.ReadSlice('\n')
+		if err != nil && err != io.EOF && !errors.Is(err, bufio.ErrBufferFull) {
+			return nil, err
+		}
+		if taille += len(morceau); taille <= ligneMaxLectures { // sinon : ligne démesurée, ignorée comme par l'index
+			long = append(long, morceau...)
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		var rec BanRecord
+		if taille <= ligneMaxLectures && json.Unmarshal(long, &rec) == nil && rec.IP != "" {
+			cle := cleBan(rec.IP)
+			if _, ok := adresses[cle]; ok {
+				if rec.Action == "unban" {
+					levees[cle] = struct{}{}
+				} else {
+					delete(levees, cle)
+				}
+			}
+		}
+		if err == io.EOF {
+			return levees, nil
+		}
+		long, taille = long[:0], 0
+	}
+}
+
 // cleBan : une adresse, une clé, quelle que soit son écriture au journal (IPv6 non abrégée, IPv4 en ::ffff:). Un unban
 // écrit sous la forme normalisée lève ainsi un ban écrit autrement.
 func cleBan(ip string) string {

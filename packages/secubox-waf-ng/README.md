@@ -110,7 +110,7 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
-| `wafctl unban <ip> [fin_max]` | #3930 : ligne `unban` au journal de sbxwaf (`bans.jsonl`, adresse normalisée) **avant** le retrait nft, sinon la ré-affirmation (2 min) remettait le ban ; journal présent mais lien, d'un autre compte ou non inscriptible : `refus:journal`, rien n'est levé ; audit `waf-unban` |
+| `wafctl unban <ip> [fin_max]` | #3930 : ligne `unban` au journal de sbxwaf (`bans.jsonl`, adresse normalisée) **avant** le retrait nft, sinon la ré-affirmation (2 min) remettait le ban ; journal présent mais lien, d'un autre compte ou non inscriptible : `refus:journal`, rien n'est levé ; audit `waf-unban`. Avec `fin_max` (ai-ban, indices, garde défont LEUR ban) : rien au journal ; un ban de sbxwaf plus court revient à la ré-affirmation |
 | `wafctl unban-liste <fichier>` | **root seul**, hors sudoers : une adresse par ligne (invalides comptées et sautées), une écriture au journal puis nft par lots de 1 000 ; audit `waf-unban-liste` |
 | `wafctl leurre <ip> <N>s` / `wafctl leurre-lever <ip>` | #3723 : redirection d'une adresse publique IPv4 ou IPv6 vers le théâtre de sbxwaf (1 h à 7 j, sinon `refus:duree`) : remplacement atomique de `/var/lib/secubox/waf/leurres-ip.json` sous verrou ; sortie `{"fin": <epoch>}` ou `refus:<motif>` (`plein` au-delà de 2 048) ; garde d'office ; sudoers `SBX_WAF_LEURRE` |
 | `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
@@ -301,7 +301,7 @@ Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; appl
 vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
 `wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
 n'est jamais touché. `unban` : même garde (compte `garde`, portée `garde-ban`), audit `garde-unban` avant
-`wafctl unban` (chemin du retour arrière de l'ai-ban), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+`wafctl unban` sans `fin_max` (geste de l'administrateur : levée entière, écrite au journal de sbxwaf), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
 acceptées, comme pour l'ai-ban (banc et essais).
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,

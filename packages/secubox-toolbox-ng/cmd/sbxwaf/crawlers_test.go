@@ -98,14 +98,14 @@ func TestBan_UnRobotVerifieNEstJamaisBanni(t *testing.T) {
 	r, fx, store, _ := bancReeval(t, "auto", nil)
 	r.banneur.robots = c
 	r.banneur.BanFor("192.178.6.100", "leurre:unrouted", "medium", time.Hour)
-	if fx.vu("add element") {
+	if fx.vu("create element") {
 		t.Fatalf("on ne bannit pas Googlebot : %v", fx.cmds)
 	}
 	if len(store.ActiveBans(time.Now().Unix())) != 0 {
 		t.Fatal("et rien n'est journalisé comme ban")
 	}
 	r.banneur.BanFor("198.51.100.9", "leurre:unrouted", "medium", time.Hour) // une adresse ordinaire reste bannie
-	if !fx.vu("add element") {
+	if !fx.vu("create element") {
 		t.Fatal("les autres adresses restent bannies")
 	}
 }

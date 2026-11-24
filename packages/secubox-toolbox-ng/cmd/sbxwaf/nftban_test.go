@@ -93,7 +93,7 @@ func TestNftBanner_EnsurePuisBan(t *testing.T) {
 
 	b.Ban("203.0.113.7", "host_anomaly:ip_literal", "high")
 	got := joint(fx.dernier())
-	if !strings.Contains(got, "add element inet secubox waf_ban") ||
+	if !strings.Contains(got, "create element inet secubox waf_ban") ||
 		!strings.Contains(got, "203.0.113.7 timeout 3600s") {
 		t.Fatalf("commande de ban inattendue: %q", got)
 	}
@@ -259,7 +259,7 @@ func (k *noyauNft) run(_ context.Context, args ...string) ([]byte, error) {
 			return k.absente, errors.New("exit status 1")
 		}
 		return []byte(`{"nftables":[{"set":{"name":"x"}}]}`), nil
-	case strings.HasPrefix(j, "add element"):
+	case strings.HasPrefix(j, "create element"):
 		if !k.table {
 			return k.absente, errors.New("exit status 1")
 		}

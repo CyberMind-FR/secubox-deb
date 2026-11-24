@@ -35,6 +35,9 @@ type noyauLots struct {
 	listes    int
 	avant     func(n int) // appelé AVANT le n-ième script (0, 1, …), hors verrou
 	toutRefus bool
+	gets      int
+	ajouts    int // add/create element, hors lots
+	getKO     bool
 }
 
 func (k *noyauLots) liste(set string) []byte {
@@ -62,8 +65,12 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 		}
 		return []byte("ip saddr @waf_ban counter drop"), nil
 	case strings.HasPrefix(j, "get element"):
+		k.gets++
 		ip := strings.Fields(args[len(args)-1])[1]
 		d, ok := k.elems[ip]
+		if k.getKO {
+			return []byte("Error: Operation not permitted"), errors.New("exit status 1")
+		}
 		if !ok {
 			return absente, errors.New("exit status 1")
 		}
@@ -84,11 +91,15 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 		return k.liste(args[len(args)-1]), nil
 	case strings.HasPrefix(j, "delete element"):
 		delete(k.elems, strings.Fields(args[5])[1])
-	case strings.HasPrefix(j, "add element"):
+	case strings.HasPrefix(j, "add element"), strings.HasPrefix(j, "create element"):
+		k.ajouts++
 		if !k.table {
 			return absente, errors.New("exit status 1")
 		}
 		f := strings.Fields(args[5])
+		if _, ok := k.elems[f[1]]; ok && args[0] == "create" {
+			return []byte("Error: Could not process rule: File exists\ncreate element inet secubox waf_ban"), errors.New("exit status 1")
+		}
 		k.elems[f[1]], _ = strconv.ParseInt(strings.TrimSuffix(f[3], "s"), 10, 64) // noyau ≥ 6.12 : change le délai
 	}
 	return nil, nil
@@ -293,6 +304,141 @@ func TestRepose_LevePendantLaReposeRepart(t *testing.T) {
 	b.Reload()
 	if _, p := k.elems[ipTest(1500)]; p || k.nb() != 2498 {
 		t.Fatalf("%d éléments, le ban levé est resté : %v", k.nb(), p)
+	}
+}
+
+// N3 : un ban arrivé à échéance pendant la passe n'est pas « levé » ; seul un unban écrit au journal retire un élément.
+func TestRetirerLeves_EcheanceNEstPasUneLevee(t *testing.T) {
+	now := time.Now().Unix()
+	b, k := banneurLots(t, []BanRecord{
+		{IP: "203.0.113.1", At: now - 100, Expires: now - 1, Action: "ban"}, // échu
+		{IP: "203.0.113.2", At: now - 100, Expires: now + 100, Action: "ban"},
+		{IP: "203.0.113.2", At: now, Action: "unban"},
+		{IP: "203.0.113.3", At: now, Action: "unban"},
+		{IP: "203.0.113.3", At: now, Expires: now - 1, Action: "ban"}, // levé, rebanni, échu
+	})
+	var envoyes []netip.Addr
+	for _, ip := range []string{"203.0.113.1", "203.0.113.2", "203.0.113.3", "203.0.113.4"} { // .4 : rien au journal
+		k.elems[ip] = 60
+		envoyes = append(envoyes, netip.MustParseAddr(ip))
+	}
+	b.retirerLeves(envoyes)
+	if _, p := k.elems["203.0.113.2"]; p || k.nb() != 3 {
+		t.Fatalf("seul 203.0.113.2 est levé : %v", k.elems)
+	}
+}
+
+// N3 : journal illisible ou disparu, rien n'est retiré.
+func TestRetirerLeves_JournalIllisible(t *testing.T) {
+	for _, quoi := range []string{"disparu", "dossier"} {
+		b, k := banneurLots(t, bansTest(50, time.Now().Unix()))
+		k.avant = func(n int) {
+			if n == 0 {
+				_ = os.Remove(b.store.path)
+				if quoi == "dossier" {
+					_ = os.Mkdir(b.store.path, 0o755) // s'ouvre, ne se lit pas
+				}
+			}
+		}
+		b.Reload()
+		if k.nb() != 50 || len(k.scripts) != 1 {
+			t.Fatalf("%s : %d éléments, scripts %d", quoi, k.nb(), len(k.scripts))
+		}
+		if e := b.Etat(); !strings.Contains(e.DernierEchec, "journal") {
+			t.Fatalf("%s : %+v", quoi, e)
+		}
+	}
+}
+
+// N3 : une adresse sautée par le lot (rebannie entre-temps, robot) n'a pas été posée par la passe, donc jamais retirée par elle.
+func TestRepose_SeulsLesEnvoyesSontRetires(t *testing.T) {
+	b, k := banneurLots(t, bansTest(10, time.Now().Unix()))
+	b.mu.Lock()
+	b.recent[ipTest(3)] = time.Now().Add(time.Second) // rebannie pendant la passe : sautée
+	b.mu.Unlock()
+	k.avant = func(n int) {
+		if n == 0 {
+			k.mu.Lock()
+			k.elems[ipTest(3)] = 999 // posée par un autre (wafctl)
+			k.mu.Unlock()
+			for _, i := range []int{3, 4} {
+				_ = b.store.Append(BanRecord{IP: ipTest(i), At: time.Now().Unix(), Action: "unban"})
+			}
+		}
+	}
+	b.Reload()
+	if _, p := k.elems[ipTest(4)]; p || k.elems[ipTest(3)] != 999 {
+		t.Fatalf("envoyé et levé retiré, sauté intact : %v", k.elems)
+	}
+}
+
+// N1 : un ban neuf ne lit jamais l'ensemble (`get element` le charge en entier) ; la lecture ne sert qu'à un élément déjà là.
+func TestBanAt_CreateDAbord(t *testing.T) {
+	for cat, duree := range map[string]time.Duration{"leurre:x": time.Hour, "rotation:0a1b2c3d": 24 * time.Hour} {
+		b, k := banneurLots(t, nil)
+		b.cooldown = 0
+		b.BanFor("203.0.113.1", cat, "high", duree)
+		if k.gets != 0 || k.ajouts != 1 || k.elems["203.0.113.1"] != int64(duree.Seconds()) {
+			t.Fatalf("%s : gets %d, ajouts %d, %v", cat, k.gets, k.ajouts, k.elems)
+		}
+		k.elems["203.0.113.2"] = 60 // plus court : allongé
+		b.BanFor("203.0.113.2", cat, "high", duree)
+		if k.gets != 1 || k.elems["203.0.113.2"] != int64(duree.Seconds()) {
+			t.Fatalf("%s : gets %d, %v", cat, k.gets, k.elems)
+		}
+		k.elems["203.0.113.3"], k.getKO = 999999, true // illisible : jamais raccourci
+		b.BanFor("203.0.113.3", cat, "high", duree)
+		if _, ok := b.store.Actif("203.0.113.3", time.Now().Unix()); !ok || k.elems["203.0.113.3"] != 999999 {
+			t.Fatalf("%s : élément illisible touché : %v", cat, k.elems)
+		}
+	}
+}
+
+// N1 : l'élément expire entre `create` (présent) et `get` (absent) : le ban est créé.
+func TestBanAt_ExpireEntreCreateEtGet(t *testing.T) {
+	b, k := banneurLots(t, nil)
+	k.elems["203.0.113.1"] = 1
+	b.runner = func(ctx context.Context, args ...string) ([]byte, error) {
+		if args[0] == "get" {
+			k.mu.Lock()
+			delete(k.elems, "203.0.113.1")
+			k.mu.Unlock()
+		}
+		return k.run(ctx, args...)
+	}
+	b.BanFor("203.0.113.1", "leurre:x", "high", time.Hour)
+	if k.elems["203.0.113.1"] != 3600 {
+		t.Fatalf("%v", k.elems)
+	}
+}
+
+// N1 : pendant qu'un ban attend poseMu plus longtemps que le cooldown, la même adresse n'entre pas deux fois dans la file.
+func TestBanAt_UneSeuleFoisDansLaFile(t *testing.T) {
+	b, k := banneurLots(t, nil)
+	b.cooldown = 5 * time.Millisecond
+	b.poseMu.Lock() // un lot part
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.BanFor("203.0.113.1", "rotation:0a1b2c3d", "high", 24*time.Hour)
+		}()
+		time.Sleep(10 * time.Millisecond) // au-delà du cooldown
+	}
+	b.mu.Lock()
+	b.cooldown = time.Hour
+	b.mu.Unlock()
+	b.poseMu.Unlock()
+	wg.Wait()
+	brut, _ := os.ReadFile(b.store.path)
+	if n := bytes.Count(brut, []byte("\n")); n != 1 || k.ajouts != 1 {
+		t.Fatalf("%d lignes au journal, %d ajouts", n, k.ajouts)
+	}
+	// La pose date le cooldown : la même adresse juste après est ignorée.
+	b.BanFor("203.0.113.1", "leurre:x", "high", time.Hour)
+	if k.ajouts != 1 {
+		t.Fatal("cooldown compté depuis la pose")
 	}
 }
 

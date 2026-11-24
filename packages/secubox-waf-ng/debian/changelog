@@ -10,6 +10,17 @@ secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
     une preuve de navigateur.
   * AppArmor : verrou du détecteur, liste des sorties Tor de secubox-ipblock.
   * Indices partagés : famille « rotation » neutre, jamais envoyée aux pairs.
+  * Un verdict de rotation ne remplace pas au journal un ban au moins aussi
+    long d'une autre famille (réévaluation, gradation).
+  * Bans (ref #3930) : « nft create element » d'abord, l'ensemble n'est lu
+    que si l'élément existe (0,7 s par ban à 60 000 éléments, sous le verrou
+    de pose) ; une adresse n'attend qu'une fois.
+  * wafctl unban <ip> <fin_max> n'écrit plus d'unban au journal de sbxwaf :
+    un retour arrière (ai-ban, indices, garde) ne lève que son propre ban.
+    Les retours arrière de la garde passent fin_max ; « Débannir » reste une
+    levée entière.
+  * Fin de repose : seul un unban écrit au journal retire un élément posé par
+    la passe, jamais une échéance ni un journal illisible.
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 20:00:00 +0100
 

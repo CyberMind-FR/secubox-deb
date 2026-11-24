@@ -47,7 +47,7 @@ func ajoutsNft(fx *fauxNft, attendu int) []string {
 		out = nil
 		fx.mu.Lock()
 		for _, c := range fx.cmds {
-			if j := joint(c); strings.Contains(j, "add element") {
+			if j := joint(c); strings.Contains(j, "create element") {
 				out = append(out, j)
 			}
 		}

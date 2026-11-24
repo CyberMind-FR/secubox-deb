@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-"""#3930 : toute levée (`wafctl unban`, `unban-liste`) écrit un `unban` au journal de sbxwaf AVANT le retrait nft.
+"""#3930 : toute levée (`wafctl unban` sans `fin_max`, `unban-liste`) écrit un `unban` au journal de sbxwaf AVANT le retrait nft.
 
 wafctl réel, faux `nft` qui note ses appels et l'état du journal à cet instant. Rien ne touche un pare-feu.
 """
@@ -177,6 +177,24 @@ def test_couvert_rien_n_est_journalise(b):
     r = b.lancer("unban", "198.51.100.7", str(int(time.time()) + 60))
     assert r.returncode == 1 and "refus:couvert" in r.stderr
     assert b.unbans() == [] and not any(x.startswith("delete") for x in b.nft())
+
+
+def test_fin_max_retire_sans_journaliser(b):
+    """`fin_max` : l'appelant défait le ban qu'IL a posé (ai-ban, indices, garde). Le ban de sbxwaf, plus court, reste au
+    journal : la repose le remet ; un « unban » l'annulerait."""
+    (b.tmp / "reste.json").write_text(json.dumps({"nftables": [{"set": {"name": "waf_ban", "elem": [
+        {"elem": {"val": "198.51.100.7", "expires": 30}}]}}]}))
+    r = b.lancer("unban", "198.51.100.7", str(int(time.time()) + 60))
+    assert r.returncode == 0, r.stderr
+    assert b.journal.read_text() == BAN and b.unbans() == []
+    assert "delete element inet secubox waf_ban { 198.51.100.7 }" in b.nft()
+
+
+def test_fin_max_sans_journal_lisible(b):
+    """Rien à y écrire : un journal douteux ne bloque pas le retour arrière."""
+    _lien(b)
+    (b.tmp / "reste.json").write_text(json.dumps({"nftables": [{"set": {"name": "waf_ban", "elem": []}}]}))
+    assert b.lancer("unban", "198.51.100.7", str(int(time.time()) + 60)).returncode == 0
 
 
 def test_compactage_pendant_l_ecriture_rien_ne_se_perd(b):

@@ -1048,7 +1048,7 @@ cmd_indices_init() {
 }
 
 # JOURNAL DES BANS (#3930). sbxwaf remet dans nft, toutes les 2 min, chaque ban de son journal qui y manque : un simple
-# `nft delete` se défaisait donc tout seul. Toute levée écrit d'abord une ligne `unban` au journal, puis retire l'élément.
+# `nft delete` se défaisait donc tout seul. Toute levée (sauf `unban <ip> <fin_max>`) écrit d'abord une ligne `unban` au journal, puis retire l'élément.
 #
 # Le dossier est inscriptible par secubox-waf et wafctl tourne en root : rien n'est créé, aucun lien n'est suivi, le
 # fichier doit être ordinaire, à un seul lien et à secubox-waf ; UNE écriture en O_APPEND (comme sbxwaf), donc ni mode ni
@@ -1155,6 +1155,8 @@ PY
 
 # `unban <ip> [fin_max]` : avec `fin_max` (levée d'ai-ban, revue finale #3723 I4), le ban n'est levé que si sa fin
 # réelle ne la dépasse pas (`refus:couvert` sinon : prolongé par SADE ou un autre) ; état illisible : `refus:etat`.
+# L'appelant y défait le ban qu'il a posé, pas celui de sbxwaf : rien au journal (#3930), un ban de sbxwaf plus court revient
+# à la ré-affirmation. Sans `fin_max`, levée entière voulue par l'opérateur : `unban` au journal d'abord.
 cmd_unban() {
     local ip="$1" fin_max="${2:-}" version reste
     reste=$(_ip_levee "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
@@ -1174,7 +1176,9 @@ cmd_unban() {
     # qu'elle ne soit plus bannie, et c'est deja le cas. Sous `set -e`, un
     # `nft delete` nu d'un element absent sortait en 1 AVANT ce constat (#3716) :
     # l'echec n'en est un que si l'element est TOUJOURS la apres le retrait.
-    _journal_unban waf-unban "$ip" 3<<< "$ip" || return 1
+    if [ -z "$fin_max" ]; then
+        _journal_unban waf-unban "$ip" 3<<< "$ip" || return 1
+    fi
     if ! nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null; then
         if nft get element inet "$NFT_TABLE" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
             error "nft a refusé le retrait de $ip"
