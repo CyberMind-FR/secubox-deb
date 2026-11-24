@@ -54,6 +54,7 @@ def donnees_gk2():
             {"timestamp": maintenant, "client_ip": BOX, "host": BOX, "path": "/",
              "category": "waf:scan", "severity": "medium", "action": "log", "tool": "", "country": "FR"}]},
         "/security-posture/overview": {"overall": {"name": "Bonne", "score": 78}},
+        "/waf/populations": {"disponible": False},     # #3919 : relevé des populations pas encore calculé
     }
 
 
@@ -176,7 +177,7 @@ async def test_client_gk2_sans_env_ni_redirection_delais_courts(gk2, monkeypatch
             super().__init__(*a, **kw)
     monkeypatch.setattr(menaces.httpx, "AsyncClient", Espion)
     r = await menaces.releve_menaces()
-    assert r["erreurs"] == [] and len(clients) == 5
+    assert r["erreurs"] == [] and len(clients) == len(menaces.CHEMINS)
     for kw in clients:
         assert kw["trust_env"] is False and kw["follow_redirects"] is False
         assert kw["timeout"].connect <= 3 and kw["timeout"].read <= 10
@@ -187,7 +188,8 @@ async def test_gk2_injoignable_releve_avec_erreurs_et_resume_refuse_sans_modele(
     gk2["pannes"].add("tout")
     vus = moteur_simule(monkeypatch, "ne doit jamais servir")
     r = await appeler("GET", "/menaces/releve")
-    assert r.status_code == 200 and len(r.json()["erreurs"]) == 5
+    assert r.status_code == 200 and len(r.json()["erreurs"]) == len(menaces.CHEMINS) - len(menaces.SECONDAIRES)
+    assert r.json()["erreurs_secondaires"] == list(menaces.SECONDAIRES)
     r = await appeler("POST", "/menaces/resumer")
     assert r.status_code == 503 and "gk2" in r.json()["detail"]
     r = await appeler("POST", "/menaces/demander", json={"question": "Que se passe-t-il ?"})

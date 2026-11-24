@@ -19,8 +19,8 @@ func TestAspirateurUABanni3905(t *testing.T) {
 	if !hit || cat != "aspirateur_ua" || mode != "escalate" {
 		t.Fatalf("aspirateur non bloqué : cat=%q mode=%q hit=%v", cat, mode, hit)
 	}
-	if seuil, duree := r.ParamsBan("aspirateur_ua"); seuil != 1 || duree != 168*time.Hour {
-		t.Fatalf("ban attendu 1re requête, 7 j : seuil=%d durée=%s", seuil, duree)
+	if seuil, duree := r.ParamsBan("aspirateur_ua"); seuil != 1 || duree != 24*time.Hour {
+		t.Fatalf("ban attendu 1re requête, 24 h : seuil=%d durée=%s", seuil, duree)
 	}
 }
 

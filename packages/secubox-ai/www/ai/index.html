@@ -104,11 +104,28 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
 .rpays{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}.rbarres{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px 10px;align-items:center;font-size:.82rem}.rbarres>small{grid-column:1/-1;color:var(--faible);font-size:.7rem;letter-spacing:.04em}
 .rbarres .rb{height:12px;border-radius:0 4px 4px 0;min-width:2px}.rfam{display:grid;grid-template-columns:minmax(90px,max-content) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.78rem}.rfam .rb{height:10px;border-radius:0 3px 3px 0;background:#3987e5;min-width:2px}
 .rtrois{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}.rgros{font-size:1.6rem;font-weight:800;line-height:1.2}.rdet{color:#c8d6ee;font-size:.78rem;overflow-wrap:anywhere}.rvh{display:flex;justify-content:space-between;gap:8px;font-size:.82rem}.rvh span{overflow-wrap:anywhere;min-width:0}
-.rcamp{display:flex;flex-direction:column;font-size:.8rem}.rcamp>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)}.rcamp>div:first-child{border-top:0}.rcamp .mono{font-size:.76rem}.rcamp small{color:var(--doux)}
+/* Campagnes et populations (#3919) : une carte par population, maquette validée le 24/11 ; couleurs = tokens du Radar. */
+.rcamp{display:flex;flex-direction:column;gap:10px;font-size:.82rem;min-width:0}
+.popc{border:1px solid var(--trait);border-radius:12px;padding:12px 14px;background:rgba(6,13,27,.55);display:flex;flex-direction:column;gap:8px;min-width:0}
+.popc header{display:flex;justify-content:space-between;align-items:baseline;gap:6px 10px;flex-wrap:wrap}.popc h4{margin:0;font-size:.95rem;font-weight:600;overflow-wrap:anywhere;min-width:0}
+.popl{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.rcamp .puce{background:rgba(86,150,255,.12);border-radius:999px;padding:2px 10px;font-size:.78rem;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.rcamp .puce.etat{font-weight:600;background:transparent;border:1px solid currentColor}.rcamp .puce.rot{color:var(--orange)}.rcamp .puce.ban{color:var(--rouge)}.rcamp .puce.obs{color:var(--cyan)}.rcamp .puce.ina{color:var(--faible)}
+.popchif{margin:0;color:var(--texte)}.popchif span{color:var(--doux)}
+.popbarre{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;background:var(--trait)}.popbarre span{display:block;height:100%}
+.poppied{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.popcible{font-family:ui-monospace,monospace;font-size:.78rem;color:var(--doux);min-width:0;overflow-wrap:anywhere}
+.popserie{width:84px;height:32px;fill:var(--bleu);flex:none}
+.rcamp summary{cursor:pointer;color:var(--doux);font-size:.8rem}.rcamp summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.popdet{overflow-x:auto}.popdet table{border-collapse:collapse;width:100%;font-size:.78rem;margin-top:6px}
+.popdet th,.popdet td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(86,150,255,.15);white-space:nowrap}.popdet td.o{white-space:normal;overflow-wrap:anywhere;min-width:9em}.popdet th{color:var(--doux);font-weight:500}.popdet td.n{text-align:right;font-family:ui-monospace,monospace}
+.popautres{display:flex;flex-direction:column;gap:10px}.popautres[open]>summary{margin-bottom:10px}
+.poprec,.poprep{margin:0;font-size:.76rem;color:var(--doux)}.poprec{border-top:1px solid var(--trait);padding-top:8px}
+.poppartiel{color:var(--orange);border-style:dashed}
 .rblocs{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,1fr) auto auto;gap:7px 8px;align-items:center;font-size:.78rem}.rblocs .rf{color:var(--doux);overflow-wrap:anywhere}
 .rcompte{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:.78rem}.rcompte div{border:1px solid rgba(86,150,255,.3);border-radius:10px;padding:8px}.rcompte b{display:block;font-size:1.15rem}.rcompte span{color:var(--doux)}
 .rpan .btn{min-height:40px}.rboutons{display:flex;gap:8px;flex-wrap:wrap}
-@container a (min-width:700px){.rchiffres{grid-template-columns:repeat(3,minmax(0,1fr))}.rtrois{grid-template-columns:repeat(3,minmax(0,1fr))}.rpays{grid-template-columns:repeat(2,minmax(0,1fr))}.rcamp>div{grid-template-columns:150px minmax(0,1fr) max-content 160px;align-items:center}}
+@container a (min-width:700px){.rchiffres{grid-template-columns:repeat(3,minmax(0,1fr))}.rtrois{grid-template-columns:repeat(3,minmax(0,1fr))}.rpays{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container a (min-width:900px){.rcorps{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.rcol.rcentre{grid-column:1/-1;order:-1}}
 @container a (min-width:1180px){.rchiffres{grid-template-columns:repeat(5,minmax(0,1fr))}.rcorps{grid-template-columns:320px minmax(0,1fr) 350px}.rcol.rcentre{grid-column:auto;order:0}}
 /* Chaîne d'attaque (#3811) : dossiers de la veille ; étape atteinte = trait plein, non atteinte = pointillé. */
@@ -272,7 +289,7 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
           <div class="rpan"><h3>Sites web</h3><small class="rderive">vhosts du relevé, hors smtp et adresse IP nue</small><div id="rSites"></div></div>
           <div class="rpan"><h3>Balayages</h3><small class="rderive">host_anomaly:unrouted + host_anomaly:ip_literal + scanners</small><div id="rBalayages"></div></div>
         </div>
-        <div class="rpan"><div class="rt"><h3>Campagnes les plus actives</h3><small>même empreinte d'outil, plusieurs sources</small></div><div id="rCampagnes" class="rcamp"></div></div>
+        <div class="rpan"><div class="rt"><h3>Campagnes et populations</h3><small>7 derniers jours · triées par activité des dernières 24 h · lecture seule</small></div><div id="rCampagnes" class="rcamp"></div></div>
       </div>
       <div class="rcol">
         <div class="rpan ria"><div class="rt"><h3>Analyste IA</h3><span class="pill neutre" id="rMoteur">—</span></div>
@@ -467,6 +484,7 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
   <section data-o="journal" class="pan"><h3>Journal <i>sans question, sans réponse, sans clé</i></h3><div class="tab"><table><thead><tr><th>Quand</th><th>Action</th><th>Détail</th></tr></thead><tbody id="lJournal"></tbody></table></div></section>
 </div></div></main>
 <script src="/shared/sidebar.js"></script>
+<script src="/ai/reperes.js"></script>
 <script>
 (function () {
   'use strict';
@@ -915,7 +933,6 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
   var R_SEV_FR = { critical: 'critique', high: 'haute', medium: 'moyenne', low: 'basse', info: 'info' };
   var R_FAM = { 'auth_smtp:sasl_failed': 'SMTP SASL', 'host_anomaly:unrouted': 'hôte inconnu', 'host_anomaly:ip_literal': 'IP en dur', scanners: 'scanners', robots: 'robots', honeypot: 'honeypot', waf_fingerprint: 'empreinte WAF', leurre: 'leurre', host_anomaly: 'hôte inconnu' };
   var R_ACTION = { banned: 'banni', robot: 'robot', detect: 'détecté', blocked: 'bloqué', block: 'bloqué' };
-  var R_OUTIL = { 'client-automatise?': 'client automatisé ?' };
   function rNombre(v) { return typeof v === 'number' && isFinite(v); }
   function rNb(v) { return rNombre(v) ? grNb(v) : '—'; }
   function rNR(zone, texte) { zone.appendChild(el('span', 'rnr', texte || 'non relevé')); }
@@ -1084,16 +1101,116 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
     if (inc == null && lit == null && sc == null) rNR(b);
     else { b.appendChild(el('div', 'rgros', grNb((inc || 0) + (lit || 0) + (sc || 0)))); b.appendChild(el('div', 'rdet', rNb(inc) + ' inconnus · ' + rNb(lit) + ' IP en dur · ' + rNb(sc) + ' scanners')); }
   }
-  function rCampagnes(r) {
-    var z = $('rCampagnes'), liste = (r.campagnes || []).slice(0, 4); vider(z);
-    if (!liste.length) { rNR(z, 'aucune campagne dans le relevé'); return; }
-    liste.forEach(function (c) {
-      var d = el('div'); d.appendChild(el('span', 'mono', c.signature || '—')); d.appendChild(el('span', '', R_OUTIL[c.outil] || c.outil || '—'));
-      d.appendChild(el('span', '', rNb(c.attaquants) + ' attaquants'));
-      d.appendChild(el('small', '', rNombre(c.sondes) ? grNb(c.sondes) + ' sondes' + (rNombre(c.haute_valeur) && c.haute_valeur > 0 ? ' · ' + grNb(c.haute_valeur) + ' sensibles' : '') : 'sondes non relevées'));
-      z.appendChild(d);
-    });
+  // ---- Populations (#3919, tâche 7) : liste « Campagnes et populations », tirée du relevé /waf/populations de gk2.
+  // Cibles (en-têtes Host d'attaquants) et opérateurs (GeoLite) sont des données hostiles : TOUT passe par
+  // textContent (el, puce de reperes.js), jamais insérées comme HTML. Classe, famille ou état inconnus : repli sur
+  // « inconnu » / « autre » / rien. La classe d'un réseau vient du seul relevé, jamais du nom de l'opérateur.
+  function popCle(table, cle, defaut) { return typeof cle === 'string' && Object.prototype.hasOwnProperty.call(table, cle) ? cle : defaut; }
+  function popCouleur(k) {
+    return { proxy_loue: 'var(--orange)', hebergeur: 'var(--bleu)', acces: 'var(--vert)', mobile_partage: 'var(--violet)', cdn: 'var(--jaune)',
+      relais_vie_privee: 'var(--doux)', scanner_recherche: 'var(--cyan)' }[k] || 'var(--faible)';
   }
+  function popPct(v) { return rNombre(v) ? Math.round(v) + ' %' : '— %'; }
+  function popPuce(R, repere, suffixe, cls, titre) {
+    var p = R.puce(document, repere, suffixe); if (cls) p.className = 'puce ' + cls; if (titre) p.title = titre; return p;
+  }
+  function popClasses(R, classes) {   // [[classe connue, %]] par part décroissante ; une clé inconnue compte pour « inconnu »
+    var acc = {}, ordre = [], src = classes && typeof classes === 'object' ? classes : {};
+    Object.keys(src).forEach(function (k) {
+      var v = src[k]; if (!rNombre(v) || v <= 0) return;
+      var c = popCle(R.CLASSES, k, 'inconnu'); if (!Object.prototype.hasOwnProperty.call(acc, c)) { acc[c] = 0; ordre.push(c); } acc[c] += v;
+    });
+    return ordre.map(function (c) { return [c, acc[c]]; }).sort(function (a, b) { return b[1] - a[1]; });
+  }
+  function popDernier(p) { var s = Array.isArray(p.serie) ? p.serie : []; var v = s[s.length - 1]; return rNombre(v) ? v : 0; }
+  function popSerie(serie, genere) {   // 7 barres J-6 → J, une bulle datée par barre
+    var s = (Array.isArray(serie) ? serie : []).slice(-7).map(function (v) { return rNombre(v) && v > 0 ? v : 0; });
+    while (s.length < 7) s.unshift(0);
+    var mx = Math.max.apply(null, s) || 1, fin = rNombre(genere) ? genere * 1000 : Date.now();
+    var svg = grSvg('svg', { 'class': 'popserie', viewBox: '0 0 74 32', role: 'img', 'aria-label': '7 jours : ' + s.join(', ') });
+    s.forEach(function (v, i) {
+      var h = v ? Math.max(2, v / mx * 30) : 1, j = new Date(fin - (6 - i) * 86400000);
+      var b = grSvg('rect', { x: i * 11, y: (32 - h).toFixed(1), width: 8, height: h.toFixed(1), rx: 1.5 });
+      b.appendChild(grSvg('title', {}, j.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' : ' + grNb(v) + (v > 1 ? ' événements' : ' événement')));
+      svg.appendChild(b);
+    });
+    return svg;
+  }
+  function popReseaux(R, top) {
+    var d = el('details'), n = top.length, t = el('table'), th = el('thead'), tr = el('tr'), tb = el('tbody'), w = el('div', 'popdet');
+    d.appendChild(el('summary', '', n === 1 ? 'Détail : le premier réseau' : 'Détail : ' + n + ' premiers réseaux'));
+    ['Type', 'AS', 'Opérateur', 'Adresses'].forEach(function (x) { tr.appendChild(el('th', '', x)); }); th.appendChild(tr); t.appendChild(th);
+    top.forEach(function (x) {
+      var l = el('tr'), c = R.CLASSES[popCle(R.CLASSES, x.classe, 'inconnu')];
+      l.appendChild(el('td', '', c[0] + ' ' + c[1]));
+      l.appendChild(el('td', '', rNombre(x.asn) ? 'AS' + Math.round(x.asn) : '—'));
+      l.appendChild(el('td', 'o', typeof x.org === 'string' && x.org ? x.org : '—'));
+      l.appendChild(el('td', 'n', rNb(x.adresses))); tb.appendChild(l);
+    });
+    t.appendChild(tb); w.appendChild(t); d.appendChild(w); return d;
+  }
+  function popCarte(R, p, genere) {
+    var fam = popCle(R.FAMILLES, p.famille, 'autre'), cibles = (Array.isArray(p.cibles) ? p.cibles : []).slice(0, 3).map(String);
+    var a = el('article', 'popc'), h = el('header'), et = el('div', 'popl');
+    h.appendChild(el('h4', '', R.FAMILLES[fam][0] + ' ' + R.nomCarte(fam, cibles)));
+    if (p.rotation === true) et.appendChild(popPuce(R, R.ETATS.rotation, '', 'etat rot', '50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins'));
+    var e = popCle(R.ETATS, p.etat, null);
+    if (e === 'bannie') et.appendChild(popPuce(R, R.ETATS.bannie, '', 'etat ban', rNb(p.bannies_24h) + ' adresses bannies sur ' + rNb(p.actives_24h) + ' actives dans les dernières 24 h, ' + rNb(p.bans) + ' sur 7 jours'));
+    else if (e === 'observee') et.appendChild(popPuce(R, R.ETATS.observee, '', 'etat obs', 'active dans les dernières 24 h, moins de la moitié de ses adresses bannies'));
+    else if (e === 'inactive') et.appendChild(popPuce(R, R.ETATS.inactive, '', 'etat ina', 'aucune activité depuis plus de 24 h'));
+    h.appendChild(et); a.appendChild(h);
+    var c = el('p', 'popchif');
+    c.appendChild(el('b', '', rNb(p.adresses))); c.appendChild(el('span', '', ' adresses · '));
+    c.appendChild(el('b', '', rNb(p.reseaux))); c.appendChild(el('span', '', ' réseaux · '));
+    c.appendChild(el('b', '', popPct(p.une))); c.appendChild(el('span', '', ' n\'essaient qu\'une fois · ' + popPct(p.le3) + ' trois fois ou moins'));
+    a.appendChild(c);
+    var cl = popClasses(R, p.classes), b = el('div', 'popbarre'), lc = el('div', 'popl');
+    b.setAttribute('aria-hidden', 'true');
+    cl.forEach(function (x) {
+      var g = el('span'), rep = R.CLASSES[x[0]]; g.style.width = Math.min(100, x[1]) + '%'; g.style.background = popCouleur(x[0]); g.title = rep[1] + ' ' + popPct(x[1]);
+      b.appendChild(g); lc.appendChild(popPuce(R, rep, popPct(x[1])));
+    });
+    if (cl.length) { a.appendChild(b); a.appendChild(lc); } else rNR(a, 'types de réseau non relevés');
+    var pays = (Array.isArray(p.pays_top) ? p.pays_top : []).filter(Array.isArray).slice(0, 3);
+    if (pays.length) {
+      var lp = el('div', 'popl');
+      pays.forEach(function (x) { var k = typeof x[0] === 'string' && /^[A-Za-z]{2}$/.test(x[0]) ? x[0].toUpperCase() : '??'; lp.appendChild(popPuce(R, [R.drapeau(k), k], popPct(x[1]), '', 'part des adresses')); });
+      a.appendChild(lp);
+    }
+    var pied = el('div', 'poppied'), txt;
+    if (!cibles.length) txt = 'Cible : non relevée';
+    else if (fam === 'messagerie') txt = 'Comptes visés : ' + cibles.join(', ') + ' (masqués)';
+    else txt = 'Cible : ' + cibles.map(function (x) { return x.replace(/\.secubox\.in$/, ''); }).join(', ');
+    pied.appendChild(el('span', 'popcible', txt)); pied.appendChild(popSerie(p.serie, genere)); a.appendChild(pied);
+    var top = (Array.isArray(p.reseaux_top) ? p.reseaux_top : []).filter(function (x) { return x && typeof x === 'object'; }).slice(0, 5);
+    if (top.length) a.appendChild(popReseaux(R, top));
+    return a;
+  }
+  function rCampagnes(r) {
+    var z = $('rCampagnes'), R = window.SbxReperes, liste = r.populations, m = r.populations_meta || {}; vider(z);
+    if (!Array.isArray(liste)) { rNR(z, 'relevé indisponible'); return; }
+    if (!R) { rNR(z, 'repères absents (reperes.js non chargé)'); return; }
+    var quand = rNombre(m.genere_le) ? new Date(m.genere_le * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
+    if (m.complet === false) z.appendChild(el('div', 'bandeau poppartiel', 'Relevé partiel' + (quand ? ' (' + quand + ')' : '') + ' : une source de gk2 manquait, les chiffres sont incomplets.'));
+    var pops = liste.filter(function (p) { return p && typeof p === 'object'; }).sort(function (a, b) { return popDernier(b) - popDernier(a); });
+    if (!pops.length) rNR(z, 'aucune population dans le relevé');
+    pops.slice(0, 6).forEach(function (p) { z.appendChild(popCarte(R, p, m.genere_le)); });
+    if (pops.length > 6) {
+      var d = el('details', 'popautres'); d.appendChild(el('summary', '', 'Autres populations (' + (pops.length - 6) + ')'));
+      pops.slice(6).forEach(function (p) { d.appendChild(popCarte(R, p, m.genere_le)); }); z.appendChild(d);
+    }
+    var rec = m.recouvrement, t = 'Recouvrement entre populations : non relevé.';
+    if (rec && rNombre(rec.adresses_communes) && rNombre(rec.adresses_total)) {
+      t = 'Recouvrement entre populations : ' + grNb(rec.adresses_communes) + ' adresses communes sur ' + grNb(rec.adresses_total)
+        + (rec.adresses_total > 0 && rec.adresses_communes * 100 < rec.adresses_total ? ' — moins de 1 % : ce sont des acteurs distincts.' : '.');
+    }
+    z.appendChild(el('p', 'poprec', t));
+    var E = R.ETATS;
+    z.appendChild(el('p', 'poprep', 'Repères : ' + Object.keys(R.CLASSES).map(function (k) { return R.CLASSES[k][0] + ' ' + R.CLASSES[k][1]; }).join(' · ')
+      + ' — ' + E.rotation[0] + ' rotation : 50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins · ' + E.bannie[0] + ' bannie : la moitié au moins des adresses actives depuis 24 h bannies · '
+      + E.observee[0] + ' observée : active, moins de la moitié bannie · ' + E.inactive[0] + ' inactive : rien depuis 24 h.' + (quand ? ' Relevé de gk2 du ' + quand + '.' : '')));
+  }
+  // ---- Fin des populations
   function rAnalyste(r) {
     var p = $('rMoteur'), m = ETAT && ETAT.moteur;
     if (r.resume_en_cours) { p.textContent = 'résumé en cours'; p.className = 'pill info'; }
@@ -1467,7 +1584,22 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
       blocs: [{ bloc: '198.51.100.0/24', adresses: 23 }, { bloc: '203.0.113.0/24', adresses: 7 }, { bloc: '192.0.2.0/24', adresses: 4 }],
       alertes: [['high', '198.51.100.23', 'NL', 'scanners', 'cloud.exemple.secubox.in', '/.env', 'banned', 2], ['medium', '203.0.113.9', 'CN', 'auth_smtp:sasl_failed', 'smtp', 'admin', 'detect', 4], ['low', '192.0.2.44', 'US', 'host_anomaly:unrouted', '192.0.2.1', '/', 'robot', 7], ['high', '198.51.100.61', 'RU', 'scanners', 'mail.exemple.secubox.in', '/.git/config', 'blocked', 9]]
         .map(function (a) { return { severity: a[0], client_ip: a[1], country: a[2], category: a[3], host: a[4], path: a[5], action: a[6], timestamp: iso(a[7]) }; }),
+      populations: demoPopulations(), populations_meta: { complet: true, genere_le: maintenant - 300, age_s: 300, recouvrement: { adresses_communes: 4, adresses_total: 3120 } },
       resume_quand: maintenant - 720, resume_en_cours: null };
+  }
+  function demoPopulations() {   // 3 populations fictives : hôtes .exemple.secubox.in, AS de documentation (RFC 5398)
+    function res(asn, org, classe, n) { return { asn: asn, org: org, classe: classe, adresses: n }; }
+    return [
+      { id: 'rotation:0a1b2c3d', famille: 'collecte', cibles: ['git.exemple.secubox.in'], adresses: 1840, reseaux: 41, une: 97, le3: 100, classes: { proxy_loue: 84, hebergeur: 12, inconnu: 4 },
+        pays_top: [['US', 52], ['GB', 11], ['CA', 6]], reseaux_top: [res(64496, 'Proxy Exemple A', 'proxy_loue', 512), res(64497, 'Proxy Exemple B', 'proxy_loue', 430), res(64498, 'Nuage Exemple', 'hebergeur', 190), res(64499, 'Proxy Exemple C', 'proxy_loue', 160), res(64500, 'Proxy Exemple D', 'proxy_loue', 121)],
+        serie: [0, 0, 0, 0, 0, 120, 1730], bans: 1702, actives_24h: 1730, bannies_24h: 1702, rotation: true, etat: 'bannie' },
+      { id: 'famille:messagerie', famille: 'messagerie', cibles: ['adm…', 'inf…', 'con…'], adresses: 960, reseaux: 312, une: 41, le3: 82, classes: { acces: 61, inconnu: 35, hebergeur: 4 },
+        pays_top: [['US', 20], ['CN', 15], ['KR', 9]], reseaux_top: [res(64501, 'Fournisseur Exemple', 'acces', 140), res(64502, 'Opérateur Exemple', 'acces', 96), res(64503, 'Câble Exemple', 'acces', 57)],
+        serie: [410, 220, 380, 512, 460, 300, 260], bans: 830, actives_24h: 244, bannies_24h: 231, rotation: true, etat: 'bannie' },
+      { id: 'famille:balayage_web', famille: 'balayage_web', cibles: ['www.exemple.secubox.in', 'radio.exemple.secubox.in'], adresses: 320, reseaux: 44, une: 18, le3: 66, classes: { hebergeur: 70, relais_vie_privee: 14, scanner_recherche: 10, inconnu: 6 },
+        pays_top: [['US', 38], ['DE', 9], ['SE', 5]], reseaux_top: [res(64504, 'Nuage Exemple', 'hebergeur', 88), res(64505, 'Relais Exemple', 'relais_vie_privee', 45), res(64506, 'Sonde Exemple', 'scanner_recherche', 32)],
+        serie: [90, 70, 66, 40, 85, 101, 12], bans: 0, actives_24h: 12, bannies_24h: 0, rotation: false, etat: 'observee' }
+    ];
   }
   function demoTendances() {
     var h = new Date().getHours() + new Date().getMinutes() / 60;

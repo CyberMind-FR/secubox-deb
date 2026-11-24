@@ -55,6 +55,7 @@ Une place par panneau : le WAF garde le détail, le SOC en donne la synthèse.
   alertes du jour, critiques et hautes, catégorie dominante, évolution d'hier contre avant-hier (deux journées
   complètes, la journée en cours est écartée ; le chiffre est omis s'il manque des jours). Chaque chiffre renvoie à
   la page du WAF et la bande porte un lien « Détail dans le WAF → ».
+- Bloc « Campagnes en cours » (1.13.0, #3919) : 4 populations d'attaquants au plus, lues dans `waf/populations` (nom, adresses, état, 7 jours) ; tout le bloc mène à l'onglet Campagnes du WAF (`/waf/#campaigns`), rendu par `cartes-campagnes.js` et `reperes.js`, copies identiques de celles de secubox-waf-ng.
 
 ## SADE — Cyber Defense Live
 

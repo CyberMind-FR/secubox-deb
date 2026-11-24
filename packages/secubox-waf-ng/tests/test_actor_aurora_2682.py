@@ -18,8 +18,9 @@ SRC = {k: v.read_text(encoding="utf-8") for k, v in PAGES.items()}
 def test_page_autonome_sans_dialogue_natif(nom):
     s = SRC[nom]
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in s
-    scripts = re.findall(r'<script[^>]*\bsrc=', s)
-    assert scripts == [] and "hybrid" not in s and "googleapis" not in s and "<link" not in s
+    # seule ressource chargée : les repères partagés des cartes de campagne (#3919), servis à côté de la page
+    scripts = re.findall(r'<script[^>]*\bsrc="([^"]*)"', s)
+    assert scripts == ([] if nom != "actor" else ["reperes.js"]) and "hybrid" not in s and "googleapis" not in s and "<link" not in s
     for interdit in ("confirm(", "alert(", "prompt(", "innerHTML", "onclick=", "Math.random"):
         assert interdit not in s, interdit
     assert "lorem" not in s.lower() and "demo" in s.lower() and "embed" in s and "sbxVue" in s
@@ -64,6 +65,8 @@ def ouvre(nav, nom, chemin_url, api, taille=None):
         c = r.request.url.split("http://sbx.test/", 1)[1].split("?")[0]
         if c.startswith("shared/"):
             r.fulfill(status=200, content_type="text/css" if c.endswith(".css") else "application/javascript", body="")
+        elif c == "page/reperes.js":
+            r.fulfill(status=200, content_type="application/javascript", body=(RACINE / "www" / "actor" / "reperes.js").read_text(encoding="utf-8"))
         elif c.startswith("page/"):
             r.fulfill(status=200, content_type="text/html", body=SRC[nom])
         else:

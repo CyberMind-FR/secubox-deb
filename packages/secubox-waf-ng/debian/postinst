@@ -81,6 +81,13 @@ case "$1" in
     mkdir -p /etc/secubox/waf
     chown root:secubox-waf /etc/secubox/waf
     chmod 0750 /etc/secubox/waf
+    # #3919 : sbx-actord lit la surcharge reseaux-classes.toml de ce dossier. Il n'entre JAMAIS dans le groupe
+    # secubox-waf (écriture de waf-threats.log, #3720) : ACL nommée, en TRAVERSÉE seule (« x »), comme
+    # secubox-mirrornet sur /var/lib/secubox/waf. Absente : catalogue livré seul, sans erreur.
+    if command -v setfacl >/dev/null 2>&1; then
+      setfacl -m u:secubox-actord:x /etc/secubox/waf \
+        || echo "secubox-waf-ng: ACL de /etc/secubox/waf pour secubox-actord non posée (surcharge reseaux-classes.toml ignorée par actord)" >&2
+    fi
 
     mkdir -p /etc/secubox/waf/ca
     chown root:secubox-waf /etc/secubox/waf/ca
@@ -276,13 +283,22 @@ PROTEGEES
 
     # ── 5. AppArmor profile ───────────────────────────────────────────────────
     # Load and enforce the profile if AppArmor is present and active.
-    if command -v aa-enforce >/dev/null 2>&1 && \
-       [ -f /etc/apparmor.d/usr.sbin.sbxwaf ] && \
+    if [ -f /etc/apparmor.d/usr.sbin.sbxwaf ] && \
        [ -d /sys/kernel/security/apparmor ]; then
-      aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
+      sbx_aa=""
+      if command -v aa-enforce >/dev/null 2>&1; then
+        aa-enforce /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
+        sbx_aa=1
+      # #3919 : sans apparmor-utils, un profil déjà chargé au démarrage gardait ses anciennes règles (base ASN refusée).
+      elif grep -q '^/usr/sbin/sbxwaf ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+        sbx_aa=1
+      fi
       # aa-enforce ne recharge PAS un profil déjà en enforce : sans ceci, une règle ajoutée par une mise à jour restait absente du noyau (le DNS des
       # robots d'indexation refusé en silence). Rechargement à chaud, sans redémarrer le démon.
-      apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
+      if [ -n "$sbx_aa" ] && command -v apparmor_parser >/dev/null 2>&1; then
+        apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null \
+          || echo "secubox-waf-ng: profil AppArmor sbxwaf non rechargé (apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf)" >&2
+      fi
     fi
     # waf-blocs (#3716, P8) : profil livré en COMPLAIN (drapeau dans le fichier),
     # chargé tel quel — jamais aa-enforce ici : il passe en enforce après le banc gk6.

@@ -8,6 +8,7 @@
   SecuBox — « Guardian », la vigie du réseau : observer aujourd'hui pour mieux protéger demain (#2341). Page encadrée par /soc/ (onglet par défaut), même origine.
   DONNÉES RÉELLES UNIQUEMENT : WAF (/stats, /history, /enforcement/mode), DPI (/stats, /usage, /clients, /countries), ad-guard (/adblock-tv/gardien).
   Une mesure absente s'affiche « — », jamais 0. Le MODE est celui du WAF, jamais supposé. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+  #3919 : bloc « Campagnes en cours » (WAF /populations, 4 lignes au plus, rendu de cartes-campagnes.js) : tout le bloc mène à l'onglet Campagnes de /waf/ (/waf/#campaigns).
   #3922 : une place par panneau — le détail des menaces (carte, catégories, événements, courbe) est dans /waf/, ici une bande de synthèse qui y renvoie.
 -->
 <meta charset="utf-8">
@@ -60,6 +61,15 @@
   .chiffre .l{color:var(--doux);font-size:.74rem} .chiffre .v{font-size:1.4rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chiffre .v.rouge{color:var(--rouge)} .chiffre .v.vert{color:var(--vert)} .chiffre .s{color:var(--faible);font-size:.68rem}
   .pare .note a{color:var(--cyan);font-weight:700}
+  /* #3919 : campagnes en cours, une ligne par population ; le bloc entier est un lien vers l'onglet Campagnes du WAF */
+  a.pan.camps{display:block;color:inherit;text-decoration:none} a.pan.camps:hover{border-color:var(--trait2)} a.pan.camps:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .camps #campagnes{display:grid;gap:2px} .camps .note b{color:var(--cyan)}
+  .cligne{display:grid;grid-template-columns:minmax(0,1fr) 110px 190px 74px;gap:2px 12px;align-items:center;padding:5px 0;font-size:.8rem;border-top:1px solid rgba(86,150,255,.12)} .cligne:first-child{border-top:0}
+  .cnom{font-weight:700;overflow-wrap:anywhere;min-width:0} .cadr{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .camps .popl{display:flex;gap:5px;flex-wrap:wrap;min-width:0} .camps .puce{border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:.7rem;font-weight:600;white-space:nowrap}
+  .camps .puce.rot{color:var(--orange)} .camps .puce.ban{color:var(--rouge)} .camps .puce.obs{color:var(--cyan)} .camps .puce.ina{color:var(--faible)}
+  .camps .popserie{width:74px;height:26px;fill:var(--bleu)} .popnr{color:var(--faible);font-size:.76rem} .poppartiel{margin:0 0 4px;color:var(--orange);font-size:.74rem}
+  @container a (max-width:699px){.cligne{grid-template-columns:minmax(0,1fr) auto} .cligne .popserie{grid-column:2;grid-row:1/span 2} .cligne .cadr{grid-column:1;text-align:left} .cligne .popl{grid-column:1/-1} .cnom{grid-column:1}}
   @container a (max-width:699px){.sec{display:none}}
   @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)} .chiffres{grid-template-columns:repeat(4,1fr)}}
   @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(7,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr}}
@@ -74,6 +84,7 @@
   <div class="sess" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="pan pare"><h3>Pare-feu applicatif <i>synthèse du jour</i></h3><div class="chiffres" id="pareFeu"></div><div class="note"><a href="/waf/" target="_top">Détail dans le WAF →</a> carte des attaques, catégories, derniers événements et historique y sont lus une seule fois.</div></div>
+  <a class="pan camps" href="/waf/#campaigns" target="_top"><h3>Campagnes en cours <i>actives sur 24 h</i></h3><div id="campagnes"><span class="popnr">Lecture du relevé…</span></div><div class="note"><b>Cartes des campagnes dans le WAF →</b></div></a>
   <div class="grille g2 sec">
     <div class="pan"><h3>Applications / usages <i>par volume</i></h3><div id="apps"></div></div>
     <div class="pan"><h3>Appareils principaux <i>par volume</i></h3><div id="appareils"></div></div>
@@ -87,6 +98,8 @@
   </div>
   <div class="note">Données lues sur la box (WAF, DPI, appareils), rien d’estimé. Le mode se change dans la console d’administration, jamais d’ici.</div>
 </div></div>
+<script src="reperes.js"></script>
+<script src="cartes-campagnes.js"></script>
 <script>
 (function(){
   "use strict";
@@ -207,7 +220,21 @@
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxSocVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)+12},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
-  if(q.get('demo')){rend(DEMO);return;}
+  // ---- Campagnes en cours (#3919) : lecture accessoire et discrète (404/401/403 → « Relevé indisponible », jamais le bandeau de session) ; rendu en texte seul par cartes-campagnes.js.
+  var CAMP_LE=0,CAMP_PAUSE=55000,CAMP_CLE=null;
+  function rendCamps(r){
+    var z=el('campagnes'),C=window.SbxCartes,R=window.SbxReperes;
+    if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
+    var k=C.cle(r);if(k===CAMP_CLE) return;
+    CAMP_CLE=k;C.synthese(document,R,z,r,4);
+  }
+  function chargeCamps(force){
+    if(!force&&(document.hidden||Date.now()-CAMP_LE<CAMP_PAUSE)) return;
+    CAMP_LE=Date.now();
+    jget('/api/v1/waf/populations').then(function(r){CAMP_PAUSE=r?55000:115000;rendCamps(r);});
+  }
+  // ---- Fin des campagnes
+  if(q.get('demo')){rend(DEMO);rendCamps(window.SbxCartes?window.SbxCartes.exemple(Math.floor(Date.now()/1000)-300):null);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
@@ -219,7 +246,7 @@
       rend({stats:r[0],history:r[1],enforcement:r[2],dpiStats:r[3],usage:r[4],clients:Array.isArray(r[5])?r[5]:null,dpiPays:Array.isArray(r[6])?r[6]:null,gardien:r[7],webfilter:r[8]});
     });
   }
-  el('rafraichir').addEventListener('click',charge);
-  charge();setInterval(charge,60000);
+  el('rafraichir').addEventListener('click',function(){charge();chargeCamps(true);});
+  charge();chargeCamps(true);setInterval(function(){charge();chargeCamps(false);},60000);
 })();
 </script>

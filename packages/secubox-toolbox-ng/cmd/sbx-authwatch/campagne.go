@@ -30,8 +30,17 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 // Campagnes suit, par compte vise, les sources distinctes qui l'ont attaque.
@@ -109,4 +118,118 @@ func (c *Campagnes) Suivies() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.cibles)
+}
+
+// EtatCampagne est ce que le relais publie d'une campagne établie (#3919) :
+// jamais le compte en clair, jamais une adresse source.
+type EtatCampagne struct {
+	ID      string `json:"id"`
+	Compte  string `json:"compte"`
+	Sources int    `json:"sources"`
+	Premier int64  `json:"premier"`
+	Dernier int64  `json:"dernier"`
+}
+
+// IdentifiantCampagne : 8 premiers hex du SHA-256 du compte visé en minuscules.
+func IdentifiantCampagne(cible string) string {
+	h := sha256.Sum256([]byte(strings.ToLower(cible)))
+	return hex.EncodeToString(h[:])[:8]
+}
+
+// IdentifiantSiEtablie rend l'identifiant de campagne de cette cible si elle
+// compte au moins `seuil` sources dans la fenêtre, sinon "".
+func (c *Campagnes) IdentifiantSiEtablie(cible string, maintenant time.Time) string {
+	if c == nil || cible == "" {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	limite := maintenant.Add(-c.fenetre)
+	n := 0
+	for _, t := range c.cibles[cible] {
+		if !t.Before(limite) {
+			n++
+		}
+	}
+	if n < c.seuil {
+		return ""
+	}
+	return IdentifiantCampagne(cible)
+}
+
+// Etat rend les campagnes ÉTABLIES (compte masqué), triées par identifiant.
+// Premier/Dernier : secondes Unix des tentatives les plus anciennes et récentes
+// parmi les sources encore dans la fenêtre.
+func (c *Campagnes) Etat(maintenant time.Time) []EtatCampagne {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	limite := maintenant.Add(-c.fenetre)
+	var out []EtatCampagne
+	for cible, m := range c.cibles {
+		var n int
+		var premier, dernier time.Time
+		for _, t := range m {
+			if t.Before(limite) {
+				continue
+			}
+			n++
+			if premier.IsZero() || t.Before(premier) {
+				premier = t
+			}
+			if t.After(dernier) {
+				dernier = t
+			}
+		}
+		if n == 0 || n < c.seuil {
+			continue
+		}
+		out = append(out, EtatCampagne{
+			ID: IdentifiantCampagne(cible), Compte: reseau.MasquerCompte(cible),
+			Sources: n, Premier: premier.Unix(), Dernier: dernier.Unix(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// EcrireEtat publie l'état des campagnes : fichier temporaire dans le même
+// répertoire, puis renommage atomique — un lecteur ne voit jamais un fichier
+// à moitié écrit.
+func EcrireEtat(c *Campagnes, chemin string, maintenant time.Time) error {
+	tab := c.Etat(maintenant)
+	if tab == nil {
+		tab = []EtatCampagne{}
+	}
+	data, err := json.Marshal(tab)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	f, err := os.CreateTemp(filepath.Dir(chemin), ".authwatch-campagnes-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Chmod(0644); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, chemin); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }

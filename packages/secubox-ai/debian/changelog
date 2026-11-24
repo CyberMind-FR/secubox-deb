@@ -1,3 +1,13 @@
+secubox-ai (2.3.0-1~trixie1) trixie; urgency=medium
+
+  * Radar : la liste « Campagnes » montre les populations d'attaquants
+    relevées sur gk2 (/waf/populations, secubox-waf-ng 1.44.0) : famille,
+    classes de réseau, pays, cible, série sur 7 jours, recouvrement. Relevé
+    absent : « relevé indisponible ». Ces données ne vont jamais au modèle
+    (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:15:00 +0100
+
 secubox-ai (2.2.1-1~trixie1) trixie; urgency=medium
 
   * Menaces : une source de gk2 en erreur (bans, campagnes, alertes) se lit

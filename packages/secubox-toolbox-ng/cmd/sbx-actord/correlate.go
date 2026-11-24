@@ -30,6 +30,14 @@ type actorSignals struct {
 }
 
 // signatureDe dérive la Signature de corrélation d'une enveloppe (RFC-0013 §3).
+//
+// L'ASN N'Y ENTRE PAS, VOLONTAIREMENT (#3919). Jusqu'à #3919 aucun capteur ne le
+// renseignait : l'axe ASN du barème (+5), sa clé d'index, son signal concordant
+// (+22 de confiance) n'ont jamais joué. sbxwaf le pose désormais, pour les VUES ;
+// le recopier ici fusionnerait des acteurs d'un même hébergeur et monterait leur
+// confiance, donc changerait les mesures et les bans automatiques, en direct
+// comme au rejeu des événements stockés. Les fiches par source (enrichissement.go)
+// lisent e.ASN elles-mêmes. Réactiver cet axe = décision du propriétaire.
 func signatureDe(e *envelope.Envelope) similarity.Signature {
 	return similarity.Signature{
 		CredentialHash: e.CredentialTokenHash,
@@ -38,7 +46,6 @@ func signatureDe(e *envelope.Envelope) similarity.Signature {
 		TLSFingerprint: e.TLSFingerprint,
 		CadenceBucket:  e.RequestRateBucket,
 		IP:             e.SrcIP,
-		ASN:            e.ASN,
 		Country:        e.GeoCountry,
 		SeenAt:         e.Timestamp,
 	}
@@ -111,6 +118,7 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 		}
 	}
 	a := s.graph.Observe(obs)
+	s.noterSource(e)
 	acc := s.accum[a.ID]
 	if acc == nil {
 		acc = &actorSignals{windows: map[int64]bool{}, days: map[string]bool{}}

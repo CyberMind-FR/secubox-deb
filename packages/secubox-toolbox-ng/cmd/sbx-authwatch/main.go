@@ -31,10 +31,13 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 func main() {
@@ -68,6 +71,13 @@ func main() {
 			"nombre de sources distinctes visant un même compte établissant une campagne (0 = désactivé)")
 		campFen = flag.Duration("campagne-fenetre", time.Hour,
 			"fenêtre d'observation des campagnes par compte visé")
+		geoipASN = flag.String("geoip-asn", "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+			"base MaxMind des ASN, lue LOCALEMENT (\"\" = désactivée) : réseau de la source sur chaque alerte (#3919)")
+		reseauxClasses = flag.String("reseaux-classes",
+			"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
+			"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
+		campEtat = flag.String("campagnes-etat", "/run/secubox-authwatch/campagnes.json",
+			"état des campagnes par compte visé, écrit toutes les 60 s par renommage atomique (\"\" = désactivé)")
 		leurres = flag.String("leurres", "",
 			"ports leurres : `defaut` pour la liste connue, ou « 3389:rdp,5900:vnc »")
 		// #1290 — RÉGIME BANNIÈRE. Sans lui, le leurre accepte et ferme : on
@@ -163,6 +173,56 @@ func main() {
 		campagnes = NewCampagnes(*campFen, *campSeuil)
 	}
 	journalMenaces := NewJournalMenaces(*menaces)
+	journalMenaces.SetCampagnes(campagnes)
+
+	// #3919 : annuaire de réseaux, rechargé au SIGHUP et toutes les 24 h.
+	if *geoipASN != "" {
+		var catalogues []string
+		for _, c := range strings.Split(*reseauxClasses, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				catalogues = append(catalogues, c)
+			}
+		}
+		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		journalMenaces.SetReseau(ann)
+		defer ann.Close()
+		hupReseau := make(chan os.Signal, 1)
+		signal.Notify(hupReseau, syscall.SIGHUP)
+		go func() {
+			tic := time.NewTicker(24 * time.Hour)
+			defer tic.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-hupReseau:
+				case <-tic.C:
+				}
+				ann.Recharger()
+			}
+		}()
+	}
+
+	// #3919 : état des campagnes publié toutes les 60 s. Un répertoire non
+	// inscriptible se dit UNE fois et ne fait jamais tomber le service.
+	if campagnes != nil && *campEtat != "" {
+		go func() {
+			var dit bool
+			tic := time.NewTicker(60 * time.Second)
+			defer tic.Stop()
+			for {
+				if err := EcrireEtat(campagnes, *campEtat, time.Now()); err != nil && !dit {
+					dit = true
+					log.Printf("sbx-authwatch: état des campagnes non écrit (%s) : %v", *campEtat, err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-tic.C:
+				}
+			}
+		}()
+	}
 	signaux := make(chan Signal, 256)
 
 	// ── sources de journaux ────────────────────────────────────────────────

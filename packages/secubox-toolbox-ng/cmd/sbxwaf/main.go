@@ -52,6 +52,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -1348,6 +1349,11 @@ func main() {
 		"base MaxMind du pays source, lue LOCALEMENT (\"\" = désactivée). Le pays "+
 			"alimente la carte du renseignement et la moitié de la définition d'une "+
 			"campagne (plusieurs IP OU plusieurs pays)")
+	geoipASN := flag.String("geoip-asn", "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+		"base MaxMind des ASN, lue LOCALEMENT (\"\" = désactivée) : réseau de l'adresse source sur chaque alerte (#3919)")
+	reseauxClasses := flag.String("reseaux-classes",
+		"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
+		"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	// Ban nft natif (#1070 phase B) — WAF autonome.
@@ -1558,6 +1564,34 @@ func main() {
 		}
 		defer emitter.Close()
 		log.Printf("sbxwaf: Actor Intelligence — émission vers %s (fire-and-forget)", *actorSocket)
+	}
+
+	// #3919 : annuaire de réseaux, câblé INDÉPENDAMMENT de --actor-socket (le
+	// journal en profite même sans actord). Rechargé au SIGHUP et toutes les
+	// 24 h : une base ASN mise à jour est prise sans redémarrer le WAF.
+	if *geoipASN != "" {
+		var catalogues []string
+		for _, c := range strings.Split(*reseauxClasses, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				catalogues = append(catalogues, c)
+			}
+		}
+		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		tl.SetReseau(ann)
+		defer ann.Close()
+		hupReseau := make(chan os.Signal, 1)
+		signal.Notify(hupReseau, syscall.SIGHUP)
+		go func() {
+			tic := time.NewTicker(24 * time.Hour)
+			defer tic.Stop()
+			for {
+				select {
+				case <-hupReseau:
+				case <-tic.C:
+				}
+				ann.Recharger()
+			}
+		}()
 	}
 
 	srv := &Server{

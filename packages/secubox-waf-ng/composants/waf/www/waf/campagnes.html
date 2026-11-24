@@ -11,7 +11,8 @@
   DONNÉES RÉELLES UNIQUEMENT (API du WAF, lues en session) :
     /campaigns  → signature, outil, attaquants[], nb_attaquants, sondes, haute_valeur, exemple_sequence[] ;
     /alerts     → recoupées par adresse pour dater, situer (cible, pays, catégories, gravité) chaque campagne ;
-    /bans       → adresses effectivement bannies (nft).
+    /bans       → adresses effectivement bannies (nft) ;
+    /populations → populations d'attaquants sur 7 jours (#3919), en tête de page : cartes de cartes-campagnes.js, repères de reperes.js.
   Le corrélateur ne date ni ne situe ses campagnes : ces champs viennent du recoupement avec les alertes récentes et
   se disent « — » quand le recoupement ne trouve rien. Une mesure absente s'affiche « — », jamais 0.
   `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
@@ -83,6 +84,31 @@
   @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}svg.donut{width:100px;height:100px}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.5fr 1fr} .g2{grid-template-columns:1fr 1fr} .cartes{grid-template-columns:repeat(3,1fr)}}
   @container a (max-width:599px){svg.frise text{font-size:15px}svg.frise text.nom{font-size:16px}}
+  /* Campagnes et populations (#3919) : une carte par population, maquette validée le 24/11, jetons de la page ; pas de panneau autour, la carte prend la largeur. */
+  .pops{display:grid;gap:8px;min-width:0}
+  .rcamp{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start;font-size:.82rem;min-width:0}
+  .popc{border:1px solid var(--trait);border-radius:12px;padding:12px 14px;background:rgba(10,22,46,.6);display:flex;flex-direction:column;gap:8px;min-width:0}
+  .popc header{display:flex;justify-content:space-between;align-items:baseline;gap:6px 10px;flex-wrap:wrap} .popc h3{margin:0;font-size:.98rem;font-weight:700;overflow-wrap:anywhere;min-width:0}
+  .popl{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+  .rcamp .puce{background:rgba(86,150,255,.12);border:0;border-radius:999px;padding:2px 10px;font-size:.76rem;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .rcamp .puce.etat{font-weight:600;background:transparent;border:1px solid currentColor} .rcamp .puce.rot{color:var(--orange)} .rcamp .puce.ban{color:var(--rouge)} .rcamp .puce.obs{color:var(--cyan)} .rcamp .puce.ina{color:var(--faible)}
+  .rcamp p{margin:0} .popchif{color:var(--texte)} .popchif span{color:var(--doux)}
+  .popbarre{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;background:var(--trait)} .popbarre span{display:block;height:100%;background:var(--faible)}
+  .popbarre .c-proxy_loue{background:var(--orange)} .popbarre .c-hebergeur{background:var(--bleu)} .popbarre .c-acces{background:var(--vert)} .popbarre .c-mobile_partage{background:var(--violet)}
+  .popbarre .c-cdn{background:var(--jaune)} .popbarre .c-relais_vie_privee{background:var(--doux)} .popbarre .c-scanner_recherche{background:var(--cyan)}
+  .poppied{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+  .popcible{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.76rem;color:var(--doux);min-width:0;overflow-wrap:anywhere}
+  .popserie{width:84px;height:32px;fill:var(--bleu);flex:none}
+  .rcamp summary{cursor:pointer;color:var(--doux);font-size:.78rem;padding:2px 0} .rcamp summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .popdet table{border-collapse:collapse;width:100%;font-size:.76rem;margin-top:6px}
+  .popdet th,.popdet td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(86,150,255,.15);vertical-align:top} .popdet td.o{overflow-wrap:anywhere} .popdet th{color:var(--doux);font-weight:500}
+  .popdet .n{text-align:right;font-variant-numeric:tabular-nums}
+  .popautres,.popautres[open]{min-width:0} .popautres .popc{margin-top:10px}
+  .poprec,.poprep,.popnr{font-size:.74rem;color:var(--doux)} .poprec{border-top:1px solid var(--trait);padding-top:8px}
+  .poppartiel{color:var(--orange);border:1px dashed currentColor;border-radius:8px;padding:6px 10px}
+  @container a (max-width:599px){.app{padding:8px} .popc{padding:10px} .popdet th,.popdet td{padding:4px 5px}}
+  @container a (min-width:1000px){.rcamp{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .rcamp>:not(article){grid-column:1/-1}}
+  body.emb .cadre{padding:2px}
   body.emb .cartes{grid-template-columns:1fr !important}
   body.emb .tuiles{grid-template-columns:repeat(2,1fr) !important}
   body.emb .grille{grid-template-columns:1fr !important}
@@ -95,6 +121,7 @@
   </div>
   <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <section class="pops"><div><h2>Campagnes et populations</h2><div class="sous">7 derniers jours · triées par activité des dernières 24 h · lecture seule</div></div><div id="populations" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
   <div><h2>Campagnes d’attaque</h2><div class="sous">Des adresses différentes, un même mode opératoire : mêmes sondes, même outil, corrélés à travers le temps.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="grille g1">
@@ -108,6 +135,8 @@
   </div>
   <div class="note" id="noteBas">Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.</div>
 </div></div>
+<script src="reperes.js"></script>
+<script src="cartes-campagnes.js"></script>
 <script>
 (function(){
   "use strict";
@@ -268,6 +297,22 @@
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  // ---- Populations (#3919) : lecture accessoire et discrète du relevé de fond (recalculé toutes les 10 min). Route absente ou refusée : « Relevé indisponible »,
+  // jamais le bandeau de session ; une relecture par minute au plus, toutes les deux minutes après un échec. Le rendu ne pose que du texte (cartes-campagnes.js).
+  var POP_LE=0,POP_PAUSE=55000,POP_CLE=null;
+  function rendPops(r){
+    var z=el('populations'),C=window.SbxCartes,R=window.SbxReperes;
+    if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
+    var k=C.cle(r);if(k===POP_CLE) return;
+    POP_CLE=k;C.populations(document,R,z,r);
+  }
+  function chargePops(force){
+    if(q.get('demo')){if(window.SbxCartes) rendPops(window.SbxCartes.exemple(Math.floor(Date.now()/1000)-300));else rendPops(null);return;}
+    if(!force&&Date.now()-POP_LE<POP_PAUSE) return;
+    POP_LE=Date.now();
+    jget('/api/v1/waf/populations').then(function(r){POP_PAUSE=r?55000:115000;rendPops(r);});
+  }
+  // ---- Fin des populations
   function charge(){
     if(q.get('demo')){rend(demo());return;}
     var b='/api/v1/waf/';
@@ -280,8 +325,8 @@
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'campagnes'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
   if(window.ResizeObserver) new ResizeObserver(hauteur).observe(el('cadre'));
-  el('rafraichir').addEventListener('click',charge);
-  charge();
-  if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible') charge();},30000);
+  el('rafraichir').addEventListener('click',function(){charge();chargePops(true);});
+  charge();chargePops(true);
+  if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible'){charge();chargePops(false);}},30000);
 })();
 </script>
