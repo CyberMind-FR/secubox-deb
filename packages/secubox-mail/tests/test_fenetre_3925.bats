@@ -23,7 +23,7 @@ setup() {
   export LXC_PATH="$BATS_TEST_TMPDIR/lxc"; mkdir -p "$LXC_PATH/mail/rootfs"
   : > "$LXC_PATH/mail/config"
   export AUDIT="$BATS_TEST_TMPDIR/audit.log" SECUBOX_AUDIT_LOG="$BATS_TEST_TMPDIR/audit.log"
-  export FENETRE_LOCK="$BATS_TEST_TMPDIR/f.lock" FENETRE_MARQUEUR="$BATS_TEST_TMPDIR/f.active"
+  export FENETRE_CEDE="$BATS_TEST_TMPDIR/f.cede" FENETRE_LOCK="$BATS_TEST_TMPDIR/f.lock" FENETRE_MARQUEUR="$BATS_TEST_TMPDIR/f.active"
   export FENETRE_MEMINFO="$BATS_TEST_TMPDIR/meminfo" FENETRE_LOADAVG="$BATS_TEST_TMPDIR/loadavg"
   echo "MemAvailable:    2048000 kB" > "$FENETRE_MEMINFO"; echo "0.50 0.40 0.30 1/200 999" > "$FENETRE_LOADAVG"
   export FENETRE_PAS=0.2 FENETRE_DUREE_S=1 FENETRE_PAS_SMTP=0.1 FENETRE_PAS_ATTENTE=0.2 FENETRE_ATTENTE_MAX=0.5
@@ -36,7 +36,7 @@ setup() {
   _fen_etat() { cat "$ETAT"; }
   _fen_identite() { local i; i="$(cat "$IDENT")"; [[ -n "$i" ]] && echo "$i"; }
   _fen_ticks() { echo 1000; }
-  cmd_start() { echo START >> "$CALLS"; echo RUNNING > "$ETAT"; echo "100:5000" > "$IDENT"; }
+  _fen_lxc_start() { [[ "$(cat "$ETAT")" == RUNNING ]] && return 1; echo START >> "$CALLS"; echo RUNNING > "$ETAT"; echo "100:5000" > "$IDENT"; }
   _sim_arret() {   # l'arrêt n'aboutit qu'au NEC-ième geste (1 = propre, 2 = deuxième essai, 3 = lxc-stop -k, 99 = jamais)
     echo "$1" >> "$CALLS"
     local n; n=$(( $(cat "$NARRETS") + 1 )); echo "$n" > "$NARRETS"
@@ -47,7 +47,7 @@ setup() {
   _fen_attach() { case "$*" in "postqueue -p") cat "$FILE" ;; esac; }
   _fen_smtp_repond() { return 0; }
   logger() { echo "LOGGER $*" >> "$CALLS"; }
-  export -f lxc_running _fen_etat _fen_identite _fen_ticks cmd_start _sim_arret _fen_lxc_stop _fen_lxc_kill _fen_attach _fen_smtp_repond logger
+  export -f lxc_running _fen_etat _fen_identite _fen_ticks _fen_lxc_start _sim_arret _fen_lxc_stop _fen_lxc_kill _fen_attach _fen_smtp_repond logger
 }
 
 # ---------------------------------------------------------------- inertie et refus
@@ -184,7 +184,7 @@ setup() {
 }
 
 @test "démarrage en échec : fermeture sans toucher à un conteneur qui n'est pas le nôtre, sortie 1" {
-  cmd_start() { echo START >> "$CALLS"; return 1; }; export -f cmd_start
+  _fen_lxc_start() { echo START >> "$CALLS"; return 1; }; export -f _fen_lxc_start
   run cmd_fenetre
   [ "$status" -eq 1 ]; [ "$(nb STOP)" -eq 0 ]; [ ! -e "$FENETRE_MARQUEUR" ]
 }
@@ -320,6 +320,87 @@ setup() {
   [ "$status" -eq 0 ]; [ "$(nb STOP)" -eq 0 ]; [ "$(cat "$ETAT")" = RUNNING ]; [ ! -e "$FENETRE_MARQUEUR" ]
 }
 
+@test "reprise humaine pendant l'ouverture (marqueur retiré pendant le démarrage) : jamais recréé, jamais arrêté" {
+  _fen_lxc_start() { echo START >> "$CALLS"; echo RUNNING > "$ETAT"; echo 100:5000 > "$IDENT"; rm -f "$FENETRE_MARQUEUR"; }
+  export -f _fen_lxc_start
+  run cmd_fenetre
+  [ "$status" -eq 0 ]; [ "$(nb STOP)" -eq 0 ]; [ ! -e "$FENETRE_MARQUEUR" ]; [ "$(cat "$ETAT")" = RUNNING ]
+  grep -q 'proprietaire reprend la main' "$CALLS"
+}
+
+@test "marqueur retiré juste avant le démarrage : on ne démarre pas" {
+  _fen_etat() { rm -f "$FENETRE_MARQUEUR"; cat "$ETAT"; }; export -f _fen_etat
+  run cmd_fenetre
+  [ "$status" -eq 0 ]; [ "$(nb START)" -eq 0 ]; [ "$(nb STOP)" -eq 0 ]
+}
+
+@test "démarré par un tiers avant notre lxc-start (déjà en marche) : on cède, on n'arrête rien" {
+  _fen_lxc_start() { echo 55:1 > "$IDENT"; echo RUNNING > "$ETAT"; return 1; }; export -f _fen_lxc_start
+  run cmd_fenetre
+  [ "$status" -eq 0 ]; [ "$(nb STOP)" -eq 0 ]; [ ! -e "$FENETRE_MARQUEUR" ]; [ "$(cat "$ETAT")" = RUNNING ]
+  grep -q 'deja en marche (demarre par un autre)' "$CALLS"
+}
+
+@test "identité illisible à la fermeture : marqueur conservé, mail.warning, sortie 1, rien d'arrêté" {
+  echo RUNNING > "$ETAT"; : > "$IDENT"
+  printf 'debut=1\nmotif=x\nfin=2\nticks=1\nphase=ouverte\nidentite=100:5000\n' > "$FENETRE_MARQUEUR"
+  run cmd_fenetre_fermer
+  [ "$status" -eq 1 ]; [ "$(nb STOP)" -eq 0 ]; [ -e "$FENETRE_MARQUEUR" ]
+  grep -q 'LOGGER .*mail.warning.*illisible' "$CALLS"
+  echo 100:5000 > "$IDENT"
+  run cmd_fenetre_fermer
+  [ "$status" -eq 0 ]; [ "$(nb STOP)" -eq 1 ]; [ ! -e "$FENETRE_MARQUEUR" ]
+}
+
+@test "marqueur retiré juste avant l'arrêt : le conteneur est laissé en marche" {
+  echo RUNNING > "$ETAT"; echo 100:5000 > "$IDENT"
+  printf 'debut=1\nmotif=x\nfin=2\nticks=1\nphase=ouverte\nidentite=100:5000\n' > "$FENETRE_MARQUEUR"
+  _fen_identite() { cat "$IDENT"; rm -f "$FENETRE_MARQUEUR"; }; export -f _fen_identite
+  run cmd_fenetre_fermer
+  [ "$status" -eq 0 ]; [ "$(nb STOP)" -eq 0 ]; [ "$(cat "$ETAT")" = RUNNING ]
+}
+
+@test "après adoption d'un marqueur périmé, les signaux ne restent pas ignorés" {
+  printf 'debut=1\nmotif=x\nfin=2\nticks=1\nphase=ouverte\nidentite=100:5000\n' > "$FENETRE_MARQUEUR"
+  echo RUNNING > "$ETAT"; echo 100:5000 > "$IDENT"
+  echo "MemAvailable:    800000 kB" > "$FENETRE_MEMINFO"
+  t() { cmd_fenetre; local rc=$?; echo "TRAPS:[$(trap -p TERM INT HUP)]"; return $rc; }
+  run t
+  [[ "$output" == *"TRAPS:[]"* ]]
+}
+
+@test "phase « ouverture » jusqu'à la réponse du port 25 (la veille reste muette), puis « ouverte »" {
+  _fen_smtp_repond() { grep -q '^phase=ouverture$' "$FENETRE_MARQUEUR" && echo ok >> "$BATS_TEST_TMPDIR/ph"; return 0; }
+  _fen_lxc_stop() { grep '^phase=' "$FENETRE_MARQUEUR" >> "$BATS_TEST_TMPDIR/ph"; _sim_arret STOP; }
+  export -f _fen_smtp_repond _fen_lxc_stop
+  run cmd_fenetre
+  [ "$status" -eq 0 ]
+  grep -q '^ok$' "$BATS_TEST_TMPDIR/ph"
+}
+
+@test "conteneur mort pendant l'attente du port 25 : échec (mail.err, sortie 1), rien d'arrêté" {
+  export FENETRE_SMTP_MAX=60
+  _fen_smtp_repond() { return 1; }
+  _fen_sleep() { echo STOPPED > "$ETAT"; : > "$IDENT"; command sleep 0.02; }
+  export -f _fen_smtp_repond _fen_sleep
+  run cmd_fenetre
+  [ "$status" -eq 1 ]; [ "$(nb STOP)" -eq 0 ]; [ ! -e "$FENETRE_MARQUEUR" ]
+  grep -q 'LOGGER .*mail.err.*attente du port 25' "$CALLS"
+}
+
+@test "cession : mailctl start humain journalise mail.warning et laisse une trace ; la fenêtre suivante la signale" {
+  printf 'debut=1\nmotif=x\nfin=2\nticks=1\nphase=ouverte\nidentite=100:5000\n' > "$FENETRE_MARQUEUR"
+  run fenetre_cede
+  [ ! -e "$FENETRE_MARQUEUR" ]; [ -s "$FENETRE_CEDE" ]
+  grep -q 'LOGGER .*mail.warning.*propriete cedee.*restera en marche' "$CALLS"
+  echo RUNNING > "$ETAT"; echo 77:1 > "$IDENT"
+  run cmd_fenetre
+  grep -q 'LOGGER .*mail.warning.*laisse en marche depuis la cession' "$CALLS"
+  echo STOPPED > "$ETAT"
+  run cmd_fenetre
+  [ ! -e "$FENETRE_CEDE" ]
+}
+
 # ---------------------------------------------------------------- arrêt vérifié, fermeture, marqueur périmé
 
 @test "arrêt : deuxième essai si le premier n'aboutit pas" {
@@ -449,7 +530,8 @@ setup() {
 
 @test "descripteur du verrou fermé pour les fils (9>&-), bornes de temps sur lxc" {
   m="$BATS_TEST_DIRNAME/../sbin/mailctl"
-  grep -q 'cmd_start 9>&-' "$m"
+  grep -q 'timeout 90 lxc-start .*9>&-' "$m"
+  grep -q 'sleep "\$1" 9>&- &' "$m"
   grep -q 'timeout 20 lxc-attach .*9>&-' "$m"
   grep -q 'timeout "\$2" lxc-stop .*9>&-' "$m"
   grep -q 'timeout 20 lxc-info .*9>&-' "$m"
@@ -483,7 +565,7 @@ setup() {
 
 @test "unité : socle des unités qui démarrent un LXC, sans ProtectKernelLogs/RestrictRealtime/SystemCallArchitectures" {
   u="$BATS_TEST_DIRNAME/../debian/secubox-mail-fenetre.service"
-  for k in Type=exec Restart=no KillMode=mixed TimeoutStopSec=3min RuntimeMaxSec=5h SuccessExitStatus=143 UMask=0027 \
+  for k in Type=exec Restart=no KillMode=mixed TimeoutStopSec=5min RuntimeMaxSec=5h SuccessExitStatus=143 UMask=0027 \
            PrivateTmp=true ProtectHome=true LockPersonality=true ProtectKernelModules=true \
            'ExecStopPost=/usr/sbin/mailctl fenetre-fermer' 'Wants=network-online.target'; do
     grep -qxF "$k" "$u"

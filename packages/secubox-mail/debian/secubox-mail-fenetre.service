@@ -25,7 +25,7 @@ RuntimeMaxSec=5h
 Restart=no
 # TERM va au seul mailctl (qui arrête le conteneur et retire son marqueur) ; KILL, si besoin, au reste du groupe.
 KillMode=mixed
-TimeoutStopSec=3min
+TimeoutStopSec=5min
 # Socle des unités qui DÉMARRENT un conteneur (secubox-streamlit-demarrage) : ProtectKernelLogs masque /proc/kmsg dans
 # l'espace de montage de l'unité, et un LXC non privilégié ne peut alors plus y monter son /proc (EPERM). RestrictRealtime
 # et SystemCallArchitectures sont retirés avec lui (exception écrite dans RULES-CODE § 10).
