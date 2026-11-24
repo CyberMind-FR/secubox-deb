@@ -72,6 +72,9 @@ type rotationCampagneEtat struct {
 	Epargnees int            `json:"epargnees"`
 	ABannir   int            `json:"a_bannir"`
 	Ecartees  int            `json:"ecartees"`
+	// classe jamais bannie ; verdicts suspendus (source d'établissement oubliée)
+	ClasseProtegee int `json:"classe_protegee"`
+	Suspendues     int `json:"suspendues"`
 }
 
 type rotationEtat struct {
@@ -85,6 +88,10 @@ type rotationEtat struct {
 	MemoireSaturee bool                   `json:"memoire_saturee"` // trop de navigateurs à retenir : plus aucun ban
 	Navigateurs    int                    `json:"navigateurs"`     // adresses retenues comme navigateurs
 	EnGrace        bool                   `json:"en_grace"`        // démarrage : rien n'est jugé
+	// pages de candidats non suivies ou non analysées, faute de place (depuis le démarrage)
+	AnalysesAbandonnees int64 `json:"analyses_abandonnees"`
+	// verdicts « robot » de l'heure, par minute [minute Unix, nombre] : le plafond tient à travers un redémarrage
+	VerdictsParMinute [][2]int64 `json:"verdicts_par_minute"`
 }
 
 // campagnesActives : copie triée (plus ancienne d'abord) des campagnes actives.
@@ -103,7 +110,7 @@ func (r *Rotation) listeCampagnes() []rotationCampagneEtat {
 		}
 		out = append(out, rotationCampagneEtat{Signature: c.signature, Hote: c.hote, EtablieLe: c.etablieLe, Dernier: c.dernier,
 			Sources: c.sources, Une: c.une, Le3: c.le3, Classes: cl, Bannies: c.bannies, Epargnees: c.epargnees, ABannir: c.aBannir,
-			Ecartees: c.ecartees})
+			Ecartees: c.ecartees, ClasseProtegee: c.classeProtegee, Suspendues: c.suspendues})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].EtablieLe != out[j].EtablieLe {
@@ -118,11 +125,23 @@ func (r *Rotation) listeCampagnes() []rotationCampagneEtat {
 func (r *Rotation) etatCourant(t time.Time) rotationEtat {
 	e := rotationEtat{GenereLe: t.Unix(), Mode: r.cfg.Mode, Verdict: r.cfg.Verdict, TorGarde: r.tor != nil,
 		Campagnes: r.listeCampagnes(), PlafondAtteint: r.plafondDit, MemoireSaturee: r.memoire.saturee(t.Unix()),
-		Navigateurs: r.memoire.nb(), EnGrace: t.Before(r.graceFin)}
+		Navigateurs: r.memoire.nb(), EnGrace: t.Before(r.graceFin), AnalysesAbandonnees: r.abandonnees.Load(), VerdictsParMinute: parMinute(r.recents)}
 	if r.cfg.Mode == "auto" {
 		e.AppliquesHeure = len(r.recents)
 	}
 	return e
+}
+
+func parMinute(ts []time.Time) [][2]int64 {
+	out := [][2]int64{}
+	for _, x := range ts { // dans l'ordre : au plus une soixantaine d'entrées
+		if m := x.Unix() / 60; len(out) > 0 && out[len(out)-1][0] == m {
+			out[len(out)-1][1]++
+		} else {
+			out = append(out, [2]int64{m, 1})
+		}
+	}
+	return out
 }
 
 func (r *Rotation) ecrireEtat(e rotationEtat) {
@@ -155,6 +174,15 @@ func (r *Rotation) relireEtat(maintenant time.Time) {
 	if json.Unmarshal(b, &e) != nil || s-e.GenereLe > duree || e.GenereLe > futur {
 		return
 	}
+	for _, x := range e.VerdictsParMinute { // datés de la fin de leur minute : jamais libérés trop tôt
+		fin := x[0]*60 + 59
+		if fin > s {
+			fin = s
+		}
+		for k := int64(0); k < x[1] && len(r.recents) < r.cfg.MaxParHeure && s-fin < 3600; k++ {
+			r.recents = append(r.recents, time.Unix(fin, 0))
+		}
+	}
 	for _, x := range e.Campagnes {
 		brut, err := hex.DecodeString(x.Signature)
 		if err != nil || len(brut) != 32 || s-x.Dernier > duree || x.Dernier > futur || x.EtablieLe > futur || len(r.campagnes) >= r.cfg.MaxCampagnes {
@@ -164,7 +192,7 @@ func (r *Rotation) relireEtat(maintenant time.Time) {
 		copy(cle[:], brut)
 		r.campagnes[cle] = &rotCampagne{cle: cle, signature: hex.EncodeToString(brut), hote: x.Hote, etablieLe: x.EtablieLe, dernier: x.Dernier,
 			sources: x.Sources, une: x.Une, le3: x.Le3, classes: x.Classes, bannies: x.Bannies, epargnees: x.Epargnees, aBannir: x.ABannir,
-			ecartees: x.Ecartees}
+			ecartees: x.Ecartees, classeProtegee: x.ClasseProtegee, suspendues: x.Suspendues}
 	}
 	if len(r.campagnes) > 0 {
 		log.Printf("sbxwaf: rotation — %d campagne(s) active(s) reprise(s) de %s", len(r.campagnes), r.cfg.Etat)

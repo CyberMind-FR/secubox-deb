@@ -61,10 +61,15 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 	ip := v.adr.String()
 	epargnee := r.memoire.contient(v.h, t.Unix())
 	raison := ""
+	if !epargnee {
+		raison = r.ecarter(ip)
+	}
 	switch {
-	case epargnee:
+	case epargnee || raison != "":
 	case r.exemptes.contient(v.h, t.Unix()): // campagne finie puis rétablie pendant l'attente : l'adresse en est devenue une source
 		raison = "exemptee"
+	case r.exemptes.groupeSature(groupeDe(v.cle), t.Unix()):
+		raison = raisonSuspendue
 	case t.UnixNano()-v.echeance > int64(rotationVerdictPerime):
 		raison = "perime"
 	case r.memoire.saturee(t.Unix()):
@@ -75,7 +80,7 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 		raison = "plafond_horaire"
 		r.direPlafond(t)
 	default:
-		raison = r.ecarter(ip)
+		raison = r.robot(ip)
 		epargnee = r.memoire.contient(v.h, time.Now().Unix()) || r.memoire.contient(v.h, t.Unix()) // une preuve a pu arriver pendant le DNS
 	}
 
@@ -89,6 +94,10 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 	switch {
 	case epargnee:
 		c.epargnees++
+	case raison == raisonClasse:
+		c.classeProtegee++
+	case raison == raisonSuspendue:
+		c.suspendues++
 	case raison != "":
 		c.ecartees++
 	case r.cfg.Mode == "auto":
@@ -101,17 +110,15 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 		return
 	}
 	r.recents = append(r.recents, t)
-	action := "detect"
-	if r.cfg.Mode == "auto" {
-		action = "banned"
-		r.banneur.BanFor(ip, "rotation:"+court, "high", r.cfg.Duree)
-		log.Printf("sbxwaf: rotation-ban %s ← %s (aucune ressource, cookie ni référent %s après sa page)", ip, court, r.cfg.Delai)
+	if r.cfg.Mode != "auto" {
+		return // proposé : état et audit seulement. Une ligne de menace nourrirait d'autres gestes (indices, riposte), donc un ban.
 	}
+	r.banneur.BanFor(ip, "rotation:"+court, "high", r.cfg.Duree)
+	log.Printf("sbxwaf: rotation-ban %s ← %s (aucune ressource, cookie ni référent %s après sa page)", ip, court, r.cfg.Delai)
 	if r.journal != nil {
-		// Ni chemin ni navigateur déclaré (une ligne de verdict n'est pas une sonde) ; jamais vers actord : un constat d'absence, proposé ou non, ne doit
-		// nourrir ni score d'acteur ni mesure.
+		// Ni chemin ni navigateur déclaré (un ban n'est pas une sonde) ; jamais vers actord : un constat d'absence ne nourrit ni score ni mesure.
 		r.journal(ThreatRecord{ClientIP: ip, Host: v.hote, Method: "GET", Category: "rotation:" + court, Severity: "high", RuleID: "rotation",
-			Action: action, HorsActeur: true})
+			Action: "banned", HorsActeur: true})
 	}
 }
 
@@ -127,7 +134,12 @@ func (r *Rotation) direPlafond(t time.Time) {
 	log.Printf("sbxwaf: rotation — plafond de %d verdicts par heure atteint (mode=%s)", r.cfg.MaxParHeure, r.cfg.Mode)
 }
 
-// ecarter rend la raison pour laquelle l'adresse ne doit jamais être bannie, "" sinon. Le DNS (robots) en dernier.
+const (
+	raisonClasse    = "classe_protegee"
+	raisonSuspendue = "suspendue"
+)
+
+// ecarter (local, sans DNS) rend la raison pour laquelle l'adresse ne doit jamais être bannie, "" sinon.
 func (r *Rotation) ecarter(ip string) string {
 	if adresseProtegee(ip, r.cfg.Protegees) {
 		return "protegee"
@@ -135,18 +147,23 @@ func (r *Rotation) ecarter(ip string) string {
 	if _, ok := r.tor[ip]; ok {
 		return "sortie_tor"
 	}
-	switch r.classer(ip).Classe {
-	case reseau.ClasseRelaisViePrivee:
-		return "relais_vie_privee"
-	case reseau.ClasseMobilePartage:
-		return "mobile_partage" // CGNAT, satellite : la page et ses ressources peuvent sortir par deux adresses, et le ban toucherait des tiers
+	if cl := r.classer(ip).Classe; cl != reseau.ClasseProxyLoue && cl != reseau.ClasseHebergeur {
+		return raisonClasse
 	}
-	if r.robots != nil {
-		if nom, sur := r.robots(ip); nom != "" {
-			return "robot_verifie"
-		} else if !sur {
-			return "robot_inverifiable"
-		}
+	return ""
+}
+
+// robot (DNS) : robot d'indexation vérifié, ou dont on ne sait rien.
+func (r *Rotation) robot(ip string) string {
+	if r.robots == nil {
+		return ""
+	}
+	nom, sur := r.robots(ip)
+	switch {
+	case nom != "":
+		return "robot_verifie"
+	case !sur:
+		return "robot_inverifiable"
 	}
 	return ""
 }

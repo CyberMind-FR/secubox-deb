@@ -1092,13 +1092,13 @@ func (s *Server) handler() http.Handler {
 	})
 }
 
-// rotationServie ouvre le verdict d'un candidat (#3919) si sa page est partie en entier. Atteinte seulement au retour NORMAL du proxy : un client qui
+// rotationServie dépose la page d'un candidat (#3919) pour analyse, si elle est partie en entier : le verdict s'ouvrira hors de la requête. Atteinte seulement au retour NORMAL du proxy : un client qui
 // coupe ou un amont tronqué fait paniquer le proxy (ErrAbortHandler) ou annule le contexte.
 func (s *Server) rotationServie(suivie *rotationReponse, candidat *rotCandidat, r *http.Request) {
-	if suivie == nil || r.Context().Err() != nil || !suivie.servie(candidat.hote) {
+	if suivie == nil || r.Context().Err() != nil {
 		return
 	}
-	s.rotation.Servie(candidat, time.Now())
+	s.rotation.Analyser(suivie, candidat, time.Now())
 }
 
 // logEscalate writes one threat record for an escalate-mode hit. `action` is

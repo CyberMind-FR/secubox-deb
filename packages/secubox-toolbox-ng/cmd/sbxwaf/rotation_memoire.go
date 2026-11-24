@@ -22,11 +22,13 @@ import (
 // jugée pendant 7 jours : un visiteur qui revient avec ses ressources en cache n'en recharge aucune, son silence ne prouve rien. Indépendante de la
 // signature et du navigateur déclaré, nourrie par TOUTE requête non privée, relue au redémarrage.
 //
-// DONNÉE PERSONNELLE : jamais l'adresse, seulement un condensé de 64 bits salé (sel aléatoire gardé avec les données). Une collision épargne : sans
-// danger. IPv6 : la clé est le /64 (les adresses temporaires d'un même poste changent chaque jour).
+// DONNÉE PERSONNELLE PSEUDONYMISÉE, pas anonyme : jamais l'adresse, seulement un condensé de 64 bits salé. Le sel est gardé avec les données : qui lit le
+// fichier peut retrouver une adresse IPv4 en les essayant toutes. D'où 0640, 7 jours au plus, et les entrées expirées purgées à chaque écriture. Une
+// collision épargne : sans danger. IPv6 : la clé est le /64 (les adresses temporaires d'un même poste changent chaque jour).
 //
 // BORNÉE : au plus `max` entrées, la plus ancienne sort. Sortir une entrée encore valable, c'est oublier un vrai navigateur : la mémoire se déclare
-// alors SATURÉE jusqu'à l'échéance de l'entrée sortie, et le détecteur ne bannit plus.
+// alors SATURÉE jusqu'à l'échéance de l'entrée sortie, et le détecteur ne bannit plus. Une entrée rattachée à un GROUPE (source d'établissement d'une
+// campagne) ne sature que son groupe ; partagée entre plusieurs, elle sature tout.
 
 const (
 	rotationMemoireTTL   = 7 * 24 * time.Hour
@@ -35,7 +37,8 @@ const (
 	rotationMemoireRepos = 15 * time.Minute // … et au moins toutes les 15 min (date du fichier)
 	rotationMemoireTrou  = time.Hour        // fichier plus vieux : la mémoire est trouée, on repart comme sans fichier
 	memoireGrain         = 60               // s : une preuve plus récente que cela n'est pas réécrite (chemin chaud)
-	memoireTranche       = 4096             // entrées copiées par section critique
+	memoireTranche       = 4096             // entrées copiées ou purgées par section critique
+	memoireGroupesMax    = 5000             // groupes saturés retenus
 )
 
 var memoireMagie = []byte("SBXNAV1\n")
@@ -44,6 +47,7 @@ type noeudMemoire struct {
 	cle        uint64
 	vu         uint32 // Unix (s)
 	prec, suiv int32
+	groupe     uint32 // 0 : aucun, ou plusieurs
 }
 
 type memoireAdresses struct {
@@ -52,13 +56,14 @@ type memoireAdresses struct {
 	ttl          int64 // s
 	idx          map[uint64]int32
 	noeuds       []noeudMemoire
-	tete, queue  int32 // tête = plus récente
-	satureJusqua int64 // Unix (s)
+	tete, queue  int32            // tête = plus récente
+	satureJusqua int64            // Unix (s)
+	groupesSat   map[uint32]int64 // groupe → saturé jusqu'à (Unix, s)
 	sale         bool
 }
 
 func nouvelleMemoire(max int, ttl time.Duration) *memoireAdresses {
-	return &memoireAdresses{max: max, ttl: int64(ttl / time.Second), idx: map[uint64]int32{}, tete: -1, queue: -1}
+	return &memoireAdresses{max: max, ttl: int64(ttl / time.Second), idx: map[uint64]int32{}, groupesSat: map[uint32]int64{}, tete: -1, queue: -1}
 }
 
 func (m *memoireAdresses) detacher(i int32) {
@@ -88,14 +93,20 @@ func (m *memoireAdresses) enTete(i int32) {
 }
 
 // noter enregistre une preuve. O(1).
-func (m *memoireAdresses) noter(cle uint64, s int64) {
+func (m *memoireAdresses) noter(cle uint64, s int64) { m.noterGroupe(cle, s, 0) }
+
+func (m *memoireAdresses) noterGroupe(cle uint64, s int64, groupe uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if i, ok := m.idx[cle]; ok {
-		if s < int64(m.noeuds[i].vu)+memoireGrain {
+		n := &m.noeuds[i]
+		if n.groupe != groupe {
+			n.groupe, m.sale = 0, true
+		}
+		if s < int64(n.vu)+memoireGrain {
 			return
 		}
-		m.noeuds[i].vu = uint32(s)
+		n.vu = uint32(s)
 		m.detacher(i)
 		m.enTete(i)
 		m.sale = true
@@ -104,8 +115,8 @@ func (m *memoireAdresses) noter(cle uint64, s int64) {
 	var i int32
 	if len(m.noeuds) >= m.max {
 		i = m.queue
-		if fin := int64(m.noeuds[i].vu) + m.ttl; fin > s && fin > m.satureJusqua {
-			m.satureJusqua = fin
+		if fin := int64(m.noeuds[i].vu) + m.ttl; fin > s {
+			m.saturer(m.noeuds[i].groupe, fin)
 		}
 		m.detacher(i)
 		delete(m.idx, m.noeuds[i].cle)
@@ -113,9 +124,70 @@ func (m *memoireAdresses) noter(cle uint64, s int64) {
 		m.noeuds = append(m.noeuds, noeudMemoire{})
 		i = int32(len(m.noeuds) - 1)
 	}
-	m.noeuds[i].cle, m.noeuds[i].vu = cle, uint32(s)
+	m.noeuds[i].cle, m.noeuds[i].vu, m.noeuds[i].groupe = cle, uint32(s), groupe
 	m.idx[cle] = i
 	m.enTete(i)
+	m.sale = true
+}
+
+// saturer (sous verrou) : une entrée valable jusqu'à `fin` est perdue ; trop de groupes saturés : tout l'est.
+func (m *memoireAdresses) saturer(groupe uint32, fin int64) {
+	if _, ok := m.groupesSat[groupe]; groupe == 0 || !ok && len(m.groupesSat) >= memoireGroupesMax {
+		m.satureJusqua = max(m.satureJusqua, fin)
+		return
+	}
+	m.groupesSat[groupe] = max(m.groupesSat[groupe], fin)
+}
+
+func (m *memoireAdresses) groupeSature(groupe uint32, s int64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return s < m.satureJusqua || s < m.groupesSat[groupe]
+}
+
+// purger oublie les entrées expirées, par tranches (jamais toute la table sous le verrou).
+func (m *memoireAdresses) purger(s int64) {
+	for {
+		m.mu.Lock()
+		k := 0
+		for ; k < memoireTranche && m.queue >= 0 && s-int64(m.noeuds[m.queue].vu) >= m.ttl; k++ {
+			m.retirer(m.queue)
+		}
+		if k < memoireTranche {
+			for g, fin := range m.groupesSat {
+				if fin <= s {
+					delete(m.groupesSat, g)
+				}
+			}
+		}
+		m.mu.Unlock()
+		if k < memoireTranche {
+			return
+		}
+	}
+}
+
+// retirer (sous verrou) : la dernière case prend la place libérée, la table reste compacte.
+func (m *memoireAdresses) retirer(i int32) {
+	m.detacher(i)
+	delete(m.idx, m.noeuds[i].cle)
+	d := int32(len(m.noeuds) - 1)
+	if i != d {
+		n := m.noeuds[d]
+		m.noeuds[i] = n
+		m.idx[n.cle] = i
+		if n.prec >= 0 {
+			m.noeuds[n.prec].suiv = i
+		} else {
+			m.tete = i
+		}
+		if n.suiv >= 0 {
+			m.noeuds[n.suiv].prec = i
+		} else {
+			m.queue = i
+		}
+	}
+	m.noeuds = m.noeuds[:d]
 	m.sale = true
 }
 
@@ -139,29 +211,35 @@ func (m *memoireAdresses) nb() int {
 }
 
 type entreeMemoire struct {
-	cle uint64
-	vu  uint32
+	cle    uint64
+	vu     uint32
+	groupe uint32
 }
 
-// instantane copie les entrées par tranches (jamais toute la table sous le verrou), de la plus ancienne à la plus récente.
-func (m *memoireAdresses) instantane() ([]entreeMemoire, int64) {
-	var out []entreeMemoire
+// instantane copie les entrées encore valables par tranches (jamais toute la table sous le verrou), de la plus ancienne à la plus récente.
+func (m *memoireAdresses) instantane(s int64) (es []entreeMemoire, sat int64, groupes map[uint32]int64) {
 	for deb := 0; ; deb += memoireTranche {
 		m.mu.Lock()
 		if deb == 0 {
 			m.sale = false
-			out = make([]entreeMemoire, 0, len(m.noeuds)+memoireTranche)
+			es = make([]entreeMemoire, 0, len(m.noeuds)+memoireTranche)
 		}
 		fin := min(deb+memoireTranche, len(m.noeuds))
 		for i := deb; i < fin; i++ {
-			out = append(out, entreeMemoire{m.noeuds[i].cle, m.noeuds[i].vu})
+			if n := &m.noeuds[i]; s-int64(n.vu) < m.ttl {
+				es = append(es, entreeMemoire{n.cle, n.vu, n.groupe})
+			}
 		}
-		reste, sat := fin < len(m.noeuds), m.satureJusqua
+		if fin >= len(m.noeuds) {
+			sat, groupes = m.satureJusqua, make(map[uint32]int64, len(m.groupesSat))
+			for g, f := range m.groupesSat {
+				groupes[g] = f
+			}
+			m.mu.Unlock()
+			sort.Slice(es, func(i, j int) bool { return es[i].vu < es[j].vu })
+			return es, sat, groupes
+		}
 		m.mu.Unlock()
-		if !reste {
-			sort.Slice(out, func(i, j int) bool { return out[i].vu < out[j].vu })
-			return out, sat
-		}
 	}
 }
 
@@ -204,30 +282,40 @@ func nouveauSel() (sel [32]byte) {
 
 // ── Fichier ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 //
-// magie | sel (32) | depuis (i64 : la mémoire est continue depuis) | écrit_le (i64) | par mémoire : saturé_jusqu'à (i64), nombre (u32), {clé u64, vu u32}… | SHA-256 de tout ce qui précède.
+// magie | sel (32) | depuis (i64 : la mémoire est continue depuis) | écrit_le (i64) | par mémoire : saturé_jusqu'à (i64), nombre (u32),
+// {clé u64, vu u32, groupe u32}…, groupes saturés (u32), {groupe u32, jusqu'à i64}… | SHA-256 de tout ce qui précède.
 
 var errMemoire = errors.New("mémoire des navigateurs illisible")
 
 func ecrireMemoires(chemin string, sel [32]byte, depuis int64, t time.Time, ms ...*memoireAdresses) error {
 	var b bytes.Buffer
-	var u [12]byte
+	var u [8]byte
 	i64 := func(v int64) {
-		binary.LittleEndian.PutUint64(u[:8], uint64(v))
-		b.Write(u[:8])
+		binary.LittleEndian.PutUint64(u[:], uint64(v))
+		b.Write(u[:])
+	}
+	u32 := func(v uint32) {
+		binary.LittleEndian.PutUint32(u[:4], v)
+		b.Write(u[:4])
 	}
 	b.Write(memoireMagie)
 	b.Write(sel[:])
 	i64(depuis)
 	i64(t.Unix())
 	for _, m := range ms {
-		es, sat := m.instantane()
+		m.purger(t.Unix())
+		es, sat, groupes := m.instantane(t.Unix())
 		i64(sat)
-		binary.LittleEndian.PutUint32(u[:4], uint32(len(es)))
-		b.Write(u[:4])
+		u32(uint32(len(es)))
 		for _, e := range es {
-			binary.LittleEndian.PutUint64(u[:8], e.cle)
-			binary.LittleEndian.PutUint32(u[8:], e.vu)
-			b.Write(u[:])
+			i64(int64(e.cle))
+			u32(e.vu)
+			u32(e.groupe)
+		}
+		u32(uint32(len(groupes)))
+		for g, fin := range groupes {
+			u32(g)
+			i64(fin)
 		}
 	}
 	som := sha256.Sum256(b.Bytes())
@@ -285,43 +373,65 @@ func lireMemoires(chemin string, t time.Time, ms ...*memoireAdresses) (sel [32]b
 	ecritLe = int64(binary.LittleEndian.Uint64(corps[tete-8:]))
 	corps = corps[tete:]
 	type section struct {
-		sat int64
-		es  []byte
+		sat    int64
+		es, gs []byte
+	}
+	// prendre détache `n` enregistrements de `taille` octets, précédés de leur nombre.
+	prendre := func(taille int) ([]byte, bool) {
+		if len(corps) < 4 {
+			return nil, false
+		}
+		n := int(binary.LittleEndian.Uint32(corps))
+		corps = corps[4:]
+		if n > len(corps)/taille {
+			return nil, false
+		}
+		v := corps[:n*taille]
+		corps = corps[n*taille:]
+		return v, true
 	}
 	var secs []section
 	for range ms {
-		if len(corps) < 12 {
+		if len(corps) < 8 {
 			return sel, 0, 0, errMemoire
 		}
-		s := section{sat: int64(binary.LittleEndian.Uint64(corps))}
-		n := int(binary.LittleEndian.Uint32(corps[8:]))
-		corps = corps[12:]
-		if n < 0 || n > len(corps)/12 {
+		x := section{sat: int64(binary.LittleEndian.Uint64(corps))}
+		corps = corps[8:]
+		var ok1, ok2 bool
+		x.es, ok1 = prendre(16)
+		x.gs, ok2 = prendre(12)
+		if !ok1 || !ok2 {
 			return sel, 0, 0, errMemoire
 		}
-		s.es, corps = corps[:n*12], corps[n*12:]
-		secs = append(secs, s)
+		secs = append(secs, x)
 	}
 	if len(corps) != 0 {
 		return sel, 0, 0, errMemoire
 	}
 	s := t.Unix()
 	for i, m := range ms {
-		for es := secs[i].es; len(es) > 0; es = es[12:] {
+		borne := func(fin int64) int64 {
+			if fin > s+m.ttl {
+				return s + m.ttl
+			}
+			return fin
+		}
+		for es := secs[i].es; len(es) > 0; es = es[16:] {
 			vu := int64(binary.LittleEndian.Uint32(es[8:]))
 			if vu > s {
 				vu = s
 			}
 			if s-vu < m.ttl {
-				m.noter(binary.LittleEndian.Uint64(es), vu)
+				m.noterGroupe(binary.LittleEndian.Uint64(es), vu, binary.LittleEndian.Uint32(es[12:]))
 			}
 		}
-		sat := secs[i].sat
-		if sat > s+m.ttl {
-			sat = s + m.ttl
+		m.mu.Lock()
+		for gs := secs[i].gs; len(gs) > 0; gs = gs[12:] {
+			m.saturer(binary.LittleEndian.Uint32(gs), borne(int64(binary.LittleEndian.Uint64(gs[4:]))))
 		}
-		m.satureJusqua = max(m.satureJusqua, sat)
+		m.satureJusqua = max(m.satureJusqua, borne(secs[i].sat))
 		m.sale = false
+		m.mu.Unlock()
 	}
 	return sel, depuis, ecritLe, nil
 }

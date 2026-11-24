@@ -11,10 +11,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
-	"regexp"
 	"strings"
+	"time"
 )
 
 // OUVERTURE DU VERDICT (#3919). Le silence d'une adresse ne prouve quelque chose que si elle a REÇU une page qui demande des ressources. Le verdict
@@ -25,9 +26,12 @@ import (
 // N'enveloppe QUE les candidats (adresse neuve portant la signature d'une campagne établie) ; toutes les autres requêtes passent sans surcoût.
 
 const (
-	rotationCorpsMax = 64 << 10  // octets de page gardés (tels qu'envoyés)
-	rotationClairMax = 256 << 10 // octets de page décompressés
-	rotationSuivis   = 64        // réponses candidates suivies à la fois ; au-delà, pas de verdict
+	rotationCorpsMax = 64 << 10 // octets de page gardés (tels qu'envoyés)
+	rotationClairMax = 64 << 10 // octets de page en clair analysés
+	rotationSuivis   = 64       // réponses candidates suivies à la fois ; au-delà, pas de verdict (compté)
+	rotationAnalyses = 8        // pages déposées ou en cours d'analyse ; au-delà, pas de verdict (compté)
+	rotationExamen   = 10 * time.Minute
+	rotationExamens  = 20000 // adresses examinées retenues
 )
 
 type cleRotationReponse struct{}
@@ -103,58 +107,214 @@ func (x *rotationReponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func (x *rotationReponse) Unwrap() http.ResponseWriter { return x.ResponseWriter }
 
-// servie : la page demandée est partie en entier et appelle au moins une ressource de son hôte.
-func (x *rotationReponse) servie(hote string) bool {
-	if x.exclu || x.echec || !x.html || x.statut < 200 || x.statut > 299 {
-		return false
-	}
-	corps := x.corps
-	if x.gzip {
-		z, err := gzip.NewReader(bytes.NewReader(corps))
-		if err != nil {
-			return false
-		}
-		corps, _ = io.ReadAll(io.LimitReader(z, rotationClairMax)) // tronqué : on lit ce qu'on a
-	}
-	return pageAvecRessource(corps, hote)
+// servie : la page demandée est partie en entier (2xx text/html lisible). Reste à savoir si elle appelle des ressources (rotationAnalyse).
+func (x *rotationReponse) servie() bool {
+	return !x.exclu && !x.echec && x.html && x.statut >= 200 && x.statut <= 299
 }
 
-var (
-	reRotScript  = regexp.MustCompile(`(?is)(<script\b[^>]*>).*?(?:</script|\z)`)
-	reRotInerte  = regexp.MustCompile(`(?is)<!--.*?(?:-->|\z)|<noscript\b.*?(?:</noscript|\z)|<template\b.*?(?:</template|\z)`)
-	reRotBalise  = regexp.MustCompile(`(?is)<(link|img|base)\b([^>]*)>`)
-	reRotAttribu = regexp.MustCompile(`(?is)([a-z-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)`)
-)
+// ANALYSE DE LA PAGE : hors du chemin de la réponse. Le handler dépose la page et rend la main (la fin de la réponse n'attend pas) ; UN travailleur la
+// lit. Au plus rotationAnalyses pages déposées ou en cours : au-delà, pas de verdict (compté). Une adresse examinée ne l'est plus pendant 10 min.
+type rotationAnalyse struct {
+	corps []byte
+	gzip  bool
+	x     *rotCandidat
+	t     time.Time // fin de la réponse
+}
+
+// clair : les 64 premiers Kio de la page, décompressés au besoin (jamais plus : une bombe de décompression ne coûte rien). nil : illisible.
+func (a *rotationAnalyse) clair() []byte {
+	if !a.gzip {
+		return a.corps
+	}
+	z, err := gzip.NewReader(bytes.NewReader(a.corps))
+	if err != nil {
+		return nil
+	}
+	c, _ := io.ReadAll(io.LimitReader(z, rotationClairMax)) // corps tronqué : on lit ce qu'on a
+	return c
+}
+
+// pageUtile : la page appelle au moins une ressource de son hôte.
+func (a *rotationAnalyse) pageUtile() bool { return pageAvecRessource(a.clair(), a.x.hote) }
+
+// Analyser dépose la page d'un candidat ; le verdict s'ouvrira, daté de `t`, si elle appelle des ressources.
+func (r *Rotation) Analyser(x *rotationReponse, c *rotCandidat, t time.Time) {
+	if r == nil || x == nil || c == nil || !x.servie() {
+		return
+	}
+	if r.analyses.Add(1) > rotationAnalyses {
+		r.analyses.Add(-1)
+		r.abandonnees.Add(1)
+		return
+	}
+	r.examinees.noter(c.h, t.Unix())
+	r.unTravailleur.Do(func() { go r.travailler() })
+	r.aAnalyser <- rotationAnalyse{corps: x.corps, gzip: x.gzip, x: c, t: t} // jamais bloquant : la file a rotationAnalyses places
+}
+
+func (r *Rotation) travailler() {
+	for a := range r.aAnalyser {
+		r.traiter(a)
+	}
+}
+
+func (r *Rotation) traiter(a rotationAnalyse) {
+	defer r.analyses.Add(-1)
+	defer func() { // hors d'un handler, rien ne rattrape une panique : elle arrêterait tout le WAF
+		if e := recover(); e != nil {
+			r.abandonnees.Add(1)
+			log.Printf("sbxwaf: rotation — analyse d'une page abandonnée : %v", e)
+		}
+	}()
+	if r.avantAnalyse != nil {
+		r.avantAnalyse()
+	}
+	if a.pageUtile() {
+		r.Servie(a.x, a.t)
+	}
+}
 
 // pageAvecRessource : la page appelle une feuille de style ou une image (non différée) de son propre hôte, ce que tout navigateur charge dans la
-// seconde. Un script seul ne suffit pas : certains visiteurs les bloquent.
-func pageAvecRessource(corps []byte, hote string) bool {
-	corps = reRotScript.ReplaceAll(corps, []byte("$1"))
-	corps = reRotInerte.ReplaceAll(corps, nil)
-	trouve := false
-	for _, m := range reRotBalise.FindAllSubmatch(corps, 2000) {
-		att := map[string]string{}
-		for _, a := range reRotAttribu.FindAllSubmatch(m[2], 32) {
-			att[strings.ToLower(string(a[1]))] = strings.TrimSpace(strings.Trim(string(a[2]), `"'`))
+// seconde. Un script seul ne suffit pas : certains visiteurs les bloquent. UNE lecture, sans retour en arrière ; au plus rotationClairMax octets. Au
+// moindre doute (commentaire, guillemet ou élément jamais fermé) : non.
+func pageAvecRessource(c []byte, hote string) bool {
+	if len(c) > rotationClairMax {
+		c = c[:rotationClairMax]
+	}
+	for {
+		i := bytes.IndexByte(c, '<')
+		if i < 0 {
+			return false
 		}
-		switch strings.ToLower(string(m[1])) {
+		c = c[i:]
+		if bytes.HasPrefix(c, []byte("<!--")) {
+			if i = bytes.Index(c[4:], []byte("-->")); i < 0 {
+				return false
+			}
+			c = c[4+i+3:]
+			continue
+		}
+		n := 1
+		for n < len(c) && n < 16 && (c[n]|0x20 >= 'a' && c[n]|0x20 <= 'z' || c[n] >= '0' && c[n] <= '9') {
+			n++
+		}
+		if n == 1 {
+			c = c[1:] // « < » isolé, balise fermante, déclaration
+			continue
+		}
+		b := baliseHTML{nom: strings.ToLower(string(c[1:n]))}
+		var ok bool
+		if c, ok = b.lire(c[n:]); !ok {
+			return false
+		}
+		switch b.nom {
 		case "base":
-			if !adresseLocale(att["href"], hote) {
+			if !adresseLocale(b.href, hote) {
 				return false // toutes les adresses relatives partent ailleurs
 			}
 		case "link":
-			media := strings.ToLower(att["media"])
-			if contientPli(" "+att["rel"]+" ", " stylesheet ") && !contientPli(att["rel"], "alternate") && (media == "" || media == "all" || media == "screen") &&
-				adresseLocale(att["href"], hote) {
-				trouve = true
+			if b.feuille && adresseLocale(b.href, hote) {
+				return true
 			}
 		case "img":
-			if !strings.EqualFold(att["loading"], "lazy") && adresseLocale(att["src"], hote) {
-				trouve = true
+			if !b.differee && adresseLocale(b.src, hote) {
+				return true
+			}
+		case "script", "style", "noscript", "template", "textarea", "title", "iframe", "xmp", "noembed", "noframes":
+			if c, ok = apresFermeture(c, b.nom); !ok {
+				return false
 			}
 		}
 	}
-	return trouve
+}
+
+// baliseHTML : les seuls attributs utiles. rel et media sont réduits à `feuille` (feuille de style appliquée à l'écran).
+type baliseHTML struct {
+	nom, href, src string
+	feuille        bool
+	differee       bool
+}
+
+// lire consomme les attributs jusqu'à « > » et rend la suite ; faux si la balise ne se ferme pas.
+func (b *baliseHTML) lire(c []byte) ([]byte, bool) {
+	utile := b.nom == "link" || b.nom == "img" || b.nom == "base"
+	rel, media := "", ""
+	for i := 0; i < len(c); {
+		switch ch := c[i]; {
+		case ch == '>':
+			media = strings.ToLower(media)
+			b.feuille = contientPli(" "+rel+" ", " stylesheet ") && !contientPli(rel, "alternate") && (media == "" || media == "all" || media == "screen")
+			return c[i+1:], true
+		case ch <= ' ' || ch == '/':
+			i++
+			continue
+		}
+		deb := i
+		for i < len(c) && c[i] > ' ' && c[i] != '=' && c[i] != '>' && c[i] != '/' {
+			i++
+		}
+		nom := c[deb:i]
+		if i == deb {
+			i++ // « = » sans nom
+			continue
+		}
+		for i < len(c) && c[i] <= ' ' {
+			i++
+		}
+		if i >= len(c) || c[i] != '=' {
+			continue
+		}
+		for i++; i < len(c) && c[i] <= ' '; i++ {
+		}
+		if i >= len(c) {
+			return nil, false
+		}
+		var val []byte
+		if q := c[i]; q == '"' || q == '\'' {
+			k := bytes.IndexByte(c[i+1:], q)
+			if k < 0 {
+				return nil, false
+			}
+			val = c[i+1 : i+1+k]
+			i += k + 2
+		} else {
+			deb = i
+			for i < len(c) && c[i] > ' ' && c[i] != '>' {
+				i++
+			}
+			val = c[deb:i]
+		}
+		if !utile || len(nom) > 7 || len(val) > 2048 {
+			continue
+		}
+		switch v := strings.TrimSpace(string(val)); strings.ToLower(string(nom)) {
+		case "href":
+			b.href = v
+		case "src":
+			b.src = v
+		case "rel":
+			rel = v
+		case "media":
+			media = v
+		case "loading":
+			b.differee = strings.EqualFold(v, "lazy")
+		}
+	}
+	return nil, false
+}
+
+// apresFermeture saute le contenu d'un élément dont rien n'est affiché ni chargé, jusqu'après « </nom ».
+func apresFermeture(c []byte, nom string) ([]byte, bool) {
+	for {
+		i := bytes.Index(c, []byte("</"))
+		if i < 0 {
+			return nil, false
+		}
+		c = c[i+2:]
+		if len(c) >= len(nom) && strings.EqualFold(string(c[:len(nom)]), nom) {
+			return c[len(nom):], true
+		}
+	}
 }
 
 // adresseLocale : adresse relative, ou absolue vers le même hôte.

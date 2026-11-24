@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -725,8 +727,9 @@ func TestMineurMobilePartageJamaisBanni(t *testing.T) {
 	}
 }
 
+// N2 : en auto, une ligne par ban, jamais vers actord. En propose, AUCUNE ligne : le journal des menaces nourrit d'autres gestes.
 func TestJournalDesVerdicts(t *testing.T) {
-	for mode, action := range map[string]string{"auto": "banned", "propose": "detect"} {
+	for _, mode := range []string{"auto", "propose"} {
 		r, _, t0 := surete(t, mode)
 		var lignes []ThreatRecord
 		r.SetJournal(func(x ThreatRecord) { lignes = append(lignes, x) })
@@ -739,12 +742,284 @@ func TestJournalDesVerdicts(t *testing.T) {
 			t.Fatal("rien n'est écrit depuis la requête")
 		}
 		avancer(r, t0.Add(4*time.Second), t0.Add(30*time.Second))
+		if mode == "propose" {
+			if c := r.campagnesActives(); len(lignes) != 0 || c[0].ABannir != 1 {
+				t.Fatalf("propose : compté dans l'état, aucune ligne de menace : %+v %+v", lignes, c)
+			}
+			continue
+		}
 		if len(lignes) != 1 {
-			t.Fatalf("%s : une ligne par verdict robot : %+v", mode, lignes)
+			t.Fatalf("une ligne par ban : %+v", lignes)
 		}
 		l := lignes[0]
-		if l.ClientIP != x || l.Category != catAttendue() || l.Severity != "high" || l.Action != action || l.RuleID != "rotation" || l.Host != hoteFictif || !l.HorsActeur {
-			t.Fatalf("%s : ligne inattendue : %+v", mode, l)
+		if l.ClientIP != x || l.Category != catAttendue() || l.Severity != "high" || l.Action != "banned" || l.RuleID != "rotation" || l.Host != hoteFictif || !l.HorsActeur {
+			t.Fatalf("ligne inattendue : %+v", l)
+		}
+	}
+}
+
+// ── N1, N4 : seules les classes louées sont bannissables ─────────────────────────────────────────────────────────────
+
+func TestN1SeulesLesClassesLoueesSontBannissables(t *testing.T) {
+	for _, mode := range []string{"auto", "propose"} {
+		r, b, t0 := surete(t, mode)
+		cl := r.annu.(*classesFactices)
+		etablir(r, 0, 60, t0)
+		toutes := []string{reseau.ClasseInconnu, reseau.ClasseAcces, reseau.ClasseMobilePartage, reseau.ClasseCDN, reseau.ClasseRelaisViePrivee,
+			reseau.ClasseScannerRecherche, reseau.ClasseProxyLoue, reseau.ClasseHebergeur}
+		for i, c := range toutes {
+			cl.poser(adressePublique(100+i), c)
+			page(r, adressePublique(100+i), t0.Add(2*time.Second))
+		}
+		avancer(r, t0.Add(2*time.Second), t0.Add(30*time.Second))
+		c := r.campagnesActives()[0]
+		if c.Bannies+c.ABannir != 2 || c.ClasseProtegee != 6 {
+			t.Fatalf("%s : proxy_loue et hebergeur seulement : %+v", mode, c)
+		}
+		if mode == "auto" && (len(b.liste()) != 2 || !b.banni(adressePublique(106)) || !b.banni(adressePublique(107))) {
+			t.Fatalf("bans : %v", b.liste())
+		}
+	}
+}
+
+// Sonde de la relecture : un visiteur CONNU revient par une autre adresse (nouveau bail, adresse du fournisseur ou inconnue de l'annuaire), tout en cache.
+func TestN1VisiteurConnuSurNouvelleAdresse(t *testing.T) {
+	r, b, t0 := surete(t, "auto")
+	cl := r.annu.(*classesFactices)
+	ressource(r, adressePublique(100), uaFictif, t0)
+	etablir(r, 0, 50, t0)
+	for i, c := range map[int]string{101: reseau.ClasseAcces, 102: reseau.ClasseInconnu} {
+		cl.poser(adressePublique(i), c)
+		page(r, adressePublique(i), t0.Add(2*time.Second))
+	}
+	avancer(r, t0.Add(2*time.Second), t0.Add(30*time.Second))
+	if len(b.liste()) != 0 {
+		t.Fatalf("visiteur connu sur une nouvelle adresse : jamais banni : %v", b.liste())
+	}
+}
+
+func TestN1ClasseAvantPlafondEtDNS(t *testing.T) {
+	r, _, t0 := surete(t, "auto")
+	var dns atomic.Int32
+	etablir(r, 0, 60, t0)
+	r.SetRobots(func(string) (string, bool) { dns.Add(1); return "", true })
+	r.annu.(*classesFactices).poser(adressePublique(100), reseau.ClasseAcces)
+	page(r, adressePublique(100), t0.Add(2*time.Second))
+	avancer(r, t0.Add(2*time.Second), t0.Add(30*time.Second))
+	if dns.Load() != 0 || len(r.recents) != 0 {
+		t.Fatalf("classe protégée : ni DNS (%d) ni place dans le plafond (%d)", dns.Load(), len(r.recents))
+	}
+}
+
+// ── N3, N6 : analyse bornée, hors du chemin de la réponse ────────────────────────────────────────────────────────────
+
+func TestN3AnalyseBornee(t *testing.T) {
+	if pageAvecRessource([]byte(strings.Repeat("x", rotationClairMax)+`<img src="/a.png">`), hoteFictif) {
+		t.Fatal("au-delà de 64 Kio de clair, rien n'est lu")
+	}
+	var z bytes.Buffer
+	g := gzip.NewWriter(&z)
+	_, _ = g.Write(bytes.Repeat([]byte("x"), 8<<20)) // bombe : 8 Mio de clair
+	_, _ = g.Write([]byte(`<img src="/a.png">`))
+	_ = g.Close()
+	if a := (&rotationAnalyse{corps: z.Bytes(), gzip: true, x: &rotCandidat{hote: hoteFictif}}); a.pageUtile() || len(a.clair()) != rotationClairMax {
+		t.Fatal("page compressée : 64 Kio de clair au plus")
+	}
+	d := time.Now()
+	for _, m := range []string{`<img `, `<a b="`, `<!-- --`, `<script></script`, `<img a=b c=d>`} {
+		pageAvecRessource([]byte(strings.Repeat(m, 64<<10)), hoteFictif)
+	}
+	if e := time.Since(d); e > time.Second {
+		t.Fatalf("balisage hostile : %s", e)
+	}
+}
+
+func TestN3HuitAnalysesAuPlusEtCompteur(t *testing.T) {
+	cfg := cfgEssai(t, "auto")
+	r := NewRotation(cfg, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
+	t0 := time.Now()
+	etablir(r, 0, 50, t0)
+	suivie := func() *rotationReponse { return &rotationReponse{statut: 200, html: true, corps: []byte(pageFictive)} }
+	bloque := make(chan struct{})
+	r.avantAnalyse = func() { <-bloque }
+	for i := 100; i < 120; i++ {
+		r.Analyser(suivie(), r.Observe(nav(adressePublique(i), uaFictif), t0.Add(2*time.Second)), t0.Add(2*time.Second))
+	}
+	if n := r.analyses.Load(); n != rotationAnalyses {
+		t.Fatalf("%d analyses à la fois au plus, %d", rotationAnalyses, n)
+	}
+	close(bloque)
+	attendreAnalyses(t, r)
+	if n := r.nbAttente(); n != rotationAnalyses {
+		t.Fatalf("%d verdicts ouverts, %d", rotationAnalyses, n)
+	}
+	r.captures.Store(rotationSuivis)
+	if r.Suivre(&rotCandidat{}) != nil {
+		t.Fatal("plafond de réponses suivies")
+	}
+	r.Tick(t0.Add(3 * time.Second))
+	if e := lireEtatRotation(t, cfg.Etat); e.AnalysesAbandonnees != 12+1 {
+		t.Fatalf("12 analyses et 1 réponse abandonnées, comptées dans l'état : %d", e.AnalysesAbandonnees)
+	}
+}
+
+func TestN3AdresseDejaExaminee(t *testing.T) {
+	r, _, t0 := surete(t, "auto")
+	etablir(r, 0, 50, t0)
+	x := adressePublique(100)
+	sans := func() *rotationReponse {
+		return &rotationReponse{statut: 200, html: true, corps: []byte("<p>rien à charger</p>")}
+	}
+	t1 := t0.Add(2 * time.Second)
+	c := r.Observe(nav(x, uaFictif), t1)
+	if c == nil {
+		t.Fatal("candidat attendu")
+	}
+	r.Analyser(sans(), c, t1)
+	attendreAnalyses(t, r)
+	for _, d := range []time.Duration{time.Second, time.Minute, 9 * time.Minute} {
+		if r.Observe(nav(x, uaFictif), t1.Add(d)) != nil {
+			t.Fatalf("déjà examinée il y a %s : plus d'analyse", d)
+		}
+	}
+	if r.Observe(nav(x, uaFictif), t1.Add(11*time.Minute)) == nil {
+		t.Fatal("au-delà de 10 min, de nouveau candidate")
+	}
+	if r.examinees.max > 20000 {
+		t.Fatalf("mémoire des adresses examinées bornée : %d", r.examinees.max)
+	}
+}
+
+// ── N5 : purge ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+func TestN5EntreesExpireesPurgeesALEcriture(t *testing.T) {
+	ch := filepath.Join(t.TempDir(), "m.bin")
+	m, e := nouvelleMemoire(100, time.Hour), nouvelleMemoire(100, time.Hour)
+	for i := uint64(0); i < 50; i++ {
+		m.noter(i, 1000)
+	}
+	for i := uint64(100); i < 120; i++ {
+		m.noter(i, 5000)
+	}
+	if err := ecrireMemoires(ch, nouveauSel(), 0, time.Unix(5000, 0), m, e); err != nil {
+		t.Fatal(err)
+	}
+	if m.nb() != 20 || m.contient(3, 5000) || !m.contient(119, 5000) {
+		t.Fatalf("expirées oubliées, les autres gardées : %d", m.nb())
+	}
+	m.noter(7, 5000) // la structure reste saine après la purge
+	for i := uint64(200); i < 300; i++ {
+		m.noter(i, 5001)
+	}
+	if m.nb() != 100 || !m.contient(299, 5001) {
+		t.Fatalf("mémoire bornée après purge : %d", m.nb())
+	}
+	if fi, _ := os.Stat(ch); fi.Size() > 8+32+16+2*20+20*16+32 {
+		t.Fatalf("le fichier ne garde pas les entrées expirées : %d octets", fi.Size())
+	}
+}
+
+// ── N7 : source d'établissement évincée ──────────────────────────────────────────────────────────────────────────────
+
+func TestN7ExemptionEvinceeSuspendSaCampagne(t *testing.T) {
+	cfg := cfgEssai(t, "auto")
+	b := &banFactice{}
+	cl := &classesFactices{defaut: reseau.ClasseProxyLoue}
+	r := NewRotation(cfg, b, cl)
+	r.exemptes = nouvelleMemoire(60, rotationMemoireTTL)
+	t0 := time.Now()
+	etablir(r, 0, 50, t0) // campagne A : 50 exemptées
+	for i := 200; i < 250; i++ {
+		voir(r, adressePublique(i), uaVariante(7), t0.Add(20*time.Second)) // campagne B : 50 de plus, 40 de A évincées
+	}
+	r.Tick(t0.Add(20 * time.Second))
+	if len(r.campagnesActives()) != 2 {
+		t.Fatal("deux campagnes attendues")
+	}
+	t1 := t0.Add(30 * time.Second)
+	page(r, adressePublique(0), t1)   // source d'établissement de A, évincée
+	page(r, adressePublique(100), t1) // neuve sur A : suspendue elle aussi
+	r.Servie(r.Observe(nav(adressePublique(101), uaVariante(7)), t1), t1)
+	avancer(r, t1, t1.Add(30*time.Second))
+	if a := b.liste(); len(a) != 1 || a[0].ip != adressePublique(101) {
+		t.Fatalf("A suspendue, B jugée : %v", a)
+	}
+	for _, c := range r.campagnesActives() {
+		if voulu := c.Signature == Signature(uaFictif, "", hoteFictif); voulu != (c.Suspendues > 0) {
+			t.Fatalf("compteur `suspendues` de A seulement : %+v", c)
+		}
+	}
+	// La suspension survit à un redémarrage.
+	r.EcrireMemoire(t1.Add(time.Minute))
+	cfg.Horloge = func() time.Time { return t1.Add(time.Minute) }
+	r2 := NewRotation(cfg, b, cl)
+	page(r2, adressePublique(110), t1.Add(2*time.Minute))
+	avancer(r2, t1.Add(2*time.Minute), t1.Add(3*time.Minute))
+	if len(b.liste()) != 1 {
+		t.Fatalf("A toujours suspendue après redémarrage : %v", b.liste())
+	}
+}
+
+func TestN7SourcePartageeEvinceeSuspendTout(t *testing.T) {
+	m := nouvelleMemoire(2, time.Hour)
+	m.noterGroupe(1, 1000, 11)
+	m.noterGroupe(1, 1001, 22) // source de deux campagnes
+	m.noterGroupe(2, 1002, 22)
+	m.noterGroupe(3, 1003, 33)
+	if !m.saturee(1004) {
+		t.Fatal("source partagée évincée : on ne sait plus à qui elle était, tout est suspendu")
+	}
+	m2 := nouvelleMemoire(1, time.Hour)
+	m2.noterGroupe(1, 1000, 11)
+	m2.noterGroupe(2, 1001, 22)
+	if m2.saturee(1002) || !m2.groupeSature(11, 1002) || m2.groupeSature(22, 1002) || m2.groupeSature(11, 1000+3600) {
+		t.Fatal("seul le groupe de la source évincée est suspendu, jusqu'à son échéance")
+	}
+}
+
+func TestN7MemoirePerdueOublieLesCampagnes(t *testing.T) {
+	cfg := cfgEssai(t, "auto")
+	r := NewRotation(cfg, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
+	etablir(r, 0, 50, time.Now())
+	if err := os.WriteFile(r.cfg.Navigateurs, []byte("corrompu"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if c := NewRotation(cfg, &banFactice{}, nil).campagnesActives(); len(c) != 0 {
+		t.Fatalf("sans la liste de ses sources d'établissement, une campagne n'est pas reprise : %+v", c)
+	}
+}
+
+// ── Plafond horaire à travers un redémarrage ─────────────────────────────────────────────────────────────────────────
+
+func TestPlafondHoraireSurvitAuRedemarrage(t *testing.T) {
+	cfg := cfgEssai(t, "auto")
+	cfg.MaxParHeure = 3
+	b := &banFactice{}
+	cl := &classesFactices{defaut: reseau.ClasseProxyLoue}
+	t0 := time.Now()
+	r := NewRotation(cfg, b, cl)
+	etablir(r, 0, 50, t0)
+	for i := 100; i < 103; i++ {
+		page(r, adressePublique(i), t0.Add(2*time.Second))
+	}
+	avancer(r, t0.Add(2*time.Second), t0.Add(20*time.Second))
+	cfg.Horloge = func() time.Time { return t0.Add(30 * time.Second) }
+	r2 := NewRotation(cfg, b, cl)
+	page(r2, adressePublique(110), t0.Add(40*time.Second))
+	avancer(r2, t0.Add(40*time.Second), t0.Add(60*time.Second))
+	if n := len(b.liste()); n != 3 {
+		t.Fatalf("plafond tenu à travers le redémarrage : %d", n)
+	}
+	if len(r2.recents) != 3 {
+		t.Fatalf("3 verdicts repris : %d", len(r2.recents))
+	}
+}
+
+func attendreAnalyses(t *testing.T, r *Rotation) {
+	t.Helper()
+	for fin := time.Now().Add(5 * time.Second); r.analyses.Load() != 0; time.Sleep(time.Millisecond) {
+		if time.Now().After(fin) {
+			t.Fatal("analyses jamais finies")
 		}
 	}
 }

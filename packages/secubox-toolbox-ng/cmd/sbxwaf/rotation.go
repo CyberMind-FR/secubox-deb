@@ -6,6 +6,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"log"
 	"net"
@@ -39,10 +40,15 @@ import (
 // « rotation:<8 hex> ») que si AUCUNE preuve de navigateur n'est venue d'elle, ni pendant ce délai ni dans les 7 jours (rotation_memoire.go). Les
 // sources qui ont servi à établir la campagne ne sont pas jugées. `immediat` : même chose sans délai (au premier Tick après la réponse).
 //
+// CLASSE DE L'ADRESSE ELLE-MÊME : seules `proxy_loue` et `hebergeur` sont bannissables, les classes où vivent les campagnes. Un particulier (`acces`,
+// `mobile_partage`), un réseau inconnu, un CDN, un relais de vie privée, un scanner de recherche ne sont jamais bannis, même muets : un visiteur connu
+// qui revient sous une nouvelle adresse est là. RESTE : un visiteur derrière un VPN hébergé dans un de ces réseaux, sans cookie ni preuve depuis 7 jours,
+// et qui ne charge rien de la page (ressources en cache, navigateur qui les bloque).
+//
 // GARDE-FOUS, rejoués au moment du ban (en plus de ceux de NftBanner.banAt) : adresse privée/locale/protégée, robot d'indexation vérifié OU
-// INVÉRIFIABLE (DNS en panne), classe `relais_vie_privee` ou `mobile_partage` (adresse partagée, sortie changeante), sortie Tor connue, mémoire des
-// navigateurs saturée, période de grâce après un démarrage, trou de plus d'une minute entre deux Tick (horloge, machine figée : verdicts abandonnés) ;
-// plafond de MaxParHeure verdicts par heure glissante, vérifié avant tout DNS. Mode `propose` : tout est établi, compté et écrit, rien n'est banni.
+// INVÉRIFIABLE (DNS en panne), sortie Tor connue, mémoire des navigateurs saturée, source d'établissement oubliée (la campagne ne juge plus), période de grâce après un démarrage, trou de plus d'une minute entre deux Tick (horloge, machine figée : verdicts abandonnés) ;
+// plafond de MaxParHeure verdicts par heure glissante, gardé à travers un redémarrage, vérifié avant tout DNS. Mode `propose` : tout est établi, compté et
+// écrit (état, audit), rien n'est banni et AUCUNE ligne de menace n'est écrite.
 // Un ban de rotation n'est jamais prolongé (reevaluation.go) et ne compte pas comme sanction (actorban.go) ; sa ligne de journal n'est ni émise vers
 // actord ni comptée comme sonde (profiler.go).
 //
@@ -57,6 +63,7 @@ import (
 //   - au plus maxSourcesTotal (200 000) sources toutes signatures confondues : au-delà, les signatures les moins récentes sont oubliées ;
 //   - au plus maxAttente (3 000) verdicts en attente : au-delà, la nouvelle adresse n'est pas jugée (jamais bannie) ;
 //   - au plus maxVerdicts (50 000) adresses déjà jugées retenues (une seule ligne par adresse et par jour) ;
+//   - pages : 64 réponses suivies (64 Kio chacune), 8 analyses, un travailleur, 20 000 adresses examinées retenues 10 min ;
 //   - navigateurs : 200 000, sources exemptées : 50 000 (rotation_memoire.go) ; MaxCampagnes campagnes actives, la moins récente sort.
 
 // RotationConfig : réglages du détecteur ; une valeur nulle prend le défaut.
@@ -137,6 +144,8 @@ type rotCampagne struct {
 	classes            map[string]int // en %
 	bannies, epargnees int
 	aBannir, ecartees  int
+	classeProtegee     int // adresse d'une classe jamais bannie
+	suspendues         int // une source d'établissement a été oubliée : la campagne ne juge plus
 }
 
 // rotCandidat : adresse neuve portant la signature d'une campagne établie ; le verdict ne s'ouvre qu'avec Servie.
@@ -174,6 +183,14 @@ type Rotation struct {
 	memoireDepuis int64
 	debut         time.Time
 	captures      atomic.Int32 // réponses candidates suivies en ce moment
+
+	// analyse des pages (rotation_reponse.go)
+	analyses      atomic.Int32 // déposées ou en cours
+	abandonnees   atomic.Int64 // réponses non suivies ou pages non analysées, faute de place
+	aAnalyser     chan rotationAnalyse
+	unTravailleur sync.Once
+	examinees     *memoireAdresses // adresses dont une page vient d'être analysée (10 min)
+	avantAnalyse  func()           // essais
 
 	mu          sync.Mutex
 	sigs        map[[32]byte]*rotSignature
@@ -241,6 +258,7 @@ func NewRotation(cfg RotationConfig, b banneurDuree, a classeur) *Rotation {
 	t := cfg.Horloge()
 	r := &Rotation{cfg: cfg, banneur: b, annu: a, maxSourcesSig: 5000, maxSourcesTotal: 200000, maxVerdicts: 50000, maxAttente: 3000, tempsDecisions: rotationTempsDecisions,
 		sel: nouveauSel(), memoire: nouvelleMemoire(rotationMemoireMax, rotationMemoireTTL), exemptes: nouvelleMemoire(rotationExemptesMax, rotationMemoireTTL),
+		examinees: nouvelleMemoire(rotationExamens, rotationExamen), aAnalyser: make(chan rotationAnalyse, rotationAnalyses),
 		debut: t, graceFin: t, sigs: map[[32]byte]*rotSignature{}, aEvaluer: map[*rotSignature]struct{}{}, campagnes: map[[32]byte]*rotCampagne{},
 		enAttente: map[netip.Addr]struct{}{}, juges: map[netip.Addr]int64{}, etatSale: true}
 	if cfg.Mode == "off" {
@@ -266,6 +284,8 @@ func (r *Rotation) relireMemoire(t time.Time) {
 	}
 	sel, depuis, ecritLe, err := lireMemoires(r.cfg.Navigateurs, t, r.memoire, r.exemptes)
 	if err != nil {
+		// Sans la liste de ses sources d'établissement, une campagne relue pourrait les juger : elle devra se rétablir.
+		r.campagnes = map[[32]byte]*rotCampagne{}
 		return
 	}
 	r.sel = sel
@@ -308,6 +328,9 @@ func Signature(ua, ja4, host string) string {
 	c := cleSignature(ua, ja4, host)
 	return hex.EncodeToString(c[:])
 }
+
+// groupeDe : la campagne, en 32 bits (jamais 0, qui veut dire « plusieurs »).
+func groupeDe(cle [32]byte) uint32 { return binary.LittleEndian.Uint32(cle[:4]) | 1 }
 
 func cleSignature(ua, ja4, host string) [32]byte {
 	var pile [768]byte
@@ -379,7 +402,7 @@ func (r *Rotation) Observe(q RotationRequete, t time.Time) *rotCandidat {
 	if nouvelle {
 		c.dernier = s
 	}
-	if t.Before(r.graceFin) || r.exemptes.contient(h, s) || r.dejaVue(a) {
+	if t.Before(r.graceFin) || r.exemptes.contient(h, s) || r.examinees.contient(h, s) || r.dejaVue(a) {
 		return nil
 	}
 	return &rotCandidat{adr: a, h: h, cle: cle, hote: sig.hote}
@@ -416,6 +439,7 @@ func (r *Rotation) Suivre(x *rotCandidat) *rotationReponse {
 	}
 	if r.captures.Add(1) > rotationSuivis {
 		r.captures.Add(-1)
+		r.abandonnees.Add(1)
 		return nil
 	}
 	return &rotationReponse{}
@@ -650,7 +674,7 @@ func (r *Rotation) evaluer(s *rotSignature, t time.Time) int {
 	}
 	if !campagne && tient {
 		for i := range ex {
-			r.exemptes.noter(ex[i].src.cle, sec)
+			r.exemptes.noterGroupe(ex[i].src.cle, sec, groupeDe(s.cle))
 		}
 	}
 
@@ -681,7 +705,7 @@ func (r *Rotation) evaluer(s *rotSignature, t time.Time) int {
 		c = r.etablir(s, t)
 		for _, src := range s.sources { // arrivées pendant le calcul
 			if !r.exemptes.contient(src.cle, sec) {
-				r.exemptes.noter(src.cle, sec)
+				r.exemptes.noterGroupe(src.cle, sec, groupeDe(s.cle))
 			}
 		}
 		defer func() {

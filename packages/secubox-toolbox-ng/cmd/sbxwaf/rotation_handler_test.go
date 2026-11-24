@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +111,7 @@ func (b *bancRotation) get(ip, hote, chemin string, entetes ...string) *httptest
 	}
 	w := httptest.NewRecorder()
 	b.srv.handler().ServeHTTP(w, q)
+	attendreAnalyses(b.t, b.rot) // la page est analysée hors de la requête
 	return w
 }
 
@@ -238,6 +240,7 @@ func TestHandlerRotationCoupures(t *testing.T) {
 	for b.rot.captures.Load() != 0 && time.Now().Before(fin) {
 		time.Sleep(10 * time.Millisecond)
 	}
+	attendreAnalyses(t, b.rot)
 	if n := b.rot.nbAttente(); n != 0 || b.rot.captures.Load() != 0 {
 		t.Fatalf("amont tronqué ou client parti : aucun verdict (%d en attente, %d suivies)", n, b.rot.captures.Load())
 	}
@@ -246,6 +249,7 @@ func TestHandlerRotationCoupures(t *testing.T) {
 	for b.rot.captures.Load() != 0 && time.Now().Before(fin) {
 		time.Sleep(10 * time.Millisecond)
 	}
+	attendreAnalyses(t, b.rot)
 	if n := b.rot.nbAttente(); n != 1 {
 		t.Fatalf("témoin : une page complète ouvre un verdict, %d", n)
 	}
@@ -306,4 +310,27 @@ func TestHandlerRotationReponsesSuiviesBornees(t *testing.T) {
 		t.Fatal("au-delà du plafond de réponses suivies : pas de verdict, page servie")
 	}
 	b.rot.captures.Store(0)
+}
+
+// Analyse d'une page de 64 Kio : ordinaire (aucune ressource avant la fin : tout est lu) et hostile (balisage fait pour coûter cher).
+func BenchmarkPageAvecRessource(b *testing.B) {
+	plein := func(motif, fin string) []byte {
+		return []byte(strings.Repeat(motif, (64<<10)/len(motif)) + fin)
+	}
+	for nom, corps := range map[string][]byte{
+		"ordinaire":         plein(`<div class="ligne"><a href="/u/d/commit/abc">message</a> <span title="x">texte</span></div>`+"\n", ""),
+		"hostile_ouvertes":  plein(`<img `, ""),
+		"hostile_attributs": plein(`<img a=b c='d' e=f g=h i=j k="l" m=n o=p>`, ""),
+		"hostile_script":    plein(`<script></script`, ""),
+		"hostile_commentes": plein(`<!-- --`, ""),
+		"hostile_base":      plein(`<base href="https://forge.exemple.test/x">`, ""),
+		"hostile_guillemet": plein(`<a b="`, ""),
+	} {
+		b.Run(nom, func(b *testing.B) {
+			b.SetBytes(int64(len(corps)))
+			for i := 0; i < b.N; i++ {
+				pageAvecRessource(corps, hoteFictif)
+			}
+		})
+	}
 }
