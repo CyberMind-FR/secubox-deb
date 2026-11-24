@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
+	"net/netip"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -79,7 +81,7 @@ type NftBanner struct {
 	etatEchoue   bool
 
 	// Repose par lots (#3930, nftban_repose.go). reposeMu : une seule repose à la fois, jamais pris par la veille ni par un
-	// ban. Ordre des verrous : reposeMu → repMu → mu, et poseMu → mu ; repMu n'attend jamais reposeMu.
+	// ban. Ordre des verrous : reposeMu → poseMu → repMu → mu ; aucun n'est pris en sens inverse.
 	reposeMu       sync.Mutex
 	reposeAttend   atomic.Bool  // une repose demandée attend déjà reposeMu
 	generation     atomic.Int64 // +1 à chaque table recréée : la passe en cours repart de zéro
@@ -89,6 +91,7 @@ type NftBanner struct {
 	derniereRepose time.Time
 	bansAttendus   int
 	bansPoses      int
+	nftFige        atomic.Bool
 }
 
 // NewNftBanner construit le banneur. `store` peut être nil (pas de persistance).
@@ -127,8 +130,16 @@ func (b *NftBanner) execNft(ctx context.Context, args ...string) ([]byte, error)
 // Ensure crée table + sets de façon idempotente. À appeler une fois au
 // démarrage. Renvoie une erreur si nft n'est pas utilisable (droits) — l'appelant
 // désactive alors le backend nft (plus de ban natif).
-func (b *NftBanner) Ensure() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+func (b *NftBanner) Ensure() error { return b.ensure(delaiEnsureDemarrage) }
+
+// Au démarrage l'écoute attend Ensure (9 commandes nft) ; une réparation, elle, n'attend personne.
+const (
+	delaiEnsureDemarrage  = 10 * time.Second
+	delaiEnsureReparation = 60 * time.Second
+)
+
+func (b *NftBanner) ensure(delai time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), delai)
 	defer cancel()
 	// COMPTEURS PAR ÉLÉMENT (#2240, phase 4). Un ban dont l'ensemble porte `counter` compte les paquets que l'adresse bannie continue d'envoyer : c'est la
 	// SEULE façon de savoir, à l'échéance, si elle insiste (rien d'autre ne la voit, la chaîne la rejette avant tout journal). Un ensemble créé avant
@@ -177,15 +188,11 @@ func (b *NftBanner) Ensure() error {
 	return nil
 }
 
-func (b *NftBanner) setPour(ip string) (string, bool) {
-	p := net.ParseIP(ip)
-	if p == nil {
-		return "", false
+func (b *NftBanner) setDe(a netip.Addr) string {
+	if a.Is4() {
+		return b.set4
 	}
-	if p.To4() != nil {
-		return b.set4, true
-	}
-	return b.set6, true
+	return b.set6
 }
 
 // Ban ajoute l'IP au set nft avec un timeout, et journalise ban. Anti-tempête
@@ -203,10 +210,15 @@ func (b *NftBanner) BanFor(ip, cat, sev string, duree time.Duration) {
 }
 
 // banAt est BanFor avec l'instant du ban passé en argument (le kill switch pose ses prolongations à SON horloge, qui est testable).
+//
+// L'échéance la plus TARDIVE est gardée (#3930) : depuis le noyau 6.12, `add element` sur un élément présent change son délai — un ban d'une heure
+// raccourcirait un ban de 7 jours posé par une campagne ou à la main.
 func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Time) {
-	if p := net.ParseIP(ip); p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() {
+	a, ok := adresseBan(ip)
+	if !ok {
 		return
 	}
+	ip = a.String() // une seule écriture par adresse : celle que `wafctl unban` met au journal
 	b.mu.Lock()
 	if !b.ready {
 		b.mu.Unlock()
@@ -220,40 +232,59 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 		}
 		b.mu.Lock()
 	}
-	if last, ok := b.recent[ip]; ok && now.Sub(last) < b.cooldown {
+	// Horloge réelle, pas `now` : scriptLot compare `recent` au début de la repose.
+	reel := time.Now()
+	if last, ok := b.recent[ip]; ok && reel.Sub(last) < b.cooldown {
 		b.mu.Unlock()
 		return
 	}
-	b.recent[ip] = now
+	b.recent[ip] = reel
 	if len(b.recent) > 4096 {
 		for k, t := range b.recent {
-			if now.Sub(t) > b.cooldown {
+			if reel.Sub(t) > b.cooldown {
 				delete(b.recent, k)
 			}
 		}
 	}
 	b.mu.Unlock()
 
-	set, ok := b.setPour(ip)
-	if !ok {
-		return
+	// poseMu : l'élément et sa ligne de journal vont ensemble ; ni un lot ni le retrait de fin de repose ne s'intercalent.
+	b.poseMu.Lock()
+	defer b.poseMu.Unlock()
+	set := b.setDe(a)
+	secs, expire := int64(duree.Seconds()), now.Add(duree).Unix()
+	if actif, ok := b.store.Actif(ip, now.Unix()); ok {
+		switch {
+		case actif.Expires == 0:
+			expire = 0
+		case actif.Expires > expire:
+			expire, secs = actif.Expires, actif.Expires-now.Unix()
+		}
 	}
-	secs := int(duree.Seconds())
+	if secs > resteMax {
+		secs = resteMax
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	elem := fmt.Sprintf("{ %s timeout %ds }", ip, secs)
-	out, err := b.runner(ctx, "add", "element", "inet", b.table, set, elem)
-	if err != nil && tableEffacee(out) {
-		// La table venait d'être effacée par un rechargement du ruleset : elle
-		// est recréée (ici, ou par un autre ban de la même rafale qui a pris le
-		// verrou d'abord), et le ban est rejoué une fois plutôt que perdu.
-		// Les bans du journal sont remis en arrière-plan : ce ban-ci n'attend pas.
-		if b.recreer("échec d'un ban") {
-			b.lancerRepose()
-		}
+	var out []byte
+	var err error
+	if reste, present := b.resteElement(ctx, set, ip); !present || (reste >= 0 && reste < secs) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		elem := fmt.Sprintf("{ %s timeout %ds }", ip, secs)
 		out, err = b.runner(ctx, "add", "element", "inet", b.table, set, elem)
+		if err != nil && tableEffacee(out) {
+			// La table venait d'être effacée par un rechargement du ruleset : elle
+			// est recréée (ici, ou par un autre ban de la même rafale qui a pris le
+			// verrou d'abord), et le ban est rejoué une fois plutôt que perdu.
+			// Les bans du journal sont remis en arrière-plan : ce ban-ci n'attend pas.
+			if b.recreer("échec d'un ban") {
+				b.lancerRepose()
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			out, err = b.runner(ctx, "add", "element", "inet", b.table, set, elem)
+		}
 	}
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -265,15 +296,37 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 		return
 	}
 	b.mu.Lock()
-	b.dernierBan = now
+	b.dernierBan = reel
 	b.mu.Unlock()
 	if b.store != nil {
 		_ = b.store.Append(BanRecord{
 			IP: ip, Category: cat, Severity: sev,
-			At: now.Unix(), Expires: now.Add(duree).Unix(), Action: "ban",
+			At: now.Unix(), Expires: expire, Action: "ban",
 		})
 	}
 	log.Printf("sbxwaf: nft BAN %s ← %s (sev=%s, dur=%s)", ip, cat, sev, duree)
+}
+
+var reElementNft = regexp.MustCompile(`expires ((?:[0-9]+(?:ms|[wdhms]))+)`)
+var reDureeNft = regexp.MustCompile(`([0-9]+)(ms|[wdhms])`)
+
+// resteElement : secondes restantes d'un élément (-1 : sans échéance). present=false : absent, ou nft n'a pas répondu.
+// En TEXTE : nftables 1.1 répond à `-j get element` en texte.
+func (b *NftBanner) resteElement(ctx context.Context, set, ip string) (reste int64, present bool) {
+	out, err := b.runner(ctx, "get", "element", "inet", b.table, set, fmt.Sprintf("{ %s }", ip))
+	if err != nil || !strings.Contains(string(out), ip) {
+		return 0, false
+	}
+	m := reElementNft.FindSubmatch(out)
+	if m == nil {
+		return -1, true
+	}
+	unites := map[string]int64{"w": 7 * 86400, "d": 86400, "h": 3600, "m": 60, "s": 1, "ms": 0}
+	for _, d := range reDureeNft.FindAllSubmatch(m[1], -1) {
+		n, _ := strconv.ParseInt(string(d[1]), 10, 64)
+		reste += n * unites[string(d[2])]
+	}
+	return reste, true
 }
 
 // ── Auto-réparation (#1693) ──────────────────────────────────────────────────
@@ -289,10 +342,11 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 // recharge le pare-feu : il vérifie et répare lui-même.
 
 // tableEffacee reconnaît la réponse de nft quand la table ou l'ensemble visé
-// n'existe plus.
-func tableEffacee(out []byte) bool {
-	return strings.Contains(string(out), "No such file or directory")
-}
+// n'existe plus : sa ligne d'erreur, pas les mots n'importe où (un binaire ou un
+// fichier manquant les dit aussi).
+func tableEffacee(out []byte) bool { return reTableEffacee.Match(out) }
+
+var reTableEffacee = regexp.MustCompile(`(?m)^(?:\S+:\d+:\d+-\d+: )?Error: (?:Could not process rule: )?No such file or directory(?:;.*)?\s*$`)
 
 // Presente dit si le blocage est en place : la chaîne existe ET consulte
 // l'ensemble. Tester la seule table ne suffit pas — un `flush table` garde la
@@ -317,15 +371,17 @@ func (b *NftBanner) recreer(motif string) bool {
 	defer b.repMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if b.Presente(ctx) {
-		return false
-	}
-	if ctx.Err() != nil {
+	presente := b.Presente(ctx)
+	if !presente && ctx.Err() != nil {
 		// nft n'a pas répondu à temps (box chargée) : on ne sait pas, on ne vide pas une chaîne peut-être en place.
-		b.noterEchec("vérification de la table : nft n'a pas répondu en 10 s")
+		b.noterFige()
 		return false
 	}
-	if err := b.Ensure(); err != nil {
+	b.nftFige.Store(false)
+	if presente {
+		return false
+	}
+	if err := b.ensure(delaiEnsureReparation); err != nil {
 		log.Printf("sbxwaf: nft — table inet %s absente (%s) et IMPOSSIBLE à recréer : %v", b.table, motif, err)
 		b.noterEchec(err.Error())
 		b.EcrireEtat()
@@ -377,7 +433,8 @@ func (b *NftBanner) veillerJusqua(fin <-chan struct{}, pas, pasReload time.Durat
 		}
 		b.EcrireEtat()
 		if !enVerification.CompareAndSwap(false, true) {
-			continue // nft n'a pas encore répondu au tour d'avant
+			b.noterFige() // nft n'a pas encore répondu au tour d'avant
+			continue
 		}
 		go func() {
 			defer enVerification.Store(false)
@@ -410,6 +467,7 @@ type EtatNft struct {
 	DerniereRepose int64 `json:"derniere_repose"`
 	BansAttendus   int   `json:"bans_attendus"`
 	BansPoses      int   `json:"bans_poses"`
+	NftFige        bool  `json:"nft_fige"` // la dernière vérification de la table n'a pas eu de réponse
 }
 
 func unixOuZero(t time.Time) int64 {
@@ -437,6 +495,16 @@ func (b *NftBanner) Etat() EtatNft {
 		DerniereRepose: unixOuZero(b.derniereRepose),
 		BansAttendus:   b.bansAttendus,
 		BansPoses:      b.bansPoses,
+		NftFige:        b.nftFige.Load(),
+	}
+}
+
+// noterFige : nft ne répond plus ; l'état le dit jusqu'à sa prochaine réponse.
+func (b *NftBanner) noterFige() {
+	if !b.nftFige.Swap(true) {
+		log.Printf("sbxwaf: nft ne répond pas : table non vérifiée")
+		b.noterEchec("nft ne répond pas : table non vérifiée")
+		b.EcrireEtat()
 	}
 }
 
@@ -578,16 +646,17 @@ func (b *NftBanner) ElementsAvecCompteurs(ctx context.Context) (map[string]ElemB
 	return out, nil
 }
 
-// Prolonger repose un ban avec une nouvelle durée. `add element` sur un élément existant ne change PAS son timeout : on le retire d'abord, et l'anti-tempête
-// (cooldown) est levé pour cette adresse. Le journal de bans reçoit une nouvelle ligne (BanFor), donc le ban prolongé est visible et annulable comme les autres.
+// Prolonger repose un ban avec une nouvelle durée. `add element` sur un élément existant ne change son délai que depuis le noyau 6.12, et banAt garde
+// l'échéance la plus tardive : on le retire d'abord, et l'anti-tempête (cooldown) est levé pour cette adresse. Le journal de bans reçoit une nouvelle ligne (BanFor), donc le ban prolongé est visible et annulable comme les autres.
 func (b *NftBanner) Prolonger(ip, cat, sev string, duree time.Duration, now time.Time) {
-	set, ok := b.setPour(ip)
+	a, ok := adresseBan(ip)
 	if !ok {
 		return
 	}
+	ip = a.String()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = b.runner(ctx, "delete", "element", "inet", b.table, set, fmt.Sprintf("{ %s }", ip))
+	_, _ = b.runner(ctx, "delete", "element", "inet", b.table, b.setDe(a), fmt.Sprintf("{ %s }", ip))
 	b.mu.Lock()
 	delete(b.recent, ip)
 	b.mu.Unlock()

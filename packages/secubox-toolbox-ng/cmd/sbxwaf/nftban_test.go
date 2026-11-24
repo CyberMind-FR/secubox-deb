@@ -26,6 +26,11 @@ type fauxNft struct {
 func (f *fauxNft) run(_ context.Context, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if j := joint(args); strings.HasPrefix(j, "get element") {
+		return []byte("Error: No such file or directory"), errors.New("absent") // pas compté : lecture
+	} else if strings.HasPrefix(j, "-j -s list set") {
+		return []byte(`{"nftables":[{"set":{"name":"x"}}]}`), nil
+	}
 	f.cmds = append(f.cmds, args)
 	if f.fail {
 		return []byte("Operation not permitted"), errors.New("nft fail")
@@ -247,6 +252,13 @@ func (k *noyauNft) run(_ context.Context, args ...string) ([]byte, error) {
 			return []byte("chain waf_drop {\n ip saddr @waf_ban counter drop\n}"), nil
 		}
 		return []byte("chain waf_drop {\n}"), nil
+	case strings.HasPrefix(j, "get element"):
+		return []byte("Error: No such file or directory"), errors.New("exit status 1")
+	case strings.HasPrefix(j, "-j -s list set"):
+		if !k.table {
+			return k.absente, errors.New("exit status 1")
+		}
+		return []byte(`{"nftables":[{"set":{"name":"x"}}]}`), nil
 	case strings.HasPrefix(j, "add element"):
 		if !k.table {
 			return k.absente, errors.New("exit status 1")

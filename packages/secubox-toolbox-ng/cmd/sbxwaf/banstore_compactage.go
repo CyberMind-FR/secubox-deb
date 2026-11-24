@@ -249,12 +249,35 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 	}
 	ok = true
 	s.deplacer(fin, n, recopies)
+	if err := recopierTardives(f, n+recopies, s.path); err != nil {
+		return bilan, err
+	}
 	if err := syncDossier(dir); err != nil {
 		return bilan, err
 	}
 	bilan.Reecrit = true
 	bilan.OctetsApres = fin.Size()
 	return bilan, nil
+}
+
+// recopierTardives ajoute au nouveau journal ce qu'un autre processus (`wafctl unban`, qui ne connaît pas notre verrou) a
+// écrit dans l'ancien entre la recopie de la fin et le rename. Écrit plus tard encore, il voit que le chemin a changé
+// d'inode et récrit sa ligne lui-même.
+func recopierTardives(ancien *os.File, depuis int64, chemin string) error {
+	if _, err := ancien.Seek(depuis, io.SeekStart); err != nil {
+		return err
+	}
+	reste, err := io.ReadAll(io.LimitReader(ancien, 16<<20))
+	if err != nil || len(reste) == 0 {
+		return err
+	}
+	f, err := os.OpenFile(chemin, os.O_APPEND|os.O_WRONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(reste)
+	return err
 }
 
 // lireLignesBans lit les octets [0, taille) et rend une entrée par ligne terminée par « \n », et la fin n de la
@@ -291,10 +314,11 @@ func lireLignesBans(f *os.File, taille int64) ([]ligneBan, int64, error) {
 		l := ligneBan{ip: -1, taille: int32(len(ligne))}
 		var rec BanRecord
 		if json.Unmarshal(ligne, &rec) == nil && rec.IP != "" {
-			idx, vu := ips[rec.IP]
+			cle := cleBan(rec.IP)
+			idx, vu := ips[cle]
 			if !vu {
 				idx = int32(len(ips))
-				ips[rec.IP] = idx
+				ips[cle] = idx
 			}
 			l.ip, l.at, l.exp, l.ban = idx, rec.At, rec.Expires, rec.Action == "ban"
 		}

@@ -30,12 +30,14 @@ import (
 //     jusqu'à l'élément fautif, dans un budget d'essais ;
 //   - la table est lue une fois, et seuls les bans MANQUANTS sont reposés. Ce n'est pas qu'une économie : depuis le noyau
 //     6.12, `add element … timeout` sur un élément présent CHANGE son échéance (avant, il ne changeait rien). Une
-//     repose de tout raccourcirait un ban allongé hors du journal (wafctl prolonger). Table illisible : repose de tout ;
+//     repose de tout raccourcirait un ban allongé hors du journal (wafctl prolonger). Ensemble illisible : un second
+//     essai, puis la famille est laissée à la passe suivante, et l'état le dit ;
 //   - aucun DNS : seule la mémoire des robots est consultée (Connu) ; les vérifications sont faites à part, à débit
 //     borné (nftban_robots.go) ;
 //   - une seule repose à la fois, hors de la veille ; une table recréée pendant une repose la fait repartir de zéro.
 //
-// Rien n'est jamais retiré ici.
+// Rien n'est retiré, sauf ce que la passe vient elle-même de poser et qui a été levé entre-temps (wafctl unban, robot) :
+// la levée écrit son `unban` au journal AVANT de retirer l'élément, le journal relu en fin de passe la dit donc.
 const (
 	tailleLot       = 1000
 	delaiLot        = 20 * time.Second
@@ -84,7 +86,7 @@ func lancerNft(cmd *exec.Cmd, entree []byte) ([]byte, error) {
 // banARePoser est un ban du journal prêt pour nft : l'adresse vient de net/netip, jamais du texte du journal.
 type banARePoser struct {
 	adr     netip.Addr
-	ip      string // adresse telle que le journal l'écrit (clé de l'anti-tempête)
+	ip      string // adresse normalisée (clé de l'anti-tempête)
 	pose    int64
 	expires int64 // 0 : pas d'échéance au journal, la durée d'office est réarmée
 }
@@ -124,7 +126,7 @@ func (b *NftBanner) bansARePoser(now int64) []banARePoser {
 		if !ok || (b.robots != nil && b.robots.Connu(r.IP) != "") {
 			continue // un robot vérifié n'est pas reposé ; LibererRobots écrit son unban
 		}
-		p := banARePoser{adr: a, ip: r.IP, pose: r.At, expires: r.Expires}
+		p := banARePoser{adr: a, ip: a.String(), pose: r.At, expires: r.Expires}
 		if p.reste(now, b.duration) <= 0 {
 			continue
 		}
@@ -146,6 +148,8 @@ func (b *NftBanner) bansARePoser(now int64) []banARePoser {
 	return out
 }
 
+var errEnsembleAbsent = errors.New("ensemble nft absent")
+
 // lirePresents rend les adresses d'un ensemble, sans compteurs (`-s`). listeMu : un `nft -j list set` de 50 000 éléments
 // prend ~100 Mo, l'unité en a 384 — jamais deux à la fois.
 func (b *NftBanner) lirePresents(ctx context.Context, set string) (map[netip.Addr]struct{}, error) {
@@ -155,9 +159,16 @@ func (b *NftBanner) lirePresents(ctx context.Context, set string) (map[netip.Add
 	defer cancel()
 	out, err := b.runner(c, "-j", "-s", "list", "set", "inet", b.table, set)
 	if err != nil {
-		return nil, fmt.Errorf("nft list set %s : %v", set, err)
+		if tableEffacee(out) {
+			return nil, errEnsembleAbsent
+		}
+		return nil, fmt.Errorf("nft list set %s : %v: %s", set, err, tronque(strings.TrimSpace(string(out)), 120))
 	}
-	return decoderPresents(bytes.NewReader(out))
+	e, err := decoderPresents(bytes.NewReader(out))
+	if err != nil {
+		err = fmt.Errorf("nft list set %s : %v", set, err)
+	}
+	return e, err
 }
 
 // decoderPresents décode `nft -j list set` au fil de l'eau. Une sortie tronquée ou sans ensemble est une erreur, jamais
@@ -257,28 +268,34 @@ func decoderPresents(r io.Reader) (map[netip.Addr]struct{}, error) {
 	return out, nil
 }
 
-// manquants retire de `bans` ceux que nft porte déjà. Un ensemble illisible compte comme vide : repose de tout.
-func (b *NftBanner) manquants(ctx context.Context, bans []banARePoser) (absents []banARePoser, presents int) {
+// manquants retire de `bans` ceux que nft porte déjà. Ensemble absent : tout manque (le lot le constatera et fera recréer
+// la table). Ensemble illisible, deux fois : ses bans ne sont ni posés ni comptés — jamais un ajout à l'aveugle.
+func (b *NftBanner) manquants(ctx context.Context, bans []banARePoser) (absents []banARePoser, presents int, illisible error) {
 	parFamille := map[bool]map[netip.Addr]struct{}{}
+	sautee := map[bool]bool{}
 	for _, quatre := range []bool{true, false} {
 		set := b.set6
 		if quatre {
 			set = b.set4
 		}
 		e, err := b.lirePresents(ctx, set)
-		if err != nil {
-			log.Printf("sbxwaf: nft — %v : repose de tous les bans de %s", err, set)
+		if err != nil && err != errEnsembleAbsent {
+			e, err = b.lirePresents(ctx, set)
+		}
+		if err != nil && err != errEnsembleAbsent {
+			sautee[quatre], illisible = true, err
 		}
 		parFamille[quatre] = e
 	}
 	for _, p := range bans {
-		if _, ok := parFamille[p.adr.Is4()][p.adr]; ok {
+		quatre := p.adr.Is4()
+		if _, ok := parFamille[quatre][p.adr]; ok {
 			presents++
-		} else {
+		} else if !sautee[quatre] {
 			absents = append(absents, p)
 		}
 	}
-	return absents, presents
+	return absents, presents, illisible
 }
 
 // scriptLot écrit le script d'un lot, à l'instant où il part : délais exacts. Écartés : les échus, les robots reconnus
@@ -337,6 +354,8 @@ type bilanRepose struct {
 	tableAbsente                bool // table ou ensemble disparu en cours de passe
 	complet                     bool
 	dernierRefus                string
+	illisible                   error        // un ensemble n'a pas pu être lu : ses bans n'ont pas été reposés
+	envoyes                     []netip.Addr // posés par cette passe
 }
 
 func (r *bilanRepose) poses() int { return r.presents + r.ajoutes }
@@ -360,6 +379,9 @@ func (b *NftBanner) poserLot(ctx context.Context, lot []banARePoser, debut time.
 	b.poseMu.Unlock()
 	if err == nil {
 		r.ajoutes += n
+		for _, p := range lot {
+			r.envoyes = append(r.envoyes, p.adr)
+		}
 		return
 	}
 	r.presents -= deja // recomptés par les moitiés
@@ -395,17 +417,18 @@ func tronque(s string, n int) string {
 }
 
 // passe pose une fois les bans manquants ; complet=false : à rejouer (table recréée) ou délai épuisé.
-func (b *NftBanner) passe(ctx context.Context, generation int64) bilanRepose {
+func (b *NftBanner) passe(ctx context.Context, generation int64) (r bilanRepose) {
 	debut := time.Now()
 	bans := b.bansARePoser(debut.Unix())
-	r := bilanRepose{attendus: len(bans), budget: budgetIsolement}
+	r = bilanRepose{attendus: len(bans), budget: budgetIsolement}
 	if len(bans) == 0 {
 		r.complet = true
 		return r
 	}
 	var absents []banARePoser
-	absents, r.presents = b.manquants(ctx, bans)
+	absents, r.presents, r.illisible = b.manquants(ctx, bans)
 	b.publierRepose(r)
+	defer func() { b.retirerLeves(r.envoyes) }()
 	for i := 0; i < len(absents); i += tailleLot {
 		if ctx.Err() != nil || b.generation.Load() != generation {
 			return r
@@ -416,14 +439,58 @@ func (b *NftBanner) passe(ctx context.Context, generation int64) bilanRepose {
 		}
 		b.publierRepose(r)
 	}
-	r.complet = ctx.Err() == nil
+	r.complet = ctx.Err() == nil && r.illisible == nil
 	return r
 }
 
 func (b *NftBanner) publierRepose(r bilanRepose) {
 	b.mu.Lock()
-	b.bansAttendus, b.bansPoses = r.attendus, r.poses()
+	b.bansAttendus = r.attendus
+	if r.illisible == nil { // sinon le compte est inconnu : le précédent reste
+		b.bansPoses = r.poses()
+	}
 	b.mu.Unlock()
+}
+
+// retirerLeves retire de nft les adresses que la passe a posées et dont le ban n'est plus actif au journal.
+func (b *NftBanner) retirerLeves(envoyes []netip.Addr) {
+	if len(envoyes) == 0 {
+		return
+	}
+	b.poseMu.Lock() // ni ban ni levée de robot entre la relecture et le retrait
+	defer b.poseMu.Unlock()
+	actifs := map[netip.Addr]struct{}{}
+	for _, r := range b.store.ActiveBans(time.Now().Unix()) {
+		if a, ok := adresseBan(r.IP); ok {
+			actifs[a] = struct{}{}
+		}
+	}
+	var leves []netip.Addr
+	for _, a := range envoyes {
+		if _, ok := actifs[a]; !ok {
+			leves = append(leves, a)
+		}
+	}
+	for i := 0; i < len(leves); i += tailleLot {
+		var script []byte
+		for _, a := range leves[i:min(i+tailleLot, len(leves))] {
+			// Ajout puis retrait, en une transaction : le retrait d'un élément déjà parti ferait échouer le lot.
+			script = fmt.Appendf(script, "add element inet %s %s { %s timeout 60s }\ndelete element inet %s %s { %s }\n",
+				b.table, b.setDe(a), a, b.table, b.setDe(a), a)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), delaiLot)
+		out, err := b.scripts(ctx, script)
+		cancel()
+		if err != nil {
+			msg := fmt.Sprintf("retrait de bans levés pendant la repose : %v: %s", err, tronque(strings.TrimSpace(string(out)), 200))
+			log.Printf("sbxwaf: nft — %s", msg)
+			b.noterEchec(msg)
+			return
+		}
+	}
+	if len(leves) > 0 {
+		log.Printf("sbxwaf: nft — %d ban(s) levé(s) pendant la repose, retiré(s)", len(leves))
+	}
 }
 
 // Reload remet dans nft les bans actifs du journal qui n'y sont pas (démarrage, réparation) et rend leur nombre. C'est
@@ -475,13 +542,16 @@ func (b *NftBanner) reposer() int {
 	}
 	b.mu.Lock()
 	b.reposeEnCours = false
-	b.bansAttendus, b.bansPoses = r.attendus, r.poses()
 	if r.complet {
 		b.derniereRepose = time.Now()
 	}
 	b.mu.Unlock()
+	b.publierRepose(r)
 	if !r.complet || r.refuses > 0 {
 		msg := fmt.Sprintf("repose incomplète : %d ban(s) sur %d en place", r.poses(), r.attendus)
+		if r.illisible != nil {
+			msg = fmt.Sprintf("repose incomplète, ensemble illisible : %v", r.illisible)
+		}
 		if r.dernierRefus != "" {
 			msg += " (" + r.dernierRefus + ")"
 		}

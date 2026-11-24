@@ -110,6 +110,8 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl unban <ip> [fin_max]` | #3930 : ligne `unban` au journal de sbxwaf (`bans.jsonl`, adresse normalisée) **avant** le retrait nft, sinon la ré-affirmation (2 min) remettait le ban ; journal présent mais lien, d'un autre compte ou non inscriptible : `refus:journal`, rien n'est levé ; audit `waf-unban` |
+| `wafctl unban-liste <fichier>` | **root seul**, hors sudoers : une adresse par ligne (invalides comptées et sautées), une écriture au journal puis nft par lots de 1 000 ; audit `waf-unban-liste` |
 | `wafctl leurre <ip> <N>s` / `wafctl leurre-lever <ip>` | #3723 : redirection d'une adresse publique IPv4 ou IPv6 vers le théâtre de sbxwaf (1 h à 7 j, sinon `refus:duree`) : remplacement atomique de `/var/lib/secubox/waf/leurres-ip.json` sous verrou ; sortie `{"fin": <epoch>}` ou `refus:<motif>` (`plein` au-delà de 2 048) ; garde d'office ; sudoers `SBX_WAF_LEURRE` |
 | `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
 | `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
@@ -319,8 +321,8 @@ ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : ét
 `/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
 enregistrée.
 
-**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban et le relit au
-démarrage. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
+**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban (`wafctl unban`
+y ajoute les siennes, #3930) ; il le relit au démarrage et en ré-affirme toutes les 2 min les bans qui manquent à nft. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
 de `--ban-store-fenetre` (31 j d'office, jamais moins de 30 j : récidive leurre et campagne, plafond de chaîne de la
 réévaluation, vue `/enforcement`), le dernier état de chaque ban actif et toute chaîne de bans qui atteint la fenêtre ; le
 reste est ajouté à `bans-AAAAMM.jsonl.gz` (mois de `at`, gzip multi-membres, `zcat` le lit), archives purgées au-delà de

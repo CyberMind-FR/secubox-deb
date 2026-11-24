@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,6 +109,34 @@ func (s *BanStore) ActiveBans(now int64) []BanRecord {
 	return actifs
 }
 
+// Actif rend le ban actif de l'adresse au journal.
+func (s *BanStore) Actif(ip string, now int64) (BanRecord, bool) {
+	if s == nil {
+		return BanRecord{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.Open(s.path)
+	if err != nil {
+		s.idx = nil
+		return BanRecord{}, false
+	}
+	defer f.Close()
+	s.suivre(f, now)
+	r, ok := s.idx.dernier[cleBan(ip)]
+	return r, ok && (r.Expires == 0 || r.Expires > now)
+}
+
+// cleBan : une adresse, une clé, quelle que soit son écriture au journal (IPv6 non abrégée, IPv4 en ::ffff:). Un unban
+// écrit sous la forme normalisée lève ainsi un ban écrit autrement.
+func cleBan(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
+	}
+	return a.Unmap().String()
+}
+
 // INDEX DU JOURNAL (#3930). À 1 000 bans par heure et 31 jours gardés, le journal compte des centaines de milliers de
 // lignes (~80 Mo) ; la réévaluation (30 s), la repose (2 min) et les campagnes (5 min) le relisaient chaque fois en
 // entier, sous le verrou qu'Append attend. L'index garde le dernier ban de chaque adresse et ne relit que les octets
@@ -174,6 +203,7 @@ func (x *indexBans) appliquer(ligne []byte, now int64) {
 	if json.Unmarshal(ligne, &r) != nil || r.IP == "" {
 		return // ligne corrompue : on l'ignore, on ne casse pas la relecture
 	}
+	r.IP = cleBan(r.IP)
 	if r.Action != "ban" || (r.Expires != 0 && r.Expires <= now-margeIndex) {
 		delete(x.dernier, r.IP)
 		return
@@ -236,7 +266,8 @@ func (s *BanStore) CompteCategorie(ip, prefixe string, depuis int64) int {
 	}
 	defer f.Close()
 	n := 0
-	motif := []byte(`"` + ip + `"`) // l'essentiel du coût est le décodage : seules les lignes de l'adresse le méritent
+	ip = cleBan(ip)
+	motif := []byte(ip + `"`) // l'essentiel du coût est le décodage : seules les lignes de l'adresse le méritent
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -244,7 +275,7 @@ func (s *BanStore) CompteCategorie(ip, prefixe string, depuis int64) int {
 			continue
 		}
 		var r BanRecord
-		if json.Unmarshal(sc.Bytes(), &r) == nil && r.Action == "ban" && r.IP == ip && r.At >= depuis && strings.HasPrefix(r.Category, prefixe) {
+		if json.Unmarshal(sc.Bytes(), &r) == nil && r.Action == "ban" && cleBan(r.IP) == ip && r.At >= depuis && strings.HasPrefix(r.Category, prefixe) {
 			n++
 		}
 	}
@@ -265,7 +296,8 @@ func (s *BanStore) DepuisChaine(ip string, maintenant int64) time.Duration {
 	}
 	defer f.Close()
 	debut, fin := int64(0), int64(0)
-	motif := []byte(`"` + ip + `"`)
+	ip = cleBan(ip)
+	motif := []byte(ip + `"`)
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -273,7 +305,7 @@ func (s *BanStore) DepuisChaine(ip string, maintenant int64) time.Duration {
 			continue
 		}
 		var r BanRecord
-		if json.Unmarshal(sc.Bytes(), &r) != nil || r.IP != ip || r.Action != "ban" {
+		if json.Unmarshal(sc.Bytes(), &r) != nil || cleBan(r.IP) != ip || r.Action != "ban" {
 			continue
 		}
 		if debut == 0 || r.At > fin+300 {

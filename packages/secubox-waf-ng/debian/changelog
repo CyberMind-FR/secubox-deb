@@ -13,7 +13,15 @@ secubox-waf-ng (1.44.2-1~trixie1) trixie; urgency=high
     compteurs ne lit plus les éléments ; un seul « list set » à la fois.
   * Robots vérifiés : libérés en arrière-plan à 5 vérifications/s et 20 min par
     passe (démarrage, puis chaque heure), réseaux des moteurs d'abord ; une
-    panne DNS est retentée, un robot connu n'est plus chassé de la mémoire.
+    panne DNS est retentée à chaque passe, un robot connu n'est plus chassé de la mémoire.
+  * wafctl unban : écrit l'unban au journal de sbxwaf avant le retrait nft
+    (la ré-affirmation remettait le ban en 2 min) ; nouveau verbe
+    unban-liste <fichier> (root seul). Un ban levé pendant une repose est
+    retiré en fin de passe ; le compactage garde les lignes écrites pendant
+    le rename ; une adresse n'a qu'une clé au journal.
+  * Un nouveau ban ne raccourcit plus un ban en place (échéance la plus
+    tardive). Ensemble nft illisible : second essai, puis famille sautée,
+    jamais de repose à l'aveugle. nft-etat.json : nft_fige.
   * Journal des bans : index suivi au fil du fichier au lieu d'une relecture
     complète toutes les 30 s.
 

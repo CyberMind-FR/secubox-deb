@@ -31,7 +31,8 @@ type noyauLots struct {
 	refuses   map[string]bool
 	execs     int // scripts + listes
 	scripts   []string
-	listeKO   bool
+	listeKO   int // lectures à faire échouer
+	listes    int
 	avant     func(n int) // appelé AVANT le n-ième script (0, 1, …), hors verrou
 	toutRefus bool
 }
@@ -60,9 +61,24 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 			return absente, errors.New("exit status 1")
 		}
 		return []byte("ip saddr @waf_ban counter drop"), nil
+	case strings.HasPrefix(j, "get element"):
+		ip := strings.Fields(args[len(args)-1])[1]
+		d, ok := k.elems[ip]
+		if !ok {
+			return absente, errors.New("exit status 1")
+		}
+		if d == 0 {
+			return []byte("elements = { " + ip + " counter packets 0 bytes 0 }"), nil
+		}
+		return []byte(fmt.Sprintf("elements = { %s counter packets 0 bytes 0 timeout 9d expires %dh%dm%ds500ms }", ip, d/3600, d/60%60, d%60)), nil
 	case strings.HasPrefix(j, "-j -s list set"):
 		k.execs++
-		if k.listeKO || !k.table {
+		k.listes++
+		if k.listeKO > 0 {
+			k.listeKO--
+			return []byte("Error: Operation not permitted"), errors.New("exit status 1")
+		}
+		if !k.table {
 			return absente, errors.New("exit status 1")
 		}
 		return k.liste(args[len(args)-1]), nil
@@ -72,7 +88,8 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 		if !k.table {
 			return absente, errors.New("exit status 1")
 		}
-		k.elems[strings.Fields(args[5])[1]] = 1
+		f := strings.Fields(args[5])
+		k.elems[f[1]], _ = strconv.ParseInt(strings.TrimSuffix(f[3], "s"), 10, 64) // noyau ≥ 6.12 : change le délai
 	}
 	return nil, nil
 }
@@ -99,10 +116,15 @@ func (k *noyauLots) script(ctx context.Context, script []byte) ([]byte, error) {
 		return []byte("Error: Operation not permitted"), errors.New("exit status 1")
 	}
 	neufs := map[string]int64{}
+	var retires []string
 	for _, l := range strings.Split(strings.TrimSpace(string(script)), "\n") {
 		champs := strings.SplitN(l, "{", 2)
 		for _, e := range strings.Split(strings.Trim(champs[1], " }"), ", ") {
 			f := strings.Fields(e)
+			if strings.HasPrefix(champs[0], "delete element") {
+				retires = append(retires, f[0])
+				continue
+			}
 			if len(f) != 3 || f[1] != "timeout" {
 				return []byte("Error: syntax error"), errors.New("exit status 1")
 			}
@@ -115,9 +137,10 @@ func (k *noyauLots) script(ctx context.Context, script []byte) ([]byte, error) {
 		}
 	}
 	for ip, d := range neufs {
-		if _, deja := k.elems[ip]; !deja {
-			k.elems[ip] = d
-		}
+		k.elems[ip] = d
+	}
+	for _, ip := range retires {
+		delete(k.elems, ip)
 	}
 	return nil, nil
 }
@@ -220,12 +243,129 @@ func TestRepose_SeulsLesManquants(t *testing.T) {
 	}
 }
 
-func TestRepose_TableIllisibleReposeDeTout(t *testing.T) {
-	b, k := banneurLots(t, bansTest(1500, time.Now().Unix()))
-	k.listeKO = true
-	if n := b.Reload(); n != 1500 || len(k.scripts) != 2 {
-		t.Fatalf("liste illisible : tout est reposé par lots (%d bans, %d scripts)", n, len(k.scripts))
+func TestRepose_EnsembleIllisibleUnSecondEssaiPuisFamilleSautee(t *testing.T) {
+	recs := bansTest(1500, time.Now().Unix())
+	recs[0].IP = "2001:db8::1"
+	b, k := banneurLots(t, recs)
+	k.elems[ipTest(3)] = 999999 // présent : jamais raccourci
+	k.listeKO = 1
+	if n := b.Reload(); n != 1499 || k.elems[ipTest(3)] != 999999 {
+		t.Fatalf("second essai : %d reposés, délai %d", n, k.elems[ipTest(3)])
 	}
+	k.flushRuleset()
+	_ = b.Ensure()
+	k.elems[ipTest(3)] = 999999
+	k.listeKO = 2 // les deux lectures de waf_ban
+	if n := b.Reload(); n != 1 || k.nb() != 2 || k.elems[ipTest(3)] != 999999 {
+		t.Fatalf("famille illisible sautée, l'autre reposée : %d, %d éléments", n, k.nb())
+	}
+	if e := b.Etat(); !strings.Contains(e.DernierEchec, "illisible") || e.BansPoses != 1500 || e.BansAttendus != 1500 {
+		t.Fatalf("état : %+v", e)
+	}
+	if n := b.Reload(); n != 1498 || k.nb() != 1500 {
+		t.Fatalf("passe suivante : %d, %d", n, k.nb())
+	}
+}
+
+// Une sortie vide ou tronquée n'est pas un ensemble vide.
+func TestRepose_SortieIllisibleNEstPasUnEnsembleVide(t *testing.T) {
+	b, k := banneurLots(t, bansTest(10, time.Now().Unix()))
+	b.runner = func(ctx context.Context, args ...string) ([]byte, error) {
+		if strings.HasPrefix(joint(args), "-j -s list set") {
+			return []byte(`{"nftables":[{"set":{"elem":[`), nil
+		}
+		return k.run(ctx, args...)
+	}
+	if b.Reload() != 0 || k.nb() != 0 {
+		t.Fatal("rien ne se pose à l'aveugle")
+	}
+}
+
+// I3 : levé (unban au journal, puis retrait nft) pendant la repose, le ban que le lot vient de remettre repart.
+func TestRepose_LevePendantLaReposeRepart(t *testing.T) {
+	b, k := banneurLots(t, bansTest(2500, time.Now().Unix()))
+	k.avant = func(n int) {
+		if n == 1 { // le lot est déjà écrit : il contient l'adresse
+			_ = b.store.Append(BanRecord{IP: ipTest(1500), At: time.Now().Unix(), Action: "unban"})
+			_ = b.store.Append(BanRecord{IP: ipTest(10), At: time.Now().Unix(), Action: "unban"}) // lot déjà passé, élément posé
+		}
+	}
+	b.Reload()
+	if _, p := k.elems[ipTest(1500)]; p || k.nb() != 2498 {
+		t.Fatalf("%d éléments, le ban levé est resté : %v", k.nb(), p)
+	}
+}
+
+func TestBanAt_GardeLEcheanceLaPlusTardive(t *testing.T) {
+	now := time.Now().Unix()
+	b, k := banneurLots(t, []BanRecord{{IP: "203.0.113.1", At: now, Expires: now + 7*86400, Action: "ban"}})
+	b.cooldown = 0
+	exp := func(ip string) int64 { r, _ := b.store.Actif(ip, now); return r.Expires }
+	b.BanFor("203.0.113.1", "leurre:x", "high", time.Hour) // journal plus long, absent de nft
+	if d := k.elems["203.0.113.1"]; d < 7*86400-5 || exp("203.0.113.1") != now+7*86400 {
+		t.Fatalf("journal : %d, exp %d", d, exp("203.0.113.1")-now)
+	}
+	k.elems["203.0.113.2"] = 86400 // à la main, hors journal
+	b.BanFor("203.0.113.2", "x", "high", time.Hour)
+	if k.elems["203.0.113.2"] != 86400 || exp("203.0.113.2") > now+3610 {
+		t.Fatalf("élément plus long raccourci : %d", k.elems["203.0.113.2"])
+	}
+	k.elems["203.0.113.3"] = 0 // sans échéance
+	b.BanFor("203.0.113.3", "x", "high", time.Hour)
+	if k.elems["203.0.113.3"] != 0 {
+		t.Fatal("un ban sans échéance n'en reçoit pas")
+	}
+	k.elems["203.0.113.4"] = 60
+	b.BanFor("::ffff:203.0.113.4", "x", "high", time.Hour)
+	if k.elems["203.0.113.4"] != 3600 || exp("203.0.113.4") == 0 {
+		t.Fatalf("plus court : allongé, adresse normalisée : %v", k.elems)
+	}
+}
+
+func TestTableEffacee(t *testing.T) {
+	for s, v := range map[string]bool{
+		"Error: No such file or directory\nadd element inet secubox waf_ban":             true,
+		"Error: No such file or directory; did you mean table 'x' in family inet?\nlist": true,
+		"/dev/stdin:1:18-21: Error: No such file or directory\nadd":                      true,
+		"Error: Could not process rule: No such file or directory\n":                     true,
+		"exec: nft: No such file or directory":                                           false,
+		"Error: cannot open /x: No such file or directory":                               false,
+		"Error: Operation not permitted":                                                 false, "": false,
+	} {
+		if tableEffacee([]byte(s)) != v {
+			t.Errorf("%q : %v attendu", s, v)
+		}
+	}
+}
+
+func TestVeiller_NftFige(t *testing.T) {
+	b, k := banneurLots(t, nil)
+	b.etatFichier = filepath.Join(t.TempDir(), "e.json")
+	var fige atomic.Bool
+	liberer := make(chan struct{})
+	fige.Store(true)
+	b.runner = func(ctx context.Context, args ...string) ([]byte, error) {
+		if fige.Load() {
+			<-liberer // processus nft que rien ne tue
+		}
+		return k.run(ctx, args...)
+	}
+	fin := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); b.veillerJusqua(fin, 5*time.Millisecond, time.Hour) }()
+	lire := func() (e EtatNft) {
+		raw, _ := os.ReadFile(b.etatFichier)
+		_ = json.Unmarshal(raw, &e)
+		return e
+	}
+	attendre(t, "nft figé publié", func() bool { e := lire(); return e.NftFige && e.DernierEchec != "" })
+	fige.Store(false)
+	close(liberer)
+	attendre(t, "nft répond de nouveau", func() bool { return !lire().NftFige })
+	close(fin)
+	wg.Wait()
+	finRepose(b)
 }
 
 func TestRepose_UnElementRefuseNePerdPasLesAutres(t *testing.T) {
@@ -288,7 +428,8 @@ func TestRepose_BanPlusRecentQueLeRelevePasRejoue(t *testing.T) {
 	cible := ipTest(1400) // second lot
 	k.avant = func(n int) {
 		if n == 0 {
-			b.BanFor(cible, "leurre:x", "high", 24*time.Hour)
+			go b.BanFor(cible, "leurre:x", "high", 24*time.Hour) // attend poseMu
+			attendre(t, "ban en attente", func() bool { b.mu.Lock(); defer b.mu.Unlock(); return !b.recent[cible].IsZero() })
 		}
 	}
 	b.Reload()
@@ -438,7 +579,7 @@ func TestRepose_RobotLibereEntreTempsNeRevientPas(t *testing.T) {
 	k.avant = func(n int) {
 		if n == 0 {
 			c.Verifie(ipTest(1400)) // ce que fait LibererRobots avant d'attendre poseMu
-			go b.leverRobot(ipTest(1400), "googlebot.com", []string{ipTest(1400)})
+			go b.leverRobot(ipTest(1400), "googlebot.com")
 		}
 	}
 	b.Reload()
@@ -448,7 +589,7 @@ func TestRepose_RobotLibereEntreTempsNeRevientPas(t *testing.T) {
 	}
 }
 
-func TestLibererRobots_ReponseFermeUneFoisPanneRetentee3Fois(t *testing.T) {
+func TestLibererRobots_ReponseFermeUneFoisPanneRetenteeAChaquePasse(t *testing.T) {
 	b, _ := banneurLots(t, bansTest(40, time.Now().Unix()))
 	b.Reload()
 	c := NewCrawlers()
@@ -472,7 +613,7 @@ func TestLibererRobots_ReponseFermeUneFoisPanneRetentee3Fois(t *testing.T) {
 		v, ok := rq.Load(ipTest(i))
 		voulu := int32(1)
 		if i == 1 {
-			voulu = robotsEssaisMax
+			voulu = 6
 		}
 		if !ok || v.(*atomic.Int32).Load() != voulu {
 			t.Fatalf("%s : %v requêtes, attendu %d", ipTest(i), v, voulu)
@@ -628,6 +769,50 @@ func TestActiveBans_IndexEgaleRelecture(t *testing.T) {
 	}
 }
 
+func TestBanStore_UneAdresseUneCle(t *testing.T) {
+	s := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
+	now := time.Now().Unix()
+	for _, ip := range []string{"::ffff:203.0.113.1", "2001:DB8:0:0::1"} {
+		_ = s.Append(BanRecord{IP: ip, Category: "leurre:x", At: now, Expires: now + 9e6, Action: "ban"})
+	}
+	if a := s.ActiveBans(now); len(a) != 2 || s.CompteCategorie("203.0.113.1", "leurre:", 0) != 1 || s.DepuisChaine("203.0.113.1", now+5) == 0 {
+		t.Fatalf("%+v", a)
+	}
+	_ = s.Append(BanRecord{IP: "203.0.113.1", At: now, Action: "unban"})
+	_ = s.Append(BanRecord{IP: "2001:db8::1", At: now, Action: "unban"})
+	if a := s.ActiveBans(now); len(a) != 0 {
+		t.Fatalf("unban normalisé : %+v", a)
+	}
+	if _, err := s.Compacter(time.Unix(now, 0).Add(40*24*time.Hour), CompactageBans{Fenetre: 31 * 24 * time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if a := (&BanStore{path: s.path}).ActiveBans(now); len(a) != 0 {
+		t.Fatalf("le compactage sépare le ban de son unban : %+v", a)
+	}
+}
+
+// Écrit dans l'ancien fichier entre la recopie de la fin et le rename (wafctl unban) : rien ne se perd.
+func TestRecopierTardives(t *testing.T) {
+	dir := t.TempDir()
+	vieux, neuf := filepath.Join(dir, "vieux"), filepath.Join(dir, "neuf")
+	_ = os.WriteFile(vieux, []byte("a\nb\n"), 0o640)
+	_ = os.WriteFile(neuf, []byte("b\n"), 0o640)
+	f, _ := os.Open(vieux)
+	defer f.Close()
+	g, _ := os.OpenFile(vieux, os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = g.WriteString("unban\n")
+	g.Close()
+	if err := recopierTardives(f, 4, neuf); err != nil {
+		t.Fatal(err)
+	}
+	if err := recopierTardives(f, 10, neuf); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(neuf); string(b) != "b\nunban\n" {
+		t.Fatalf("%q", b)
+	}
+}
+
 func TestActiveBans_LIndexSurvitAuCompactage(t *testing.T) {
 	s := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
 	now := time.Now()
@@ -737,6 +922,20 @@ func TestRepose_NftReel(t *testing.T) {
 				t.Fatalf("%+v", b.Etat())
 			}
 		})
+		for ip, set := range map[string]string{"203.0.113.77": "waf_ban", "2001:db8:ffff::77": "waf_ban6"} {
+			if out, err := exec.Command("nft", "add", "element", "inet", "secubox", set, "{ "+ip+" timeout 7d }").CombinedOutput(); err != nil {
+				t.Fatalf("%v %s", err, out)
+			}
+			b.BanFor(ip, "leurre:x", "high", time.Hour)
+			if r, ok := b.resteElement(context.Background(), set, ip); !ok || r < 7*86400-10 {
+				t.Fatalf("%s : ban manuel de 7 j raccourci à %d s (%v)", ip, r, ok)
+			}
+			store.Append(BanRecord{IP: ip, At: now, Action: "unban"})
+			b.retirerLeves([]netip.Addr{netip.MustParseAddr(ip)})
+			if _, ok := b.resteElement(context.Background(), set, ip); ok {
+				t.Fatalf("%s : levé, encore là", ip)
+			}
+		}
 		store.Append(BanRecord{IP: "11.9.9.9", At: now, Expires: 1 << 60, Action: "ban"})
 		if got := b.Reload(); got != 1 {
 			t.Fatalf("échéance démesurée bornée, %d", got)
