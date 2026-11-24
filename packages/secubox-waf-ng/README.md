@@ -436,7 +436,7 @@ hebergeur = [64496, 64497]
 **Relevé** : toutes les 30 min, l'API lance `python3 -m api.populations` (compte `secubox`, `nice` 10, `ionice` best-effort 7, tué à 540 s, jamais deux à la fois) sur
 7 jours de `waf-threats.log*` ; cache `/var/lib/secubox/waf/populations.json` (0640), double tampon : une passe
 partielle n'écrase pas un relevé complet de moins d'une heure.
-Réserve `/var/lib/secubox/waf/populations-agregats/` (0770, groupe secubox-waf) : agrégat de chaque journal tourné, nommé par
+Réserve `/var/lib/secubox/waf/populations-agregats/` (2770, groupe secubox-waf, fichiers 0640) : agrégat de chaque journal tourné, nommé par
 (st_dev, st_ino, taille, mtime), et réseau et pays des adresses déjà cherchées (valables tant que les bases GeoIP ne changent
 pas) ; jamais un compte en clair ; effaçable sans risque, elle se refait. Un relevé de 30 à 40 min est normal.
 `GET /api/v1/waf/populations` (`require_lecture_ai`) rend ce cache : `{"disponible": false}` s'il manque, sinon

@@ -18,7 +18,7 @@ acces = [
   4766, 9318,                             # Korea Telecom, SK Broadband (KR)
   4134, 4837, 9808,                       # Chinanet, China Unicom, China Mobile (CN)
   25159, 12389,                           # MegaFon, Rostelecom (RU)
-  10429, 28573,                           # Telefônica Brasil, Claro (BR)
+  28573,                                  # Claro (BR)
   9498, 55836,                            # Bharti Airtel, Reliance Jio (IN)
   3215, 12322, 15557, 5410,               # Orange, Free, SFR, Bouygues (FR)
   3320, 3209,                             # Deutsche Telekom, Vodafone (DE)

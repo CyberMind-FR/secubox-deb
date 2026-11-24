@@ -388,9 +388,88 @@ def test_agregats_gardes_meme_releve_et_journaux_tournes_non_relus(tmp_path, mon
     prof = [{"signature": "00aa11bb22cc33dd", "attaquants": [f"9.{i}.0.1" for i in range(12)]}]
     assert _pop(_assemble(d, reserve, campagnes_profileur=prof), "profileur:00aa11bb22cc33dd")["adresses"] == 4
     fichiers = sorted(reserve.iterdir())
-    assert len(fichiers) == 2 and all(stat.S_IMODE(f.stat().st_mode) == 0o660 for f in fichiers)
-    assert stat.S_IMODE(reserve.stat().st_mode) == 0o770
+    assert len(fichiers) == 2 and all(stat.S_IMODE(f.stat().st_mode) == 0o640 for f in fichiers)
+    assert stat.S_IMODE(reserve.stat().st_mode) in (0o2770, 0o770)
     assert all("gerald" not in f.read_text() for f in fichiers)      # jamais un compte en clair, même en réserve
+
+
+def test_reserve_au_groupe_secubox_waf(tmp_path, monkeypatch):
+    """Dossier 2770 et fichiers 0640 au groupe secubox-waf : lisibles après le chown de l'unité du WAF."""
+    gid = os.getgid()
+    monkeypatch.setattr(P, "_gid_waf", lambda: gid)
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    reserve.mkdir(0o700)                                      # dossier d'une version antérieure : remis en ordre
+    _assemble(d, reserve)
+    assert stat.S_IMODE(reserve.stat().st_mode) == 0o2770 and reserve.stat().st_gid == gid
+    for f in reserve.iterdir():
+        assert stat.S_IMODE(f.stat().st_mode) == 0o640 and f.stat().st_gid == gid
+
+
+@pytest.mark.parametrize("gid", [None, 0])
+def test_reserve_sans_le_groupe_continue(tmp_path, monkeypatch, gid):
+    """Groupe absent, ou qu'on ne peut pas donner : la réserve sert quand même."""
+    monkeypatch.setattr(P, "_gid_waf", lambda: gid)
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, None)
+    assert _assemble(d, reserve) == ref and len(list(reserve.iterdir())) == 2
+
+
+def test_temporaires_abandonnes_effaces(tmp_path):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    reserve.mkdir()
+    vieux, neuf = reserve / ".tmp-vieux", reserve / ".tmp-neuf"
+    for f, age in ((vieux, 7200), (neuf, 60)):
+        f.write_text("x")
+        os.utime(f, (MAINTENANT - age, MAINTENANT - age))
+    _assemble(d, reserve)
+    assert not vieux.exists() and neuf.exists()
+
+
+def _corrompre(d, cle, valeur):
+    d[cle] = valeur
+    return d
+
+
+@pytest.mark.parametrize("abime", [
+    lambda d: _corrompre(d, "ips", ["9.0.0.1", 3] * 9), lambda d: _corrompre(d, "ips", ["x" * 500] * 9),
+    lambda d: _corrompre(d, "cles", ["famille inventée"] * 9), lambda d: _corrompre(d, "cibles", ["203.0.113.9"] * 9),
+    lambda d: _corrompre(d, "cibles", ["<script>"] * 9), lambda d: _corrompre(d, "t", ["1"] * 8),
+    lambda d: _corrompre(d, "t", [1.5] * 8), lambda d: _corrompre(d, "t", [-1] * 8), lambda d: _corrompre(d, "t", [True] * 8),
+    lambda d: _corrompre(d, "t", [10 ** 30] * 8), lambda d: _corrompre(d, "t", {"a": 1}),
+    lambda d: _corrompre(d, "reseaux", [[0, "64500", 0, "acces"]]), lambda d: _corrompre(d, "reseaux", [[0, 64500, 0, "inventee"]]),
+    lambda d: _corrompre(d, "cves", {"9.0.0.1": {"<b>": 1}}), lambda d: _corrompre(d, "cves", []), lambda d: _corrompre(d, "complet", 1)])
+def test_agregat_de_types_faux_recalcule(tmp_path, abime):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, reserve)
+    for f in reserve.iterdir():
+        f.write_text(json.dumps(abime(json.loads(f.read_text()))))
+    assert _assemble(d, reserve) == ref
+
+
+def test_agregat_trop_gros_profond_ou_lien_recalcule(tmp_path, monkeypatch):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, reserve)
+    fichiers = list(reserve.iterdir())
+    fichiers[0].write_text("[" * 200_000)                      # RecursionError, pas une ValueError
+    fichiers[1].unlink()
+    (tmp_path / "ailleurs.json").write_text("{}")
+    fichiers[1].symlink_to(tmp_path / "ailleurs.json")
+    assert _assemble(d, reserve) == ref
+    monkeypatch.setattr(P, "MAX_AGREGAT_OCTETS", 10)
+    assert _assemble(d, reserve) == ref
+
+
+def test_memo_adresses_de_types_faux_recherche_de_nouveau(tmp_path, monkeypatch):
+    class A:
+        def signature(self): return [1]
+        def classer(self, ip): return (64500, "Org", "inconnu")
+        def classe_asn(self, asn): return "hebergeur"
+        def pays(self, ip): return "FR"
+    (tmp_path / "adresses.json").write_text(json.dumps({"signature": [1], "adresses": {
+        "a": [True, "x", "FR"], "b": [1, 7, "FR"], "c": [1, "x", "<b>"], "d": "x", "e": [-4, "x", "FR"]}}))
+    m = P.MemoAdresses(A(), str(tmp_path))
+    for ip in "abcde":
+        assert m.classer(ip) == (64500, "Org", "hebergeur") and m.pays(ip) == "FR", ip
 
 
 def test_agregat_recalcule_si_le_journal_change_et_perime_efface(tmp_path):

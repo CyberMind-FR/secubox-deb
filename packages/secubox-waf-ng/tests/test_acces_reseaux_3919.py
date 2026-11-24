@@ -101,3 +101,19 @@ def test_actord_a_de_quoi_tenir_le_cache_de_pages_de_ses_bases():
         return int(v[:-1])
     assert mo("MemoryHigh") >= 450 and mo("MemoryMax") >= mo("MemoryHigh")
     assert "GOMEMLIMIT=180MiB" in _valeurs(ACTORD, "Environment")      # la mémoire propre reste bornée
+
+
+def test_un_fichier_disparu_ne_bloque_pas_le_demarrage_du_waf():
+    """`find … -exec chown` échoue si un fichier (temporaire du relevé) disparaît pendant la passe : jamais fatal."""
+    waf = (PAQUET / "systemd" / "secubox-waf-ng.service").read_text(encoding="utf-8")
+    lignes = [l for l in waf.splitlines() if l.startswith("ExecStartPre=") and "/usr/bin/find" in l]
+    assert len(lignes) == 1 and lignes[0].startswith("ExecStartPre=-+/usr/bin/find /var/lib/secubox/waf ")
+    assert "ExecStartPre" not in (PAQUET / "conf" / "honeypot.conf").read_text(encoding="utf-8")   # rien à refléter
+
+
+def test_actord_capte_l_arret_avant_le_rejeu():
+    """SIGTERM pendant le rejeu : sortie par les `defer` (liste des pages libres écrite), jamais un arrêt brutal."""
+    src = (TNG / "cmd" / "sbx-actord" / "main.go").read_text(encoding="utf-8")
+    ctx = src.index("signal.NotifyContext(")
+    assert src.index("defer led.Close()") < ctx < src.index("srv.rebuild()") < src.index("if ctx.Err() != nil")
+    assert src.index("if ctx.Err() != nil") < src.index("srv.serveIngest(") and src.count("signal.NotifyContext(") == 1

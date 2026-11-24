@@ -5,11 +5,14 @@ secubox-waf-ng (1.44.1-1~trixie1) trixie; urgency=medium
     tournés et recherches GeoIP gardés dans
     /var/lib/secubox/waf/populations-agregats, lignes hors sujet écartées
     sans décodage ; une rotation pendant la passe ne compte plus deux fois
-    un journal. La classe d'un réseau est celle du catalogue du jour.
+    un journal. Réserve 2770 au groupe secubox-waf, fichiers 0640,
+    contenu contrôlé à la lecture. La classe d'un réseau est celle du catalogue du jour.
   * secubox-actord : MemoryHigh=450M, MemoryMax=512M (cache de pages des
     bases) ; liste des pages libres écrite à l'arrêt propre, l'ouverture ne
     parcourt plus les bases (3 Go lus, API fermée 10 min sur gk2).
-  * Catalogue : 34 fournisseurs d'accès, 6 hébergeurs de plus.
+  * secubox-waf-ng.service : un fichier qui disparaît pendant la remise des
+    droits de /var/lib/secubox/waf n'empêche plus le WAF de démarrer.
+  * Catalogue : 33 fournisseurs d'accès, 6 hébergeurs de plus.
   * Campagnes d'actord : « ports (balayage) » au lieu de « ports:N », à
     défaut d'hôte seulement.
   * Page Campagnes : celles sans alerte récente en lignes repliées ; âge du

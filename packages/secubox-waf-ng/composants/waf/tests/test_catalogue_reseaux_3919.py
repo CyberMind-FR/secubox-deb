@@ -26,4 +26,5 @@ def test_le_releve_lit_tout_le_catalogue():
     cat = P.charger_catalogue([str(CATALOGUE)])
     assert len(cat) == sum(len(x) for x in CLASSES.values())
     assert cat[22773] == cat[4134] == cat[29518] == "acces" and cat[24940] == "hebergeur" and cat[212238] == "proxy_loue"
+    assert 10429 not in cat                    # pas assez établi comme accès grand public : « inconnu »
     assert cat[14593] == "mobile_partage" and CLASSES["mobile_partage"] == [14593]

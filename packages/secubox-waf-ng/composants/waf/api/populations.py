@@ -12,7 +12,7 @@ bornée (MAX_ADRESSES adresses suivies ; au-delà le relevé est marqué `comple
 Ce qui ne sort JAMAIS : une adresse (seulement des comptes), un compte visé en clair (masqué au-delà de 3
 caractères, comme `reseau.MasquerCompte`), un mot de passe. Les classes de réseau viennent du catalogue seul : un ASN
 absent est `inconnu`, jamais déduit du nom de l'opérateur."""
-import bisect
+import grp
 import gzip
 import http.client
 import io
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import socket
+import stat
 import tempfile
 import zlib
 from datetime import date, datetime, timezone
@@ -792,8 +793,39 @@ def _cle_agregat(j: _Journal) -> str:
     return "agregat-%x-%x-%x-%x-%x.json" % (VERSION_AGREGAT, e.st_dev, e.st_ino, e.st_size, e.st_mtime_ns)
 
 
+def _gid_waf() -> Optional[int]:
+    try:
+        return grp.getgrnam("secubox-waf").gr_gid
+    except (KeyError, OSError):
+        return None
+
+
+def _donner_au_groupe(cible) -> None:
+    """Le groupe secubox-waf, si le processus en est membre ; sinon rien (la réserve n'est qu'un cache)."""
+    gid = _gid_waf()
+    if gid is not None:
+        try:
+            os.chown(cible, -1, gid)
+        except OSError:
+            pass
+
+
+def _lire_reserve(chemin: str) -> Any:
+    """Un fichier de la réserve, ou None : absent, lien, trop gros, illisible. Jamais une exception."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as f:
+            e = os.fstat(f.fileno())
+            if not stat.S_ISREG(e.st_mode) or e.st_size > MAX_AGREGAT_OCTETS:
+                return None
+            return json.loads(f.read(MAX_AGREGAT_OCTETS + 1))
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+
+
 def _ecrire_json(chemin: str, contenu: Any) -> bool:
-    """Écriture atomique en 0660 : le dossier est au groupe secubox-waf (l'unité du WAF le rend à ce compte)."""
+    """Écriture atomique, 0640 au groupe secubox-waf : l'API (secubox) le lit encore une fois que l'unité du WAF l'a rendu
+    à secubox-waf. Groupe impossible à donner : le fichier garde celui du processus."""
     try:
         corps = json.dumps(contenu, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "replace")
         if len(corps) > MAX_AGREGAT_OCTETS:
@@ -803,7 +835,8 @@ def _ecrire_json(chemin: str, contenu: Any) -> bool:
         return False
     try:
         with os.fdopen(fd, "wb") as f:
-            os.fchmod(f.fileno(), 0o660)
+            _donner_au_groupe(f.fileno())
+            os.fchmod(f.fileno(), 0o640)
             f.write(corps)
         os.replace(tmp, chemin)
         return True
@@ -830,35 +863,88 @@ def _ranger(a: _Agregat) -> Dict[str, Any]:
             "cibles": list(tables[2]), "orgs": list(tables[3]), "reseaux": res, "cves": a.cves, "t": plat}
 
 
+def _cible_valide(c: Any) -> bool:
+    return isinstance(c, str) and (c == "" or (len(c) <= 4 and c.endswith("…")) or (len(c) <= 253 and _hote(c) == c))
+
+
+def _cle_valide(c: Any) -> bool:
+    return isinstance(c, str) and (c in _CLES or (c.startswith("rotation:") and bool(_HEX8.match(c[9:]))))
+
+
+_CLES = frozenset(f for _, _, f in FAMILLE)
+MAX_ENTIER = 2 ** 40            # secondes, jours, comptes : bien au-delà de toute valeur vraie
+
+
 def _deranger(d: Any) -> Optional[_Agregat]:
-    """L'inverse ; None si le contenu n'a pas la forme attendue (il est alors recalculé)."""
+    """L'inverse ; None si un seul type, une seule taille ou une seule valeur n'est pas celle qu'on écrit : le journal est
+    alors relu. Un fichier abîmé ne fait jamais échouer la passe et ne publie rien."""
     try:
-        if d["v"] != VERSION_AGREGAT or len(d["t"]) % 8:
+        if not isinstance(d, dict) or d["v"] != VERSION_AGREGAT or not isinstance(d["complet"], bool):
+            return None
+        ips, cles, cibles, orgs, plat, res, cves = (d[k] for k in ("ips", "cles", "cibles", "orgs", "t", "reseaux", "cves"))
+        if not all(isinstance(x, list) for x in (ips, cles, cibles, orgs, plat, res)) or not isinstance(cves, dict):
+            return None
+        if len(plat) % 8 or not set(map(type, plat)) <= {int} or (plat and not 0 <= min(plat) <= max(plat) < MAX_ENTIER):
+            return None
+        if not all(isinstance(x, str) and len(x) <= 45 for x in ips) or not all(isinstance(x, str) for x in orgs):
+            return None
+        if not all(map(_cle_valide, cles)) or not all(map(_cible_valide, cibles)):
             return None
         a = _Agregat()
-        a.complet = d["complet"] is True
-        ips, cles, cibles, orgs, plat = d["ips"], d["cles"], d["cibles"], d["orgs"], iter(d["t"])
+        a.complet = d["complet"]
+        it = iter(plat)
         a.tentatives = {(j, ips[i], cles[c], cibles[h]): [n, p, q, b]
-                        for j, i, c, h, n, p, q, b in zip(*[plat] * 8)}
-        a.reseaux = {ips[i]: (asn, orgs[o], cl) for i, asn, o, cl in d["reseaux"]}
-        a.cves = {str(ip): {str(c): int(j) for c, j in v.items()} for ip, v in d["cves"].items()}
+                        for j, i, c, h, n, p, q, b in zip(*[it] * 8)}
+        for i, asn, o, cl in res:
+            if type(asn) is not int or not 0 < asn < 2 ** 32 or (cl not in CLASSES and cl != INCONNU):
+                return None
+            a.reseaux[ips[i]] = (asn, orgs[o], cl)
+        for ip, v in cves.items():
+            if len(v) > MAX_CVES or not all(_CVE.fullmatch(c) and type(j) is int for c, j in v.items()):
+                return None
+            a.cves[ip] = dict(v)
         return a
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError):
         return None
 
 
 def _preparer_dossier(dossier: Optional[str]) -> Optional[str]:
+    """La réserve : 2770 au groupe secubox-waf (setgid : ce qui s'y crée reste à ce groupe). None si inutilisable."""
     if not dossier:
         return None
     try:
         if os.path.islink(dossier):
             return None
         if not os.path.isdir(dossier):
-            os.mkdir(dossier)
-            os.chmod(dossier, 0o770)      # le groupe secubox-waf garde l'écriture après le chown de l'unité du WAF
+            os.mkdir(dossier, 0o770)
+        e = os.stat(dossier)
+        if e.st_uid == os.geteuid() and (stat.S_IMODE(e.st_mode) != 0o2770 or e.st_gid != _gid_waf()):
+            _donner_au_groupe(dossier)
+            try:
+                os.chmod(dossier, 0o2770)
+            except OSError:                     # setgid refusé (RestrictSUIDSGID) : le groupe suffit
+                os.chmod(dossier, 0o770)
         return dossier if os.access(dossier, os.W_OK | os.X_OK) else None
     except OSError:
         return None
+
+
+def _purger_reserve(reserve: str, gardes: set, maintenant: float) -> None:
+    """Agrégats périmés, et temporaires d'une passe tuée (plus d'une heure). Rien d'autre n'est touché."""
+    try:
+        noms = os.listdir(reserve)
+    except OSError:
+        return
+    for nom in noms:
+        chemin = os.path.join(reserve, nom)
+        try:
+            if nom.startswith(".tmp-"):
+                if maintenant - os.lstat(chemin).st_mtime > 3600:
+                    os.unlink(chemin)
+            elif _NOM_AGREGAT.match(nom) and nom not in gardes:
+                os.unlink(chemin)
+        except OSError:
+            continue
 
 
 def agregats_du_journal(dossier: str, reserve: Optional[str], maintenant: float) -> Iterator[_Agregat]:
@@ -874,7 +960,7 @@ def agregats_du_journal(dossier: str, reserve: Optional[str], maintenant: float)
             a = None
             if chemin:
                 gardes.add(os.path.basename(chemin))
-                a = _deranger(lire_json(chemin)[0])
+                a = _deranger(_lire_reserve(chemin))
             if a is None:
                 a = agreger(j.lignes(), maintenant)
                 if chemin and len(gardes) <= MAX_AGREGATS:
@@ -883,12 +969,7 @@ def agregats_du_journal(dossier: str, reserve: Optional[str], maintenant: float)
         finally:
             j.fermer()
     if reserve:
-        try:
-            for nom in os.listdir(reserve):
-                if _NOM_AGREGAT.match(nom) and nom not in gardes:
-                    os.unlink(os.path.join(reserve, nom))
-        except OSError:
-            pass
+        _purger_reserve(reserve, gardes, maintenant)
 
 
 class MemoAdresses:
@@ -905,7 +986,7 @@ class MemoAdresses:
         self._change = False
         self._neuf: Dict[str, list] = {}         # adresse → [asn ou None, opérateur, pays ou None]
         if self._chemin:
-            d, _ = lire_json(self._chemin)
+            d = _lire_reserve(self._chemin)
             if isinstance(d, dict) and d.get("signature") == self._signature and isinstance(d.get("adresses"), dict):
                 self._ancien = d["adresses"]
 
@@ -913,7 +994,8 @@ class MemoAdresses:
         f = self._neuf.get(ip)
         if f is None:
             f = self._ancien.get(ip)
-            if not (isinstance(f, list) and len(f) == 3):
+            if not (isinstance(f, list) and len(f) == 3 and (f[0] is None or (type(f[0]) is int and 0 <= f[0] < 2 ** 32))
+                    and isinstance(f[1], str) and (f[2] is None or f[2] == "" or (isinstance(f[2], str) and _PAYS.match(f[2])))):
                 f = [None, "", None]
                 self._change = True
             self._neuf[ip] = f

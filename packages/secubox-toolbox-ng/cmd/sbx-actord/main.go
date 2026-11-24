@@ -92,6 +92,12 @@ func main() {
 	}
 	defer led.Close()
 
+	// #3919 : arrêt propre capté dès les bases ouvertes. Un SIGTERM pendant le rejeu
+	// attend sa fin puis sort par les `defer` : la liste des pages libres est écrite,
+	// et l'ouverture suivante ne parcourt pas toutes les bases.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// #3919 : annuaire de réseaux, ouvert AVANT le rejeu (qui remplit les
 	// fiches par source). Toujours ouvert : sans base ASN, le catalogue classe
 	// encore les ASN portés par les enveloppes.
@@ -114,6 +120,10 @@ func main() {
 		annuaire:   ann,
 	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
+	if ctx.Err() != nil {
+		log.Printf("actord: arrêt demandé pendant le rejeu")
+		return
+	}
 
 	// Mode calibration (RFC-0013 §13) : rejoue un journal puis quitte, sans
 	// ouvrir de socket ni décider quoi que ce soit.
@@ -156,10 +166,6 @@ func main() {
 
 	go srv.pruneLoop(*retention)
 	go srv.consolidationLoop()
-
-	// Arrêt propre.
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	// #3919 : annuaire rechargé au SIGHUP (capté dès le démarrage) et toutes les 24 h.
 	go func() {
