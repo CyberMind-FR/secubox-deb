@@ -41,6 +41,13 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   levée d'évasion (192.168.1.112 + IPv6) relancée chaque minute, `evasion lever` régénérait + rechargeait Unbound même
   sans changement (11-36 s), passage tué à 55 s avant commit ; audit.log refusé (AppArmor, O_CREAT). #3910 (PR #3911,
   ad-guard 1.33.6 + garde 0.3.9, gk2 06:12) : ctl « inchange » sans rendu, commit par adresse levée, audit O_APPEND seul.
+  Suite (PR #3912 garde 0.3.10, PR #3913 ad-guard 1.33.7 + garde 0.3.11, gk2 06:20) : profils AppArmor de garde en « w »
+  sur audit.log (« a » refusait chaque write(), revérifié MAY_WRITE) ; marqueur root « rendu en attente » (un geste tué
+  entre écriture de l'état et rechargement n'est plus pris pour « inchange » — risque introduit par 1.33.6) ;
+  garde-passage TimeoutStartSec 300 / MemoryMax 448M (unbound-checkconf ~300 Mo dans le même cgroup : swap, tué à 55 s).
+  Reste : 3 entrées d'évasion orphelines pour ac:19:8e:ab:26:c9 dans etat.json d'ad-guard, que garde ne suit plus
+  (décisions 86d7…/da97… échues le 21-22/11, toujours « active ») — à arbitrer. Chaque geste TV coûte ~30-40 s
+  (unbound-checkconf de toute la configuration) : vérifier seulement le fichier TV serait le vrai gain.
 
 ## 2026-11-22 — gk7 (autre site) : pubs sur le Player, DNS Freebox non délégué ; TV Privacy nettoyé
 - gk7 = 192.168.1.11 sur une autre Freebox (préfixe 2a01:e0a:e7d:2290). Cette Freebox distribue son propre DNS
