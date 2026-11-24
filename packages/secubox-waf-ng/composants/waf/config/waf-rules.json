@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.8.1",
+    "version": "1.8.2",
     "updated": "2026-11-24",
-    "changelog": "1.8.1 : aspirateur_ua en mode escalate, le seul qui honore ban_seuil=1 et ban_duree=168h (block bannissait à la 3e touche, 1 h). 1.8.0 : catégorie aspirateur_ua (#3905), UA figé de l'aspirateur distribué de Gitea, bloqué et banni 7 j dès la 1re requête. 1.7.0 : catégories roundcube, nextcloud et php_requete (signatures structurelles équivalentes à PHP2Shell, #3273) et compléments php2shell-005 à php2shell-008, tout en mode detect, seuils provisoires étiquetés. 1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
+    "changelog": "1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h (taille de la liste waf_ban). 1.8.1 : aspirateur_ua en mode escalate, le seul qui honore ban_seuil=1 et ban_duree=168h (block bannissait à la 3e touche, 1 h). 1.8.0 : catégorie aspirateur_ua (#3905), UA figé de l'aspirateur distribué de Gitea, bloqué et banni 7 j dès la 1re requête. 1.7.0 : catégories roundcube, nextcloud et php_requete (signatures structurelles équivalentes à PHP2Shell, #3273) et compléments php2shell-005 à php2shell-008, tout en mode detect, seuils provisoires étiquetés. 1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -1264,8 +1264,8 @@
       "enabled": true,
       "mode": "escalate",
       "ban_seuil": 1,
-      "ban_duree": "168h",
-      "note": "gk2 24/11 : 1 018 requêtes Gitea en 5 h depuis 1 004 adresses, toutes avec cet UA exact, sur des pages coûteuses (src/commit, commit, blame). Décision du propriétaire : attaque, l'UA suffit pour bannir. Chaîne complète ancrée en fin : une autre version, un autre système ou un UA prolongé ne correspondent pas. Mode escalate : seul ce mode lit ban_seuil/ban_duree de la catégorie (block applique le compteur global de 3).",
+      "ban_duree": "24h",
+      "note": "Durée ramenée à 24 h le 24/11 (propriétaire) : ~1 000 adresses neuves par heure, 7 j menaient la liste waf_ban vers 170 000 entrées. gk2 24/11 : 1 018 requêtes Gitea en 5 h depuis 1 004 adresses, toutes avec cet UA exact, sur des pages coûteuses (src/commit, commit, blame). Décision du propriétaire : attaque, l'UA suffit pour bannir. Chaîne complète ancrée en fin : une autre version, un autre système ou un UA prolongé ne correspondent pas. Mode escalate : seul ce mode lit ban_seuil/ban_duree de la catégorie (block applique le compteur global de 3).",
       "patterns": [
         {
           "id": "aspi-001",
