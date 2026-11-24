@@ -5,7 +5,8 @@
 [Unit]
 Description=SecuBox Mail — fenêtre de relance planifiée du conteneur mail, puis remise en veille (#3925)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3925
-After=secubox-mail.service
+After=data-lxc.mount network-online.target lxc-net.service secubox-mail.service
+Wants=network-online.target
 
 [Service]
 # Type=exec : la tenue de la fenêtre dure jusqu'à 90 min (jusqu'à 4 h au plus) et le démarrage est de toute façon borné
@@ -14,15 +15,22 @@ After=secubox-mail.service
 Type=exec
 # Root : démarre et arrête le conteneur (lxc-start, lxc-stop, lxc-attach). Sans [fenetre] actif = true, ne fait rien.
 ExecStart=/usr/sbin/mailctl fenetre --motif "fenetre planifiee"
+# Filet : si le processus principal est tué ou meurt, la fermeture n'arrête que l'instance dont le marqueur prouve qu'elle
+# est la nôtre (idempotent, sans effet sans marqueur).
+ExecStopPost=/usr/sbin/mailctl fenetre-fermer
+# 143 = TERM traité proprement par mailctl (arrêt demandé).
+SuccessExitStatus=143
+# Plafond : 240 min de fenêtre + attentes bornées (pression, SMTP, vidange) + fermeture restent sous 5 h.
+RuntimeMaxSec=5h
 Restart=no
 # TERM va au seul mailctl (qui arrête le conteneur et retire son marqueur) ; KILL, si besoin, au reste du groupe.
 KillMode=mixed
 TimeoutStopSec=3min
-# Socle compatible avec lxc-start/lxc-attach (exception écrite dans RULES-CODE § 10, comme secubox-mail-veille.service).
+# Socle des unités qui DÉMARRENT un conteneur (secubox-streamlit-demarrage) : ProtectKernelLogs masque /proc/kmsg dans
+# l'espace de montage de l'unité, et un LXC non privilégié ne peut alors plus y monter son /proc (EPERM). RestrictRealtime
+# et SystemCallArchitectures sont retirés avec lui (exception écrite dans RULES-CODE § 10).
 UMask=0027
-PrivateTmp=true
 ProtectHome=true
-ProtectKernelLogs=true
+PrivateTmp=true
+LockPersonality=true
 ProtectKernelModules=true
-RestrictRealtime=true
-SystemCallArchitectures=native

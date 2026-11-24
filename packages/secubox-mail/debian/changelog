@@ -5,8 +5,16 @@ secubox-mail (2.17.0-1~trixie1) trixie; urgency=medium
     90 min puis le remet en veille après vidange de la file active. Garde de
     pression (mémoire, charge), instance unique (flock), marqueur de reprise par
     un « mailctl start » humain, arrêt anticipé si la mémoire manque.
-    secubox-mail-fenetre.timer : 04:50, lundi 07:05 et 18:00. Inerte tant que
+    secubox-mail-fenetre.timer : 04:52, lundi 07:07 et 18:02. Inerte tant que
     [fenetre] actif = false dans mail.toml (section ajoutée sans réécriture).
+  * Sûreté : n'arrête jamais qu'une instance démarrée par la fenêtre (état
+    STOPPED exact, identité PID+instant dans le marqueur, lxc.start.auto relu) ;
+    arrêt vérifié avec reprise puis lxc-stop -k ; ExecStopPost fenetre-fermer ;
+    bornes de temps sur lxc-attach/lxc-stop ; même garde mémoire dans toutes les
+    phases (1400 Mo pour éveiller, 350 Mo en tenue, 120 Mo critique) ; unité
+    alignée sur celles qui démarrent un LXC (sans ProtectKernelLogs) ; la mise à
+    jour du paquet ne redémarre pas la fenêtre ni ne réactive une minuterie
+    désactivée (imap-sync, fenetre) ; la veille se tait pendant l'ouverture.
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 09:00:00 +0100
 

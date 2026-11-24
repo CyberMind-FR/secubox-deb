@@ -67,7 +67,7 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 | `mailctl services` | Surcharges systemd du conteneur : sans bac à sable (dovecot, clamav-daemon, #3667) ; relance automatique de Postfix (`postfix@`) et Dovecot ; rspamd et clamav-daemon tués en premier par l'OOM (`OOMScoreAdjust=500`, un négatif est refusé dans le LXC sans privilèges) (#3842) |
 | `mailctl antispam on\|off\|status` | rspamd désactivable (#3845) : `off` vide les milters de Postfix puis arrête et désactive rspamd ; `on` l'inverse ; audit `antispam_active` / `antispam_desactive`. **`off` coupe aussi la signature DKIM du courrier sortant** (et l'antivirus, porté par rspamd). Page : carte « Antispam (Rspamd) », routes `GET /spam/status`, `POST /spam/enable\|disable` (require_jwt) |
 | `mailctl veille` | Lancée toutes les 5 min par `secubox-mail-veille.timer` : relance `postfix@-`, `dovecot` ou `rspamd` en échec dans le conteneur (journal `secubox-mail`) ; sort en erreur s'il ne repart pas, l'unité apparaît alors en échec dans le relevé de flotte (#3842) |
-| `mailctl fenetre [--duree MIN] [--motif TXT]` | Fenêtre de relance planifiée (#3925), lancée par `secubox-mail-fenetre.timer` (04:50, lundi 07:05, 18:00) pour une box dont le conteneur reste arrêté (`lxc.start.auto = 0`) : éveille le conteneur, attend le port 25, le tient `duree_min` minutes (90 par défaut, 10 à 240), laisse la file Postfix active se vider (10 min au plus), puis l'arrête. Inerte tant que `[fenetre] actif = false`. N'agit jamais sur un conteneur déjà en marche ou en `lxc.start.auto = 1`. Refuse d'éveiller si `MemAvailable < memoire_min_mo` ou charge > `charge_max` (nouvel essai chaque minute, 10 min au plus, puis `mail.warning` et échec) ; arrêt anticipé si `MemAvailable < arret_memoire_mo` sur 4 contrôles. Marqueur `/run/secubox-mail-fenetre.active` : un `mailctl start`/`restart` humain le retire, la fenêtre laisse alors le conteneur en marche. `systemctl stop secubox-mail-fenetre` remet en veille. `mailctl status` montre l'état de la fenêtre |
+| `mailctl fenetre [--duree MIN] [--motif TXT]` | Fenêtre de relance planifiée (#3925), lancée par `secubox-mail-fenetre.timer` (04:52, lundi 07:07, 18:02) pour une box dont le conteneur reste arrêté (`lxc.start.auto = 0`) : éveille le conteneur, attend le port 25, le tient `duree_min` minutes (90 par défaut, 10 à 240), laisse la file Postfix active se vider (10 min au plus), puis l'arrête. Inerte tant que `[fenetre] actif = false`. N'agit jamais sur un conteneur déjà en marche ou en `lxc.start.auto = 1`. Refuse d'éveiller si `MemAvailable < memoire_min_mo` (1400 Mo), charge > `charge_max` (25) ou mesure illisible (nouvel essai chaque minute, 10 min au plus, puis `mail.warning` et échec) ; contrôles toutes les 15 s, même garde mémoire dans toutes les phases : arrêt immédiat sous 120 Mo, anticipé sous `arret_memoire_mo` (350) sur 4 contrôles (la vidange est alors sautée). **N'arrête jamais qu'une instance démarrée par elle** : état `STOPPED` exact revérifié avant le démarrage, identité (PID init + instant de démarrage) gardée dans le marqueur, `lxc.start.auto` relu avant tout arrêt ; perte de propriété seulement après deux `STOPPED` consécutifs. Arrêt vérifié (lxc-stop, deuxième essai, `-k`) ; si le conteneur ne s'arrête pas, marqueur conservé, `mail.err`, échec. `mailctl fenetre-fermer` (ExecStopPost) ferme de façon idempotente une fenêtre restée ouverte. Marqueur `/run/secubox-mail-fenetre.active` : un `mailctl start`/`restart` humain le retire, la fenêtre laisse alors le conteneur en marche. `systemctl stop secubox-mail-fenetre` remet en veille. `mailctl status` montre l'état de la fenêtre |
 
 ### Options TOML ajoutées
 
@@ -78,9 +78,9 @@ enabled = false   # true → module antivirus Rspamd vers le LXC clamav (secubox
 [fenetre]         # fenêtre de relance planifiée (#3925), inerte par défaut ; commentaires sur leurs propres lignes
 actif = false
 duree_min = 90
-memoire_min_mo = 900
-charge_max = 40
-arret_memoire_mo = 250
+memoire_min_mo = 1400
+charge_max = 25
+arret_memoire_mo = 350
 ```
 
 Le paquet livre aussi l'autoconfig RFC 6186 (`config-v1.1.xml`) et les
