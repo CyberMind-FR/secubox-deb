@@ -40,6 +40,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/features"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 // ThreatRecord holds the fields for one WAF threat event.
@@ -89,6 +90,13 @@ type ThreatLog struct {
 	mu      sync.Mutex
 	emitter *emit.Emitter // #1240 : émission Actor Intelligence (facultative)
 	geo     *Geo          // #1240 : pays source, lecture locale (facultative)
+	reseau  classeur      // #3919 : ASN, opérateur et classe de réseau (facultatif)
+}
+
+// classeur est ce que le journal demande à l'annuaire de réseaux ;
+// *reseau.Annuaire le satisfait, un test y met un annuaire factice.
+type classeur interface {
+	Classer(ip string) reseau.Info
 }
 
 // NewThreatLog creates a ThreatLog that writes to path.
@@ -107,6 +115,17 @@ func (l *ThreatLog) SetEmitter(e *emit.Emitter) { l.emitter = e }
 // SetGeo branche (facultativement) la résolution du pays source. Sans elle, les
 // enveloppes partent sans pays — le graphe perd un axe, pas une couche.
 func (l *ThreatLog) SetGeo(g *Geo) { l.geo = g }
+
+// SetReseau branche (facultativement) l'annuaire de réseaux (#3919) : ASN,
+// opérateur et classe posés sur chaque ligne et dans l'enveloppe. Sans lui,
+// les lignes n'ont pas ces clés. Indépendant de l'émission vers actord.
+func (l *ThreatLog) SetReseau(a *reseau.Annuaire) {
+	if a == nil {
+		l.reseau = nil
+		return
+	}
+	l.reseau = a
+}
 
 // sevToInt projette la sévérité WAF (low/medium/high/critical) sur 0..100.
 // « audit » vaut 10 (#3257) : une ligne d'état (body-inspect-truncated,
@@ -180,6 +199,7 @@ func entryToEnvelope(e *logEntry) *envelope.Envelope {
 		PathShape:       features.PathShape(e.Path),
 		UserAgentFamily: uaFam,
 		TLSFingerprint:  e.JA4,
+		ASN:             e.ASN,
 		HTTPFingerprint: e.EmpreinteHTTP,
 		BehaviorTags:    tags,
 	}
@@ -215,6 +235,10 @@ type logEntry struct {
 	Signals map[string]int `json:"signals,omitempty"`
 	// #3723 — lignes leurre_redirige : requêtes représentées par la ligne.
 	Servies int64 `json:"servies,omitempty"`
+	// #3919 — réseau de l'adresse source (absents sans annuaire ni base).
+	ASN          uint32 `json:"asn,omitempty"`
+	ASNOrg       string `json:"asn_org,omitempty"`
+	ReseauClasse string `json:"reseau_classe,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -275,6 +299,14 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		Mode:          rec.Mode,
 		Signals:       rec.Signaux,
 		Servies:       rec.Servies,
+	}
+
+	// #3919 : classé avec l'adresse d'origine, avant son masquage en « local ».
+	// Une adresse locale ou sans base reste sans clé réseau.
+	if l.reseau != nil && entry.ClientIP != "local" {
+		if info := l.reseau.Classer(rec.ClientIP); info.ASN != 0 {
+			entry.ASN, entry.ASNOrg, entry.ReseauClasse = info.ASN, info.Org, info.Classe
+		}
 	}
 
 	if estAutoTest(rec.ClientIP, rec.UA) {

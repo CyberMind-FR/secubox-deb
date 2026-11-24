@@ -27,10 +27,26 @@ type Info struct {
 	Classe string
 }
 
+// baseASN est ce que l'annuaire exige d'une base : *maxminddb.Reader la
+// satisfait, un test y met une fausse base.
+type baseASN interface {
+	Lookup(ip net.IP, result any) error
+	Close() error
+}
+
+// ouvrirBase ouvre une base ; variable de paquet pour que les tests l'injectent.
+var ouvrirBase = func(chemin string) (baseASN, error) {
+	r, err := maxminddb.Open(chemin)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
 // Annuaire résout une adresse en Info. Sûr avec un récepteur nil.
 type Annuaire struct {
 	mu         sync.RWMutex
-	r          *maxminddb.Reader
+	r          baseASN
 	classes    map[uint32]string
 	chemin     string
 	catalogues []string
@@ -41,16 +57,16 @@ type Annuaire struct {
 // jamais nil ni panique.
 func Ouvrir(cheminMMDB string, catalogues ...string) *Annuaire {
 	a := &Annuaire{chemin: cheminMMDB, catalogues: catalogues, classes: map[uint32]string{}}
-	a.r = ouvrirBase(cheminMMDB)
+	a.r = ouvrirBaseOuNil(cheminMMDB)
 	a.classes = chargerCatalogues(catalogues)
 	return a
 }
 
-func ouvrirBase(chemin string) *maxminddb.Reader {
+func ouvrirBaseOuNil(chemin string) baseASN {
 	if chemin == "" {
 		return nil
 	}
-	r, err := maxminddb.Open(chemin)
+	r, err := ouvrirBase(chemin)
 	if err != nil {
 		log.Printf("reseau: base ASN indisponible (%v) — classes inconnues", err)
 		return nil
@@ -116,9 +132,9 @@ func (a *Annuaire) Recharger() {
 		return
 	}
 	classes := chargerCatalogues(a.catalogues)
-	var nouvelle *maxminddb.Reader
+	var nouvelle baseASN
 	if a.chemin != "" {
-		nouvelle = ouvrirBase(a.chemin)
+		nouvelle = ouvrirBaseOuNil(a.chemin)
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()

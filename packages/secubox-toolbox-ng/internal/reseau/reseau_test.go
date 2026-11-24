@@ -6,6 +6,8 @@
 package reseau
 
 import (
+	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,5 +110,33 @@ func TestMasquerCompte(t *testing.T) {
 		if got := MasquerCompte(in); got != want {
 			t.Errorf("MasquerCompte(%q) = %q, attendu %q", in, got, want)
 		}
+	}
+}
+
+// baseFausse remplace le lecteur mmdb (#3919).
+type baseFausse struct{ ferme bool }
+
+func (b *baseFausse) Lookup(ip net.IP, res any) error {
+	e := res.(*enregistrementASN)
+	e.ASN, e.Org = 15169, "GOOGLE"
+	return nil
+}
+func (b *baseFausse) Close() error { b.ferme = true; return nil }
+
+func TestRechargerGardeAncienneBase(t *testing.T) {
+	ancienne := &baseFausse{}
+	defer func(o func(string) (baseASN, error)) { ouvrirBase = o }(ouvrirBase)
+	ouvrirBase = func(string) (baseASN, error) { return ancienne, nil }
+	a := Ouvrir("/fausse.mmdb")
+	if got := a.Classer("8.8.8.8"); got.ASN != 15169 {
+		t.Fatalf("avant rechargement : %+v", got)
+	}
+	ouvrirBase = func(string) (baseASN, error) { return nil, errors.New("tronquée") }
+	a.Recharger()
+	if got := a.Classer("8.8.8.8"); got.ASN != 15169 || got.Org != "GOOGLE" {
+		t.Errorf("l'ancienne base doit rester : %+v", got)
+	}
+	if ancienne.ferme {
+		t.Error("l'ancienne base ne doit pas être fermée sur échec")
 	}
 }
