@@ -192,6 +192,8 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/share/secubox/www/actor
 	install -m 0644 www/actor/index.html \
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
+	install -m 0644 www/actor/reperes.js \
+	  debian/secubox-waf-ng/usr/share/secubox/www/actor/reperes.js
 	# #1240 : vhost dédié actor.<domaine> (servi en direct par nginx, comme
 	# le vhost du tableau WAF). Déposé dans sites-available ; activé + semé « lan » par le postinst.
 	install -d debian/secubox-waf-ng/etc/nginx/sites-available
