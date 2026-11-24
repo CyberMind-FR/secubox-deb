@@ -37,8 +37,11 @@ ExecStart=/usr/sbin/secubox-garde-passage
 UMask=0027
 AppArmorProfile=secubox-garde-passage
 Nice=10
-MemoryMax=192M
-TimeoutStartSec=55
+# #3910 : le contrôleur ad-guard (sudo, même groupe de contrôle) régénère Unbound et lance unbound-checkconf sur toute la
+# configuration (~300 Mo, 30-40 s sur gk2) : à 192 Mo il tournait en swap et dépassait 55 s, le passage était tué et
+# recommençait chaque minute. La minuterie (OnUnitActiveSec) n'empile pas les passages.
+MemoryMax=448M
+TimeoutStartSec=300
 NoNewPrivileges=no
 ProtectSystem=strict
 ProtectHome=yes

@@ -1,3 +1,12 @@
+secubox-ad-guard (1.33.7-1~trixie1) trixie; urgency=medium
+
+  * Contrôleur, gestes de garde : marqueur « rendu en attente » (dossier de
+    root) posé avant l'écriture de l'état et retiré après le rechargement ;
+    un geste tué entre les deux est refait au lieu de répondre « inchange »
+    (ref #3910).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 08:10:00 +0100
+
 secubox-ad-guard (1.33.6-1~trixie1) trixie; urgency=medium
 
   * Contrôleur, verbes quarantaine/evasion : un geste qui ne change rien
