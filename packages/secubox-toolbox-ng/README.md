@@ -75,7 +75,7 @@ d'une campagne établie, son identifiant (8 hex du SHA-256 du compte). Le compor
 |---|---|
 | `--geoip-asn` | `/var/lib/GeoIP/GeoLite2-ASN.mmdb` (`""` = désactivé) |
 | `--reseaux-classes` | `/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml` (livré par secubox-waf-ng ≥ 1.44.0 ; absent : `inconnu`) |
-| `--campagnes-etat` | `/run/secubox/authwatch-campagnes.json` (`""` = désactivé) |
+| `--campagnes-etat` | `/run/secubox-authwatch/campagnes.json` (`""` = désactivé) |
 
-`authwatch-campagnes.json` (0644, renommage atomique toutes les 60 s) : tableau de `{id, compte, sources, premier,
+`campagnes.json` (dossier propre au service, `RuntimeDirectory=secubox-authwatch`, effacé à l'arrêt ; 0644, renommage atomique toutes les 60 s) : tableau de `{id, compte, sources, premier,
 dernier}`, `compte` masqué au-delà de 3 caractères, aucune adresse. Lu par le relevé des populations du WAF.

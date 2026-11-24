@@ -49,12 +49,14 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
-# Deux chemins en ecriture : le journal de menaces partage avec le WAF, et
-# /run/secubox pour l'etat des campagnes par compte vise (#3919,
-# authwatch-campagnes.json, ecrit toutes les 60 s par renommage atomique : le
-# DOSSIER doit etre inscriptible, pas le seul fichier). Parent partage 1777
-# root : pas de RuntimeDirectory (#1022). `-` : absent, le service bannit quand meme.
-ReadWritePaths=/var/log/secubox/waf -/run/secubox
+# Le seul chemin en ecriture partage : le journal de menaces du WAF.
+ReadWritePaths=/var/log/secubox/waf
+# Etat des campagnes par compte vise (#3919), ecrit toutes les 60 s par renommage
+# atomique dans /run/secubox-authwatch/campagnes.json. Dossier PROPRE au service :
+# jamais /run/secubox, partage (sockets de tous les modules, #1022). Efface a
+# l'arret : un etat perime se lirait comme une campagne en cours.
+RuntimeDirectory=secubox-authwatch
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target

@@ -2,8 +2,8 @@ secubox-toolbox-ng (0.19.0-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch : asn, asn_org, reseau_classe et identifiant de campagne
     sur ses alertes (--geoip-asn, --reseaux-classes) ; état des campagnes par
-    compte visé, compte masqué, dans /run/secubox/authwatch-campagnes.json
-    (--campagnes-etat). L'unité ouvre /run/secubox en écriture (ref #3919).
+    compte visé, compte masqué, dans /run/secubox-authwatch/campagnes.json
+    (--campagnes-etat, RuntimeDirectory propre au service) (ref #3919).
   * Paquet Go internal/reseau : annuaire ASN local et catalogue des classes
     de réseau, partagé avec sbxwaf et sbx-actord (secubox-waf-ng 1.44.0).
 

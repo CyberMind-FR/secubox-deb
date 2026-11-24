@@ -70,15 +70,20 @@ def test_actord_se_recharge_par_sighup():
     assert src.index("signal.Notify(hupReseau, syscall.SIGHUP)") < src.index("srv.rebuild()")
 
 
-def test_authwatch_peut_ecrire_son_etat_de_campagnes():
+def test_authwatch_ecrit_son_etat_dans_son_propre_dossier():
+    """Jamais /run/secubox en écriture (sockets de tous les modules) : un RuntimeDirectory propre, effacé à l'arrêt."""
     etat = Path(_defaut("sbx-authwatch", "campagnes-etat"))
-    chemins = [c.lstrip("-") for c in _valeurs(AUTHWATCH, "ReadWritePaths")]
     assert "ProtectSystem=strict" in AUTHWATCH
-    assert str(etat.parent) in chemins and "/var/log/secubox/waf" in chemins
-    # /run/secubox absent ne doit jamais empêcher le service de bannir
-    assert "-" + str(etat.parent) in _valeurs(AUTHWATCH, "ReadWritePaths")
-    # jamais un RuntimeDirectory sur le parent partagé (#1022)
-    assert not _valeurs(AUTHWATCH, "RuntimeDirectory")
+    assert _valeurs(AUTHWATCH, "RuntimeDirectory") == ["secubox-authwatch"]
+    assert str(etat.parent) == "/run/secubox-authwatch"
+    assert _valeurs(AUTHWATCH, "RuntimeDirectoryMode") == ["0755"]
+    assert _valeurs(AUTHWATCH, "RuntimeDirectoryPreserve") in ([], ["no"])
+    assert _valeurs(AUTHWATCH, "ReadWritePaths") == ["/var/log/secubox/waf"]
+
+
+def test_le_releve_lit_l_etat_la_ou_authwatch_l_ecrit():
+    src = (PAQUET / "composants" / "waf" / "api" / "populations.py").read_text(encoding="utf-8")
+    assert re.search(r'^AUTHWATCH_CAMPAGNES = "([^"]+)"', src, re.M).group(1) == _defaut("sbx-authwatch", "campagnes-etat")
 
 
 def test_l_api_a_de_quoi_lire_les_bases():
