@@ -25,6 +25,17 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   capteur TV Privacy. #3899 (PR #3900, toolbox-ng 0.18.1, gk2 05:27) : durée de vie 24 h/1 h, remplacement plein,
   une seule mise en file. Après : 849 adresses distinctes pour 850 PTR en 3 min (plus de répétition). couture 200.
   Gitea (LXC) ~39 % CPU, sbxwaf ~41 % : à suivre.
+- sbxdpi #3903 (PR #3904, toolbox-ng 0.18.2, gk2 05:37) : stats.json (3,5 Mo, ~10 Go/j sur le SSD) persisté toutes les
+  10 min (DPI_PERSIST_INTERVAL) et à l'arrêt, fichiers par appareil (tmpfs) toujours à 30 s.
+- Gitea : aspirateur distribué (UA exact Chrome/150 Mac, 1 004 adresses, src/commit, blame ; 576 × 499). Décision du
+  propriétaire : attaque, l'UA suffit. #3905 : catégorie waf-rules aspirateur_ua (PR #3906, waf-ng 1.43.5, 05:43) — en
+  mode block sbxwaf IGNORE ban_seuil/ban_duree (compteur global 3, 1 h) : rien banni ; corrigé en mode escalate (PR #3908,
+  waf-ng 1.43.6, 05:51) → ban 7 j dès la 1re requête. 213 bans en 10 min, Gitea 39 % → 5 % CPU. couture 503 pendant
+  chaque redémarrage du WAF (quelques secondes), 200 ensuite. REQUIRE_SIGNIN_VIEW non appliqué (préférence : bannir).
+- Système #3907 (PR #3909, secubox-system 1.13.5, gk2 05:58) : panneau Entrées/sorties + GET /api/v1/system/io (débits,
+  IOPS, % occupé par disque, pression, swap, 5 services qui écrivent le plus, io.stat des cgroups, sans root). Mesure gk2 :
+  eMMC 68 % occupée (4 Mo/s lus, 448 lectures/s), pression CPU 80 %. Charge encore 35 : garde-passage 45 %, unbound 42 %,
+  sbxwaf 34 %, metrics + metrics-publish 44 %, ad-guard-auto 19 % — à instruire. Carte Système du Hall : à faire.
 
 ## 2026-11-22 — gk7 (autre site) : pubs sur le Player, DNS Freebox non délégué ; TV Privacy nettoyé
 - gk7 = 192.168.1.11 sur une autre Freebox (préfixe 2a01:e0a:e7d:2290). Cette Freebox distribue son propre DNS
