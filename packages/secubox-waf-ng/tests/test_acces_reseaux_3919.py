@@ -91,3 +91,13 @@ def test_l_api_a_de_quoi_lire_les_bases():
     depends = control[control.index("\nDepends:"):control.index("\nConflicts:")]
     assert re.search(r"^ python3-maxminddb,?$", depends, re.M)
     assert re.search(r"^ acl,?$", depends, re.M)
+
+
+def test_actord_a_de_quoi_tenir_le_cache_de_pages_de_ses_bases():
+    """À 200M, l'ouverture relisait des pages aussitôt évincées (3 Go lus, API fermée 10 min sur gk2)."""
+    def mo(cle):
+        v = _valeurs(ACTORD, cle)[0]
+        assert v.endswith("M")
+        return int(v[:-1])
+    assert mo("MemoryHigh") >= 450 and mo("MemoryMax") >= mo("MemoryHigh")
+    assert "GOMEMLIMIT=180MiB" in _valeurs(ACTORD, "Environment")      # la mémoire propre reste bornée
