@@ -111,4 +111,12 @@ merge_mail_toml() {
 
     _toml_add_section_if_missing "$toml" "mail.antivirus" \
         'enabled = false'
+
+    # Fenêtre de relance planifiée (#3925) : inerte par défaut.
+    _toml_add_section_if_missing "$toml" "fenetre" \
+        'actif = false' \
+        'duree_min = 90' \
+        'memoire_min_mo = 900' \
+        'charge_max = 40' \
+        'arret_memoire_mo = 250'
 }

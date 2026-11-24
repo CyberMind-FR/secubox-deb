@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Mail — fenêtre de relance planifiée du conteneur mail, puis remise en veille (#3925)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3925
+After=secubox-mail.service
+
+[Service]
+# Type=exec : la tenue de la fenêtre dure jusqu'à 90 min (jusqu'à 4 h au plus) et le démarrage est de toute façon borné
+# par mailctl lui-même ; avec Type=oneshot et TimeoutStartSec=infinity l'unité resterait « activating » pendant la
+# fenêtre. En exec elle est « active » dès le lancement, et « systemctl stop » remet le conteneur en veille (TERM).
+Type=exec
+# Root : démarre et arrête le conteneur (lxc-start, lxc-stop, lxc-attach). Sans [fenetre] actif = true, ne fait rien.
+ExecStart=/usr/sbin/mailctl fenetre --motif "fenetre planifiee"
+Restart=no
+# TERM va au seul mailctl (qui arrête le conteneur et retire son marqueur) ; KILL, si besoin, au reste du groupe.
+KillMode=mixed
+TimeoutStopSec=3min
+# Socle compatible avec lxc-start/lxc-attach (exception écrite dans RULES-CODE § 10, comme secubox-mail-veille.service).
+UMask=0027
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+RestrictRealtime=true
+SystemCallArchitectures=native

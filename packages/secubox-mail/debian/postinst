@@ -106,6 +106,8 @@ if [ "$1" = "configure" ]; then
         systemctl enable --now secubox-mail-imap-sync.timer >/dev/null 2>&1 || true
         # Veille des services de courrier (#3842) : relance un Postfix/Dovecot/rspamd en échec, sinon unité en échec.
         systemctl enable --now secubox-mail-veille.timer >/dev/null 2>&1 || true
+        # Fenêtre de relance planifiée (#3925) : inerte tant que [fenetre] actif = false dans mail.toml.
+        systemctl enable --now secubox-mail-fenetre.timer >/dev/null 2>&1 || true
     fi
 
     # Autoconfig XML + SRV Unbound (ref #1169 task 11) — end of board-only

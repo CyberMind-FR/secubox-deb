@@ -53,3 +53,16 @@ web_ui_host = "rspamd.gk2.secubox.in"
 # Anti-virus optionnel (câblé mais dormant). true → clamav-daemon + freshclam
 # + module antivirus Rspamd. Coûteux sur ARM (~1 Go signatures) : off par défaut.
 enabled = false
+
+# Fenêtre de relance planifiée du conteneur mail (#3925). Pour une box dont le conteneur reste arrêté
+# (lxc.start.auto = 0) : secubox-mail-fenetre.timer l'éveille à 04:50, lundi 07:05 et 18:00, puis le remet en veille.
+# Inerte tant que actif = false ; sans effet sur un conteneur déjà en marche ou en démarrage automatique.
+# Commentaires sur leurs propres lignes : le lecteur de mailctl ne coupe pas les commentaires de fin de ligne.
+# duree_min : 10 à 240. memoire_min_mo : MemAvailable minimale pour éveiller. charge_max : charge 1 min maximale pour
+# éveiller. arret_memoire_mo : sous ce seuil, 4 contrôles de suite, arrêt anticipé.
+[fenetre]
+actif = false
+duree_min = 90
+memoire_min_mo = 900
+charge_max = 40
+arret_memoire_mo = 250

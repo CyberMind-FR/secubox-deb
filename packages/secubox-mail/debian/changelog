@@ -1,3 +1,15 @@
+secubox-mail (2.17.0-1~trixie1) trixie; urgency=medium
+
+  * Fenêtre de relance planifiée (ref #3925) : mailctl fenetre éveille le
+    conteneur mail laissé arrêté (lxc.start.auto=0), attend le port 25, le tient
+    90 min puis le remet en veille après vidange de la file active. Garde de
+    pression (mémoire, charge), instance unique (flock), marqueur de reprise par
+    un « mailctl start » humain, arrêt anticipé si la mémoire manque.
+    secubox-mail-fenetre.timer : 04:50, lundi 07:05 et 18:00. Inerte tant que
+    [fenetre] actif = false dans mail.toml (section ajoutée sans réécriture).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 09:00:00 +0100
+
 secubox-mail (2.16.18-1~trixie1) trixie; urgency=medium
 
   * Antispam rspamd désactivable (ref #3845) : mailctl antispam on|off|status,

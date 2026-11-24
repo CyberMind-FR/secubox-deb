@@ -646,6 +646,195 @@ cmd_veille() {
     log "services de courrier en service : $SERVICES_VEILLES"
 }
 
+# Fenêtre de relance planifiée (#3925). Sur la box de production le conteneur mail reste arrêté (lxc.start.auto=0)
+# pour économiser la mémoire ; les rapports de 05:07, 05:34 et du lundi 07:20 ont besoin du relais SMTP. La minuterie
+# secubox-mail-fenetre.timer l'éveille pour une fenêtre bornée, puis le remet en veille. Inerte tant que
+# [fenetre] actif = false. Un conteneur déjà en marche, ou démarré au boot, n'est jamais touché : il n'est pas à nous.
+FENETRE_LOCK="${FENETRE_LOCK:-/run/secubox-mail-fenetre.lock}"
+FENETRE_MARQUEUR="${FENETRE_MARQUEUR:-/run/secubox-mail-fenetre.active}"
+FEN_PROPRIETAIRE=0
+
+# Pas de temps surchargeables (les tests bats les raccourcissent ; rien ne les exporte en production).
+_fen_sleep() { sleep "$1" & wait $!; }
+_fen_mem_mo() { awk '/^MemAvailable:/ { printf "%d", $2/1024; exit }' "${FENETRE_MEMINFO:-/proc/meminfo}" 2>/dev/null; }
+_fen_charge() { awk '{ print $1; exit }' "${FENETRE_LOADAVG:-/proc/loadavg}" 2>/dev/null; }
+
+# _fen_entier <valeur> <défaut> <min> <max> : entier borné, le défaut si la valeur n'est pas un entier.
+_fen_entier() {
+    local v="$1" def="$2" min="$3" max="$4"
+    [[ "$v" =~ ^[0-9]+$ ]] || v="$def"
+    (( v < min )) && v="$min"
+    (( v > max )) && v="$max"
+    echo "$v"
+}
+
+# _fen_journal <priorité> <message> : sortie du script + journal secubox-mail (jamais de secret : durée, mémoire, motif).
+_fen_journal() {
+    local prio="$1" msg="$2"
+    case "$prio" in warning|err) warn "$msg" ;; *) log "$msg" ;; esac
+    logger -t secubox-mail -p "mail.${prio}" "fenetre : ${msg} (#3925)" 2>/dev/null || true
+}
+
+_fen_smtp_repond() {
+    timeout 3 bash -c "exec 3<>/dev/tcp/${LXC_IP}/25" >/dev/null 2>&1
+}
+
+# Courrier ACTIF (« * » après l'identifiant) dans la file Postfix du conteneur ; le différé n'est pas attendu.
+_fen_file_active() {
+    lxc_attach "$CONTAINER" postqueue -p 2>/dev/null | grep -cE '^[0-9A-Za-z]+\*' || true
+}
+
+# Un geste humain (« mailctl start|restart ») reprend la main : il retire le marqueur, la fenêtre le voit et laisse le
+# conteneur tourner. cmd_start, lui, n'y touche pas : c'est lui que la fenêtre appelle.
+fenetre_cede() { rm -f "$FENETRE_MARQUEUR" 2>/dev/null || true; }
+
+# Remise en veille : seulement si le marqueur est encore là (sinon quelqu'un a repris le conteneur).
+_fen_remise_en_veille() {
+    [[ "$FEN_PROPRIETAIRE" == 1 ]] || return 0
+    FEN_PROPRIETAIRE=0
+    if [[ -e "$FENETRE_MARQUEUR" ]]; then
+        _fen_journal info "fin de fenetre : remise en veille du conteneur '$CONTAINER'"
+        cmd_stop || true
+        rm -f "$FENETRE_MARQUEUR"
+        _antispam_audit "fenetre_fermee"
+    else
+        _fen_journal info "marqueur retire : le conteneur '$CONTAINER' est laisse en marche"
+    fi
+}
+_fen_sortie() { _fen_remise_en_veille; }
+_fen_signal() { exit 143; }
+
+cmd_fenetre() {
+    local duree_arg="" motif="fenetre planifiee"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --duree) duree_arg="${2:-}"; shift 2 || { error "--duree attend une valeur"; return 2; } ;;
+            --motif) motif="${2:-}"; shift 2 || { error "--motif attend une valeur"; return 2; } ;;
+            *) error "option inconnue : $1"; return 2 ;;
+        esac
+    done
+    motif="$(printf '%s' "$motif" | tr -d '\n\r' | cut -c1-80)"
+
+    if [[ "$(config_get_section "fenetre" "actif" "false")" != "true" ]]; then
+        log "fenetre inactive ([fenetre] actif = false) : rien a faire"
+        return 0
+    fi
+    local duree_min memoire_min charge_max arret_mem duree_s
+    duree_min="$(_fen_entier "${duree_arg:-$(config_get_section "fenetre" "duree_min" 90)}" 90 10 240)"
+    memoire_min="$(_fen_entier "$(config_get_section "fenetre" "memoire_min_mo" 900)" 900 0 1000000)"
+    charge_max="$(_fen_entier "$(config_get_section "fenetre" "charge_max" 40)" 40 1 100000)"
+    arret_mem="$(_fen_entier "$(config_get_section "fenetre" "arret_memoire_mo" 250)" 250 0 1000000)"
+    duree_s="${FENETRE_DUREE_S:-$(( duree_min * 60 ))}"
+
+    # Une seule fenêtre à la fois.
+    exec 9>"$FENETRE_LOCK" || { error "verrou $FENETRE_LOCK impossible"; return 1; }
+    if ! flock -n 9; then
+        log "fenetre deja en cours : rien a faire"
+        return 0
+    fi
+
+    if ! lxc_exists "$CONTAINER"; then
+        log "conteneur mail '$CONTAINER' absent : rien a faire"
+        return 0
+    fi
+    if lxc_running "$CONTAINER"; then
+        log "conteneur mail '$CONTAINER' deja en marche : il n'est pas a nous, rien a faire"
+        return 0
+    fi
+    if grep -Eq '^[[:space:]]*lxc\.start\.auto[[:space:]]*=[[:space:]]*1' "$LXC_PATH/$CONTAINER/config" 2>/dev/null; then
+        log "conteneur mail '$CONTAINER' en demarrage automatique (lxc.start.auto = 1) : gere ailleurs, rien a faire"
+        return 0
+    fi
+
+    # Garde de pression : on n'éveille pas un conteneur de ~1 Go sur une box déjà serrée ; nouvelle chance toutes les 60 s.
+    local attendu=0 pas_att="${FENETRE_PAS_ATTENTE:-60}" max_att="${FENETRE_ATTENTE_MAX:-600}" mem charge
+    while :; do
+        mem="$(_fen_mem_mo)"; mem="${mem:-999999}"
+        charge="$(_fen_charge)"; charge="${charge:-0}"
+        if (( mem >= memoire_min )) && awk -v c="$charge" -v m="$charge_max" 'BEGIN { exit !(c <= m) }'; then
+            break
+        fi
+        if awk -v a="$attendu" -v m="$max_att" 'BEGIN { exit !(a >= m) }'; then
+            error "fenetre abandonnee : memoire ${mem} Mo (min ${memoire_min}), charge ${charge} (max ${charge_max})"
+            logger -t secubox-mail -p mail.warning "fenetre : abandonnee apres ${attendu}s, memoire ${mem} Mo, charge ${charge} (#3925)" 2>/dev/null || true
+            return 1
+        fi
+        log "pression (memoire ${mem} Mo, charge ${charge}) : nouvelle tentative dans ${pas_att}s"
+        _fen_sleep "$pas_att"
+        attendu="$(awk -v a="$attendu" -v p="$pas_att" 'BEGIN { print a + p }')"
+    done
+
+    # Marqueur AVANT le démarrage : s'il manque ensuite, un humain a repris le conteneur.
+    local debut fin
+    debut="$(date +%s)"; fin=$(( debut + duree_s ))
+    printf '%s\n%s\n%s\n' "$debut" "$motif" "$fin" > "$FENETRE_MARQUEUR" || { error "marqueur impossible"; return 1; }
+    FEN_PROPRIETAIRE=1
+    trap _fen_sortie EXIT
+    trap _fen_signal TERM INT
+    _fen_journal info "ouverture de fenetre (${motif}) : ${duree_s}s, memoire ${mem} Mo, charge ${charge}"
+    _antispam_audit "fenetre_ouverte"
+
+    if ! cmd_start; then
+        _fen_journal warning "demarrage du conteneur '$CONTAINER' en echec"
+        return 1
+    fi
+
+    # SMTP : le relais doit répondre sur le port 25 avant qu'on parle de fenêtre utile.
+    local t=0 pas_smtp="${FENETRE_PAS_SMTP:-5}" max_smtp="${FENETRE_SMTP_MAX:-300}"
+    until _fen_smtp_repond; do
+        if awk -v a="$t" -v m="$max_smtp" 'BEGIN { exit !(a >= m) }'; then
+            _fen_journal warning "le port 25 de ${LXC_IP} ne repond pas apres ${t}s : arret du conteneur"
+            return 1
+        fi
+        _fen_sleep "$pas_smtp"
+        t="$(awk -v a="$t" -v p="$pas_smtp" 'BEGIN { print a + p }')"
+    done
+    _fen_journal info "relais SMTP ${LXC_IP}:25 disponible"
+
+    # Tenue de la fenêtre.
+    local pas="${FENETRE_PAS:-30}" bas=0
+    while (( $(date +%s) < fin )); do
+        _fen_sleep "$pas"
+        if [[ ! -e "$FENETRE_MARQUEUR" ]]; then
+            _fen_journal info "marqueur retire : le proprietaire reprend le conteneur '$CONTAINER'"
+            FEN_PROPRIETAIRE=0; trap - EXIT TERM INT
+            return 0
+        fi
+        if ! lxc_running "$CONTAINER"; then
+            _fen_journal warning "conteneur '$CONTAINER' arrete pendant la fenetre"
+            rm -f "$FENETRE_MARQUEUR"; FEN_PROPRIETAIRE=0; trap - EXIT TERM INT
+            return 0
+        fi
+        mem="$(_fen_mem_mo)"; mem="${mem:-999999}"
+        if (( mem < arret_mem )); then
+            bas=$(( bas + 1 ))
+            if (( bas >= 4 )); then
+                _fen_journal warning "memoire ${mem} Mo < ${arret_mem} Mo sur 4 controles : arret anticipe"
+                _antispam_audit "fenetre_arret_memoire"
+                break
+            fi
+        else
+            bas=0
+        fi
+    done
+
+    # Vidange : on ne coupe pas Postfix sur du courrier actif ; bornée.
+    local v=0 pas_v="${FENETRE_PAS_VIDANGE:-15}" max_v="${FENETRE_VIDANGE_MAX:-600}" n
+    while n="$(_fen_file_active)"; [[ "${n:-0}" -gt 0 ]]; do
+        if awk -v a="$v" -v m="$max_v" 'BEGIN { exit !(a >= m) }'; then
+            _fen_journal warning "file Postfix encore active (${n}) apres ${v}s : arret quand meme"
+            break
+        fi
+        [[ -e "$FENETRE_MARQUEUR" ]] || break
+        _fen_sleep "$pas_v"
+        v="$(awk -v a="$v" -v p="$pas_v" 'BEGIN { print a + p }')"
+    done
+
+    _fen_remise_en_veille
+    trap - EXIT TERM INT
+    return 0
+}
+
 cmd_antispam_apprentissage() {
     local wc="$WEBMAIL_CONTAINER"
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
@@ -1202,6 +1391,18 @@ cmd_status() {
         echo -e "  Status:    ${YELLOW}Stopped${NC}"
     else
         echo -e "  Status:    ${RED}Not installed${NC}"
+    fi
+    echo ""
+
+    # Fenêtre de relance planifiée (#3925)
+    if [[ -e "$FENETRE_MARQUEUR" ]]; then
+        local _fd _fm _ff
+        { read -r _fd; read -r _fm; read -r _ff; } < "$FENETRE_MARQUEUR" 2>/dev/null || true
+        echo -e "  Fenêtre:   ${GREEN}ouverte${NC} (${_fm:-?}) jusqu'à $(date -d "@${_ff:-0}" '+%F %T' 2>/dev/null || echo '?')"
+    elif [[ "$(config_get_section "fenetre" "actif" "false")" == "true" ]]; then
+        echo "  Fenêtre:   planifiée (secubox-mail-fenetre.timer)"
+    else
+        echo "  Fenêtre:   inactive ([fenetre] actif = false)"
     fi
     echo ""
 
@@ -1949,6 +2150,8 @@ Service:
   start                Start mail services
   stop                 Stop mail services
   restart              Restart mail services
+  fenetre [--duree MIN] [--motif TXT]
+                       Fenêtre de relance planifiée : éveille le conteneur arrêté, puis le remet en veille (#3925)
 
 Users:
   user add <email>     Add mail user
@@ -2174,9 +2377,9 @@ case "${1:-}" in
     # Phase 2 — Rspamd
     rspamd)      shift; cmd_rspamd "$@" ;;
     # Service control
-    start)       shift; cmd_start "$@" ;;
+    start)       shift; fenetre_cede; cmd_start "$@" ;;
     stop)        shift; cmd_stop "$@" ;;
-    restart)     shift; cmd_restart "$@" ;;
+    restart)     shift; fenetre_cede; cmd_restart "$@" ;;
     # Users and aliases
     user)        shift; cmd_user "$@" ;;
     user-repair) shift; cmd_user_repair "$@" ;;
@@ -2208,6 +2411,7 @@ case "${1:-}" in
     redis)       cmd_redis ;;
     services)    cmd_services ;;
     veille)      cmd_veille ;;
+    fenetre)     shift; cmd_fenetre "$@" ;;
     webmail)     cmd_webmail ;;
     sync)        cmd_sync ;;
     # Help
