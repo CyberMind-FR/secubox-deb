@@ -468,6 +468,20 @@ async def resources():
     }
 
 
+# #3907 : entrées/sorties (débits par disque, pression, swap, services qui écrivent le plus), sans root.
+_MESURE_ES = None
+
+
+@router.get("/io", dependencies=[Depends(require_lecture)])
+def entrees_sorties():
+    """Débits entre deux relevés ; le premier appel n'en a pas encore (intervalle_s null)."""
+    global _MESURE_ES
+    from .es import Mesure      # noqa: PLC0415 — relatif, comme pare_feu (agrégateur en processus)
+    if _MESURE_ES is None:
+        _MESURE_ES = Mesure()
+    return _MESURE_ES.releve(time.time())
+
+
 @router.get("/metrics", dependencies=[Depends(require_lecture)])
 def metrics_public():
     """

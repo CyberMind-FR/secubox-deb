@@ -134,6 +134,15 @@
                     <div class="t"><span>Charge 1 / 5 / 15 min</span><span id="rLoad">—</span></div>
                 </div>
                 <p class="note">Valeurs instantanées lues à chaque actualisation ; l’API ne fournit pas d’historique.</p></div>
+            <div class="pan" id="pEs"><h3>Entrées/sorties <i id="esInt"></i></h3>
+                <div class="res">
+                    <div id="esDisques"></div>
+                    <div class="t"><span>Pression processeur · mémoire · disque</span><span id="esPres">—</span></div>
+                    <div class="t"><span>Swap entrées · sorties</span><span id="esSwap">—</span></div>
+                    <div class="t"><span>Services qui écrivent le plus</span><span></span></div>
+                    <div id="esEcr"></div>
+                </div>
+                <p class="note">Débits entre deux actualisations. Pression : part du temps (10 s) où des tâches attendaient la ressource. Swap en pages par seconde.</p></div>
 
             <div class="pan"><h3>Sécurité <i>posture</i></h3>
                 <dl class="kv"><dt>Pare-feu</dt><dd id="sFw">—</dd><dt>SSH</dt><dd id="sSsh">—</dd><dt>AppArmor</dt><dd id="sAa">—</dd></dl>
@@ -237,7 +246,7 @@
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
         const nb = v => (typeof v === 'number' && isFinite(v)) ? v : null;
 
-        let INFO = null, RES = null, SERV = null, NET = null, SEC = null, PKG = null, BOARD = null, KIOSK = null, SESS = null, SUMM = null, JOUR = null;
+        let ES = null, INFO = null, RES = null, SERV = null, NET = null, SEC = null, PKG = null, BOARD = null, KIOSK = null, SESS = null, SUMM = null, JOUR = null;
         let SESSION_OK = true, CONFIRM = null, REGLAGES_INIT = false, NOM_CHARGE = '';
 
         // Jeton : sbx_token, puis les anciennes clés de cette page (secubox_token, token).
@@ -278,6 +287,10 @@
         function ligneVide(tb, n, txt) { const tr = el('tr'); const td = el('td', 'vide', txt); td.colSpan = n; tr.appendChild(td); tb.appendChild(tr); }
 
         function demoData() {
+            ES = { intervalle_s: 30, disques: [{ nom: 'mmcblk0', lecture_o_s: 2048, ecriture_o_s: 51200, lectures_s: 0.4, ecritures_s: 6.1, occupe_pct: 3.2 },
+                { nom: 'sda', lecture_o_s: 409600, ecriture_o_s: 1843200, lectures_s: 12, ecritures_s: 41, occupe_pct: 18.5 }],
+                pression: { cpu: { some: 12.4, full: null }, memory: { some: 1.2, full: 0.3 }, io: { some: 4.8, full: 0.6 } },
+                swap: { entrees_s: 0, sorties_s: 2.5 }, ecrivains: [{ unite: 'sbxdpi.service', ecriture_o_s: 116000 }, { unite: 'systemd-journald.service', ecriture_o_s: 42000 }, { unite: 'lxc.payload.gitea', ecriture_o_s: 9000 }] };
             INFO = { hostname: 'gk2', board: 'MOCHAbin', arch: 'aarch64', kernel: '6.1.0-demo-arm64', uptime_formatted: '12d 4h 31m', uptime_seconds: 1060000, local_time: '13/10/2026 09:41:07' };
             RES = { cpu_percent: 23.4, memory_percent: 61.2, memory_used: 4.9e9, memory_total: 8e9, disk_percent: 47.8, disk_used: 1.2e11, disk_total: 2.5e11, load_avg: [0.82, 0.64, 0.51] };
             SERV = { services: ['secubox-hub', 'secubox-wireguard', 'secubox-dpi', 'secubox-system', 'nginx', 'nftables', 'dnsmasq'].map((n, i) => ({ name: n, active: i !== 2, status: i === 2 ? 'inactive' : 'active', enabled: true })) };
@@ -296,6 +309,7 @@
             if (DEMO) { demoData(); SESSION_OK = true; rendre(); return; }
             const chemins = ['/info', '/resources', '/services', '/network', '/security', '/packages', '/board', '/kiosk/status', '/sessions', '/sessions/summary', '/secubox_logs'];
             const essais = await Promise.allSettled(chemins.map(lire));
+            try { ES = await lire('/io'); } catch (e) { ES = null; }    // #3907 : à part, une absence ne compte pas comme panne
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
             const tous = essais.every(e => e.status === 'rejected');
@@ -304,6 +318,29 @@
             $('erreur').hidden = !(tous && !refus);
             if (tous && !refus) $('erreur').textContent = 'Impossible de lire le système (service arrêté ou injoignable).';
             rendre();
+        }
+
+        // #3907 : entrées/sorties. Débits null au premier relevé (« première mesure »).
+        function debitEs(v) { return nb(v) === null ? '—' : octets(v) + '/s'; }
+        function rendreEs() {
+            const e = ES || {}, premier = !nb(e.intervalle_s);
+            $('esInt').textContent = !ES ? 'indisponible' : premier ? 'première mesure' : 'sur ' + Math.round(e.intervalle_s) + ' s';
+            const d = $('esDisques'); d.replaceChildren();
+            (Array.isArray(e.disques) ? e.disques : []).forEach(x => {
+                const l = el('div', 't'); l.appendChild(el('span', null, tiret(x.nom)));
+                l.appendChild(el('span', null, premier ? '—' : 'lu ' + debitEs(x.lecture_o_s) + ' · écrit ' + debitEs(x.ecriture_o_s) + ' · ' + (nb(x.ecritures_s) === null ? '—' : x.ecritures_s.toFixed(1).replace('.', ',')) + ' écr./s'));
+                const b = el('div', 'barre'), i = el('i'); b.appendChild(i); i.style.width = nb(x.occupe_pct) === null ? '0' : Math.min(100, x.occupe_pct) + '%'; i.className = couleurPct(x.occupe_pct);
+                b.title = 'occupé ' + pct(x.occupe_pct);
+                const c = el('div'); c.appendChild(l); c.appendChild(b); d.appendChild(c);
+            });
+            const p = e.pression || {}, s = k => p[k] && nb(p[k].some) !== null ? p[k].some.toFixed(1).replace('.', ',') + ' %' : '—';
+            $('esPres').textContent = s('cpu') + ' · ' + s('memory') + ' · ' + s('io');
+            const w = e.swap || {}, f = v => nb(v) === null ? '—' : v.toFixed(1).replace('.', ',') + '/s';
+            $('esSwap').textContent = f(w.entrees_s) + ' · ' + f(w.sorties_s);
+            const z = $('esEcr'); z.replaceChildren();
+            const ecr = Array.isArray(e.ecrivains) ? e.ecrivains : [];
+            if (!ecr.length) z.appendChild(el('div', 't', premier ? 'première mesure' : 'aucune écriture notable'));
+            ecr.forEach(x => { const l = el('div', 't'); l.appendChild(el('span', null, tiret(x.unite))); l.appendChild(el('span', null, debitEs(x.ecriture_o_s))); z.appendChild(l); });
         }
 
         function etatTuile(id, classe) { $(id).className = 'tuile ' + classe; }
@@ -344,6 +381,7 @@
             $('rMem').textContent = nb(r.memory_percent) === null ? '—' : octets(r.memory_used) + ' / ' + octets(r.memory_total) + ' · ' + pct(r.memory_percent); barre('bMem', r.memory_percent);
             $('rDisk').textContent = nb(r.disk_percent) === null ? '—' : octets(r.disk_used) + ' / ' + octets(r.disk_total) + ' · ' + pct(r.disk_percent); barre('bDisk', r.disk_percent);
             $('rLoad').textContent = charge ? charge.map(x => nb(x) === null ? '—' : x.toFixed(2).replace('.', ',')).join(' · ') : '—';
+            rendreEs();
             // Sécurité
             const pos = (id, v, bon, mauvais) => { const c = $(id); c.replaceChildren(); if (!v) { c.textContent = '—'; return; } c.appendChild(pastille(bon.includes(v) ? 'ok' : mauvais.includes(v) ? 'hors' : '', v.toUpperCase())); };
             {   // #3780 : mesure datée de nftables, jamais une affirmation
