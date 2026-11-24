@@ -431,19 +431,147 @@ def test_route_lit_le_cache_sans_recalcul(waf, monkeypatch, tmp_path):
     assert j["disponible"] is True and j["age_s"] == 120 and j["populations"] == [{"id": "famille:collecte"}]
 
 
-def test_rafraichir_ecrit_le_cache(waf, monkeypatch, tmp_path):
+def _sources_absentes(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "AUTHWATCH_CAMPAGNES", str(tmp_path / "absent-authwatch.json"))
+    monkeypatch.setattr(P, "ROTATION_ETAT", str(tmp_path / "absent-rotation.json"))
+    monkeypatch.setattr(P, "ACTORD_SOCK", str(tmp_path / "absent.sock"))
+    monkeypatch.setattr(P, "BASES_ASN", (str(tmp_path / "absent.mmdb"),))
+    monkeypatch.setattr(P, "BASES_PAYS", (str(tmp_path / "absent-pays.mmdb"),))
+
+
+def test_cli_ecrit_le_cache(monkeypatch, tmp_path, capsys):
+    import time
     journaux = tmp_path / "journaux"
     journaux.mkdir()
     (journaux / "waf-threats.log").write_text("\n".join(
-        _ligne(f"8.{i}.0.1", "aspirateur_ua", il_y_a_s=60) for i in range(3)) + "\n")
-    monkeypatch.setattr(waf, "THREATS_LOG", str(journaux / "waf-threats.log"))
-    monkeypatch.setattr(waf, "CAMPAIGNS_FILE", str(tmp_path / "absent-campaigns.json"))
-    monkeypatch.setattr(waf._populations, "AUTHWATCH_CAMPAGNES", str(tmp_path / "absent-authwatch.json"))
-    monkeypatch.setattr(waf._populations, "ROTATION_ETAT", str(tmp_path / "absent-rotation.json"))
-    monkeypatch.setattr(waf._populations, "ACTORD_SOCK", str(tmp_path / "absent.sock"))
-    monkeypatch.setattr(waf._populations, "BASE_ASN", str(tmp_path / "absent.mmdb"))
-    monkeypatch.setattr(waf._populations, "BASE_PAYS", str(tmp_path / "absent-pays.mmdb"))
-    waf._rafraichir_populations(MAINTENANT)
-    r = json.loads((tmp_path / "populations.json").read_text())
+        _ligne(f"8.{i}.0.1", "aspirateur_ua", il_y_a_s=MAINTENANT - time.time() + 60) for i in range(3)) + "\n")
+    _sources_absentes(monkeypatch, tmp_path)
+    cache = tmp_path / "populations.json"
+    rc = P.main(["--ecrire", str(cache), "--journal", str(journaux), "--campagnes", str(tmp_path / "absent.json")])
+    assert rc == 0
+    r = P.lire_cache(str(cache))
     p = next(x for x in r["populations"] if x["id"] == "famille:collecte")
     assert p["adresses"] == 3 and p["campagne_actord"] is None and r["complet"] is True
+    assert isinstance(r["duree_s"], float) and r["duree_s"] >= 0
+    assert set(r["manques"]) == {"base_asn", "base_pays"}
+    assert json.loads(capsys.readouterr().out.strip())["ecrit"] is True
+
+
+def test_cli_en_processus_separe(tmp_path):
+    """Le vrai point d'entrée `python3 -m api.populations`, lancé depuis le dossier qui contient le paquet `api`."""
+    import subprocess
+    journaux = tmp_path / "journaux"
+    journaux.mkdir()
+    (journaux / "waf-threats.log").write_text("{tronqué\n")
+    cache = tmp_path / "populations.json"
+    r = subprocess.run([sys.executable, "-m", "api.populations", "--ecrire", str(cache), "--journal", str(journaux),
+                        "--campagnes", str(tmp_path / "absent.json")],
+                       cwd=str(Path(__file__).resolve().parent.parent), capture_output=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert P.lire_cache(str(cache))["populations"] == []
+
+
+def test_lanceur_nice_et_processus(waf, monkeypatch):
+    import asyncio
+    appels = []
+
+    class Proc:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def faux_exec(*argv, **kw):
+        appels.append((argv, kw))
+        return Proc()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", faux_exec)
+    assert asyncio.run(waf._lancer_populations()) == 0
+    argv, kw = appels[0]
+    assert list(argv) == ["nice", "-n", "15", sys.executable, "-m", "api.populations", "--ecrire",
+                          str(waf.POPULATIONS_CACHE)]
+    assert kw["cwd"] == str(Path(waf.__file__).resolve().parent.parent)
+    assert (Path(kw["cwd"]) / "api" / "populations.py").is_file()
+    assert waf.POPULATIONS_PERIODE == 600 and waf.POPULATIONS_DELAI == 300
+
+
+def test_lanceur_jamais_deux_a_la_fois(waf, monkeypatch):
+    import asyncio
+    lances = []
+
+    async def lent():
+        lances.append(1)
+        await asyncio.sleep(0.05)
+        return 0
+
+    monkeypatch.setattr(waf, "_lancer_populations", lent)
+    monkeypatch.setattr(waf, "_populations_tache", None)
+
+    async def scenario():
+        assert waf._demarrer_populations() is True
+        assert waf._demarrer_populations() is False        # passe en cours : pas de seconde
+        await waf._populations_tache
+        assert waf._demarrer_populations() is True
+        await waf._populations_tache
+
+    asyncio.run(scenario())
+    assert lances == [1, 1]
+
+
+def test_lanceur_tue_au_dela_du_delai(waf, monkeypatch):
+    import asyncio
+    tue = []
+
+    class Proc:
+        returncode = None
+
+        async def communicate(self):
+            await asyncio.sleep(10)
+
+        def kill(self):
+            tue.append(1)
+
+        async def wait(self):
+            return -9
+
+    async def faux_exec(*argv, **kw):
+        return Proc()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", faux_exec)
+    monkeypatch.setattr(waf, "POPULATIONS_DELAI", 0.05)
+    assert asyncio.run(waf._lancer_populations()) is None
+    assert tue == [1]
+
+
+def test_bases_geoip_ordre_de_repli(monkeypatch, tmp_path):
+    essais = []
+
+    class Base:
+        def __init__(self, chemin):
+            self.chemin = chemin
+
+        def close(self):
+            pass
+
+    def ouvrir(chemin):
+        essais.append(chemin)
+        if chemin.endswith("ouvrable.mmdb"):
+            return Base(chemin)
+        raise FileNotFoundError(chemin)
+
+    monkeypatch.setattr(P, "_maxminddb", types.SimpleNamespace(open_database=ouvrir))
+    assert P.BASES_PAYS == ("/var/lib/secubox/geoip/GeoLite2-Country.mmdb", "/var/lib/GeoIP/GeoLite2-Country.mmdb",
+                            "/usr/share/GeoIP/GeoLite2-Country.mmdb")
+    assert P.BASES_ASN == ("/var/lib/GeoIP/GeoLite2-ASN.mmdb", "/var/lib/secubox/geoip/GeoLite2-ASN.mmdb",
+                           "/usr/share/GeoIP/GeoLite2-ASN.mmdb")
+    a = P.Annuaire(["/a/absente.mmdb", "/b/ouvrable.mmdb", "/c/ouvrable.mmdb"], ["/x/absente.mmdb", "/y/absente.mmdb"], [])
+    assert a._asn.chemin == "/b/ouvrable.mmdb" and a.disponible and not a.pays_disponible
+    assert essais == ["/a/absente.mmdb", "/b/ouvrable.mmdb", "/x/absente.mmdb", "/y/absente.mmdb"]
+    # le relevé signale chaque base qu'aucun chemin n'a ouverte
+    essais.clear()
+    _sources_absentes(monkeypatch, tmp_path)
+    monkeypatch.setattr(P, "BASES_ASN", ("/a/absente.mmdb", "/b/ouvrable.mmdb"))
+    monkeypatch.setattr(P, "BASES_PAYS", ("/x/absente.mmdb",))
+    cache = tmp_path / "p.json"
+    assert P.rafraichir(str(tmp_path), str(cache), str(tmp_path / "absent.json"), MAINTENANT) is True
+    assert P.lire_cache(str(cache))["manques"] == ["base_pays"]

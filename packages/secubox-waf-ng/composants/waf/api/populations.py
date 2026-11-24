@@ -36,8 +36,13 @@ except ImportError:  # pragma: no cover — Python < 3.11
     _tomllib = None
 
 # ── sources (mêmes chemins que les options Go --geoip-asn / --reseaux-classes) ──────────────────────────────────────
-BASE_ASN = "/var/lib/GeoIP/GeoLite2-ASN.mmdb"
-BASE_PAYS = "/usr/share/GeoIP/GeoLite2-Country.mmdb"
+# Bases essayées dans l'ordre, la première qui s'ouvre gagne (la box n'a pas toujours le même emplacement).
+BASES_ASN = ("/var/lib/GeoIP/GeoLite2-ASN.mmdb", "/var/lib/secubox/geoip/GeoLite2-ASN.mmdb",
+             "/usr/share/GeoIP/GeoLite2-ASN.mmdb")
+BASES_PAYS = ("/var/lib/secubox/geoip/GeoLite2-Country.mmdb", "/var/lib/GeoIP/GeoLite2-Country.mmdb",
+              "/usr/share/GeoIP/GeoLite2-Country.mmdb")
+JOURNAL_DOSSIER = "/var/log/secubox/waf"
+CAMPAGNES_PROFILEUR = "/var/cache/secubox/waf/campaigns.json"
 CATALOGUES = ("/usr/share/secubox/waf/reseaux-classes.toml", "/etc/secubox/waf/reseaux-classes.toml")
 AUTHWATCH_CAMPAGNES = "/run/secubox/authwatch-campagnes.json"
 ROTATION_ETAT = "/var/lib/secubox/waf/rotation-etat.json"
@@ -183,23 +188,32 @@ class Annuaire:
     """ASN, opérateur, classe et pays d'une adresse, lus dans les bases locales (jamais un appel réseau). Base absente
     ou illisible : annuaire dégradé (classe `inconnu`, pays vide), jamais une exception."""
 
-    def __init__(self, base_asn: Optional[str], base_pays: Optional[str], catalogues: Iterable[str]):
+    def __init__(self, base_asn, base_pays, catalogues: Iterable[str]):
+        """`base_asn`/`base_pays` : un chemin, ou une suite de chemins essayés dans l'ordre (le premier qui s'ouvre)."""
         self._classes = charger_catalogue(catalogues)
         self._asn = self._ouvrir(base_asn)
         self._pays = self._ouvrir(base_pays)
 
     @staticmethod
-    def _ouvrir(chemin: Optional[str]):
-        if not chemin or _maxminddb is None:
+    def _ouvrir(chemins):
+        if not chemins or _maxminddb is None:
             return None
-        try:
-            return _maxminddb.open_database(chemin)
-        except (OSError, ValueError, Exception):  # noqa: BLE001 — base tronquée pendant sa mise à jour
-            return None
+        for chemin in ([chemins] if isinstance(chemins, str) else chemins):
+            if not chemin:
+                continue
+            try:
+                return _maxminddb.open_database(chemin)
+            except Exception:  # noqa: BLE001 — absente, ou tronquée pendant sa mise à jour : la suivante
+                continue
+        return None
 
     @property
     def disponible(self) -> bool:
         return self._asn is not None
+
+    @property
+    def pays_disponible(self) -> bool:
+        return self._pays is not None
 
     def classe_asn(self, asn: int) -> str:
         return self._classes.get(asn, INCONNU) if asn else INCONNU
@@ -629,7 +643,10 @@ def _liste(d: Any, cle: Optional[str] = None) -> list:
 
 
 def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: float) -> bool:
-    """Une passe complète : lit toutes les sources, calcule, écrit le cache. Appelée dans un fil (tâche de fond)."""
+    """Une passe complète : lit toutes les sources, calcule, écrit le cache. Lancée dans un PROCESSUS à part (`main`),
+    jamais dans le processus de l'API. Le relevé porte sa durée (`duree_s`)."""
+    import time
+    debut = time.monotonic()
     manques = []
     smtp, present = lire_json(AUTHWATCH_CAMPAGNES)
     if present and not isinstance(smtp, list):
@@ -641,13 +658,15 @@ def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: f
     if present and not isinstance(rot, dict):
         manques.append("rotation")
     actord = lire_campagnes_actord(ACTORD_SOCK)
-    annuaire = Annuaire(BASE_ASN, BASE_PAYS, CATALOGUES)
+    annuaire = Annuaire(BASES_ASN, BASES_PAYS, CATALOGUES)
     try:
         releve = calculer(lignes_du_journal(dossier, FENETRE_JOURS, maintenant), maintenant, annuaire.pays,
                           annuaire.classer, _liste(smtp), _liste(prof, "campagnes"), _liste(rot, "campagnes"),
                           campagnes_actord=actord, classe_asn=annuaire.classe_asn)
         if not annuaire.disponible:
             manques.append("base_asn")
+        if not annuaire.pays_disponible:
+            manques.append("base_pays")
     finally:
         annuaire.fermer()
     if not os.path.isdir(dossier):
@@ -656,9 +675,11 @@ def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: f
         releve["manques"] = manques
     # Une source présente mais illisible, ou le journal absent : relevé partiel (spec 5.3). La base ASN manquante
     # n'en fait pas un partiel (classes tirées des lignes, comptes justes), elle est seulement signalée.
-    if set(manques) - {"base_asn"}:
+    if set(manques) - {"base_asn", "base_pays"}:
         releve["complet"] = False
+    releve["duree_s"] = round(time.monotonic() - debut, 2)
     return ecrire_cache(cache, releve)
+
 
 
 # ── cache en double tampon ──────────────────────────────────────────────────────────────────────────────────────
@@ -699,3 +720,31 @@ def ecrire_cache(chemin: str, releve: Dict[str, Any]) -> bool:
             pass
         return False
     return True
+
+
+# ── point d'entrée du processus de calcul ───────────────────────────────────────────────────────────────────────
+
+def _dossier_journal() -> str:
+    """Même choix que l'API : SECUBOX_WAF_THREATS_LOG (hérité du processus parent), sinon le dossier de sbxwaf."""
+    journal = os.environ.get("SECUBOX_WAF_THREATS_LOG")
+    return os.path.dirname(journal) if journal else JOURNAL_DOSSIER
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """`python3 -m api.populations --ecrire <cache>` : calcule le relevé et l'écrit. Lancé par la tâche de fond de
+    l'API (nice 15, délai 300 s), sous le même utilisateur qu'elle. Code 0 si écrit, 1 sinon (double tampon, droits)."""
+    import argparse
+    import time
+    ap = argparse.ArgumentParser(prog="api.populations", description="Relevé des populations d'attaquants (#3919)")
+    ap.add_argument("--ecrire", required=True, help="chemin du cache à écrire")
+    ap.add_argument("--journal", default=None, help="dossier de waf-threats.log* (défaut : celui de sbxwaf)")
+    ap.add_argument("--campagnes", default=CAMPAGNES_PROFILEUR, help="instantané des campagnes du profileur")
+    args = ap.parse_args(argv)
+    ecrit = rafraichir(args.journal or _dossier_journal(), args.ecrire, args.campagnes, time.time())
+    releve = lire_cache(args.ecrire) if ecrit else None
+    print(json.dumps({"ecrit": ecrit, "duree_s": (releve or {}).get("duree_s")}))
+    return 0 if ecrit else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

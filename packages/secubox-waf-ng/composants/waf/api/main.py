@@ -14,6 +14,7 @@ import os
 import json
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -96,9 +97,11 @@ VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
 LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
-# Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés en tâche de fond, lu par gk3.
-POPULATIONS_CACHE = Path("/var/cache/secubox/waf/populations.json")
+# Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés par un PROCESSUS à part (nice 15), lu par
+# gk3. Dossier 0770 secubox-waf, où l'API (secubox, membre du groupe) écrit déjà php-signaux.json.
+POPULATIONS_CACHE = Path("/var/lib/secubox/waf/populations.json")
 POPULATIONS_PERIODE = 600  # s
+POPULATIONS_DELAI = 300    # s : au-delà, le processus est tué
 _history_lock = threading.Lock()
 
 
@@ -1017,10 +1020,59 @@ def _rafraichir_php_signaux(maintenant: Optional[float] = None) -> None:
     _php_signaux.ecrire_cache(PHP_SIGNAUX_CACHE, etat)
 
 
-def _rafraichir_populations(maintenant: Optional[float] = None) -> None:
-    """Balaie 7 jours du journal des menaces et écrit le relevé des populations (#3919). Tâche de fond seulement."""
-    _populations.rafraichir(str(Path(THREATS_LOG).parent), str(POPULATIONS_CACHE), CAMPAIGNS_FILE,
-                            maintenant if maintenant is not None else time.time())
+# Dossier qui contient le paquet `api` : le processus de calcul y est lancé (`python3 -m api.populations`).
+_POPULATIONS_CWD = str(Path(__file__).resolve().parent.parent)
+_populations_tache: Optional["asyncio.Task"] = None
+_populations_delai_signale = False
+
+
+def _argv_populations() -> List[str]:
+    return ["nice", "-n", "15", sys.executable, "-m", "api.populations", "--ecrire", str(POPULATIONS_CACHE)]
+
+
+async def _lancer_populations() -> Optional[int]:
+    """Une passe du relevé des populations (#3919) dans un processus à part, même utilisateur que l'API : le balayage
+    de 7 jours de journal ne prend jamais le GIL de l'API. Tué au-delà de POPULATIONS_DELAI (signalé une fois).
+    Rend le code de sortie, ou None (délai dépassé, lancement impossible)."""
+    global _populations_delai_signale
+    debut = time.monotonic()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *_argv_populations(), cwd=_POPULATIONS_CWD, stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+    except OSError as e:
+        log.warning("populations : lancement impossible : %s", e)
+        return None
+    try:
+        _, err = await asyncio.wait_for(proc.communicate(), POPULATIONS_DELAI)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        if not _populations_delai_signale:
+            log.warning("populations : calcul tué après %d s, le relevé précédent reste servi", POPULATIONS_DELAI)
+            _populations_delai_signale = True
+        return None
+    except asyncio.CancelledError:      # arrêt de l'API : pas de processus orphelin
+        if proc.returncode is None:
+            proc.kill()
+        raise
+    _populations_delai_signale = False
+    duree = time.monotonic() - debut
+    if proc.returncode != 0:
+        log.warning("populations : sortie %s en %.1f s : %s", proc.returncode, duree,
+                    (err or b"").decode("utf-8", "replace").strip()[-300:])
+    else:
+        log.info("populations : relevé écrit en %.1f s", duree)
+    return proc.returncode
+
+
+def _demarrer_populations() -> bool:
+    """Lance une passe si aucune n'est en cours (jamais deux à la fois) ; la boucle de fond n'attend pas sa fin."""
+    global _populations_tache
+    if _populations_tache is not None and not _populations_tache.done():
+        return False
+    _populations_tache = asyncio.create_task(_lancer_populations())
+    return True
 
 
 async def _warm_loop():
@@ -1069,11 +1121,8 @@ async def _warm_loop():
                 log.warning("filtres-ia : calcul en échec : %s", e)
             dernier_filtres_ia = time.time()
         if time.time() - dernier_populations >= POPULATIONS_PERIODE:   # #3919 : relevé populations, lu par gk3
-            try:
-                await asyncio.to_thread(_rafraichir_populations)
-            except Exception as e:  # noqa: BLE001 — le relevé précédent reste servi, avec son âge
-                log.warning("populations : calcul en échec : %s", e)
-            dernier_populations = time.time()
+            if _demarrer_populations():
+                dernier_populations = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1083,11 +1132,14 @@ async def _lifespan(_app):
     try:
         yield
     finally:
-        task.cancel()
-        try:
-            await task
-        except (asyncio.CancelledError, Exception):
-            pass
+        for t in (task, _populations_tache):
+            if t is None:
+                continue
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
 
 
 app = FastAPI(title="SecuBox WAF", lifespan=_lifespan)
