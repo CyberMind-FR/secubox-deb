@@ -28,9 +28,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"go.etcd.io/bbolt"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/basebolt"
 )
 
 // GenesisHash est le PrevHash conventionnel du tout premier enregistrement :
@@ -86,7 +87,7 @@ type Ledger struct {
 func Open(path string) (*Ledger, error) {
 	// #3320 : memes options que le magasin (pas de reecriture de la liste des
 	// pages libres a chaque commit, allocation en O(1)).
-	db, err := bbolt.Open(path, 0o600, &bbolt.Options{Timeout: 5 * time.Second, NoFreelistSync: true, FreelistType: bbolt.FreelistMapType})
+	db, err := bbolt.Open(path, 0o600, basebolt.Options())
 	if err != nil {
 		return nil, fmt.Errorf("evidence : ouverture ledger %q : %w", path, err)
 	}
@@ -104,9 +105,9 @@ func Open(path string) (*Ledger, error) {
 	return &Ledger{db: db}, nil
 }
 
-// Close ferme la base sous-jacente.
+// Close ferme la base sous-jacente, liste des pages libres écrite (#3919).
 func (l *Ledger) Close() error {
-	return l.db.Close()
+	return basebolt.Fermer(l.db)
 }
 
 // seqKey encode un numéro de séquence en clé 8 octets big-endian (ordre

@@ -14,7 +14,9 @@
   var NS = "http://www.w3.org/2000/svg", MAX_CARTES = 6, MAX_LIGNES = 4;
   var MANQUES = { journal: "journal du WAF", authwatch: "échecs de messagerie", profileur: "profileur de campagnes", rotation: "détecteur de rotation" };
   var BASES = { base_asn: "base des opérateurs", base_pays: "base des pays" };
-  var T_ROTATION = "50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins";
+  var T_ROTATION = "50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins";
+  var T_PIVOT = "une même cible pour la moitié des tentatives au moins";
+  var T_DETECTEUR = "campagne à rotation établie par le détecteur de sbxwaf";
 
   function nombre(v) { return typeof v === "number" && isFinite(v); }
   function nb(v) { return nombre(v) ? Math.round(v).toLocaleString("fr-FR") : "—"; }
@@ -23,7 +25,7 @@
   function cleOu(table, cle, defaut) { return possede(table, cle) ? cle : defaut; }
   function objet(v) { return !!v && typeof v === "object"; }
   function liste(v) { return Array.isArray(v) ? v : []; }
-  function vider(zone) { while (zone.firstChild) zone.removeChild(zone.firstChild); zone.textContent = ""; }
+  function vider(zone) { while (zone.firstChild) zone.removeChild(zone.firstChild); zone.textContent = ""; zone.sbxAge = null; }
   function el(doc, tag, cls, texte) {
     var e = doc.createElement(tag);
     if (cls) e.className = cls;
@@ -45,6 +47,15 @@
   function quand(r) {
     return nombre(r.genere_le) ? new Date(r.genere_le * 1000).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
   }
+  // L'âge, seule partie réécrite à chaque lecture (majAge) sans refermer un détail ouvert. Une passe toutes les 30 minutes :
+  // 30 à 40 min d'âge est normal, aucun seuil d'alerte ici.
+  function texteAge(r) {
+    var q = quand(r), a = r.age_s;
+    if (!q) return "";
+    return "Relevé du " + q + (nombre(a) && a >= 0 ? " (il y a " + (a < 5400 ? Math.max(1, Math.round(a / 60)) + " min" : Math.round(a / 3600) + " h") + ")" : "") + ", refait toutes les 30 minutes.";
+  }
+  function poseAge(doc, zone, r) { zone.sbxAge = el(doc, "p", "popnr popage", texteAge(r)); zone.appendChild(zone.sbxAge); }
+  function majAge(zone, r) { if (zone.sbxAge && disponible(r)) zone.sbxAge.textContent = texteAge(r); }
   function noms(table, cles) { return cles.filter(function (c) { return possede(table, c); }).map(function (c) { return table[c]; }).join(", "); }
 
   // Empreinte d'un relevé, sans son âge : la page ne redessine (et ne referme un détail ouvert) que s'il a changé.
@@ -57,8 +68,14 @@
   function cibles(p) { return liste(p.cibles).slice(0, 3).map(String); }
   function titre(R, p) { var f = cleOu(R.FAMILLES, p.famille, "autre"); return R.FAMILLES[f][0] + " " + R.nomCarte(f, cibles(p)); }
 
+  // Le pivot n'est vérifié que pour une population de famille ; une campagne du détecteur a ses propres critères.
+  function titreRotation(p) {
+    var id = typeof p.id === "string" ? p.id : "";
+    if (id.indexOf("rotation:") === 0) return T_DETECTEUR;
+    return id.indexOf("famille:") === 0 ? T_ROTATION + ", et " + T_PIVOT : T_ROTATION;
+  }
   function etats(doc, R, p, zone) {
-    if (p.rotation === true) zone.appendChild(puce(doc, R, R.ETATS.rotation, "", "etat rot", T_ROTATION));
+    if (p.rotation === true) zone.appendChild(puce(doc, R, R.ETATS.rotation, "", "etat rot", titreRotation(p)));
     var e = cleOu(R.ETATS, p.etat, null);
     if (e === "bannie") zone.appendChild(puce(doc, R, R.ETATS.bannie, "", "etat ban", nb(p.bannies_24h) + " adresses bannies sur " + nb(p.actives_24h) + " actives dans les dernières 24 h, " + nb(p.bans) + " sur 7 jours"));
     else if (e === "observee") zone.appendChild(puce(doc, R, R.ETATS.observee, "", "etat obs", "active dans les dernières 24 h, moins de la moitié de ses adresses bannies"));
@@ -163,7 +180,7 @@
   function populations(doc, R, zone, r) {
     vider(zone);
     if (!disponible(r)) { zone.appendChild(el(doc, "span", "popnr", "Relevé indisponible")); return; }
-    var av = reserve(doc, r, false), pops = triees(r), q = quand(r), E = R.ETATS;
+    var av = reserve(doc, r, false), pops = triees(r), E = R.ETATS;
     if (av) zone.appendChild(av);
     if (!pops.length) zone.appendChild(el(doc, "span", "popnr", "aucune population dans le relevé"));
     pops.slice(0, MAX_CARTES).forEach(function (p) { zone.appendChild(carte(doc, R, p, r.genere_le)); });
@@ -176,12 +193,14 @@
     var rec = r.recouvrement, t = "Recouvrement entre populations : non relevé.";
     if (objet(rec) && nombre(rec.adresses_communes) && nombre(rec.adresses_total)) {
       t = "Recouvrement entre populations : " + nb(rec.adresses_communes) + " adresses communes sur " + nb(rec.adresses_total)
-        + (rec.adresses_total > 0 && rec.adresses_communes * 100 < rec.adresses_total ? " — moins de 1 % : ce sont des acteurs distincts." : ".");
+        + (rec.adresses_total > 0 && rec.adresses_communes * 100 < rec.adresses_total ? " — moins de 1 % : ce sont des acteurs distincts."
+          : rec.adresses_total > 0 ? " — " + pct(Math.max(1, rec.adresses_communes * 100 / rec.adresses_total)) + " : certaines adresses participent à plusieurs populations." : ".");
     }
     zone.appendChild(el(doc, "p", "poprec", t));
     zone.appendChild(el(doc, "p", "poprep", "Repères : " + Object.keys(R.CLASSES).map(function (k) { return R.CLASSES[k][0] + " " + R.CLASSES[k][1]; }).join(" · ")
-      + " — " + E.rotation[0] + " rotation : " + T_ROTATION + " · " + E.bannie[0] + " bannie : la moitié au moins des adresses actives depuis 24 h bannies · "
-      + E.observee[0] + " observée : active, moins de la moitié bannie · " + E.inactive[0] + " inactive : rien depuis 24 h." + (q ? " Relevé du " + q + "." : "")));
+      + " — " + E.rotation[0] + " rotation : " + T_ROTATION + " (population d'une famille : et " + T_PIVOT + ") · " + E.bannie[0] + " bannie : la moitié au moins des adresses actives depuis 24 h bannies · "
+      + E.observee[0] + " observée : active, moins de la moitié bannie · " + E.inactive[0] + " inactive : rien depuis 24 h."));
+    poseAge(doc, zone, r);
   }
 
   // La synthèse du SOC : une ligne par campagne en cours (4 au plus), sans carte (#3922 : le détail est dans le WAF).
@@ -202,6 +221,7 @@
     });
     reste = pops.length - n;
     if (reste > 0) zone.appendChild(el(doc, "span", "popnr", "et " + reste + (reste > 1 ? " autres" : " autre")));
+    poseAge(doc, zone, r);
   }
 
   // Relevé de DÉMONSTRATION : hôtes example.test, comptes masqués fictifs, AS de documentation (RFC 5398), aucune adresse.
@@ -225,5 +245,5 @@
     ] };
   }
 
-  w.SbxCartes = { populations: populations, synthese: synthese, cle: cle, exemple: exemple };
+  w.SbxCartes = { populations: populations, synthese: synthese, cle: cle, majAge: majAge, exemple: exemple };
 })(window);

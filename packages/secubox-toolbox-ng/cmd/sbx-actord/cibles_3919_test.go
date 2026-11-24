@@ -91,6 +91,33 @@ func TestCibleJamaisUneAdresse(t *testing.T) {
 	}
 }
 
+// TestBalayageDePorts : les capteurs DPI et pare-feu mettent « ports:N » dans
+// DstService. Ce n'est pas un hôte : une seule étiquette lisible, et un hôte réel
+// passe toujours devant, quel que soit son nombre d'événements.
+func TestBalayageDePorts(t *testing.T) {
+	for _, d := range []string{"ports:2", "ports:119"} {
+		if got := cibleAffichee(evtSource("198.51.100.1", time.Now().Unix(), d)); got != "ports (balayage)" {
+			t.Errorf("%q → %q", d, got)
+		}
+	}
+	s := &Server{}
+	ips := map[string]bool{"198.51.100.1": true}
+	for i := 0; i < 9; i++ {
+		s.noterSource(evtSource("198.51.100.1", time.Now().Unix(), "ports:2"))
+	}
+	g := &campagne{}
+	s.enrichir(g, ips)
+	if len(g.CiblesNoms) != 1 || g.CiblesNoms[0] != "ports (balayage)" {
+		t.Errorf("cibles_noms = %v", g.CiblesNoms)
+	}
+	s.noterSource(evtSource("198.51.100.1", time.Now().Unix(), "forge.exemple.test"))
+	g = &campagne{}
+	s.enrichir(g, ips)
+	if len(g.CiblesNoms) != 1 || g.CiblesNoms[0] != "forge.exemple.test" {
+		t.Errorf("hôte réel présent : cibles_noms = %v", g.CiblesNoms)
+	}
+}
+
 // TestCibleBornee : une cible est bornée à 64 caractères dans la fiche.
 func TestCibleBornee(t *testing.T) {
 	s := &Server{}

@@ -19,10 +19,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"go.etcd.io/bbolt"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/basebolt"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 )
 
@@ -69,8 +69,9 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// Close ferme le magasin.
-func (s *Store) Close() error { return s.db.Close() }
+// Close ferme le magasin, liste des pages libres écrite (#3919 : l'ouverture
+// suivante ne parcourt plus toute la base).
+func (s *Store) Close() error { return basebolt.Fermer(s.db) }
 
 func eventKey(ts int64, seq uint64) []byte {
 	k := make([]byte, 16)
@@ -79,13 +80,8 @@ func eventKey(ts int64, seq uint64) []byte {
 	return k
 }
 
-// OptionsBolt : options d'ouverture communes (#3320). NoFreelistSync : la liste
-// des pages libres n'est plus reecrite a chaque commit (enorme apres les purges
-// d'une base de plusieurs centaines de Mo) ; elle est reconstruite a
-// l'ouverture. FreelistMapType : allocation en O(1) au lieu d'un tableau trie.
-func OptionsBolt() *bbolt.Options {
-	return &bbolt.Options{Timeout: 5 * time.Second, NoFreelistSync: true, FreelistType: bbolt.FreelistMapType}
-}
+// OptionsBolt : options d'ouverture communes (#3320, voir internal/actor/basebolt).
+func OptionsBolt() *bbolt.Options { return basebolt.Options() }
 
 // Ingest persiste une enveloppe (supposée déjà validée par l'appelant) et met à
 // jour les compteurs, dans une seule transaction.

@@ -193,3 +193,18 @@ func TestClasseASN(t *testing.T) {
 		t.Errorf("nil = %q, attendu inconnu", got)
 	}
 }
+
+// TestCatalogueLivre : le fichier livré par secubox-waf-ng se lit en entier
+// (tableaux sur plusieurs lignes, commentaires en fin de ligne).
+func TestCatalogueLivre(t *testing.T) {
+	m, err := lireFichierCatalogue("../../../secubox-waf-ng/composants/waf/config/reseaux-classes.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for asn, classe := range map[uint32]string{22773: ClasseAcces, 4134: ClasseAcces, 29518: ClasseAcces,
+		24940: ClasseHebergeur, 212238: ClasseProxyLoue, 14593: ClasseMobilePartage} {
+		if m[asn] != classe {
+			t.Errorf("AS%d : %q, attendu %q", asn, m[asn], classe)
+		}
+	}
+}

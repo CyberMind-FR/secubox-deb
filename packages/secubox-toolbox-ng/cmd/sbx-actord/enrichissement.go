@@ -35,7 +35,7 @@ const ciblesParSourceMax = 16
 
 // BORNES MÉMOIRE DES FICHES (#3919, revue). Les fiches ne vivent qu'en
 // mémoire, et secubox-actord.service tourne sous GOMEMLIMIT=180MiB /
-// MemoryMax=256M. À ~1 000 adresses nouvelles par heure, garder les fiches
+// MemoryMax=512M. À ~1 000 adresses nouvelles par heure, garder les fiches
 // aussi longtemps que les acteurs (360 h) en ferait ~360 000. D'où :
 //   - une rétention PROPRE aux fiches, 48 h, indépendante de celle des acteurs ;
 //   - un plafond dur de 200 000 fiches : plein, on ÉVINCE les plus anciennes
@@ -170,6 +170,9 @@ var servicesAuthwatch = map[string]bool{
 	"gitea": true, "nextcloud": true, "peertube": true, // services.json livré
 }
 
+// ciblePorts : étiquette d'un balayage de ports, montrée seulement à défaut d'hôte.
+const ciblePorts = "ports (balayage)"
+
 // cibleMax borne une cible retenue (en caractères) : l'hôte vient de l'attaquant.
 const cibleMax = 64
 
@@ -186,6 +189,9 @@ func cibleAffichee(e *envelope.Envelope) string {
 			return s
 		}
 		return reseau.MasquerCompte(c)
+	}
+	if n, ok := strings.CutPrefix(c, "ports:"); ok && n != "" && strings.Trim(n, "0123456789") == "" {
+		return ciblePorts // nombre de ports balayés (capteurs DPI, pare-feu), pas un hôte
 	}
 	if estAdresseLitterale(c) {
 		return ""
@@ -346,6 +352,9 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 		}
 	}
 
+	if len(cibles) > 1 {
+		delete(cibles, ciblePorts)
+	}
 	g.CiblesNoms = []string{}
 	// Les comptes y sont déjà masqués (cibleAffichee, à l'ingestion).
 	g.CiblesNoms = append(g.CiblesNoms, premiers(cibles, 3)...)

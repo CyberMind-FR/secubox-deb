@@ -100,7 +100,7 @@ PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requ
 # Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés par un PROCESSUS à part (nice 10), lu par
 # gk3. Dossier 0770 secubox-waf, où l'API (secubox, membre du groupe) écrit déjà php-signaux.json.
 POPULATIONS_CACHE = Path("/var/lib/secubox/waf/populations.json")
-POPULATIONS_PERIODE = 600  # s
+POPULATIONS_PERIODE = 1800  # s : 30 min (une passe coûtait 68 à 107 s de processeur sur gk2, boîte saturée)
 POPULATIONS_DELAI = 540    # s : au-delà, le processus est tué (sous la période : jamais deux passes à la fois)
 _history_lock = threading.Lock()
 
