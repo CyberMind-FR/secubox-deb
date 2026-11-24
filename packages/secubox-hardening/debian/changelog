@@ -1,3 +1,14 @@
+secubox-hardening (1.7.1-1~trixie1) trixie; urgency=medium
+
+  * Leurres de messagerie d'authwatch (ref #3924, secubox-toolbox-ng 0.20.0) :
+    110, 143 et les ports locaux 18025, 18465, 18587, 18993, 18995 reconnus
+    comme voulus par la page de garde et fermés en IPv6. Nouveau
+    /etc/nftables.d/secubox-leurres-mail.nft : sous la base en `policy drop`,
+    les ports locaux ne sont acceptés que par la redirection d'authwatch ;
+    pris au prochain chargement de nftables, sans effet sans redirection.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 16:00:00 +0100
+
 secubox-hardening (1.7.0-1~trixie1) trixie; urgency=medium
 
   * Protection contre l'épuisement d'états TCP (#3735) : famille Sockstress

@@ -92,7 +92,7 @@ def test_lan_route_meme_garde_que_eth2():
 def test_leurres_ouverts_et_reconnus_comme_voulus():
     """#3728 : les écoutes de leurre de sbx-authwatch ne sont plus coupées (102 123 paquets jetés sur gk2, 0 touche) et
     la page ne les signale pas comme backends exposés : elles sont listées à part."""
-    assert wg.LEURRES == {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017}
+    assert wg.LEURRES == {23, 110, 143, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 18025, 18465, 18587, 18993, 18995, 27017}
     ss = "LISTEN 0 8192 *:3389 *:*\nLISTEN 0 511 0.0.0.0:8123 0.0.0.0:*\n"
     expose, leurres = wg.classer(wg.ports_en_ecoute(ss), gardes=[8088], )
     assert list(expose) == [8123] and leurres == [3389]
@@ -105,3 +105,20 @@ def test_leurres_fermes_en_ipv6():
     for iface in ("eth2", "br-lan"):
         m = re.search(rf'iifname "{iface}" meta nfproto ipv6 tcp dport \{{ ([\d, ]+) \}} counter drop', texte)
         assert m and set(int(p) for p in m.group(1).split(",")) == wg.LEURRES, iface
+
+
+def test_leurres_de_messagerie_par_redirection_seulement():
+    """#3924 : la base en `policy drop` n'accepte les ports locaux que si la connexion y arrive par DNAT, en IPv4."""
+    import re
+    racine = LIVREE.parent.parent
+    texte = (racine / "nft" / "secubox-leurres-mail.nft").read_text(encoding="utf-8")
+    regles = [ln.strip() for ln in texte.splitlines() if "accept" in ln and not ln.startswith("#")]
+    assert len(regles) == 1
+    assert "meta nfproto ipv4" in regles[0] and "ct status dnat" in regles[0]
+    locaux, publics = (set(map(int, m.split(","))) for m in re.findall(r"\{([\d, ]+)\}", regles[0]))
+    assert locaux == {18025, 18465, 18587, 18993, 18995} <= wg.LEURRES
+    assert publics == {25, 465, 587, 993, 995}
+    assert "table inet filter" in texte and "flush" not in texte
+    # Livrée, mais jamais chargée par la postinst : elle AJOUTE une règle, la recharger la doublerait.
+    assert "secubox-leurres-mail.nft" in (racine / "debian" / "rules").read_text(encoding="utf-8")
+    assert "secubox-leurres-mail" not in (racine / "debian" / "postinst").read_text(encoding="utf-8")

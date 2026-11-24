@@ -42,6 +42,8 @@ override_dh_auto_install:
 
 	install -d $(CURDIR)/debian/secubox-hardening/etc/nftables.d
 	install -m 644 nft/secubox-wan-guard.nft $(CURDIR)/debian/secubox-hardening/etc/nftables.d/secubox-wan-guard.nft
+	# #3924 : leurres de messagerie, acceptes par redirection seulement (pris au prochain chargement de nftables).
+	install -m 644 nft/secubox-leurres-mail.nft $(CURDIR)/debian/secubox-hardening/etc/nftables.d/secubox-leurres-mail.nft
 
 	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening
 	install -m 644 nft/nftables.conf $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening/nftables.conf

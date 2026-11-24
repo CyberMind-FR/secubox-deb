@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Leurres de messagerie de sbx-authwatch (#3924), secubox-toolbox-ng ≥ 0.20.0.
+#
+# Pendant l'arrêt du conteneur de courrier, la table `ip secubox_leurres_mail`
+# (tenue par authwatch) redirige 25, 465, 587, 993 et 995 vers des ports locaux.
+# Sous la base en `policy drop`, une box dont le WAN n'est pas de confiance les
+# jetterait : ces ports locaux sont acceptés, et SEULEMENT quand la connexion y
+# arrive par cette redirection (port d'origine = port de messagerie, DNAT posé).
+# Un accès direct reste refusé, et sans redirection rien n'écoute derrière.
+table inet filter {
+	chain input {
+		meta nfproto ipv4 tcp dport { 18025, 18465, 18587, 18993, 18995 } ct status dnat ct original proto-dst { 25, 465, 587, 993, 995 } accept comment "leurres de messagerie, par redirection seulement (#3924)"
+	}
+}
