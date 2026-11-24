@@ -1149,11 +1149,17 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
     });
     t.appendChild(tb); w.appendChild(t); d.appendChild(w); return d;
   }
+  // Le pivot n'est vérifié que pour une population de famille ; une campagne du détecteur a ses propres critères.
+  function popRotation(p) {
+    var id = typeof p.id === 'string' ? p.id : '', t = '50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins';
+    if (id.indexOf('rotation:') === 0) return 'campagne à rotation établie par le détecteur de sbxwaf';
+    return id.indexOf('famille:') === 0 ? t + ', et une même cible pour la moitié des tentatives au moins' : t;
+  }
   function popCarte(R, p, genere) {
     var fam = popCle(R.FAMILLES, p.famille, 'autre'), cibles = (Array.isArray(p.cibles) ? p.cibles : []).slice(0, 3).map(String);
     var a = el('article', 'popc'), h = el('header'), et = el('div', 'popl');
     h.appendChild(el('h4', '', R.FAMILLES[fam][0] + ' ' + R.nomCarte(fam, cibles)));
-    if (p.rotation === true) et.appendChild(popPuce(R, R.ETATS.rotation, '', 'etat rot', '50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins'));
+    if (p.rotation === true) et.appendChild(popPuce(R, R.ETATS.rotation, '', 'etat rot', popRotation(p)));
     var e = popCle(R.ETATS, p.etat, null);
     if (e === 'bannie') et.appendChild(popPuce(R, R.ETATS.bannie, '', 'etat ban', rNb(p.bannies_24h) + ' adresses bannies sur ' + rNb(p.actives_24h) + ' actives dans les dernières 24 h, ' + rNb(p.bans) + ' sur 7 jours'));
     else if (e === 'observee') et.appendChild(popPuce(R, R.ETATS.observee, '', 'etat obs', 'active dans les dernières 24 h, moins de la moitié de ses adresses bannies'));
@@ -1202,13 +1208,14 @@ section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5
     var rec = m.recouvrement, t = 'Recouvrement entre populations : non relevé.';
     if (rec && rNombre(rec.adresses_communes) && rNombre(rec.adresses_total)) {
       t = 'Recouvrement entre populations : ' + grNb(rec.adresses_communes) + ' adresses communes sur ' + grNb(rec.adresses_total)
-        + (rec.adresses_total > 0 && rec.adresses_communes * 100 < rec.adresses_total ? ' — moins de 1 % : ce sont des acteurs distincts.' : '.');
+        + (rec.adresses_total > 0 && rec.adresses_communes * 100 < rec.adresses_total ? ' — moins de 1 % : ce sont des acteurs distincts.'
+          : rec.adresses_total > 0 ? ' — ' + popPct(Math.max(1, rec.adresses_communes * 100 / rec.adresses_total)) + ' : certaines adresses participent à plusieurs populations.' : '.');
     }
     z.appendChild(el('p', 'poprec', t));
     var E = R.ETATS;
     z.appendChild(el('p', 'poprep', 'Repères : ' + Object.keys(R.CLASSES).map(function (k) { return R.CLASSES[k][0] + ' ' + R.CLASSES[k][1]; }).join(' · ')
-      + ' — ' + E.rotation[0] + ' rotation : 50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins · ' + E.bannie[0] + ' bannie : la moitié au moins des adresses actives depuis 24 h bannies · '
-      + E.observee[0] + ' observée : active, moins de la moitié bannie · ' + E.inactive[0] + ' inactive : rien depuis 24 h.' + (quand ? ' Relevé de gk2 du ' + quand + '.' : '')));
+      + ' — ' + E.rotation[0] + ' rotation : 50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins (population d\'une famille : et une même cible pour la moitié des tentatives au moins) · ' + E.bannie[0] + ' bannie : la moitié au moins des adresses actives depuis 24 h bannies · '
+      + E.observee[0] + ' observée : active, moins de la moitié bannie · ' + E.inactive[0] + ' inactive : rien depuis 24 h.' + (quand ? ' Relevé de gk2 du ' + quand + (rNombre(m.age_s) && m.age_s >= 0 ? ' (il y a ' + (m.age_s < 5400 ? Math.max(1, Math.round(m.age_s / 60)) + ' min' : Math.round(m.age_s / 3600) + ' h') + ')' : '') + ', refait toutes les 30 minutes.' : '')));
   }
   // ---- Fin des populations
   function rAnalyste(r) {

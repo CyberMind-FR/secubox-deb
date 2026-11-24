@@ -306,6 +306,10 @@ def test_jamais_un_hote_adresse(hote):
     assert all(p["cibles"] == [] and p["nom_cible"] == "" for p in r["populations"]) and len(r["populations"]) == 2
 
 
+def test_ports_balayes_pas_un_hote():
+    assert P._hote("ports:2") is None and P._hote("ports.exemple.test") == "ports.exemple.test"
+
+
 def test_hotes_ordinaires_gardes():
     for h in ("forge.exemple.test", "git2", "a1.exemple.test", "smtp"):
         assert P._hote(h) == h
@@ -342,6 +346,274 @@ def test_plafond_garde_les_adresses_du_jour(monkeypatch, tmp_path):
     r = _calc(P.lignes_du_journal(str(tmp_path), maintenant=MAINTENANT))
     p = _pop(r, "famille:balayage_web")
     assert r["complet"] is False and p["adresses"] == 3 and p["actives_24h"] == 2
+
+
+# ── lot 1b : coût du relevé (agrégats gardés, lignes écartées sans décodage, pas de double compte) ─────────────────
+
+def _journaux(tmp_path, courant=3, tourne=4):
+    d = tmp_path / "journaux"
+    d.mkdir()
+    (d / "waf-threats.log").write_text("\n".join(_ligne(f"8.{i}.0.1", "scanners") for i in range(courant)) + "\n")
+    (d / "waf-threats.log.1").write_text("\n".join(
+        _ligne(f"9.{i}.0.1", "aspirateur_ua", il_y_a_s=JOUR + 60, action="banned") for i in range(tourne)) + "\n")
+    with gzip.open(d / "waf-threats.log.2.gz", "wt") as f:
+        f.write("\n".join(_ligne(f"9.{i}.0.1", "auth_smtp:sasl_failed", il_y_a_s=2 * JOUR, host="smtp", path="gerald")
+                          for i in range(tourne)) + "\n"
+                + _ligne("9.1.0.1", "ia_filtres_haute", il_y_a_s=2 * JOUR, rule_id="CVE-2026-0007") + "\n")
+    for n in ("waf-threats.log", "waf-threats.log.1", "waf-threats.log.2.gz"):
+        os.utime(d / n, (MAINTENANT, MAINTENANT))
+    return d
+
+
+def _assemble(d, reserve, **kw):
+    args = dict(maintenant=MAINTENANT, pays=lambda ip: "", classer=_classer(), campagnes_smtp=[],
+                campagnes_profileur=[], rotation=[])
+    args.update(kw)
+    return P.assembler(P.agregats_du_journal(str(d), reserve and str(reserve), MAINTENANT), **args)
+
+
+def test_agregats_gardes_meme_releve_et_journaux_tournes_non_relus(tmp_path, monkeypatch):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    sans = _assemble(d, None)
+    premier = _assemble(d, reserve)
+    lus = []
+    vrai = P.agreger
+    monkeypatch.setattr(P, "agreger", lambda lignes, m: (lus.append(1), vrai(lignes, m))[1])
+    second = _assemble(d, reserve)
+    assert sans == premier == second
+    assert len(lus) == 1                                  # le journal courant seulement
+    assert _pop(second, "famille:messagerie")["cibles"] == ["ger…"] and "gerald" not in json.dumps(second)
+    assert _pop(second, "famille:collecte")["cves"] == ["CVE-2026-0007"]
+    # les autres sources s'appliquent aux agrégats gardés : profileur apparu depuis
+    prof = [{"signature": "00aa11bb22cc33dd", "attaquants": [f"9.{i}.0.1" for i in range(12)]}]
+    assert _pop(_assemble(d, reserve, campagnes_profileur=prof), "profileur:00aa11bb22cc33dd")["adresses"] == 4
+    fichiers = sorted(reserve.iterdir())
+    assert len(fichiers) == 2 and all(stat.S_IMODE(f.stat().st_mode) == 0o640 for f in fichiers)
+    assert stat.S_IMODE(reserve.stat().st_mode) in (0o2770, 0o770)
+    assert all("gerald" not in f.read_text() for f in fichiers)      # jamais un compte en clair, même en réserve
+
+
+def test_reserve_au_groupe_secubox_waf(tmp_path, monkeypatch):
+    """Dossier 2770 et fichiers 0640 au groupe secubox-waf : lisibles après le chown de l'unité du WAF."""
+    gid = os.getgid()
+    monkeypatch.setattr(P, "_gid_waf", lambda: gid)
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    reserve.mkdir(0o700)                                      # dossier d'une version antérieure : remis en ordre
+    _assemble(d, reserve)
+    assert stat.S_IMODE(reserve.stat().st_mode) == 0o2770 and reserve.stat().st_gid == gid
+    for f in reserve.iterdir():
+        assert stat.S_IMODE(f.stat().st_mode) == 0o640 and f.stat().st_gid == gid
+
+
+@pytest.mark.parametrize("gid", [None, 0])
+def test_reserve_sans_le_groupe_continue(tmp_path, monkeypatch, gid):
+    """Groupe absent, ou qu'on ne peut pas donner : la réserve sert quand même."""
+    monkeypatch.setattr(P, "_gid_waf", lambda: gid)
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, None)
+    assert _assemble(d, reserve) == ref and len(list(reserve.iterdir())) == 2
+
+
+def test_temporaires_abandonnes_effaces(tmp_path):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    reserve.mkdir()
+    vieux, neuf = reserve / ".tmp-vieux", reserve / ".tmp-neuf"
+    for f, age in ((vieux, 7200), (neuf, 60)):
+        f.write_text("x")
+        os.utime(f, (MAINTENANT - age, MAINTENANT - age))
+    _assemble(d, reserve)
+    assert not vieux.exists() and neuf.exists()
+
+
+def _corrompre(d, cle, valeur):
+    d[cle] = valeur
+    return d
+
+
+@pytest.mark.parametrize("abime", [
+    lambda d: _corrompre(d, "ips", ["9.0.0.1", 3] * 9), lambda d: _corrompre(d, "ips", ["x" * 500] * 9),
+    lambda d: _corrompre(d, "cles", ["famille inventée"] * 9), lambda d: _corrompre(d, "cibles", ["203.0.113.9"] * 9),
+    lambda d: _corrompre(d, "cibles", ["<script>"] * 9), lambda d: _corrompre(d, "t", ["1"] * 8),
+    lambda d: _corrompre(d, "t", [1.5] * 8), lambda d: _corrompre(d, "t", [-1] * 8), lambda d: _corrompre(d, "t", [True] * 8),
+    lambda d: _corrompre(d, "t", [10 ** 30] * 8), lambda d: _corrompre(d, "t", {"a": 1}),
+    lambda d: _corrompre(d, "reseaux", [[0, "64500", 0, "acces"]]), lambda d: _corrompre(d, "reseaux", [[0, 64500, 0, "inventee"]]),
+    lambda d: _corrompre(d, "cves", {"9.0.0.1": {"<b>": 1}}), lambda d: _corrompre(d, "cves", []), lambda d: _corrompre(d, "complet", 1)])
+def test_agregat_de_types_faux_recalcule(tmp_path, abime):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, reserve)
+    for f in reserve.iterdir():
+        f.write_text(json.dumps(abime(json.loads(f.read_text()))))
+    assert _assemble(d, reserve) == ref
+
+
+def test_agregat_trop_gros_profond_ou_lien_recalcule(tmp_path, monkeypatch):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, reserve)
+    fichiers = list(reserve.iterdir())
+    fichiers[0].write_text("[" * 200_000)                      # RecursionError, pas une ValueError
+    fichiers[1].unlink()
+    (tmp_path / "ailleurs.json").write_text("{}")
+    fichiers[1].symlink_to(tmp_path / "ailleurs.json")
+    assert _assemble(d, reserve) == ref
+    monkeypatch.setattr(P, "MAX_AGREGAT_OCTETS", 10)
+    assert _assemble(d, reserve) == ref
+
+
+def test_memo_adresses_de_types_faux_recherche_de_nouveau(tmp_path, monkeypatch):
+    class A:
+        def signature(self): return [1]
+        def classer(self, ip): return (64500, "Org", "inconnu")
+        def classe_asn(self, asn): return "hebergeur"
+        def pays(self, ip): return "FR"
+    (tmp_path / "adresses.json").write_text(json.dumps({"signature": [1], "adresses": {
+        "a": [True, "x", "FR"], "b": [1, 7, "FR"], "c": [1, "x", "<b>"], "d": "x", "e": [-4, "x", "FR"]}}))
+    m = P.MemoAdresses(A(), str(tmp_path))
+    for ip in "abcde":
+        assert m.classer(ip) == (64500, "Org", "hebergeur") and m.pays(ip) == "FR", ip
+
+
+def test_agregat_recalcule_si_le_journal_change_et_perime_efface(tmp_path):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    _assemble(d, reserve)
+    avant = {f.name for f in reserve.iterdir()}
+    (reserve / "etranger.txt").write_text("gardé")
+    with open(d / "waf-threats.log.1", "a") as f:
+        f.write(_ligne("9.200.0.1", "aspirateur_ua", il_y_a_s=JOUR) + "\n")
+    os.utime(d / "waf-threats.log.1", (MAINTENANT + 1, MAINTENANT + 1))
+    assert _pop(_assemble(d, reserve), "famille:collecte")["adresses"] == 5
+    apres = {f.name for f in reserve.iterdir()} - {"etranger.txt"}
+    assert len(apres) == 2 and len(avant & apres) == 1 and (reserve / "etranger.txt").exists()
+
+
+@pytest.mark.parametrize("contenu", ["", "{tronqué", "[]", '{"v": 1}', '{"v": 999, "t": []}',
+                                     '{"v":1,"complet":true,"ips":[],"cles":[],"cibles":[],"orgs":[],"reseaux":[],"cves":{},"t":[1,9,9,9,1,1,1,0]}'])
+def test_agregat_illisible_recalcule(tmp_path, contenu):
+    d, reserve = _journaux(tmp_path), tmp_path / "agregats"
+    ref = _assemble(d, reserve)
+    for f in reserve.iterdir():
+        f.write_text(contenu)
+    assert _assemble(d, reserve) == ref
+
+
+def test_reserve_impossible_meme_releve(tmp_path):
+    d = _journaux(tmp_path)
+    (tmp_path / "fichier").write_text("x")
+    ref = _assemble(d, None)
+    assert _assemble(d, tmp_path / "fichier") == ref
+    assert _assemble(d, tmp_path / "absent" / "sous") == ref
+    (tmp_path / "lien").symlink_to(tmp_path)
+    assert _assemble(d, tmp_path / "lien") == ref
+
+
+def test_rotation_pendant_la_passe_jamais_deux_fois_le_meme_fichier(tmp_path):
+    d = _journaux(tmp_path)
+    (d / "waf-threats.log.1").unlink()
+    os.link(d / "waf-threats.log", d / "waf-threats.log.1")          # le courant vu sous ses deux noms
+    assert _pop(_assemble(d, None), "famille:balayage_web")["serie"][-1] == 3
+
+
+def test_rotation_pendant_l_ouverture_rien_de_perdu(tmp_path, monkeypatch):
+    """`log` devient `log.1` entre l'ouverture des deux : on recommence, l'ancien `.1` n'est pas oublié."""
+    d = _journaux(tmp_path)
+    (d / "waf-threats.log.2.gz").unlink()
+    vrai, fait = open, []
+
+    def ouvrir(chemin, *a, **k):
+        f = vrai(chemin, *a, **k)
+        if str(chemin).endswith("waf-threats.log") and not fait:
+            fait.append(1)
+            os.rename(d / "waf-threats.log.1", d / "waf-threats.log.2")
+            os.rename(d / "waf-threats.log", d / "waf-threats.log.1")
+            (d / "waf-threats.log").write_text("")
+        return f
+
+    monkeypatch.setattr("builtins.open", ouvrir)
+    r = _assemble(d, None)
+    assert fait and _pop(r, "famille:balayage_web")["adresses"] == 3 and _pop(r, "famille:collecte")["adresses"] == 4
+    assert sum(_pop(r, "famille:balayage_web")["serie"]) == 3
+
+
+def test_compression_en_cours_le_gz_partiel_est_ignore(tmp_path):
+    d = _journaux(tmp_path)
+    (d / "waf-threats.log.2").write_bytes(gzip.decompress((d / "waf-threats.log.2.gz").read_bytes()))
+    assert sum(_pop(_assemble(d, None), "famille:messagerie")["serie"]) == 4
+
+
+def test_ligne_hors_sujet_jamais_decodee(monkeypatch):
+    decodees = []
+    vrai = json.loads
+    monkeypatch.setattr(P.json, "loads", lambda s: (decodees.append(s), vrai(s))[1])
+    compact = json.dumps(json.loads(_ligne("8.1.0.1", "xss")), separators=(",", ":"))
+    decodees.clear()
+    r = _calc([_ligne("8.1.0.1", "sqli"), compact, _ligne("8.2.0.1", "scanners")])
+    assert len(decodees) == 1 and _pop(r, "famille:balayage_web")["adresses"] == 1
+
+
+def test_categorie_dans_un_champ_hostile_ne_trompe_pas_le_tri():
+    """Un chemin qui contient `"category":"sqli"` (guillemets échappés par JSON) ne fait pas écarter la ligne."""
+    for sep in ((",", ":"), (", ", ": ")):
+        for piege in ('","category":"sqli","x":"', '{"category": "xss"}'):
+            ligne = json.dumps(json.loads(_ligne("8.1.0.1", "scanners", host=piege, path=piege)), separators=sep)
+            assert _pop(_calc([ligne]), "famille:balayage_web")["adresses"] == 1
+    # et une catégorie échappée en unicode reste lue
+    assert _calc([_ligne("8.1.0.1", "scanners").replace('"scanners"', '"\\u0073canners"')])["populations"][0]["adresses"] == 1
+
+
+def test_classe_du_catalogue_courant_sur_l_historique():
+    """Une ligne écrite « inconnu » avant l'ajout de son ASN au catalogue prend la classe d'aujourd'hui."""
+    lignes = [_ligne("8.1.0.1", "scanners", asn=22773, asn_org="Cox", reseau_classe="inconnu")]
+    r = _calc(lignes, classe_asn=lambda asn: "acces" if asn == 22773 else "inconnu")
+    assert _pop(r, "famille:balayage_web")["classes"] == {"acces": 100}
+
+
+def test_adresses_cherchees_une_seule_fois_entre_les_passes(tmp_path, monkeypatch):
+    recherches = []
+
+    class Base:
+        def __init__(self, chemin):
+            self.chemin = chemin
+
+        def get(self, ip):
+            recherches.append(ip)
+            if "ASN" in self.chemin:
+                return {"autonomous_system_number": 64500, "autonomous_system_organization": "Exemple"}
+            return {"country": {"iso_code": "FR"}}
+
+        def close(self):
+            pass
+
+    asn, pays, cat = tmp_path / "ASN.mmdb", tmp_path / "Country.mmdb", tmp_path / "cat.toml"
+    asn.write_text("a")
+    pays.write_text("p")
+    cat.write_text("[classes]\nhebergeur = [64500]\n")
+    d = _journaux(tmp_path)
+    _sources_absentes(monkeypatch, tmp_path)
+    monkeypatch.setattr(P, "_maxminddb", types.SimpleNamespace(open_database=Base))
+    monkeypatch.setattr(P, "BASES_ASN", (str(asn),))
+    monkeypatch.setattr(P, "BASES_PAYS", (str(pays),))
+    monkeypatch.setattr(P, "CATALOGUES", (str(cat),))
+    sortie = tmp_path / "sortie"
+    sortie.mkdir()
+
+    def passe():
+        recherches.clear()
+        assert P.rafraichir(str(d), str(sortie / "p.json"), str(tmp_path / "absent.json"), MAINTENANT)
+        r = P.lire_cache(str(sortie / "p.json"))
+        assert r["complet"] is True and _pop(r, "famille:collecte")["pays_top"] == [["FR", 100]]
+        return _pop(r, "famille:collecte")["classes"], len(recherches)
+
+    assert passe() == ({"hebergeur": 100}, 2 * 7)          # 7 adresses, une recherche par base
+    assert passe() == ({"hebergeur": 100}, 0)
+    cat.write_text("[classes]\nacces = [64500]\n")        # catalogue changé : appliqué sans rien rechercher
+    assert passe() == ({"acces": 100}, 0)
+    pays.write_text("base renouvelée")                     # base changée : tout est recherché de nouveau
+    assert passe()[1] == 2 * 7
+
+
+def test_cibles_bornees_par_journal(monkeypatch):
+    monkeypatch.setattr(P, "MAX_CIBLES_JOURNAL", 5)
+    a = P.agreger([_ligne("8.1.0.1", "scanners", host=f"h{i}.exemple.test") for i in range(50)], MAINTENANT)
+    assert len(a.tentatives) <= 6 and sum(v[0] for v in a.tentatives.values()) == 50
 
 
 def test_lignes_du_journal_ignore_les_vieux_fichiers(tmp_path):
@@ -550,7 +822,7 @@ def test_lanceur_nice_et_processus(waf, monkeypatch):
                           str(waf.POPULATIONS_CACHE)]
     assert kw["cwd"] == str(Path(waf.__file__).resolve().parent.parent)
     assert (Path(kw["cwd"]) / "api" / "populations.py").is_file()
-    assert waf.POPULATIONS_PERIODE == 600 and waf.POPULATIONS_DELAI == 540 < waf.POPULATIONS_PERIODE
+    assert waf.POPULATIONS_PERIODE == 1800 and waf.POPULATIONS_DELAI == 540 < waf.POPULATIONS_PERIODE
 
 
 def test_lanceur_jamais_deux_a_la_fois(waf, monkeypatch):

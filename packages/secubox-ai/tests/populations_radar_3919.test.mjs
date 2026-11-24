@@ -125,3 +125,17 @@ test("chaque emoji est suivi de son texte", () => {
   assert.ok(puces.length > 5);
   puces.forEach((x) => assert.match(x.textContent, /^\S+ \S/, "puce sans texte : " + x.textContent));
 });
+
+test("âge dit sans alerte, pivot annoncé là où il est vérifié, recouvrement conclu (lot 1b)", () => {
+  const { ctx, zones } = monter();
+  const rendre = (id, meta) => { ctx.rCampagnes({ populations: [pop(id, "collecte", 4)], populations_meta: Object.assign({ complet: true, genere_le: 1790000000, age_s: 2400, recouvrement: { adresses_communes: 780, adresses_total: 7800 } }, meta || {}) }); return zones.rCampagnes.textContent; };
+  const titre = () => tous(zones.rCampagnes).find((x) => x.className === "puce etat rot").title;
+  const t = rendre("famille:collecte");
+  assert.match(t, /\(il y a 40 min\), refait toutes les 30 minutes/);
+  assert.doesNotMatch(t, /partiel/i);
+  assert.match(t, /— 10 % : certaines adresses participent à plusieurs populations\./);
+  assert.match(titre(), /même cible/);
+  rendre("profileur:00aa"); assert.doesNotMatch(titre(), /même cible/);
+  rendre("rotation:0a1b2c3d"); assert.match(titre(), /détecteur/);
+  assert.doesNotMatch(rendre("famille:collecte", { age_s: null }), /il y a/);
+});
