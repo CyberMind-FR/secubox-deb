@@ -783,7 +783,7 @@ def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Opti
 
 # ── agrégats des journaux tournés, gardés sur disque ────────────────────────────────────────────────────────────
 
-VERSION_AGREGAT = 1             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
+VERSION_AGREGAT = 2             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
 MAX_AGREGATS = 12               # fichiers gardés (logrotate : 7 rotations)
 MAX_AGREGAT_OCTETS = 32 * 1024 * 1024
 _NOM_AGREGAT = re.compile(r"^(?:agregat-[0-9a-f-]+|adresses)\.json$")
