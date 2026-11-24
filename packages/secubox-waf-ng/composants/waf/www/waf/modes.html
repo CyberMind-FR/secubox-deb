@@ -110,7 +110,7 @@
       <div class="pan">
         <h2>Leurres de service <i>sbx-authwatch · ouverts sur le WAN</i></h2>
         <div id="leurres"></div>
-        <p class="note">Bannir : ban à la fin du dialogue (règle actuelle, #3728). Observer : identifiants journalisés, aucun ban. Messagerie (smtp, submission, imap, pop3 ; #3924) : compte masqué, jamais de mot de passe, « bannir » applique les règles d’authentification ordinaires ; smtps, imaps et pop3s observent toujours. Effet immédiat (relu à chaud).</p>
+        <p class="note">Bannir : ban à la fin du dialogue (règle actuelle, #3728). Observer : identifiants journalisés, aucun ban. Messagerie (submission, imap, pop3 ; #3924) : « observer » par défaut, jamais de mot de passe ; « bannir » ne vise qu’un compte inexistant. smtp, smtps, imaps et pop3s observent toujours. Effet immédiat (relu à chaud).</p>
       </div>
 
       <div class="pan">
@@ -154,8 +154,8 @@
       product_absent_probes:{name:'Sondes de produits absents',mode:'detect',motifs:4,structurels:0,enabled:true,verrouille:true},
       sqli:{name:'Injection SQL',mode:'block',motifs:7,structurels:0,enabled:true,verrouille:false}}};
     STATS={categories:{nextcloud:{touches:14,faux_positifs_estimes:2},roundcube:{touches:9,faux_positifs_estimes:0},sqli:{touches:57,faux_positifs_estimes:0}}};
-    LEURRES={leurres:[['rdp',3389],['vnc',5900],['telnet',23],['smb',445],['mysql',3306],['postgres',5432],['redis',6379],['mongodb',27017],['elasticsearch',9200],['mssql',1433],['smtp',25],['submission',587],['imap',143],['pop3',110],['smtps',465],['imaps',993],['pop3s',995]]
-      .map(function(x){var fixe=/^(smtps|imaps|pop3s)$/.test(x[0]);return {service:x[0],port:x[1],mode:fixe||x[0]==='postgres'?'observer':'bannir',fixe:fixe};})};
+    LEURRES={leurres:[['rdp',3389],['vnc',5900],['telnet',23],['smb',445],['mysql',3306],['postgres',5432],['redis',6379],['mongodb',27017],['elasticsearch',9200],['mssql',1433],['submission',587],['imap',143],['pop3',110],['smtp',25],['smtps',465],['imaps',993],['pop3s',995]]
+      .map(function(x){var fixe=/^(smtp|smtps|imaps|pop3s)$/.test(x[0]);return {service:x[0],port:x[1],mode:fixe||/^(postgres|submission|imap|pop3)$/.test(x[0])?'observer':'bannir',fixe:fixe};})};
     HOTES={hotes:[{hote:'nc.exemple.fr',service:'nextcloud',conteneur_php:'oui',couvert:true,explicite:false},
       {hote:'webmail.exemple.fr',service:'roundcube',conteneur_php:'oui',couvert:true,explicite:false},
       {hote:'wp.exemple.fr',service:null,conteneur_php:'inconnu',couvert:false,explicite:false}],motifs:['^(nc|nextcloud|cloud)\\.','^(webmail|roundcube)\\.']};
