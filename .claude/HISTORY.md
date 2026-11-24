@@ -36,6 +36,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   IOPS, % occupé par disque, pression, swap, 5 services qui écrivent le plus, io.stat des cgroups, sans root). Mesure gk2 :
   eMMC 68 % occupée (4 Mo/s lus, 448 lectures/s), pression CPU 80 %. Charge encore 35 : garde-passage 45 %, unbound 42 %,
   sbxwaf 34 %, metrics + metrics-publish 44 %, ad-guard-auto 19 % — à instruire. Carte Système du Hall : à faire.
+- eMMC lue ~7 Mo/s par des services éphémères (minuteries Python ~20/min, cache de pages chassé faute de mémoire).
+  Tâches planifiées ≈ 1 cœur : dnssensor 12 s/passage, garde-passage 9 s, network-anomaly 6 s. garde-passage EN BOUCLE :
+  levée d'évasion (192.168.1.112 + IPv6) relancée chaque minute, `evasion lever` régénérait + rechargeait Unbound même
+  sans changement (11-36 s), passage tué à 55 s avant commit ; audit.log refusé (AppArmor, O_CREAT). #3910 (PR #3911,
+  ad-guard 1.33.6 + garde 0.3.9, gk2 06:12) : ctl « inchange » sans rendu, commit par adresse levée, audit O_APPEND seul.
 
 ## 2026-11-22 — gk7 (autre site) : pubs sur le Player, DNS Freebox non délégué ; TV Privacy nettoyé
 - gk7 = 192.168.1.11 sur une autre Freebox (préfixe 2a01:e0a:e7d:2290). Cette Freebox distribue son propre DNS
