@@ -11,6 +11,21 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 (11:10) — parent des journaux laissé à root, aspirateur banni 24 h
+
+- **#3916 (PR #3917, déployé gk2)** : `LogsDirectory=secubox` retiré de 11 unités `User=secubox` (systemd re-chownait
+  récursivement tout /var/log/secubox, journaux du WAF compris, dès que le tmpfiles de waf-ng remettait le parent à root).
+  13 postinsts ne réattribuent plus le parent (root:root 0755, créé seulement s'il manque) ; repairs.log, watchdog.log,
+  sentinelle-gsm-audit.log, soc-agent-audit.log, streamlit.log pré-créés. Test `secubox-core/tests/test_parent_journaux_3916.py`.
+  16 paquets montés ; 13 installés sur gk2, parent root:root 755 après coup, couture 200.
+- **toolbox 2.13.12** : le postinst redémarrait unbound à CHAQUE mise à jour (coupure DNS) ; désormais seulement si un
+  écouteur change, par `fast_reload`. Vérifié sur gk2 : pid unbound inchangé après installation.
+- **#3905 (PR #3918, déployé gk2)** : `aspirateur_ua` banni 24 h au lieu de 168 h (waf-rules 1.8.2, waf-ng 1.43.7),
+  décision du propriétaire ; `waf_ban` à 7 212 entrées, ~1 000 neuves/h. Bans posés avant gardent 7 j. Gitea : aucune
+  sonde sur .env/.git/admin, aucun 200 sensible — aspiration de contenu, pas d'exploitation.
+- Reste : `secubox-metrics-rapport-waf.service` en échec depuis 05:37 (antérieur) ; disque de gk0 plein (8 Go libérés
+  dans le bloc-notes, 11 Go dans le dossier d'une autre session).
+
 ## 2026-11-24 (suite) — garde levée par MAC, journaux du WAF, moteur IA gk0
 
 - garde 0.3.12 (#3914, PR #3915) : une décision multi-adresses d'une même MAC est levée en UN geste
