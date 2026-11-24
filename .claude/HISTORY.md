@@ -11,6 +11,19 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 (suite) — garde levée par MAC, journaux du WAF, moteur IA gk0
+
+- garde 0.3.12 (#3914, PR #3915) : une décision multi-adresses d'une même MAC est levée en UN geste
+  (`lever <mac>`, un seul rendu Unbound) ; déployée gk2. gk0 (ac:19:8e:ab:26:c9, classé « TV 26c9 ») : décision
+  afb0 levée par l'administrateur, 7 évasions orphelines levées par MAC.
+- `unbound-checkconf` limité au fichier TV écarté : le fichier ne tient pas seul (local-zone-override vers les
+  listes), et depuis la fin de la boucle garde le pilote TV ne recharge plus que quelques fois par jour.
+- Bans 3 300 → 5 400 : aspirateur_ua (#3905), ~1 000 IP/h du parc de proxies de l'aspirateur Gitea, 7 j chacune.
+- #3916 : `LogsDirectory=secubox` (10 unités) re-chowne tout /var/log/secubox au démarrage si le parent est root ;
+  le redémarrage de secubox-system à 05:54 a coupé waf-threats.log jusqu'à 08:50. Triage chown fait sur gk2.
+- Relais gk0 : socket du moteur effacée par deux démarrages concurrents (llama vivant, injoignable, analyses en
+  échec) ; verrou + relance sur socket perdue dans relais.py (hors dépôt, sauvegarde .avant-verrou-moteur).
+
 ## 2026-11-24 — gk2 : PTR de sbxdpi sans fin, faux « 0 ban » du Radar, résumés empilés sur gk0 (ref #3899 #3901)
 - Relevé externe « 1 113 alertes, 0 ban » : gk2 tenait ~2 000 bans (set waf_ban). Le 0 venait de secubox-ai : gk2
   saturé le 23/11 (ReadTimeout sur /waf/*), liste vide comptée 0. #3901 (PR #3902, secubox-ai 2.2.1, gk3 05:30) :
