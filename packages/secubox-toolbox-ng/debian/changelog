@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.18.2-1~trixie1) trixie; urgency=medium
+
+  * sbxdpi : le snapshot disque stats.json (3,5 Mo sur gk2) s'écrit toutes
+    les 10 min (DPI_PERSIST_INTERVAL) et à l'arrêt propre, non plus toutes
+    les 30 s (~10 Go/jour sur le SSD) ; les fichiers par appareil (tmpfs)
+    gardent le tour de 30 s (ref #3903).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 06:10:00 +0100
+
 secubox-toolbox-ng (0.18.1-1~trixie1) trixie; urgency=medium
 
   * sbxdpi : le cache de DNS inverse vieillit (24 h trouvé, 1 h sans réponse)

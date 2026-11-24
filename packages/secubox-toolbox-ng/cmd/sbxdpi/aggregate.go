@@ -518,16 +518,20 @@ func (a *aggregator) loadSnapshot(path string) {
 	}
 }
 
-// flushLoop rewrites the snapshot every FlushInterval until ctx is cancelled.
+// flushLoop : fichiers par appareil (tmpfs) à chaque FlushInterval ; relevé disque (CachePath) seulement toutes les
+// PersistInterval (#3903) — l'arrêt propre l'écrit de toute façon (Run).
 func flushLoop(ctx context.Context, cfg Config, agg *aggregator) {
 	t := time.NewTicker(cfg.FlushInterval)
 	defer t.Stop()
+	p := time.NewTicker(cfg.PersistInterval)
+	defer p.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-p.C:
 			agg.writeSnapshot(cfg.CachePath)
+		case <-t.C:
 			agg.appareils.flush() // lot 4 : fichier par appareil, seulement si des cibles existent
 		}
 	}
