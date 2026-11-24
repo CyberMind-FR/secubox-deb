@@ -222,7 +222,7 @@ cdn = []
   - Route `GET /populations`, garde `require_lecture_ai`, renvoie le cache + `age_s`, ou
     `{"disponible": False}` si absent.
   - Forme du relevé :
-    `{"genere_le", "complet", "fenetre_jours": 7, "populations": [{"id", "famille", "nom_cible", "cibles": [...3], "adresses", "reseaux", "une", "le3", "classes": {classe: %}, "pays_top": [[code, %]...3], "reseaux_top": [{"asn","org","classe","adresses"}...5], "serie": [7 entiers, J-6→J], "bans", "premier", "dernier", "rotation": bool, "etat": "bannie"|"observee"|"inactive", "campagne_actord": str|None}], "recouvrement": {"adresses_communes": int, "adresses_total": int}}`
+    `{"genere_le", "complet", "fenetre_jours": 7, "populations": [{"id" /* stable : famille:<famille> | rotation:<8 hex> | profileur:<signature> */, "famille", "nom_cible", "cibles": [...3], "adresses", "reseaux", "une", "le3", "classes": {classe: %}, "pays_top": [[code, %]...3], "reseaux_top": [{"asn","org","classe","adresses"}...5], "serie": [7 entiers, J-6→J], "bans", "premier", "dernier", "rotation": bool, "etat": "bannie"|"observee"|"inactive", "campagne_actord": str|None, "cves": [identifiants CVE des filtres ia_filtres_* déclenchés par les adresses de la population, 20 max]}], "recouvrement": {"adresses_communes": int, "adresses_total": int}}`
   - Règles de population (spec 5.3) : campagne de rotation (tâche 9) = sa population ; campagnes SMTP réunies dans
     `messagerie` (comptes masqués dans `cibles`) ; campagne du profileur ≥ 10 adresses = sa population, sinon sa
     famille ; reste par famille ; `autre` exclu de la liste.
@@ -243,6 +243,11 @@ cdn = []
   - `test_lignes_fautives` : lignes vides, JSON tronqué, `client_ip:"local"`, IPv6 `2606:4700::1` → aucune exception ;
     `local` ignoré ; IPv6 comptée.
   - `test_serie_7_jours` : lignes datées J-6…J → `serie` de longueur 7 dans l'ordre.
+  - `test_id_stable` : deux calculs successifs sur les mêmes lignes donnent les mêmes `id` (`famille:collecte`, …).
+  - `test_cves_population` : une adresse de la population collecte déclenche `ia_filtres_critique` avec un `rule_id`
+    contenant `CVE-2026-0001` → `cves == ["CVE-2026-0001"]` sur cette population.
+  - `test_acl_datascope` : documenté plutôt que testé ici — le cache doit rester lisible par le groupe
+    `secubox-datascope` (tâche 12 pose l'ACL dans le postinst).
   - `test_recouvrement` : 2 adresses communes à deux familles → `adresses_communes==2`.
   - `test_double_tampon` : un relevé complet écrit puis un partiel 10 min après → le fichier garde le complet ;
     2 h après → le partiel remplace.
