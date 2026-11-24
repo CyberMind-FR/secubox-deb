@@ -433,20 +433,25 @@ son unité le recycle ; jamais de signal à la main, #2629).
 hebergeur = [64496, 64497]
 ```
 
-**Relevé** : toutes les 10 min, l'API lance `python3 -m api.populations` (compte `secubox`, `nice` 15, tué à 300 s) sur
+**Relevé** : toutes les 10 min, l'API lance `python3 -m api.populations` (compte `secubox`, `nice` 10, `ionice` best-effort 7, tué à 540 s, jamais deux à la fois) sur
 7 jours de `waf-threats.log*` ; cache `/var/lib/secubox/waf/populations.json` (0640), double tampon : une passe
 partielle n'écrase pas un relevé complet de moins d'une heure.
 `GET /api/v1/waf/populations` (`require_lecture_ai`) rend ce cache : `{"disponible": false}` s'il manque, sinon
 `disponible`, `age_s`, `genere_le`, `complet`, `manques`, `duree_s`, le recouvrement et `populations` (`id` stable,
 `famille`, `nom_cible`, `cibles`, `adresses` et `reseaux` (nombres), `classes`, `pays_top`, `une`, `le3`, `rotation`,
-`etat`, `bans`, `premier`, `dernier`, `reseaux_top`, `serie` sur 7 jours, `cves`, `campagne_actord`). Jamais une adresse, un compte en clair ni un mot de
-passe. Sources facultatives, absentes sans erreur : `/run/secubox/authwatch-campagnes.json`,
+`etat`, `bans`, `actives_24h`, `bannies_24h`, `premier`, `dernier`, `reseaux_top`, `serie` sur 7 jours, `cves`, `campagne_actord`).
+`etat` : `bannie` si la moitié au moins des adresses actives depuis 24 h ont été bannies depuis 24 h, sinon `observee`,
+`inactive` sans activité depuis 24 h. `rotation` d'une population de famille (`famille:…`) : 50 adresses, 80 % à trois
+tentatives ou moins, et une même cible pour la moitié des tentatives au moins. Jamais une adresse, un compte en clair ni un mot de
+passe. Sources facultatives, absentes sans erreur : `/run/secubox-authwatch/campagnes.json`,
 `/var/lib/secubox/waf/rotation-etat.json` (détecteur non livré dans ce lot), sbx-actord.
 
 **Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
 `classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
 (`sources` compte toutes les adresses) ; aucune : `classes`, `pays_top`, `une` et `le3` sont **absents**. `rotation`
-exige 50 adresses mesurées, dont 80 % à trois tentatives ou moins.
+exige 50 adresses mesurées, dont 80 % à trois tentatives ou moins. Un service d'authwatch (`smtp`, `ssh`…, liste fermée)
+s'affiche, un compte reste masqué, un hôte qui est une adresse n'est pas retenu. **L'ASN ne sert qu'aux vues** : il n'entre
+pas dans la corrélation d'actord (`signatureDe`), donc ni dans la confiance, ni dans les mesures, ni dans les bans.
 
 **Droits** : `secubox-actord` traverse `/etc/secubox/waf` par une ACL nommée « x » (postinst), jamais par le groupe
 `secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une

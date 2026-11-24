@@ -131,6 +131,10 @@ test("messagerie : comptes masqués ; repli des campagnes à une source ou inact
   ctx.rendCampagnes();
   const t = zones.list.textContent;
   assert.ok(t.includes("Comptes visés : geg…, inf… (masqués)"));
+  const b = monter();   // authwatch nomme le service : ce n'est ni un compte, ni « masqué »
+  b.ctx.poser([camp("d", { famille: "messagerie", cibles_noms: ["smtp"] })]);
+  b.ctx.rendCampagnes();
+  assert.ok(b.zones.list.textContent.includes("Cible : smtp") && !b.zones.list.textContent.includes("masqués"));
   const autres = tous(zones.list).find((x) => x.tag === "details" && x.className === "campautres");
   assert.ok(autres, "repli absent");
   assert.ok(autres.textContent.includes("Autres campagnes (2)") && autres.textContent.includes("💤 inactive"));

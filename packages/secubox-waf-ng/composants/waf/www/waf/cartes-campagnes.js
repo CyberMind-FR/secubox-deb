@@ -14,7 +14,7 @@
   var NS = "http://www.w3.org/2000/svg", MAX_CARTES = 6, MAX_LIGNES = 4;
   var MANQUES = { journal: "journal du WAF", authwatch: "échecs de messagerie", profileur: "profileur de campagnes", rotation: "détecteur de rotation" };
   var BASES = { base_asn: "base des opérateurs", base_pays: "base des pays" };
-  var T_ROTATION = "50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins";
+  var T_ROTATION = "50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins, et une même cible pour la moitié des tentatives au moins";
 
   function nombre(v) { return typeof v === "number" && isFinite(v); }
   function nb(v) { return nombre(v) ? Math.round(v).toLocaleString("fr-FR") : "—"; }
@@ -60,8 +60,8 @@
   function etats(doc, R, p, zone) {
     if (p.rotation === true) zone.appendChild(puce(doc, R, R.ETATS.rotation, "", "etat rot", T_ROTATION));
     var e = cleOu(R.ETATS, p.etat, null);
-    if (e === "bannie") zone.appendChild(puce(doc, R, R.ETATS.bannie, "", "etat ban", nb(p.bans) + " adresses bannies sur 7 jours, un ban dans les dernières 24 h"));
-    else if (e === "observee") zone.appendChild(puce(doc, R, R.ETATS.observee, "", "etat obs", "active dans les dernières 24 h, sans ban récent"));
+    if (e === "bannie") zone.appendChild(puce(doc, R, R.ETATS.bannie, "", "etat ban", nb(p.bannies_24h) + " adresses bannies sur " + nb(p.actives_24h) + " actives dans les dernières 24 h, " + nb(p.bans) + " sur 7 jours"));
+    else if (e === "observee") zone.appendChild(puce(doc, R, R.ETATS.observee, "", "etat obs", "active dans les dernières 24 h, moins de la moitié de ses adresses bannies"));
     else if (e === "inactive") zone.appendChild(puce(doc, R, R.ETATS.inactive, "", "etat ina", "aucune activité depuis plus de 24 h"));
     return zone;
   }
@@ -180,8 +180,8 @@
     }
     zone.appendChild(el(doc, "p", "poprec", t));
     zone.appendChild(el(doc, "p", "poprep", "Repères : " + Object.keys(R.CLASSES).map(function (k) { return R.CLASSES[k][0] + " " + R.CLASSES[k][1]; }).join(" · ")
-      + " — " + E.rotation[0] + " rotation : " + T_ROTATION + " · " + E.bannie[0] + " bannie : un ban dans les dernières 24 h · "
-      + E.observee[0] + " observée : active sans ban récent · " + E.inactive[0] + " inactive : rien depuis 24 h." + (q ? " Relevé du " + q + "." : "")));
+      + " — " + E.rotation[0] + " rotation : " + T_ROTATION + " · " + E.bannie[0] + " bannie : la moitié au moins des adresses actives depuis 24 h bannies · "
+      + E.observee[0] + " observée : active, moins de la moitié bannie · " + E.inactive[0] + " inactive : rien depuis 24 h." + (q ? " Relevé du " + q + "." : "")));
   }
 
   // La synthèse du SOC : une ligne par campagne en cours (4 au plus), sans carte (#3922 : le détail est dans le WAF).
