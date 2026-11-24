@@ -57,3 +57,44 @@ def test_guardian_a_la_bande_pare_feu_applicatif_qui_renvoie_au_waf():
     liens = set(re.findall(r"case_\('(/waf/[a-z]+\.html)'", GUARDIAN))
     assert {"/waf/menaces.html", "/waf/vue.html", "/waf/historique.html"} <= liens
     assert GUARDIAN.count('target="_top"') >= 2 and "const " not in GUARDIAN.split("<script>")[1]
+
+
+def test_evolution_compare_deux_journees_completes_sans_la_journee_en_cours():
+    """La dernière entrée de l'historique est aujourd'hui (partielle) : elle est écartée, on compare hier et avant-hier."""
+    import datetime
+    import json
+
+    import pytest
+    sync_api = pytest.importorskip("playwright.sync_api")
+    auj = datetime.date.today()
+    j = lambda n: (auj - datetime.timedelta(days=n)).isoformat()
+    stats = {"total_threats": 10, "observed_threats": 1, "by_severity": {}, "by_category": {"robots": 10}}
+
+    def ouvre(nav, histo):
+        p = nav.new_context().new_page()
+        reps = {"/api/v1/waf/stats": stats, "/api/v1/waf/history": histo}
+
+        def api(r):
+            c = reps.get(r.request.url.split("?")[0].split("g.test")[1])
+            r.fulfill(status=200 if c is not None else 401, content_type="application/json", body=json.dumps(c if c is not None else {}))
+        p.route("http://g.test/api/**", api)
+        p.route("http://g.test/soc/guardian.html*", lambda r: r.fulfill(status=200, content_type="text/html", body=(WWW / "guardian.html").read_text(encoding="utf-8")))
+        p.goto("http://g.test/soc/guardian.html")
+        p.wait_for_timeout(600)
+        return p
+
+    with sync_api.sync_playwright() as pw:
+        try:
+            nav = pw.chromium.launch()
+        except Exception as e:
+            pytest.skip(f"chromium indisponible : {e}")
+        p = ouvre(nav, {"jours": {j(3): {"total": 900}, j(2): {"total": 1000}, j(1): {"total": 1120}, j(0): {"total": 5}}})
+        t = p.inner_text("#pareFeu").replace(" ", " ").replace(" ", " ")
+        assert "+12 %" in t and "1 120 alertes" in t and "hier contre avant-hier" in t
+        assert "1 000" in t and "900" not in t and "−" not in t and "-100" not in t
+        p.context.close()
+        # une seule journée complète (+ aujourd'hui) : le chiffre est omis
+        p = ouvre(nav, {"jours": {j(1): {"total": 1120}, j(0): {"total": 5}}})
+        assert p.locator("#pareFeu .chiffre").count() == 3 and "Évolution" not in p.inner_text("#pareFeu")
+        p.context.close()
+        nav.close()

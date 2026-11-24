@@ -42,6 +42,20 @@ Configuration file: `/etc/secubox/soc.toml`
 - `GET /api/v1/soc/status` - Module status
 - `GET /api/v1/soc/health` - Health check
 
+## Vigie SOC, Guardian et le WAF (1.12.1, #3922)
+
+Une place par panneau : le WAF garde le détail, le SOC en donne la synthèse.
+
+- Les onglets de `/soc/` n'encadrent plus aucune page du WAF (Menaces, Attaquants, Campagnes, Surfaces, Visites,
+  Historique). Un seul lien « Détail dans le WAF ↗ » ouvre `/waf/` en navigation de premier niveau.
+- Guardian (`guardian.html`) ne recalcule plus la carte des attaques, « Ce qui protège », les derniers événements, la
+  répartition par catégorie ni la courbe par jour : ces panneaux restent dans le WAF. Il garde le réseau, le DPI, les
+  appareils, les leurres, le mode et le filtrage web.
+- À leur place, une bande « Pare-feu applicatif » (`waf/stats` et `waf/history` déjà lus, aucune route nouvelle) :
+  alertes du jour, critiques et hautes, catégorie dominante, évolution d'hier contre avant-hier (deux journées
+  complètes, la journée en cours est écartée ; le chiffre est omis s'il manque des jours). Chaque chiffre renvoie à
+  la page du WAF et la bande porte un lien « Détail dans le WAF → ».
+
 ## SADE — Cyber Defense Live
 
 Console de défense active du SOC : page `/soc/defense.html`, routes montées sous `/defense` (préfixe `/api/v1/soc`

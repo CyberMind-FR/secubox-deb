@@ -151,17 +151,19 @@
   function pareFeu(s,h){
     var bc=s&&s.by_category||{},cl=Object.keys(bc).map(function(k){return [k,num(bc[k])];}).sort(function(x,y){return y[1]-x[1];}),tot=cl.reduce(function(a,c){return a+c[1];},0);
     var total=s?num(s.total_threats!=null?s.total_threats:s.blocked_24h):null,sev=s&&s.by_severity||{},crit=s?num(sev.critical)+num(sev.high):null;
-    var jr=(h&&h.jours)||{},dates=Object.keys(jr).sort(),evo='—',evoS='historique indisponible',evoC='';
-    if(dates.length>=2){var der=num(jr[dates[dates.length-1]].total),av=num(jr[dates[dates.length-2]].total);
-      evoS=dates[dates.length-1].slice(5)+' contre '+dates[dates.length-2].slice(5);
-      if(av>0){var p=Math.round(100*(der-av)/av);evo=(p>0?'+':'')+p+' %';evoC=p>0?' rouge':p<0?' vert':'';}}
-    var dom=cl.length&&tot>0?cl[0]:null;
     function case_(href,l,v,sous,cls){return '<a class="chiffre" href="'+href+'" target="_top"><span class="l">'+esc(l)+'</span><span class="v'+(cls||'')+'">'+v+'</span><span class="s">'+esc(sous)+'</span></a>';}
+    /* Deux journées COMPLÈTES : la journée en cours (date locale du jour) est écartée, sinon « aujourd'hui, partiel » contre « hier, entier » afficherait une baisse factice chaque matin. */
+    var jr=(h&&h.jours)||{},auj=new Date(),aujS=auj.getFullYear()+'-'+('0'+(auj.getMonth()+1)).slice(-2)+'-'+('0'+auj.getDate()).slice(-2),
+      dates=Object.keys(jr).sort().filter(function(k){return k<aujS;}),evoCase='';
+    if(dates.length>=2){var dh=dates[dates.length-1],da=dates[dates.length-2],der=num(jr[dh].total),av=num(jr[da].total);
+      if(av>0){var p=Math.round(100*(der-av)/av);
+        evoCase=case_('/waf/historique.html','Évolution : hier contre avant-hier',(p>0?'+':'')+p+' %','Hier ('+dh.slice(5)+') : '+fmt(der)+' alertes ; avant-hier ('+da.slice(5)+') : '+fmt(av),p>0?' rouge':p<0?' vert':'');}}
+    var dom=cl.length&&tot>0?cl[0]:null;
     el('pareFeu').innerHTML=
       case_('/waf/menaces.html','Alertes du jour',total==null?'—':fmt(total),s?'journal des menaces du WAF':'session requise')
      +case_('/waf/menaces.html','Critiques et hautes',crit==null?'—':fmt(crit),'gravité haute ou critique',crit?' rouge':'')
      +case_('/waf/vue.html','Catégorie dominante',dom?esc(String(dom[0]).slice(0,22)):'—',dom?Math.round(100*dom[1]/tot)+' % des menaces observées':(s?'aucune menace':'session requise'))
-     +case_('/waf/historique.html','Évolution',evo,evoS,evoC);
+     +evoCase;
   }
   function rend(d){
     el('demo').hidden=!d.demo;
