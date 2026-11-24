@@ -30,6 +30,7 @@ type regleFamille struct {
 // reporte là-bas.
 var reglesFamille = []regleFamille{
 	{"auth_smtp", true, FamilleMessagerie},
+	{"auth_imap", true, FamilleMessagerie},
 	{"auth_ssh", true, FamilleAccesDistant},
 	{"leurre", true, FamilleAccesDistant},
 	{"aspirateur_ua", false, FamilleCollecte},

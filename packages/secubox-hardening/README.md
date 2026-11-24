@@ -23,6 +23,8 @@ Kernel and system hardening for ANSSI CSPN compliance
 - AppArmor
 - Garde des ports de backend côté eth2 et, depuis 1.6.2, côté LAN du mode routeur `br-lan` (même liste, imposée par un
   test : netmodes 1.7.0 accepte br-lan en entrée comme eth2) (`/etc/nftables.d/secubox-wan-guard.nft`, #1306, #3206)
+- Leurres de messagerie d'authwatch (#3924) : sous la base en `policy drop`, ports locaux acceptés par sa redirection
+  seulement (`/etc/nftables.d/secubox-leurres-mail.nft`) ; 110 et 143 listés comme leurres
 
 ## Installation
 

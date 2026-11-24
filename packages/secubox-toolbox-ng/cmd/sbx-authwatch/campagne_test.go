@@ -85,7 +85,7 @@ func TestCampagneBannitDesLaPremiereTentative(t *testing.T) {
 	signaux := make(chan Signal, 16)
 	// Seuil du compteur volontairement inatteignable : seule la campagne peut
 	// declencher, ce qui prouve que c'est bien elle qui agit.
-	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), camp, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), camp, nil, b, j, lb, false, nil)
 
 	for _, ip := range []string{"203.0.113.11", "203.0.113.12", "203.0.113.13", "203.0.113.14"} {
 		signaux <- Signal{IP: ip, Service: "smtp", Categorie: "auth_smtp:sasl_failed",
@@ -94,13 +94,14 @@ func TestCampagneBannitDesLaPremiereTentative(t *testing.T) {
 	}
 	time.Sleep(80 * time.Millisecond)
 	annule()
+	arret()
 
 	// Les deux premieres etablissent la campagne, les suivantes sont bannies.
-	if len(fx.bannies) < 2 {
-		t.Fatalf("la campagne aurait du bannir les sources tardives, obtenu %v", fx.bannies)
+	if len(fx.liste()) < 2 {
+		t.Fatalf("la campagne aurait du bannir les sources tardives, obtenu %v", fx.liste())
 	}
-	if fx.bannies[0] != "203.0.113.13" {
-		t.Errorf("le bannissement doit commencer a la source qui etablit le seuil, obtenu %v", fx.bannies)
+	if fx.liste()[0] != "203.0.113.13" {
+		t.Errorf("le bannissement doit commencer a la source qui etablit le seuil, obtenu %v", fx.liste())
 	}
 }
 

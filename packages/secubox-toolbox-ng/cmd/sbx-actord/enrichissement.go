@@ -164,7 +164,7 @@ func estCompte(e *envelope.Envelope) bool {
 // l'opérateur et absent d'ici est donc masqué : c'est le sens sûr de l'erreur.
 // TestServicesConnusSuiventAuthwatch échoue si authwatch en gagne un.
 var servicesAuthwatch = map[string]bool{
-	"ssh": true, "smtp": true, "imap": true, "ftp": true, // motifs, bannières
+	"ssh": true, "smtp": true, "imap": true, "pop3": true, "ftp": true, // motifs, bannières, leurres de messagerie
 	"rdp": true, "vnc": true, "telnet": true, "smb": true, "mysql": true, // leurres
 	"postgres": true, "redis": true, "mongodb": true, "elasticsearch": true, "mssql": true,
 	"gitea": true, "nextcloud": true, "peertube": true, // services.json livré

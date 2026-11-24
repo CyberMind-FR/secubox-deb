@@ -1,3 +1,16 @@
+secubox-waf-ng (1.44.3-1~trixie1) trixie; urgency=medium
+
+  * Page Modes : leurres de messagerie d'authwatch (ref #3924). submission,
+    imap et pop3 réglables, « observer » tant que « bannir » n'est pas
+    écrit ; smtp, smtps, imaps et pop3s toujours en observation. Les autres
+    leurres ne changent pas (absent = bannir).
+  * Populations : auth_imap* rejoint la famille « messagerie », comme dans
+    reseau.Famille (agrégats gardés recalculés). sbx-actord : service pop3
+    connu. Les lignes de gravité audit des leurres de messagerie (compte
+    réel, mode observer) ne comptent pas comme attaquants.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 18:00:00 +0100
+
 secubox-waf-ng (1.44.2-1~trixie1) trixie; urgency=high
 
   * Repose des bans (ref #3930) : à 10 000 bans, un « nft add element » et un

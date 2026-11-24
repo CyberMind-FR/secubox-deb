@@ -89,13 +89,14 @@ func TestCompteInexistantBannitDesLaPremiereTentative(t *testing.T) {
 	signaux <- Signal{IP: "203.0.113.77", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "SASL refusee", Cible: "gerald@gk2.net"}
 	// Seuils volontairement inatteignables : seule la liste peut declencher.
-	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
 		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false, nil)
 	time.Sleep(100 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 1 || fx.bannies[0] != "203.0.113.77" {
-		t.Fatalf("une tentative sur un compte inexistant doit bannir aussitot, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 1 || fx.liste()[0] != "203.0.113.77" {
+		t.Fatalf("une tentative sur un compte inexistant doit bannir aussitot, obtenu %v", fx.liste())
 	}
 	if l := lignesJournal(t, chemin); len(l) != 1 || l[0]["action"] != "banned" {
 		t.Fatalf("journal attendu banned, obtenu %v", l)
@@ -114,13 +115,14 @@ func TestCompteReelResteTraiteAvecPatience(t *testing.T) {
 	signaux := make(chan Signal, 2)
 	signaux <- Signal{IP: "203.0.113.78", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "SASL refusee", Cible: "gk2@secubox.in"}
-	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour),
 		NewCampagnes(time.Hour, 999), comptes, b, j, lb, false, nil)
 	time.Sleep(100 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 0 {
-		t.Fatalf("un echec sur le compte reel ne doit pas bannir aussitot, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 0 {
+		t.Fatalf("un echec sur le compte reel ne doit pas bannir aussitot, obtenu %v", fx.liste())
 	}
 }
 
@@ -145,5 +147,38 @@ func TestFormatPasswdFileDovecot(t *testing.T) {
 	// La garde qui compte : l'empreinte ne doit jamais devenir un nom de compte.
 	if !c.Inexistant("{sha512-crypt}$6$abcd$efgh") {
 		t.Error("une empreinte ne doit pas etre enregistree comme compte")
+	}
+}
+
+// La liste est relue quand elle change ; pendant une écriture, on ne sait rien.
+func TestComptesRelus(t *testing.T) {
+	f := fichierComptes(t, "gk2@secubox.in:x\n")
+	c, err := NewComptes([]string{f})
+	if err != nil || !c.Inexistant("nouveau@secubox.in") {
+		t.Fatalf("%v", err)
+	}
+	ecrit := func(texte string, age time.Duration) {
+		t.Helper()
+		if err := os.WriteFile(f, []byte(texte), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		q := time.Now().Add(-age)
+		if err := os.Chtimes(f, q, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ecrit("nouv", 0) // écriture en cours
+	if c.Charge() || c.Inexistant("gk2@secubox.in") {
+		t.Fatal("fichier en cours d'écriture : aucune certitude")
+	}
+	ecrit("gk2@secubox.in:x\nnouveau@secubox.in:y\n", time.Minute)
+	if c.Inexistant("nouveau@secubox.in") || !c.Inexistant("inconnu@x") {
+		t.Fatal("liste non relue")
+	}
+	if err := os.Remove(f); err != nil {
+		t.Fatal(err)
+	}
+	if c.Charge() || c.Inexistant("inconnu@x") {
+		t.Fatal("liste disparue : aucune certitude")
 	}
 }
