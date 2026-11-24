@@ -1,3 +1,13 @@
+secubox-garde (0.3.12-1~trixie1) trixie; urgency=medium
+
+  * Levée d'une décision qui tient plusieurs adresses d'une même MAC en UN geste
+    (`evasion|quarantaine lever <mac>`, déjà ouvert par le sudoers) : un seul
+    rendu Unbound + unbound-checkconf (~50 s sur gk2) au lieu d'un par adresse
+    (13 adresses = 11 min). Repli adresse par adresse si une autre décision
+    active de même menace tient la MAC, ou si le geste échoue (ref #3914).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 08:43:54 +0100
+
 secubox-garde (0.3.11-1~trixie1) trixie; urgency=medium
 
   * secubox-garde-passage : TimeoutStartSec 55 → 300 s et MemoryMax 192 → 448 Mo ;

@@ -211,3 +211,13 @@ class Effets:
 
     def rouvrir(self, ip: str, mac: Optional[str] = None, motif: str = "levée") -> dict:
         return self._geste("rouvrir", lambda: ["evasion", "lever", _ip(ip)], ip, motif)
+
+    def lever_mac(self, menace: str, mac: str, motif: str = "levée") -> dict:
+        """#3914 : toutes les entrées d'une MAC en UN geste (un seul rendu Unbound au lieu d'un par adresse)."""
+        def args():
+            verbe = {"infection": "quarantaine", "evasion": "evasion"}.get(menace)
+            m = _mac(mac)
+            if verbe is None or m == "-":
+                raise ValueError("menace" if verbe is None else "mac")
+            return [verbe, "lever", m]
+        return self._geste("lever_mac", args, str(mac), motif)

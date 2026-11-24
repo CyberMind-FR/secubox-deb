@@ -40,6 +40,9 @@ class Effets:
     def rouvrir(self, ip, mac=None, motif=""):
         return self._r("rouvrir", ip)
 
+    def lever_mac(self, menace, mac, motif=""):
+        return self._r("lever_mac", menace, mac)
+
     def alerte(self, texte):
         self.appels.append(("alerte", texte))
 
@@ -205,6 +208,10 @@ class EffetsLevee(Effets):
     def liberer(self, ip, mac=None, motif=""):
         self.appels.append(("liberer", ip))
         return {"ok": ip not in self.refus, "motif": ""}
+
+    def lever_mac(self, menace, mac, motif=""):
+        self.appels.append(("lever_mac", menace, mac))
+        return {"ok": not self.refus, "motif": ""}             # une adresse refusée : le geste par MAC échoue aussi
 
 
 def _etat(db):
