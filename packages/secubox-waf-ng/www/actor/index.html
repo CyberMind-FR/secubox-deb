@@ -103,6 +103,20 @@
   .multi.n3{background:rgba(255,159,28,.12);border-color:rgba(255,159,28,.5);color:var(--orange)}
   .multi.n4{background:rgba(255,77,94,.14);border-color:rgba(255,77,94,.6);color:var(--rouge)}
   .nat{margin-right:2px}
+  /* carte de campagne (#3919) : même carte que le Radar (puces, barre de classes, pays, cible, période), anneau conservé */
+  .acteur.camp{align-items:flex-start;padding:10px 11px}
+  .cc{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;font-size:.78rem}
+  .cc header{display:flex;justify-content:space-between;align-items:baseline;gap:4px 8px;flex-wrap:wrap}
+  .cc h3{margin:0;font-size:.88rem;font-weight:600;overflow-wrap:anywhere;min-width:0}
+  .cpl{display:flex;gap:5px;flex-wrap:wrap;min-width:0}
+  .cc .puce{background:rgba(86,150,255,.12);border-radius:999px;padding:1px 9px;font-size:.72rem;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .cc .puce.etat{font-weight:600;background:transparent;border:1px solid currentColor} .cc .puce.rot{color:var(--orange)} .cc .puce.ina{color:var(--faible)}
+  .cc p{margin:0;overflow-wrap:anywhere} .cchif{color:var(--texte)} .cchif span{color:var(--doux)}
+  .cbarre{display:flex;height:7px;border-radius:4px;overflow:hidden;gap:2px;background:var(--trait)} .cbarre span{display:block;height:100%}
+  .ccible,.csig{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--doux)}
+  .cper{color:var(--faible);font-size:.72rem} .clien{color:var(--cyan);font-size:.74rem}
+  .cdet summary,.campautres>summary{cursor:pointer;color:var(--doux);font-size:.74rem} .cdet p{margin-top:4px;color:var(--doux);font-size:.72rem}
+  .campautres{display:grid;gap:6px} .campautres[open]>summary{margin-bottom:4px}
   /* profil */
   #retour{display:none}
   .phead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
@@ -183,6 +197,7 @@
   <div class="note">Observe. Correlate. Explain. Defend. — « continuité de campagne probable », jamais « même personne ».</div>
 </div></div></main>
 
+<script src="reperes.js"></script>
 <script>
 "use strict";
 var Q=new URLSearchParams(location.search),DEMO=!!Q.get('demo'),EMB=!!Q.get('embed');
@@ -208,14 +223,15 @@ function nb(x){return Math.round(num(x)).toString().replace(/\B(?=(\d{3})+(?!\d)
 function mes(x){return (x===null||x===undefined||x==='')?'—':nb(x);}   // mesure absente = « — », 0 est une mesure
 function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
 var SESSION_REFUSEE=false;
-function jget(u){
+// discret : lecture accessoire (populations du WAF), un refus n'annonce pas « session requise ».
+function jget(u,discret){
   var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
-  return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){if(r.status===401||r.status===403)SESSION_REFUSEE=true;return r.ok?r.json():null;}).catch(function(){return null;});
+  return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){if(!discret&&(r.status===401||r.status===403))SESSION_REFUSEE=true;return r.ok?r.json():null;}).catch(function(){return null;});
 }
 
 var VECLBL={knowledge:'connaissance',continuity:'continuité',intent:'intention',automation:'automation',severity:'gravité',persistence:'persistance',confidence:'confiance'};
 var FLOW=['OBSERVE','DELAY','CHALLENGE','TARPIT','DENY','QUARANTINE'];
-var ACTS=[],CAMPS=[],CUR=null,CAMP=null,STATS=null;
+var ACTS=[],CAMPS=[],CUR=null,CAMP=null,STATS=null,POPS=[],POPS_LE=0;
 // La campagne est l'unité de lecture : on ouvre sur les campagnes, les acteurs restent à un clic. Tri par défaut = score.
 var FILTRE='campagnes',TRI='score';
 
@@ -369,25 +385,99 @@ function trie(l){
 function ligne(on){var d=h('div','acteur'+(on?' on':''));d.setAttribute('role','button');d.tabIndex=0;
   d.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();d.click();}});return d;}
 function videAvecBouton(box,txt,lib,fn){var d=h('div','vide',txt+' ');var b=h('button','fb',lib);b.type='button';b.addEventListener('click',fn);add(d,b);add(box,d);}
-// Une campagne, une ligne : regrouper sans fusionner (42 sources qui chassent du Gitea ne sont pas la même personne).
-function rendCampagnes(){
-  var box=vide($('list'));
-  if(!CAMPS.length){videAvecBouton(box,'Aucune campagne : il faut plusieurs acteurs partageant le même mode opératoire, ou un acteur qui s’est déplacé.','voir les acteurs',function(){FILTRE='tous';rendBarre();rendList();});return;}
-  CAMPS.forEach(function(c){
-    var dico=c.cibles_inexistantes>0,d=ligne(c.signature===CAMP);
-    var ring=h('div','ring',String(c.nb_acteurs));ring.style.setProperty('--v',String(Math.min(100,c.nb_acteurs*2)));ring.style.setProperty('--c',dico?'var(--orange)':'var(--cyan)');
-    var nm=h('div','nm'),tg=h('div','tg'),nc=(c.cibles||[]).length;
-    add(nm,h('b',null,c.signature,c.signature));
-    add(tg,h('span','tag ips',c.sources+' sources'),h('span','tag',nc+' cible'+(nc>1?'s':'')));
-    if(dico)add(tg,h('span','tag dico',c.cibles_inexistantes+' inexistantes','Noms d’hôtes qui n’existent pas : énumération de sous-domaines'));
-    if(c.pays>1)add(tg,h('span','tag cont',c.pays+' pays'));
-    add(nm,tg);
-    var lv=h('div','lvl');add(lv,h('b',null,String(c.nb_acteurs)),document.createTextNode('acteurs'));
-    add(d,ring,nm,lv);
-    d.addEventListener('click',function(){CAMP=c.signature;CUR=(c.acteurs||[])[0];rendList();rendProfile();montreProfil();});
-    add(box,d);
-  });
+// ---- Cartes de campagne (#3919, tâche 8) : même carte que le Radar, mêmes repères (reperes.js, window.SbxReperes).
+// Signature, cibles, comptes et opérateurs viennent d'attaquants : TOUT passe par textContent (h, puce de reperes.js),
+// jamais comme HTML. Classe ou famille inconnue : repli sur « inconnu » / « autre ». Champs #3919 absents (actord plus
+// ancien) ou reperes.js absent : la ligne d'avant, sans erreur. Une campagne reste un regroupement, jamais une identité.
+function cCle(t,k,d){return typeof k==='string'&&Object.prototype.hasOwnProperty.call(t,k)?k:d;}
+function cNombre(v){return typeof v==='number'&&isFinite(v);}
+function cPct(v){return cNombre(v)?Math.round(v)+' %':'— %';}
+function cCouleur(k){
+  return {proxy_loue:'var(--orange)',hebergeur:'var(--bleu)',acces:'var(--vert)',mobile_partage:'var(--violet)',cdn:'var(--jaune)',
+    relais_vie_privee:'var(--doux)',scanner_recherche:'var(--cyan)'}[k]||'var(--faible)';
 }
+function cPuce(R,rep,suf,cls,titre){var p=R.puce(document,rep,suf);if(cls)p.className='puce '+cls;if(titre)p.title=titre;return p;}
+function cClasses(R,classes){   // [[classe connue, %]] par part décroissante ; une clé inconnue compte pour « inconnu »
+  var acc={},ordre=[],src=classes&&typeof classes==='object'?classes:{};
+  Object.keys(src).forEach(function(k){var v=src[k];if(!cNombre(v)||v<=0)return;
+    var c=cCle(R.CLASSES,k,'inconnu');if(!Object.prototype.hasOwnProperty.call(acc,c)){acc[c]=0;ordre.push(c);}acc[c]+=v;});
+  return ordre.map(function(c){return [c,acc[c]];}).sort(function(a,b){return b[1]-a[1];});
+}
+function cInactive(c){return cNombre(c.dernier)&&c.dernier>0&&c.dernier<Date.now()/1000-86400;}
+function cRepliee(c){return num(c.sources)<=1||cInactive(c);}   // une seule source, ou rien depuis 24 h
+function cDate(ts){return cNombre(ts)&&ts>0?new Date(ts*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';}
+function cPopulation(sig){   // population du Radar rapprochée de cette campagne par le relevé de gk2 (campagne_actord)
+  if(typeof sig!=='string'||!sig)return null;
+  for(var i=0;i<POPS.length;i++){var p=POPS[i];if(p&&typeof p==='object'&&p.campagne_actord===sig)return p;}
+  return null;
+}
+function anneauCampagne(c){
+  var n=num(c.nb_acteurs),r=h('div','ring',String(n));r.style.setProperty('--v',String(Math.min(100,n*2)));r.style.setProperty('--c',num(c.cibles_inexistantes)>0?'var(--orange)':'var(--cyan)');return r;
+}
+// L'affichage d'avant #3919 : une ligne, la signature en titre.
+function ligneCampagne(c){
+  var dico=num(c.cibles_inexistantes)>0,d=ligne(c.signature===CAMP),sig=String(c.signature==null?'—':c.signature);
+  var nm=h('div','nm'),tg=h('div','tg'),nc=(Array.isArray(c.cibles)?c.cibles:[]).length;
+  add(nm,h('b',null,sig,sig));
+  add(tg,h('span','tag ips',num(c.sources)+' sources'),h('span','tag',nc+' cible'+(nc>1?'s':'')));
+  if(dico)add(tg,h('span','tag dico',num(c.cibles_inexistantes)+' inexistantes','Noms d’hôtes qui n’existent pas : énumération de sous-domaines'));
+  if(num(c.pays)>1)add(tg,h('span','tag cont',num(c.pays)+' pays'));
+  add(nm,tg);
+  var lv=h('div','lvl');add(lv,h('b',null,String(num(c.nb_acteurs))),document.createTextNode('acteurs'));
+  add(d,anneauCampagne(c),nm,lv);return d;
+}
+function carteCampagne(R,c){
+  var fam=cCle(R.FAMILLES,c.famille,'autre'),noms=(Array.isArray(c.cibles_noms)?c.cibles_noms:Array.isArray(c.cibles)?c.cibles:[]).slice(0,3).map(String);
+  var d=ligne(c.signature===CAMP),cc=h('div','cc'),tete=h('header'),et=h('div','cpl');d.classList.add('camp');
+  add(tete,h('h3',null,R.FAMILLES[fam][0]+' '+R.nomCarte(fam,noms)));
+  if(c.rotation===true)add(et,cPuce(R,R.ETATS.rotation,'','etat rot','50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins'));
+  if(cInactive(c))add(et,cPuce(R,R.ETATS.inactive,'','etat ina','aucune activité depuis plus de 24 h'));
+  add(cc,add(tete,et));
+  var ch=h('p','cchif');
+  add(ch,h('b',null,nb(c.nb_acteurs)),h('span',null,num(c.nb_acteurs)>1?' acteurs · ':' acteur · '),h('b',null,nb(c.sources)),h('span',null,num(c.sources)>1?' adresses':' adresse'));
+  if(cNombre(c.une)||cNombre(c.le3))add(ch,h('span',null,' · '),h('b',null,cPct(c.une)),h('span',null,' n’essaient qu’une fois · '+cPct(c.le3)+' trois fois ou moins'));
+  if(num(c.cibles_inexistantes)>0)add(ch,h('span',null,' · '),h('b',null,nb(c.cibles_inexistantes)),h('span',null,' noms inexistants','Noms d’hôtes qui n’existent pas : énumération de sous-domaines'));
+  add(cc,ch);
+  var cl=cClasses(R,c.classes),b=h('div','cbarre'),lc=h('div','cpl');b.setAttribute('aria-hidden','true');
+  cl.forEach(function(x){var g=h('span'),rep=R.CLASSES[x[0]];g.style.width=Math.min(100,x[1])+'%';g.style.background=cCouleur(x[0]);g.title=rep[1]+' '+cPct(x[1]);add(b,g);add(lc,cPuce(R,rep,cPct(x[1])));});
+  if(cl.length)add(cc,b,lc);
+  var pays=(Array.isArray(c.pays_top)?c.pays_top:[]).filter(function(x){return x&&typeof x==='object';}).slice(0,3);
+  if(pays.length){var lp=h('div','cpl');pays.forEach(function(x){var k=typeof x.code==='string'&&/^[A-Za-z]{2}$/.test(x.code)?x.code.toUpperCase():'??';add(lp,cPuce(R,[R.drapeau(k),k],cPct(x.part),'','part des adresses'));});add(cc,lp);}
+  var txt;
+  if(!noms.length)txt='Cible : non relevée';
+  else if(fam==='messagerie')txt='Comptes visés : '+noms.join(', ')+' (masqués)';
+  else txt='Cible : '+noms.map(function(x){return x.replace(/\.secubox\.in$/,'');}).join(', ');
+  add(cc,h('p','ccible',txt),h('p','cper','Active du '+cDate(c.premier)+' au '+cDate(c.dernier)));
+  var pop=cPopulation(c.signature);
+  if(pop)add(cc,h('p','clien','↔ même population que « '+R.nomCarte(pop.famille,(Array.isArray(pop.cibles)?pop.cibles:[]).slice(0,3).map(String))+' » dans le Radar'));
+  // Détail : la signature (plus le titre), les acteurs, les compteurs bruts. Ouvrir le détail n'ouvre pas le profil.
+  var det=h('details','cdet'),ac=(Array.isArray(c.acteurs)?c.acteurs:[]).map(String);
+  add(det,h('summary',null,'Détail'),h('p','csig','Signature : '+String(c.signature==null?'—':c.signature)),
+    h('p',null,'Acteurs : '+(ac.length?ac.slice(0,6).join(', ')+(ac.length>6?' …':''):'—')),
+    h('p',null,'Pays : '+mes(c.pays)+' · priorité '+mes(c.priorite)+' · continuité '+mes(c.continuite)));
+  det.addEventListener('click',function(e){e.stopPropagation();});det.addEventListener('keydown',function(e){e.stopPropagation();});
+  add(cc,det);
+  add(d,anneauCampagne(c),cc);return d;
+}
+// Une campagne, une carte : regrouper sans fusionner (42 sources qui chassent du Gitea ne sont pas la même personne).
+function rendCampagnes(){
+  var box=vide($('list')),R=window.SbxReperes;
+  if(!CAMPS.length){videAvecBouton(box,'Aucune campagne : il faut plusieurs acteurs partageant le même mode opératoire, ou un acteur qui s’est déplacé.','voir les acteurs',function(){FILTRE='tous';rendBarre();rendList();});return;}
+  var vues=[],repliees=[];
+  CAMPS.forEach(function(c){if(c&&typeof c==='object')(cRepliee(c)?repliees:vues).push(c);});
+  function carte(c){
+    var d=R&&typeof c.famille==='string'?carteCampagne(R,c):ligneCampagne(c);
+    d.addEventListener('click',function(){CAMP=c.signature;CUR=(c.acteurs||[])[0];rendList();rendProfile();montreProfil();});
+    return d;
+  }
+  vues.forEach(function(c){add(box,carte(c));});
+  if(!vues.length)add(box,h('div','vide','Aucune campagne active dans les dernières 24 h avec plusieurs adresses.'));
+  if(repliees.length){
+    var dt=h('details','campautres');add(dt,h('summary',null,'Autres campagnes ('+repliees.length+') : une seule adresse, ou rien depuis 24 h'));
+    repliees.forEach(function(c){add(dt,carte(c));});add(box,dt);
+  }
+}
+// ---- Fin des cartes de campagne
 function rendList(){
   if(FILTRE==='campagnes'){rendCampagnes();return;}
   var box=vide($('list'));
@@ -473,6 +563,12 @@ function aperçu(){
   if(APERCU&&Date.now()-APERCU_LE<55000)return Promise.resolve(APERCU);
   return jget('/api/v1/actor/overview').then(function(a){if(a){APERCU_LE=Date.now();APERCU=a;}return APERCU;});
 }
+// Populations du Radar (#3919, relevé de fond du WAF, garde lecture IA) : seulement pour le lien « même population ».
+// Route absente, refusée ou relevé pas encore calculé : aucun lien, aucun bandeau. Une relecture par minute suffit.
+function populations(){
+  if(Date.now()-POPS_LE<55000)return Promise.resolve(POPS);
+  return jget('/api/v1/waf/populations',true).then(function(d){POPS_LE=Date.now();POPS=d&&d.disponible!==false&&Array.isArray(d.populations)?d.populations:[];return POPS;});
+}
 
 // ── Données de démonstration (adresses de documentation, noms fictifs, rien n'est écrit) ──
 function demoActs(){
@@ -490,6 +586,22 @@ function demoApercu(){
     robots:[{famille:'Googlebot',hits:1820,ips:14},{famille:'Bingbot',hits:610,ips:6}]};
 }
 
+// Campagnes fictives au format d'actord #3919 : hôtes example.test, comptes masqués fictifs, AS de documentation (RFC 5398), aucune adresse.
+function demoCampagnes(){
+  var t=Math.floor(Date.now()/1000);
+  return [{signature:'campagne-sqli-01',nb_acteurs:3,sources:14,cibles:['app.example.test','api.example.test'],cibles_inexistantes:0,pays:3,acteurs:['ACT-0A41','ACT-17C2'],priorite:62,continuite:88,premier:t-5*86400,dernier:t-420,
+      famille:'balayage_web',cibles_noms:['app.example.test','api.example.test'],classes:{hebergeur:71,inconnu:14,relais_vie_privee:12,proxy_loue:3},pays_top:[{code:'US',part:39},{code:'DE',part:8},{code:'SE',part:5}],une:15,le3:70,rotation:false},
+    {signature:'collecte-git-02',nb_acteurs:41,sources:2565,cibles:['git.example.test'],cibles_inexistantes:0,pays:12,acteurs:['ACT-17C2','ACT-2B90'],priorite:48,continuite:64,premier:t-86400,dernier:t-60,
+      famille:'collecte',cibles_noms:['git.example.test'],classes:{proxy_loue:87,hebergeur:10,inconnu:2,acces:1},pays_top:[{code:'US',part:56},{code:'GB',part:12},{code:'CA',part:6}],une:100,le3:100,rotation:true},
+    {signature:'enum-sous-domaines',nb_acteurs:2,sources:5,cibles:['inconnu.example.test'],cibles_inexistantes:4,pays:1,acteurs:['ACT-2B90'],priorite:31,continuite:20,premier:t-6*86400,dernier:t-3*86400,
+      famille:'balayage_web',cibles_noms:['inconnu.example.test'],classes:{hebergeur:100},pays_top:[{code:'NL',part:100}],une:40,le3:80,rotation:false},
+    {signature:'mots-de-passe-03',nb_acteurs:1,sources:1,cibles:['mail.example.test'],cibles_inexistantes:0,pays:1,acteurs:['ACT-3D17'],priorite:18,continuite:10,premier:t-7200,dernier:t-900,
+      famille:'messagerie',cibles_noms:['adm…','inf…'],classes:{acces:100},pays_top:[{code:'KR',part:100}],une:0,le3:100,rotation:false}];
+}
+// Population du Radar fictive, rapprochée de la campagne de collecte (opérateur AS64500, réseau de documentation).
+function demoPopulations(){
+  return [{id:'collecte:git',famille:'collecte',cibles:['git.example.test'],campagne_actord:'collecte-git-02',reseaux_top:[{asn:64500,org:'Opérateur exemple AS64500',classe:'proxy_loue',adresses:663}]}];
+}
 function maj(){var m=$('maj');try{m.textContent='relevé à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){m.textContent='—';}}
 function rend(s,acts,camps){
   STATS=s;CAMPS=camps||[];ACTS=acts||[];
@@ -499,11 +611,9 @@ function rend(s,acts,camps){
   rendTuiles();carteMonde();rendEven();rendBarre();rendList();rendProfile();maj();annoncer();
 }
 function tick(){
-  if(DEMO){APERCU=demoApercu();rend({posture:'Protégée',mode:'observe',blocked_24h:136638,attempts_24h:5421,actors:4,campaigns:2,events_24h:18204},demoActs(),
-    [{signature:'campagne-sqli-01',nb_acteurs:3,sources:14,cibles:['app.example.test','api.example.test'],cibles_inexistantes:0,pays:3,acteurs:['ACT-0A41','ACT-17C2']},
-     {signature:'enum-sous-domaines',nb_acteurs:2,sources:5,cibles:['inconnu.example.test'],cibles_inexistantes:4,pays:1,acteurs:['ACT-2B90']}]);return;}
+  if(DEMO){APERCU=demoApercu();POPS=demoPopulations();rend({posture:'Protégée',mode:'observe',blocked_24h:136638,attempts_24h:5421,actors:4,campaigns:4,events_24h:18204},demoActs(),demoCampagnes());return;}
   SESSION_REFUSEE=false;
-  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns'),aperçu()]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns'),aperçu(),populations()]).then(function(r){
     CAMPS=r[2]||[];
     var ok=!!r[0];
     $('session').hidden=ok||!SESSION_REFUSEE;
