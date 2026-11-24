@@ -1,3 +1,12 @@
+secubox-waf-ng (1.43.5-1~trixie1) trixie; urgency=medium
+
+  * waf-rules 1.8.0 : catégorie aspirateur_ua (bloquée, bannie 7 j dès la
+    1re requête) pour l'UA figé de l'aspirateur distribué de Gitea (Chrome 150
+    Mac, 1 000+ adresses sur gk2) ; chaîne complète ancrée, les navigateurs
+    voisins ne correspondent pas (ref #3905).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 06:30:00 +0100
+
 secubox-waf-ng (1.43.4-1~trixie1) trixie; urgency=medium
 
   * sbxwaf (ref #3885) : pages 502, 503, 504, avertissement et bannissement

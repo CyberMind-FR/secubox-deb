@@ -161,7 +161,7 @@ def test_sync_nouvelles_categories_posees_actives():
     vivant = {"_meta": {"version": "1.6.0"},
               "categories": {k: v for k, v in livre["categories"].items() if k not in NOUVELLES}}
     neuf = sync.fusionne(livre, vivant)
-    assert neuf["_meta"]["version"] == "1.7.0"
+    assert neuf["_meta"]["version"] == livre["_meta"]["version"]
     for nom in NOUVELLES:
         assert nom in neuf["categories"], nom
         assert neuf["categories"][nom]["enabled"] is True
@@ -202,3 +202,13 @@ def test_mode_choisi_et_enabled_false_cumules_3741():
     livre = {"categories": {"x": cat("x-1", mode="detect", ban_seuil=2)}}
     vivant = {"categories": {"x": cat("x-0", mode="block", mode_choisi=True, enabled=False)}}
     assert sync.fusionne(livre, vivant)["categories"]["x"] == cat("x-1", mode="block", mode_choisi=True, enabled=False)
+
+
+def test_sync_aspirateur_ua_pose_actif_bloquant_3905():
+    livre = _livre_reel()
+    vivant = {"_meta": {"version": "1.7.0"},
+              "categories": {k: v for k, v in livre["categories"].items() if k != "aspirateur_ua"}}
+    neuf = sync.fusionne(livre, vivant)
+    c = neuf["categories"]["aspirateur_ua"]
+    assert c["enabled"] is True and c["mode"] == "block" and c["ban_seuil"] == 1 and c["ban_duree"] == "168h"
+    assert list(neuf["categories"])[-1] == "php2shell"
