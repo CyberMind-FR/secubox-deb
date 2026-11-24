@@ -97,11 +97,11 @@ VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
 LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
-# Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés par un PROCESSUS à part (nice 15), lu par
+# Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés par un PROCESSUS à part (nice 10), lu par
 # gk3. Dossier 0770 secubox-waf, où l'API (secubox, membre du groupe) écrit déjà php-signaux.json.
 POPULATIONS_CACHE = Path("/var/lib/secubox/waf/populations.json")
 POPULATIONS_PERIODE = 600  # s
-POPULATIONS_DELAI = 300    # s : au-delà, le processus est tué
+POPULATIONS_DELAI = 540    # s : au-delà, le processus est tué (sous la période : jamais deux passes à la fois)
 _history_lock = threading.Lock()
 
 
@@ -1027,7 +1027,7 @@ _populations_delai_signale = False
 
 
 def _argv_populations() -> List[str]:
-    return ["nice", "-n", "15", sys.executable, "-m", "api.populations", "--ecrire", str(POPULATIONS_CACHE)]
+    return ["nice", "-n", "10", "ionice", "-c", "2", "-n", "7", sys.executable, "-m", "api.populations", "--ecrire", str(POPULATIONS_CACHE)]
 
 
 async def _lancer_populations() -> Optional[int]:
@@ -1055,6 +1055,7 @@ async def _lancer_populations() -> Optional[int]:
     except asyncio.CancelledError:      # arrêt de l'API : pas de processus orphelin
         if proc.returncode is None:
             proc.kill()
+            await proc.wait()
         raise
     _populations_delai_signale = False
     duree = time.monotonic() - debut

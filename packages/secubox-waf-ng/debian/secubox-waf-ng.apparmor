@@ -18,6 +18,7 @@
 #   - ix   : /usr/sbin/nft (ban natif --nft-ban, #1693)
 #   - rw   : /var/lib/secubox/waf/**      (journal des bans)
 #   - r    : /usr/share/GeoIP/**          (pays d'origine)
+#   - r    : /var/lib/GeoIP/GeoLite2-ASN.mmdb, /usr/share/secubox/waf/reseaux-classes.toml (réseau, #3919)
 #   - network inet, inet6 : upstream TCP connections + listener
 #   - network netlink raw + capability net_admin : nft (#1693)
 #
@@ -98,6 +99,14 @@
   # ── Géolocalisation (pays d'origine des menaces) ────────────────────────
   /usr/share/GeoIP/          r,
   /usr/share/GeoIP/**        r,
+
+  # ── Réseau de chaque alerte (#3919) ─────────────────────────────────────
+  # --geoip-asn et --reseaux-classes (valeurs par défaut) : ces deux fichiers
+  # seulement, en lecture. La surcharge /etc/secubox/waf/reseaux-classes.toml
+  # est déjà couverte par /etc/secubox/waf/**. Refusés, le journal perdrait le
+  # réseau en silence (classe « inconnu » partout).
+  /var/lib/GeoIP/GeoLite2-ASN.mmdb              r,
+  /usr/share/secubox/waf/reseaux-classes.toml   r,
 
   # ── Go runtime ───────────────────────────────────────────────────────────
   /proc/self/maps            r,

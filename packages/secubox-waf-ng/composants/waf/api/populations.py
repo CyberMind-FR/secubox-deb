@@ -44,7 +44,7 @@ BASES_PAYS = ("/var/lib/secubox/geoip/GeoLite2-Country.mmdb", "/var/lib/GeoIP/Ge
 JOURNAL_DOSSIER = "/var/log/secubox/waf"
 CAMPAGNES_PROFILEUR = "/var/cache/secubox/waf/campaigns.json"
 CATALOGUES = ("/usr/share/secubox/waf/reseaux-classes.toml", "/etc/secubox/waf/reseaux-classes.toml")
-AUTHWATCH_CAMPAGNES = "/run/secubox/authwatch-campagnes.json"
+AUTHWATCH_CAMPAGNES = "/run/secubox-authwatch/campagnes.json"
 ROTATION_ETAT = "/var/lib/secubox/waf/rotation-etat.json"
 ACTORD_SOCK = "/run/secubox/actor.sock"
 ACTORD_DELAI_S = 2.0
@@ -56,10 +56,12 @@ MAX_CIBLES_SUIVIES = 1_000      # cibles distinctes comptées par population
 SEUIL_PROFILEUR = 10            # une campagne du profileur devient sa population à partir de 10 adresses
 ROTATION_ADRESSES = 50          # indicateur de rotation (spec 5.3) : ≥ 50 adresses…
 ROTATION_LE3 = 80               # … dont ≥ 80 % à ≤ 3 tentatives
+ROTATION_PIVOT = 50             # … et, pour une population de FAMILLE, ≥ 50 % des tentatives sur une même cible (pivot)
 INACTIVE_S = 86400
+BANNIE_PART = 50                # « bannie » : ≥ 50 % des adresses actives depuis 24 h ont été bannies depuis 24 h
 DOUBLE_TAMPON_S = 3600          # un partiel ne remplace pas un complet de moins d'1 h
 MAX_CVES = 20
-MODE_CACHE = 0o640              # lisible par le groupe (ACL secubox-datascope posée par le postinst, tâche 12)
+MODE_CACHE = 0o640              # groupe secubox-waf seulement ; l'accès de DataScope est décidé dans #3921 (README)
 
 CLASSES = ("acces", "cdn", "hebergeur", "proxy_loue", "scanner_recherche", "mobile_partage", "relais_vie_privee")
 INCONNU = "inconnu"
@@ -87,6 +89,7 @@ _CVE = re.compile(r"CVE-\d{4}-\d{4,7}")
 _HEX8 = re.compile(r"^[0-9a-f]{8}$")
 _SIGNATURE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 _HOTE = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,251}[a-z0-9])?$")
+_LABEL_NUMERIQUE = re.compile(r"^(?:[0-9]+|0x[0-9a-f]*)$")
 _PAYS = re.compile(r"^[A-Z]{2}$")
 
 
@@ -140,7 +143,17 @@ def _hote(valeur: Any) -> Optional[str]:
     if not h or h.startswith("["):
         return None
     h = h.rsplit(":", 1)[0] if h.count(":") == 1 else h
-    return h if _HOTE.match(h) else None
+    return h if _HOTE.match(h) and not _adresse_litterale(h) else None
+
+
+def _adresse_litterale(h: str) -> bool:
+    """L'hôte est une adresse IP, écriture décimale, octale ou hexadécimale incluse (dernier label numérique) : aucune
+    adresse ne part vers gk3 sous couvert de cible. Miroir d'`estAdresseLitterale` (sbx-actord)."""
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return bool(_LABEL_NUMERIQUE.match(h.rsplit(".", 1)[-1]))
 
 
 def _jour(ts: float) -> date:
@@ -263,8 +276,8 @@ class Annuaire:
 # ── calcul ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 class _Pop:
-    __slots__ = ("ident", "fam", "adresses", "serie", "bannies", "dernier_ban", "premier", "dernier", "cibles",
-                 "familles")
+    __slots__ = ("ident", "fam", "adresses", "serie", "bannies", "actives_24h", "bannies_24h", "premier", "dernier",
+                 "cibles", "familles")
 
     def __init__(self, ident: str, fam: str):
         self.ident = ident
@@ -272,7 +285,8 @@ class _Pop:
         self.adresses: Dict[str, int] = {}
         self.serie = [0] * FENETRE_JOURS
         self.bannies: set = set()
-        self.dernier_ban = 0.0
+        self.actives_24h: set = set()
+        self.bannies_24h: set = set()
         self.premier: Optional[float] = None
         self.dernier: Optional[float] = None
         self.cibles: Dict[str, int] = {}
@@ -406,9 +420,13 @@ def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str
             p.serie[i] += 1
         p.premier = t if p.premier is None or t < p.premier else p.premier
         p.dernier = t if p.dernier is None or t > p.dernier else p.dernier
+        recente = maintenant - t <= INACTIVE_S
+        if recente:
+            p.actives_24h.add(ip)
         if e.get("action") == "banned":
             p.bannies.add(ip)
-            p.dernier_ban = max(p.dernier_ban, t)
+            if recente:
+                p.bannies_24h.add(ip)
         path = e.get("path") if cat.startswith("auth_") else None
         if isinstance(path, str) and path:
             cible = masquer_compte(path)          # compte visé : JAMAIS gardé en clair
@@ -516,10 +534,11 @@ def _rendre(p: _Pop, maintenant: float, infos: Dict[str, Tuple[int, str, str]], 
         "bans": len(p.bannies),
         "premier": int(p.premier) if p.premier is not None else None,
         "dernier": int(p.dernier) if p.dernier is not None else None,
-        "rotation": n >= ROTATION_ADRESSES and _part(le3, n) >= ROTATION_LE3,
+        "actives_24h": len(p.actives_24h),
+        "bannies_24h": len(p.bannies_24h),
+        "rotation": n >= ROTATION_ADRESSES and _part(le3, n) >= ROTATION_LE3 and _a_un_pivot(p),
         "cves": sorted(trouvees)[:MAX_CVES],
     }
-    dernier_ban = p.dernier_ban
     if etat is not None:
         pop["rotation"] = True
         if n == 0:     # campagne établie (mode propose) sans ligne au journal : chiffres de l'état du détecteur
@@ -529,19 +548,29 @@ def _rendre(p: _Pop, maintenant: float, infos: Dict[str, Tuple[int, str, str]], 
             pop["classes"] = {c: min(_entier(v), 100) for c, v in cl.items()
                               if c in CLASSES or c == INCONNU} if isinstance(cl, dict) else {}
             pop["bans"] = _entier(etat.get("bannies"))
+            vu = _horodatage(etat.get("dernier"))
+            if vu is not None and maintenant - vu <= INACTIVE_S:
+                pop["actives_24h"] = pop["adresses"]
+                pop["bannies_24h"] = min(pop["bans"], pop["adresses"])
         for champ, cle, plus_tot in (("premier", "etablie_le", True), ("dernier", "dernier", False)):
             v = _horodatage(etat.get(cle))
             if v is not None and (pop[champ] is None or (v < pop[champ] if plus_tot else v > pop[champ])):
                 pop[champ] = int(v)
-        if pop["bans"] and pop["dernier"] is not None:
-            dernier_ban = max(dernier_ban, pop["dernier"])
     if pop["dernier"] is None or maintenant - pop["dernier"] > INACTIVE_S:
         pop["etat"] = "inactive"
-    elif pop["bans"] and maintenant - dernier_ban <= INACTIVE_S:
+    elif pop["bannies_24h"] and pop["bannies_24h"] * 100 >= BANNIE_PART * pop["actives_24h"]:
         pop["etat"] = "bannie"
     else:
         pop["etat"] = "observee"
     return pop
+
+
+def _a_un_pivot(p: _Pop) -> bool:
+    """Une famille réunit des activités sans lien : beaucoup d'adresses pressées n'y font une rotation que si elles
+    visent la même cible pour moitié au moins. Une campagne (profileur, détecteur) porte déjà son pivot."""
+    if not p.ident.startswith("famille:"):
+        return True
+    return bool(p.cibles) and max(p.cibles.values()) * 100 >= ROTATION_PIVOT * sum(p.adresses.values())
 
 
 def _rapprocher(pop: Dict[str, Any], campagnes_actord: Optional[list]) -> Optional[str]:
@@ -571,7 +600,8 @@ def _rang_rotation(nom: str) -> Optional[int]:
 
 
 def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Optional[float] = None) -> Iterator[str]:
-    """Le journal des menaces et ses rotations (`.log.N`, `.log.N.gz`), du plus ancien au plus récent, EN FLUX.
+    """Le journal des menaces et ses rotations (`.log.N`, `.log.N.gz`), fichier le plus RÉCENT d'abord, EN FLUX : au plafond
+    d'adresses (MAX_ADRESSES), celles du jour sont gardées. L'ordre des lignes est sans effet sur le relevé.
     Un fichier non modifié depuis plus de `jours`+1 jours est sauté ; un gzip corrompu s'arrête là, sans erreur."""
     import time
     limite = (maintenant if maintenant is not None else time.time()) - (jours + 1) * 86400
@@ -579,7 +609,7 @@ def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Opti
         noms = os.listdir(dossier)
     except OSError:
         return
-    fichiers = sorted(((r, n) for n in noms if (r := _rang_rotation(n)) is not None), reverse=True)
+    fichiers = sorted(((r, n) for n in noms if (r := _rang_rotation(n)) is not None))
     for _, nom in fichiers:
         chemin = os.path.join(dossier, nom)
         try:
@@ -732,7 +762,7 @@ def _dossier_journal() -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """`python3 -m api.populations --ecrire <cache>` : calcule le relevé et l'écrit. Lancé par la tâche de fond de
-    l'API (nice 15, délai 300 s), sous le même utilisateur qu'elle. Code 0 si écrit, 1 sinon (double tampon, droits)."""
+    l'API (nice 10, ionice, délai 540 s), sous le même utilisateur qu'elle. Code 0 si écrit, 1 sinon (double tampon, droits)."""
     import argparse
     import time
     ap = argparse.ArgumentParser(prog="api.populations", description="Relevé des populations d'attaquants (#3919)")

@@ -1,3 +1,24 @@
+secubox-waf-ng (1.44.0-1~trixie1) trixie; urgency=medium
+
+  * Populations d'attaquants, lot 1 (ref #3919), sans détecteur de rotation.
+  * sbxwaf : asn, asn_org et reseau_classe sur chaque alerte et dans
+    l'enveloppe d'actord (--geoip-asn, --reseaux-classes) ; catalogue des
+    classes de réseau reseaux-classes.toml, surcharge de l'opérateur dans
+    /etc/secubox/waf. Le profil AppArmor lit ces deux fichiers, et le
+    postinst le recharge même sans apparmor-utils.
+  * API : relevé des populations sur 7 jours, calculé toutes les 10 min par
+    un processus à part, servi par GET /api/v1/waf/populations (dépendance
+    python3-maxminddb).
+  * sbx-actord : campagnes enrichies (famille, cibles, classes, pays,
+    rotation) ; parts calculées sur les seules adresses vues depuis 48 h,
+    absentes si aucune ne l'est. ExecReload (SIGHUP) recharge la base ASN.
+    ACL de traversée de /etc/secubox/waf pour secubox-actord (acl). L'ASN
+    ne sert qu'aux vues : il n'entre pas dans la corrélation, donc aucune
+    mesure ni aucun ban automatique ne change.
+  * Page Actor : liste des campagnes en cartes lisibles.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:15:00 +0100
+
 secubox-waf-ng (1.43.7-1~trixie1) trixie; urgency=medium
 
   * waf-rules 1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h. Environ

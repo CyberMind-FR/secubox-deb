@@ -65,3 +65,17 @@ fire-and-forget over unix sockets.
 
 Rollback is an nft DNAT-map edit at every step; the Python engine is the live
 path until Phase 6.
+
+## sbx-authwatch : réseau et campagnes (#3919, 0.19.0)
+
+Chaque alerte écrite dans `waf-threats.log` porte `asn`, `asn_org`, `reseau_classe` et, si le compte visé est l'objet
+d'une campagne établie, son identifiant (8 hex du SHA-256 du compte). Le comportement de ban ne change pas.
+
+| Option | Défaut |
+|---|---|
+| `--geoip-asn` | `/var/lib/GeoIP/GeoLite2-ASN.mmdb` (`""` = désactivé) |
+| `--reseaux-classes` | `/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml` (livré par secubox-waf-ng ≥ 1.44.0 ; absent : `inconnu`) |
+| `--campagnes-etat` | `/run/secubox-authwatch/campagnes.json` (`""` = désactivé) |
+
+`campagnes.json` (dossier propre au service, `RuntimeDirectory=secubox-authwatch`, effacé à l'arrêt ; 0644, renommage atomique toutes les 60 s) : tableau de `{id, compte, sources, premier,
+dernier}`, `compte` masqué au-delà de 3 caractères, aucune adresse. Lu par le relevé des populations du WAF.

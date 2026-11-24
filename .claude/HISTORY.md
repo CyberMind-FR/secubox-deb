@@ -11,6 +11,31 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 (14:30) — populations d'attaquants et campagnes lisibles en ligne (lot 1 de #3919)
+
+- **PR #3926, déployé** : gk2 waf-ng 1.44.0, toolbox-ng 0.19.0, soc 1.13.0 ; gk3 ai 2.3.0. Cartes de campagnes dans
+  /waf/ (Campagnes), synthèse dans Guardian, page Actor, Radar. Relevé `/api/v1/waf/populations` : 14 populations,
+  18 260 adresses, 68 à 107 s de calcul sur gk2. Couture 200, aucun refus AppArmor.
+- La relecture d'ensemble a trouvé un bloquant avant déploiement : le réseau posé dans l'enveloppe entrait dans la
+  corrélation des acteurs (confiance 1 → 90), donc dans les mesures automatiques. Retiré, testé en direct et au rejeu.
+- actord : au redémarrage, API fermée dix minutes (MemoryHigh 200 Mo pour 1,28 Go de base, 3 Go relus) ; limite
+  desserrée à chaud le temps du démarrage, puis remise. Correctif durable au lot 1b.
+- Détecteur de rotation (tâche 9) : relu deux fois, trois défauts critiques corrigés, pas déployé.
+- Mail de gk2 arrêté depuis le 23/11 : rapports en échec. Fenêtre planifiée (#3925, PR #3927) et leurres de
+  messagerie (#3924) en cours. Disque de gk0 : 7 → 33 Go libres.
+
+## 2026-11-24 (après-midi) — SOC sans doublons WAF, veille des images gk0, chantiers #3919/#3921
+
+- **#3922 (PR #3923, déployé gk2, secubox-soc 1.12.1)** : le SOC n'encadre plus 6 pages du WAF (lien « Détail dans le WAF »)
+  et Guardian ne recalcule plus 5 panneaux du WAF (bande « Pare-feu applicatif », évolution hier vs avant-hier).
+  Refonte plus large (fin des pages complètes en iframe, panneaux partagés natifs, mobile d'abord) consignée dans #3920.
+- **gk0 POC** : résumés IA en échec (délai 15 min) car mémoire saturée (llama + sd-server, swap 19 Go plein). sd-server
+  arrêté ; relais : veille du générateur d'images après 15 min, réveil à la demande (hors dépôt, sauvegarde
+  `relais.py.avant-veille-images`).
+- **#3919** (populations d'attaquants, rotation) : conception + plan, exécution par sous-agents, tâches 1-5 validées.
+  **#3921** (DataScope paysage, tendances, enregistreur) : conception + plan, enchaîné après #3919. Maquette des cartes
+  de campagne validée par le propriétaire.
+
 ## 2026-11-24 (11:10) — parent des journaux laissé à root, aspirateur banni 24 h
 
 - **#3916 (PR #3917, déployé gk2)** : `LogsDirectory=secubox` retiré de 11 unités `User=secubox` (systemd re-chownait

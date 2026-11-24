@@ -26,6 +26,12 @@ le modèle explique et ne tranche jamais.
   incidents avec l'action réelle, terminal, frise), lue sur `/menaces/releve`, `/menaces/series`, `/actions`,
   `/veille/etat` et `/status` ; relue toutes les 30 s onglet visible ; donnée absente = « relevé indisponible ».
 
+- **Campagnes du Radar** (2.3.0, #3919) : une carte par population d'attaquants relevée par gk2 (`/waf/populations`,
+  secubox-waf-ng ≥ 1.44.0) : famille, classes de réseau, pays, cible, part à une et à trois tentatives, série de
+  7 jours, 5 premiers réseaux, recouvrement. Noms composés par le code (`www/ai/reperes.js`, copie identique de celle
+  de secubox-waf-ng) ; ces données ne sont jamais données au modèle. Relevé absent = « relevé indisponible », sans
+  effet sur le reste du Radar.
+
 ## Mise en service (2.1.0 : tour Nuclei, #3862)
 
 La 2.1.0 applique la migration 0012 de `veille.db` (sauvegarde `veille.db.avant-0012`), crée le compte

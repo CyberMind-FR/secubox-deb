@@ -112,6 +112,18 @@ test("carte lisible : titre, états, chiffres, classes, pays, cible, période, a
   assert.ok(!n.find((x) => x.tag === "h3").textContent.includes("sig-1"));
 });
 
+test("aucune adresse mesurée depuis 48 h : parts absentes, jamais 0 % ni « inconnu 100 % »", () => {
+  const { ctx, zones } = monter();
+  const c = camp("sig-sans-fiche", { famille: "autre", cibles_noms: [], rotation: false });
+  for (const k of ["classes", "pays_top", "une", "le3"]) delete c[k];
+  ctx.poser([c]);
+  ctx.rendCampagnes();
+  const t = zones.list.textContent;
+  assert.ok(t.includes("2 acteurs · 40 adresses") && t.includes("Cible : non relevée"), t);
+  assert.ok(!t.includes("%") && !t.includes("inconnu") && !t.includes("rotation"), t);
+  assert.ok(!t.includes("git.example.test"), "jamais de repli sur les cibles brutes (comptes en clair)");
+});
+
 test("messagerie : comptes masqués ; repli des campagnes à une source ou inactives", () => {
   const { ctx, zones } = monter();
   ctx.poser([camp("a", { famille: "messagerie", cibles_noms: ["geg…", "inf…"] }),
@@ -119,6 +131,10 @@ test("messagerie : comptes masqués ; repli des campagnes à une source ou inact
   ctx.rendCampagnes();
   const t = zones.list.textContent;
   assert.ok(t.includes("Comptes visés : geg…, inf… (masqués)"));
+  const b = monter();   // authwatch nomme le service : ce n'est ni un compte, ni « masqué »
+  b.ctx.poser([camp("d", { famille: "messagerie", cibles_noms: ["smtp"] })]);
+  b.ctx.rendCampagnes();
+  assert.ok(b.zones.list.textContent.includes("Cible : smtp") && !b.zones.list.textContent.includes("masqués"));
   const autres = tous(zones.list).find((x) => x.tag === "details" && x.className === "campautres");
   assert.ok(autres, "repli absent");
   assert.ok(autres.textContent.includes("Autres campagnes (2)") && autres.textContent.includes("💤 inactive"));

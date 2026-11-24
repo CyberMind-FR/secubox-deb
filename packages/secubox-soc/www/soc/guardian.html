@@ -6,8 +6,10 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox — « Guardian », la vigie du réseau : observer aujourd'hui pour mieux protéger demain (#2341). Page encadrée par /soc/ (onglet par défaut), même origine.
-  DONNÉES RÉELLES UNIQUEMENT : WAF (/stats, /history, /alerts, /status, /detections, /enforcement/mode), DPI (/stats, /usage, /clients, /countries), ad-guard (/adblock-tv/gardien).
+  DONNÉES RÉELLES UNIQUEMENT : WAF (/stats, /history, /enforcement/mode), DPI (/stats, /usage, /clients, /countries), ad-guard (/adblock-tv/gardien).
   Une mesure absente s'affiche « — », jamais 0. Le MODE est celui du WAF, jamais supposé. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+  #3919 : bloc « Campagnes en cours » (WAF /populations, 4 lignes au plus, rendu de cartes-campagnes.js) : tout le bloc mène à l'onglet Campagnes de /waf/ (/waf/#campaigns).
+  #3922 : une place par panneau — le détail des menaces (carte, catégories, événements, courbe) est dans /waf/, ici une bande de synthèse qui y renvoie.
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,49 +43,36 @@
   .pan h3{margin:0 0 8px;font-size:.92rem;font-weight:700;display:flex;align-items:center;gap:7px}
   .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
   .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
-  svg.courbe{width:100%;height:auto;display:block} svg.courbe text{fill:var(--faible);font-size:10px} svg.courbe .gr{stroke:rgba(159,179,214,.14);stroke-width:1}
-  .legende{display:flex;gap:10px;flex-wrap:wrap;color:var(--doux);font-size:.7rem;margin-top:4px} .legende i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
-  .carte{display:grid;gap:8px;grid-template-columns:1fr}
-  svg.monde{width:100%;height:auto;display:block;border-radius:8px}
-  .pays{display:grid;gap:3px;align-content:start;font-size:.78rem}
-  .pays div{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums;color:var(--doux)} .pays b{color:var(--texte)}
-  /* Carte par type de menace (#2735) : mêmes règles que la vue d'ensemble du WAF */
-  .carte svg.monde g.pt{cursor:pointer;outline:none} .carte svg.monde g.pt:focus-visible .hal{stroke:var(--texte);stroke-width:.35}
-  .carte svg.monde .att{opacity:.16} .pays .att{opacity:.35}
-  .pays .lg{display:flex;justify-content:flex-start;align-items:center;gap:6px} .pays .lg svg{flex:none;width:11px;height:11px} .pays .lg b{margin-left:auto}
-  .legT{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
-  .legT button{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:.72rem;color:var(--doux);background:rgba(59,130,246,.10);border:1px solid var(--trait);border-radius:999px;padding:3px 10px 3px 7px;cursor:pointer}
-  .legT button svg{width:12px;height:12px;flex:none} .legT button b{color:var(--texte);font-variant-numeric:tabular-nums}
-  .legT button[aria-pressed="true"]{color:var(--texte);border-color:var(--cyan);background:rgba(41,182,246,.20)}
-  .legT button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-  .legT .aucun{color:var(--faible);font-size:.72rem}
-  .tip{position:fixed;z-index:9;pointer-events:none;max-width:240px;background:#0b1830;border:1px solid var(--trait2);border-radius:8px;padding:7px 9px;font-size:.72rem;color:var(--doux);box-shadow:0 4px 18px rgba(0,0,0,.5)}
-  .tip b{color:var(--texte)} .tip div{display:flex;align-items:center;gap:6px;margin-top:2px;font-variant-numeric:tabular-nums} .tip svg{width:10px;height:10px;flex:none} .tip em{margin-left:auto;font-style:normal;color:var(--texte)}
   .note{color:var(--faible);font-size:.66rem;margin-top:6px}
-  .repart{display:grid;gap:10px;grid-template-columns:120px 1fr;align-items:center}
-  .donut{width:120px;height:120px;border-radius:50%;position:relative}
-  .donut span{position:absolute;inset:20px;border-radius:50%;background:#0b1830;display:grid;place-items:center;text-align:center;font-size:.64rem;color:var(--doux)} .donut span b{display:block;font-size:1.05rem;color:var(--texte)}
-  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.74rem;padding:1.5px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
   .ligne{display:grid;grid-template-columns:1fr auto 80px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
   .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
   .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
-  table{width:100%;border-collapse:collapse;font-size:.76rem}
-  th{color:var(--faible);font-weight:600;text-align:left;padding:3px 6px;font-size:.68rem;white-space:nowrap}
-  td{padding:4px 6px;border-top:1px solid rgba(86,150,255,.12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;font-variant-numeric:tabular-nums}
-  .scroll{overflow-x:auto}
-  .risque{display:inline-block;min-width:34px;text-align:center;border-radius:5px;padding:1px 6px;font-weight:700;font-size:.72rem}
-  .act{border:1px solid var(--trait2);border-radius:6px;padding:1px 9px;font-size:.7rem;color:var(--doux)}
   .modes{display:grid;gap:6px;grid-template-columns:repeat(2,1fr)}
   .mode{border:1px solid var(--trait);border-radius:10px;padding:8px 6px;text-align:center;font-size:.72rem;color:var(--faible);background:rgba(18,40,78,.45)}
   .mode b{display:block;font-size:.76rem;letter-spacing:.04em;color:var(--doux)} .mode.on{border-color:var(--cyan);box-shadow:0 0 14px rgba(41,182,246,.28);color:var(--texte)} .mode.on b{color:var(--cyan)}
   .mode.on.alerte{border-color:var(--orange);box-shadow:0 0 14px rgba(255,159,28,.25)} .mode.on.alerte b{color:var(--orange)}
   .etat-mode{margin-top:8px;font-size:.72rem;color:var(--doux);display:flex;gap:8px;align-items:center} .etat-mode i{width:9px;height:9px;border-radius:50%;background:var(--vert);display:inline-block}
-  .prot{display:grid;grid-template-columns:18px 1fr;gap:8px;align-items:center;font-size:.78rem;padding:3px 0}
   .oiseau{display:flex;gap:12px;align-items:center}
   .oiseau .gros{font-size:2.1rem;font-weight:700;line-height:1}
-  @container a (max-width:699px){.sec{display:none}.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}.donut span{inset:17px}}
-  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
-  @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(7,1fr)} .g1{grid-template-columns:1.25fr 1.1fr 1fr} .g2{grid-template-columns:1.3fr 1fr 1fr} .g3{grid-template-columns:1fr 1.4fr 1fr} .carte{grid-template-columns:1fr 120px}}
+  /* #3922 : bande de synthèse du pare-feu applicatif, chaque chiffre mène au détail dans le WAF */
+  .chiffres{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .chiffre{display:flex;flex-direction:column;gap:2px;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.45);color:inherit;text-decoration:none;min-width:0}
+  .chiffre:hover{border-color:var(--trait2)} .chiffre:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .chiffre .l{color:var(--doux);font-size:.74rem} .chiffre .v{font-size:1.4rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chiffre .v.rouge{color:var(--rouge)} .chiffre .v.vert{color:var(--vert)} .chiffre .s{color:var(--faible);font-size:.68rem}
+  .pare .note a{color:var(--cyan);font-weight:700}
+  /* #3919 : campagnes en cours, une ligne par population ; le bloc entier est un lien vers l'onglet Campagnes du WAF */
+  a.pan.camps{display:block;color:inherit;text-decoration:none} a.pan.camps:hover{border-color:var(--trait2)} a.pan.camps:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .camps #campagnes{display:grid;gap:2px} .camps .note b{color:var(--cyan)}
+  .cligne{display:grid;grid-template-columns:minmax(0,1fr) 110px 190px 74px;gap:2px 12px;align-items:center;padding:5px 0;font-size:.8rem;border-top:1px solid rgba(86,150,255,.12)} .cligne:first-child{border-top:0}
+  .cnom{font-weight:700;overflow-wrap:anywhere;min-width:0} .cadr{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .camps .popl{display:flex;gap:5px;flex-wrap:wrap;min-width:0} .camps .puce{border:1px solid currentColor;border-radius:999px;padding:1px 8px;font-size:.7rem;font-weight:600;white-space:nowrap}
+  .camps .puce.rot{color:var(--orange)} .camps .puce.ban{color:var(--rouge)} .camps .puce.obs{color:var(--cyan)} .camps .puce.ina{color:var(--faible)}
+  .camps .popserie{width:74px;height:26px;fill:var(--bleu)} .popnr{color:var(--faible);font-size:.76rem} .poppartiel{margin:0 0 4px;color:var(--orange);font-size:.74rem}
+  @container a (max-width:699px){.cligne{grid-template-columns:minmax(0,1fr) auto} .cligne .popserie{grid-column:2;grid-row:1/span 2} .cligne .cadr{grid-column:1;text-align:left} .cligne .popl{grid-column:1/-1} .cnom{grid-column:1}}
+  @container a (max-width:699px){.sec{display:none}}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)} .chiffres{grid-template-columns:repeat(4,1fr)}}
+  @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(7,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr}}
 </style>
 <div class="cadre"><div class="app">
   <div class="tete">
@@ -94,27 +83,23 @@
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
   <div class="sess" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="tuiles" id="tuiles"></div>
-  <div class="grille g1">
-    <div class="pan sec"><h3>Carte des attaques <i>pays déduit de l’adresse</i></h3><div class="carte"><svg class="monde" id="monde" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des menaces"></svg><div class="pays" id="pays"></div></div><div class="note" id="geoNote"></div><div class="legT" id="legT" role="group" aria-label="Types de menace : mettre un type en avant sur la carte"></div></div>
-    <div class="pan"><h3>Évolution des événements <i>par jour</i></h3><div id="courbe"></div><div class="legende" id="legCourbe"></div></div>
-    <div class="pan"><h3>Répartition par catégorie <i>aujourd’hui</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="cats"></div></div></div>
-  </div>
+  <div class="pan pare"><h3>Pare-feu applicatif <i>synthèse du jour</i></h3><div class="chiffres" id="pareFeu"></div><div class="note"><a href="/waf/" target="_top">Détail dans le WAF →</a> carte des attaques, catégories, derniers événements et historique y sont lus une seule fois.</div></div>
+  <a class="pan camps" href="/waf/#campaigns" target="_top"><h3>Campagnes en cours <i>actives sur 24 h</i></h3><div id="campagnes"><span class="popnr">Lecture du relevé…</span></div><div class="note"><b>Cartes des campagnes dans le WAF →</b></div></a>
   <div class="grille g2 sec">
-    <div class="pan"><h3>Derniers événements détectés <i id="evNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>IP source</th><th>Pays</th><th>Catégorie</th><th>Événement</th><th>Gravité</th><th>Action</th></tr></thead><tbody id="events"></tbody></table></div></div>
     <div class="pan"><h3>Applications / usages <i>par volume</i></h3><div id="apps"></div></div>
     <div class="pan"><h3>Appareils principaux <i>par volume</i></h3><div id="appareils"></div></div>
   </div>
   <div class="grille g3 sec">
     <div class="pan"><h3>Canaris / leurres <i>services leurres touchés</i></h3><div class="oiseau"><div class="gros" id="leurresN">—</div><div style="flex:1"><div id="leurres"></div></div></div></div>
     <div class="pan"><h3>État du mode Guardian</h3><div class="modes" id="modes"></div><div class="etat-mode" id="etatMode"></div></div>
-    <div class="pan"><h3>Ce qui protège</h3><div id="prot"></div></div>
   </div>
   <div class="grille sec">
     <div class="pan"><h3>Filtrage web <i id="wfNote">catégories, 7 jours</i></h3><div id="wf"></div></div>
   </div>
   <div class="note">Données lues sur la box (WAF, DPI, appareils), rien d’estimé. Le mode se change dans la console d’administration, jamais d’ici.</div>
 </div></div>
-<div class="tip" id="tip" hidden role="tooltip"></div>
+<script src="reperes.js"></script>
+<script src="cartes-campagnes.js"></script>
 <script>
 (function(){
   "use strict";
@@ -136,116 +121,6 @@
     ok:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" fill="rgba(46,204,113,.14)"/><path d="M9 12l2 2 4-4"/></svg>'
   };
   function tuile(cls,ic,v,l,s,sc,def){return '<div class="tuile '+cls+'" title="'+esc(def)+'">'+ic+'<div><div class="v">'+v+'</div><div class="l">'+esc(l)+'</div>'+(s?'<div class="s '+(sc||'')+'">'+esc(s)+'</div>':'')+'</div></div>';}
-  // Carte du monde : la grille éprouvée de la page Actor (60 × 120 points de 3°, une série de longueurs par ligne). Les cercles sont posés au centre du PAYS.
-  var TERRE="0120|0120|031,8,5,9,67|028,7,3,16,10,2,1,1,23,2,27|019,2,2,1,2,1,1,6,3,16,29,1,11,3,23|019,2,3,1,1,5,1,2,7,12,25,1,8,13,1,1,5,1,12|06,4,12,4,2,1,1,7,5,9,17,2,12,2,1,28,7|14,1,34,3,8,15,19,2,34|06,27,1,4,5,3,7,2,9,3,1,51,1|05,24,5,2,8,2,16,4,1,45,1,1,1,3,2|08,1,5,15,5,3,1,1,19,1,3,1,1,2,2,39,6,1,6|016,15,3,6,18,1,5,1,2,38,7,2,6|017,16,1,7,16,1,1,49,4,1,7|019,19,21,49,12|019,19,21,11,1,1,1,4,1,28,1,1,12|019,18,20,1,1,3,1,6,4,3,1,28,2,1,12|019,16,22,3,5,3,2,7,1,22,1,2,17|019,16,22,3,4,1,2,1,1,8,1,23,1,1,3,1,13|020,14,24,5,9,28,4,2,14|021,12,24,8,2,2,3,29,2,1,16|023,5,4,1,23,15,1,4,1,24,19|024,4,27,22,3,20,20|025,2,6,1,21,17,1,7,3,7,1,7,22|025,3,2,1,5,1,18,17,2,5,5,4,3,4,1,1,23|027,4,23,19,1,4,6,3,4,5,4,1,19|030,2,22,22,9,2,6,3,24|031,1,3,3,1,1,15,22,8,2,8,1,24|034,6,16,21,24,1,18|034,9,14,1,4,14,16,1,5,2,20|034,9,20,12,18,2,1,3,21|033,12,18,11,20,1,2,2,1,1,3,1,15|033,14,17,9,21,1,10,3,12|033,15,16,9,23,2,8,3,11|034,14,16,9,47|035,12,17,10,2,1,26,2,2,1,12|035,12,17,10,2,1,26,2,2,1,12|037,10,17,8,3,1,24,9,11|037,9,19,7,2,2,22,12,10|036,8,21,6,27,13,9|036,8,21,6,27,13,9|036,7,23,4,29,12,9|036,6,24,1,32,1,6,4,10|035,6,66,3,8,1,1|035,4,79,1,1|036,2,79,1,2|035,3,78,1,3|035,2,83|035,2,83|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120|0120";
-  var CENTRE={AD:[42.5,1.5],AE:[24,54],AL:[41,20],AM:[40,45],AR:[-34,-64],AT:[47.5,14.5],AU:[-25,134],AZ:[40.3,47.7],BA:[44,18],BD:[24,90],BE:[50.6,4.6],BG:[42.7,25.5],BR:[-10,-52],BY:[53.7,28],CA:[58,-100],CH:[46.8,8.2],CL:[-35,-71],CN:[35,103],CO:[4,-72],CZ:[49.8,15.5],DE:[51,10],DK:[56,10],DZ:[28,2],EC:[-1.5,-78],EE:[58.6,25.5],EG:[26,30],ES:[40,-4],FI:[64,26],FR:[46.5,2.5],GB:[54,-2],GE:[42,43.5],GR:[39,22],HK:[22.3,114.2],HR:[45.1,15.2],HU:[47,19.5],ID:[-2,118],IE:[53,-8],IL:[31,35],IN:[22,79],IQ:[33,44],IR:[32,53],IS:[65,-18],IT:[42.8,12.5],JP:[36,138],KE:[0,38],KG:[41.5,74.5],KR:[36.5,128],KZ:[48,68],LT:[55.3,23.8],LU:[49.8,6.1],LV:[56.9,24.6],MA:[32,-6],MD:[47,28.5],MX:[23,-102],MY:[4,102],NG:[9,8],NL:[52.2,5.5],NO:[62,10],NZ:[-41,174],PE:[-10,-76],PH:[13,122],PK:[30,70],PL:[52,19.4],PT:[39.5,-8],RO:[46,25],RS:[44,21],RU:[60,90],SA:[24,45],SE:[62,15],SG:[1.35,103.8],SI:[46.1,14.8],SK:[48.7,19.5],TH:[15,101],TN:[34,9],TR:[39,35],TW:[23.7,121],UA:[49,32],US:[39,-98],UZ:[41,64],VE:[7,-66],VN:[16,106],ZA:[-29,24]};
-  function drapeau(c){return /^[A-Z]{2}$/.test(c)?String.fromCodePoint(127397+c.charCodeAt(0),127397+c.charCodeAt(1)):'';}
-  // Types de menace : la catégorie libre du journal est rangée dans une famille (regex ordonnées), chaque famille a une couleur Aurora ET une forme.
-  var NS='http://www.w3.org/2000/svg';
-  var TYPES=[
-    {id:'inj',nom:'Injection (SQL, code)',coul:'#ff4d5e',forme:'cercle',re:/sql|inject|\brce\b|exec|command|cmd|shell|eval|code/i},
-    {id:'xss',nom:'Script (XSS)',coul:'#ff9f1c',forme:'carre',re:/xss|script|csrf|html/i},
-    {id:'trav',nom:'Traversée de fichiers',coul:'#ffd23f',forme:'losange',re:/travers|lfi|rfi|path|director|inclusion|file|dotdot/i},
-    {id:'leurre',nom:'Leurres (honeypot)',coul:'#2ecc71',forme:'croix',re:/leurre|honey|decoy|trap|bait|canary/i},
-    {id:'bot',nom:'Robots',coul:'#3b82f6',forme:'triangleb',re:/bot|robot|crawl|spider|scrap/i},
-    {id:'brute',nom:'Brute force / accès',coul:'#a78bfa',forme:'hexa',re:/brute|auth|login|cred|passw|access|accès|unauthor|ssh|smtp/i},
-    {id:'scan',nom:'Scanners / reconnaissance',coul:'#29b6f6',forme:'triangle',re:/scan|fuzz|recon|probe|nikto|nmap|anomal|suspic|unrouted|absent|host_/i},
-    {id:'autre',nom:'Autre type',coul:'#9fb3d6',forme:'anneau',re:/./}];
-  var TYPE_PAR_ID={};TYPES.forEach(function(t){TYPE_PAR_ID[t.id]=t;});
-  function famille(cat){var c=String(cat==null?'':cat).trim();if(!c)return null;for(var i=0;i<TYPES.length;i++)if(TYPES[i].re.test(c))return TYPES[i].id;return 'autre';}
-  function noeud(nom,at,parent){var n=document.createElementNS(NS,nom);for(var k in at)n.setAttribute(k,at[k]);if(parent)parent.appendChild(n);return n;}
-  // Glyphe centré en (x,y), demi-taille r : une forme par famille, lisible sans la couleur.
-  function glyphe(parent,forme,x,y,r,coul){
-    var f=function(p){return p.map(function(v){return (+v).toFixed(2);}).join(' ');},at={fill:coul,stroke:'none'},n;
-    if(forme==='cercle')n=noeud('circle',{cx:x,cy:y,r:r,fill:coul},parent);
-    else if(forme==='carre')n=noeud('rect',{x:x-r*.85,y:y-r*.85,width:r*1.7,height:r*1.7,fill:coul},parent);
-    else if(forme==='losange')n=noeud('polygon',{points:f([x,y-r*1.1,x+r*1.1,y,x,y+r*1.1,x-r*1.1,y]),fill:coul},parent);
-    else if(forme==='triangle')n=noeud('polygon',{points:f([x,y-r*1.05,x+r*1.05,y+r*.85,x-r*1.05,y+r*.85]),fill:coul},parent);
-    else if(forme==='triangleb')n=noeud('polygon',{points:f([x-r*1.05,y-r*.85,x+r*1.05,y-r*.85,x,y+r*1.05]),fill:coul},parent);
-    else if(forme==='hexa'){var h=[];for(var i=0;i<6;i++)h.push(x+r*1.05*Math.cos(Math.PI/3*i),y+r*1.05*Math.sin(Math.PI/3*i));n=noeud('polygon',{points:f(h),fill:coul},parent);}
-    else if(forme==='croix'){var e=r*.38;n=noeud('polygon',{points:f([x-e,y-r,x+e,y-r,x+e,y-e,x+r,y-e,x+r,y+e,x+e,y+e,x+e,y+r,x-e,y+r,x-e,y+e,x-r,y+e,x-r,y-e,x-e,y-e]),fill:coul},parent);}
-    else n=noeud('circle',{cx:x,cy:y,r:r*.8,fill:'none',stroke:coul,'stroke-width':r*.4},parent);
-    return n;}
-  function pastille(t){var sv=noeud('svg',{viewBox:'0 0 10 10','aria-hidden':'true',focusable:'false'});glyphe(sv,t.forme,5,5,3.8,t.coul);return sv;}
-  // Répartition pays × type, déduite des alertes récentes déjà lues (/alerts?limit=500 : aucune route nouvelle).
-  function croise(alertes){
-    var par={},tot={},n=0;
-    (alertes||[]).forEach(function(a){var f=famille(a.category),c=String(a.country||'').toUpperCase();if(!f)return;n++;tot[f]=(tot[f]||0)+1;
-      if(/^[A-Z]{2}$/.test(c)){par[c]=par[c]||{};par[c][f]=(par[c][f]||0)+1;}});
-    return {par:par,tot:tot,n:n};}
-  function dominant(rep){var b=null,m=0;TYPES.forEach(function(t){if(rep&&(rep[t.id]||0)>m){m=rep[t.id];b=t.id;}});return b;}
-  var etat={foc:null,pays:[],cx:{par:{},tot:{},n:0}};
-  function arc(cx,cy,r,ri,a0,a1){
-    function p(R,a){return (cx+R*Math.sin(a)).toFixed(2)+','+(cy-R*Math.cos(a)).toFixed(2);}
-    if(a1-a0>=Math.PI*2-1e-6){var m=a0+Math.PI;return 'M'+p(r,a0)+'A'+r+','+r+' 0 1 1 '+p(r,m)+'A'+r+','+r+' 0 1 1 '+p(r,a0)+'ZM'+p(ri,a0)+'A'+ri+','+ri+' 0 1 0 '+p(ri,m)+'A'+ri+','+ri+' 0 1 0 '+p(ri,a0)+'Z';}
-    var g=a1-a0>Math.PI?1:0;
-    return 'M'+p(r,a0)+'A'+r+','+r+' 0 '+g+' 1 '+p(r,a1)+'L'+p(ri,a1)+'A'+ri+','+ri+' 0 '+g+' 0 '+p(ri,a0)+'Z';}
-  function hexa(h,a){var n=parseInt(h.slice(1),16);return 'rgba('+(n>>16)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
-  function att(id){return !!(etat.foc&&etat.foc!==id);}
-  // pastille en chaîne : uniquement des constantes internes (couleur et forme de TYPES), jamais une donnée du journal
-  function pastilleStr(t){var sv=pastille(t);return sv.outerHTML;}
-  function resume(p){var rep=etat.cx.par[p.code]||{},tt=0,l=[];TYPES.forEach(function(t){tt+=rep[t.id]||0;});
-    TYPES.forEach(function(t){if(rep[t.id])l.push([t,rep[t.id]]);});l.sort(function(x,y){return y[1]-x[1];});return {l:l,tt:tt};}
-  function aria(p){var r=resume(p);return p.code+' : '+fmt(p.n)+' événements'+(r.tt?' ; '+r.l.map(function(x){return x[0].nom+' '+x[1];}).join(', '):' ; type inconnu');}
-  function infobulle(p,ev){
-    var t=el('tip'),r=resume(p);t.textContent='';
-    var h=document.createElement('b');h.textContent=drapeau(p.code)+' '+p.code+' · '+fmt(p.n)+' événements';t.appendChild(h);
-    if(!r.tt){var d=document.createElement('div');d.textContent='Type inconnu : aucune alerte récente de ce pays.';t.appendChild(d);}
-    else{r.l.forEach(function(x){var d=document.createElement('div');d.appendChild(pastille(x[0]));var s=document.createElement('span');s.textContent=x[0].nom;d.appendChild(s);var e=document.createElement('em');e.textContent=x[1]+' ('+Math.round(100*x[1]/r.tt)+' %)';d.appendChild(e);t.appendChild(d);});
-      var z=document.createElement('div');z.style.color='var(--faible)';z.textContent='sur '+r.tt+' alertes récentes';t.appendChild(z);}
-    t.hidden=false;var b=ev.target.getBoundingClientRect(),w=t.offsetWidth,x=Math.min(Math.max(4,b.left+b.width/2-w/2),window.innerWidth-w-4),y=b.bottom+6;
-    if(y+t.offsetHeight>window.innerHeight)y=Math.max(4,b.top-t.offsetHeight-6);t.style.left=x+'px';t.style.top=y+'px';}
-  function cacheBulle(){el('tip').hidden=true;}
-  function monde(pays){
-    var sv=el('monde');sv.textContent='';
-    var rect=noeud('rect',{width:120,height:60,fill:'rgba(6,13,27,.5)'},sv);
-    var terre=noeud('g',{fill:'#33507f','aria-hidden':'true'},sv),d='';
-    TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
-      l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)d+='M'+(x+i+.08)+','+(j+.5)+'a.42,.42 0 1 0 .84,0a.42,.42 0 1 0 -.84,0';}x+=n;cur=!cur;});});
-    noeud('path',{d:d},terre);
-    var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1])),foc=etat.foc;
-    pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
-      var cx=+((c[1]+180)/3).toFixed(1),cy=+((90-c[0])/3).toFixed(1),r=+(1.6+3.4*Math.sqrt(num(p.n)/max)).toFixed(1),ri=r*.52,rep=etat.cx.par[p.code],dom=dominant(rep),tt=resume(p).tt;
-      var att=foc&&!(rep&&rep[foc]);
-      var g=noeud('g',{'class':'pt'+(att?' att':''),tabindex:'0',role:'img','aria-label':aria(p),'data-pays':p.code,'data-dom':dom||'','data-n':num(p.n)},sv);
-      noeud('circle',{'class':'hal',cx:cx,cy:cy,r:r+.5,fill:dom?TYPE_PAR_ID[dom].coul:'#9fb3d6','fill-opacity':.18},g);
-      if(!dom){noeud('circle',{cx:cx,cy:cy,r:r*.78,fill:'none',stroke:'#9fb3d6','stroke-width':.35,'stroke-dasharray':'.9 .7'},g);}
-      else{var a=0;TYPES.forEach(function(t){var k=rep[t.id]||0;if(!k)return;var da=2*Math.PI*k/tt;
-        noeud('path',{d:arc(cx,cy,r,ri,a,a+da),fill:t.coul,stroke:'#060d1b','stroke-width':.18,'fill-opacity':foc&&foc!==t.id?.22:1,'data-type':t.id},g);a+=da;});
-        glyphe(g,TYPE_PAR_ID[dom].forme,cx,cy,ri*.55,TYPE_PAR_ID[dom].coul);}
-      g.addEventListener('mouseenter',function(ev){infobulle(p,ev);});g.addEventListener('mouseleave',cacheBulle);
-      g.addEventListener('focus',function(ev){infobulle(p,ev);});g.addEventListener('blur',cacheBulle);});
-  }
-  function liste(pays){
-    var box=el('pays');box.textContent='';
-    if(!pays.length){var v=document.createElement('div');v.className='vide';v.textContent='Session requise.';box.appendChild(v);return;}
-    pays.slice(0,9).forEach(function(p){var rep=etat.cx.par[p.code],dom=dominant(rep),t=dom&&TYPE_PAR_ID[dom],row=document.createElement('div');
-      row.className='lg'+(etat.foc&&!(rep&&rep[etat.foc])?' att':'');row.setAttribute('data-pays',p.code);row.setAttribute('data-dom',dom||'');
-      row.title=p.code+' : '+(t?'type dominant, '+t.nom:'type inconnu (aucune alerte récente)');
-      row.appendChild(pastille(t||{forme:'anneau',coul:'#6f84a8'}));
-      var s=document.createElement('span');s.textContent=drapeau(p.code)+' '+p.code;row.appendChild(s);
-      var b=document.createElement('b');b.textContent=fmt(p.n);row.appendChild(b);box.appendChild(row);});}
-  function legende(){
-    var box=el('legT');box.textContent='';var cx=etat.cx,pres=TYPES.filter(function(t){return cx.tot[t.id];});
-    if(!pres.length){var v=document.createElement('span');v.className='aucun';v.textContent='Types : — (aucune alerte récente lue)';box.appendChild(v);return;}
-    pres.sort(function(a,b){return cx.tot[b.id]-cx.tot[a.id];});
-    pres.forEach(function(t){var bt=document.createElement('button');bt.type='button';bt.setAttribute('data-type',t.id);bt.setAttribute('aria-pressed',etat.foc===t.id?'true':'false');
-      bt.title='Mettre « '+t.nom+' » en avant sur la carte (appuyer de nouveau pour annuler)';
-      bt.appendChild(pastille(t));var s=document.createElement('span');s.textContent=t.nom;bt.appendChild(s);var b=document.createElement('b');b.textContent=fmt(cx.tot[t.id]);bt.appendChild(b);
-      bt.addEventListener('click',function(){etat.foc=etat.foc===t.id?null:t.id;carte();});box.appendChild(bt);});}
-  function carte(){monde(etat.pays);liste(etat.pays);legende();}
-  function courbe(j){
-    var n=j.length;if(n<2) return '<div class="vide">Pas encore assez de jours mesurés.</div>';
-    var W=520,H=170,L=38,R=8,T=8,B=20,max=Math.max.apply(null,j.map(function(d){return num(d.total);}).concat([1]));
-    var pas=[10,20,25,50,100,200,250,500,1000,2000,5000,10000,20000,25000,50000,100000,200000,250000,500000,1000000].filter(function(u){return u*3>=max;})[0]||Math.ceil(max/3),haut=pas*3;
-    var x=function(i){return L+i*(W-L-R)/(n-1);},y=function(v){return T+(H-T-B)*(1-num(v)/haut);};
-    function ch(cle){var d='';j.forEach(function(p,i){var X=x(i),Y=y(p[cle]);if(!i)d='M'+X+','+Y;else{var cx=(x(i-1)+X)/2;d+=' C'+cx+','+y(j[i-1][cle])+' '+cx+','+Y+' '+X+','+Y;}});return d;}
-    var g='';for(var k=0;k<=3;k++){var v=pas*k,Y=y(v);g+='<line class="gr" x1="'+L+'" y1="'+Y+'" x2="'+(W-R)+'" y2="'+Y+'"/><text x="'+(L-5)+'" y="'+(Y+3)+'" text-anchor="end">'+fmt(v)+'</text>';}
-    var st=Math.max(1,Math.ceil(n/6)),xs='';j.forEach(function(p,i){if(i%st===0||i===n-1)xs+='<text x="'+x(i)+'" y="'+(H-5)+'" text-anchor="middle">'+esc(String(p.jour).slice(5))+'</text>';});
-    return '<svg class="courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Événements par jour">'+g+xs+'<path d="'+ch('total')+'" fill="none" stroke="#29b6f6" stroke-width="1.8" stroke-linecap="round"/><path d="'+ch('menaces')+'" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round"/><path d="'+ch('crit')+'" fill="none" stroke="#ff4d5e" stroke-width="1.8" stroke-linecap="round"/></svg>';
-  }
-  var GRAV={critical:['Critique','#ff4d5e'],high:['Haute','#ff4d5e'],medium:['Moyenne','#ff9f1c'],low:['Faible','#ffd23f'],info:['Info','#6f84a8'],audit:['Audit','#6f84a8']};
-  var ACT={robot:'Robot',banned:'Banni',blocked:'Bloqué',block:'Bloqué',warning:'Alerte',log:'Capturé',captured:'Capturé',limited:'Limité',observe:'Observe'};
   /* #2423 : appareils principaux, octets par type d'usage ; les identités qui ont porté la même adresse de tunnel (suffixe « · .NN » du nom DPI) sont regroupées — DÉDUIT, annoncé comme tel. Le rattachement à l'appareil du NAC est dans /nac/ (Clients réels). */
   var COULEUR_USAGE={cloud:'#a78bfa',streaming:'#ff9f1c',social:'#29b6f6',web:'#2ecc71',messaging:'#ffd23f',ai:'#ff4d5e'};
   /* #2430 : le filtrage de contenus (secubox-webfilter), lu sur /api/v1/webfilter/etat — comptes par catégorie sur 7 jours, aucun nom d'appareil. */
@@ -284,9 +159,28 @@
     var m=rows.length?rows[0][1]:1;
     el_.innerHTML=rows.length?rows.map(function(r,i){return '<div class="ligne"><span class="n" title="'+esc(r[0])+'">'+esc(r[0])+'</span><span>'+fmtv(r[1])+'</span><div class="barre"><i style="width:'+Math.max(4,100*r[1]/m)+'%;background:'+(col||PAL[i%8])+'"></i></div></div>';}).join(''):'<div class="vide">Aucune donnée.</div>';
   }
+  /* #3922 : une place par panneau. Le détail des menaces (carte, catégories, derniers événements, courbe) vit dans le WAF ; ici une seule bande de synthèse,
+     tirée de waf/stats et waf/history déjà lus (aucune route nouvelle). Une mesure absente s'affiche « — » : on n'invente aucun chiffre (les bans actifs ne sont pas lus ici). */
+  function pareFeu(s,h){
+    var bc=s&&s.by_category||{},cl=Object.keys(bc).map(function(k){return [k,num(bc[k])];}).sort(function(x,y){return y[1]-x[1];}),tot=cl.reduce(function(a,c){return a+c[1];},0);
+    var total=s?num(s.total_threats!=null?s.total_threats:s.blocked_24h):null,sev=s&&s.by_severity||{},crit=s?num(sev.critical)+num(sev.high):null;
+    function case_(href,l,v,sous,cls){return '<a class="chiffre" href="'+href+'" target="_top"><span class="l">'+esc(l)+'</span><span class="v'+(cls||'')+'">'+v+'</span><span class="s">'+esc(sous)+'</span></a>';}
+    /* Deux journées COMPLÈTES : la journée en cours (date locale du jour) est écartée, sinon « aujourd'hui, partiel » contre « hier, entier » afficherait une baisse factice chaque matin. */
+    var jr=(h&&h.jours)||{},auj=new Date(),aujS=auj.getFullYear()+'-'+('0'+(auj.getMonth()+1)).slice(-2)+'-'+('0'+auj.getDate()).slice(-2),
+      dates=Object.keys(jr).sort().filter(function(k){return k<aujS;}),evoCase='';
+    if(dates.length>=2){var dh=dates[dates.length-1],da=dates[dates.length-2],der=num(jr[dh].total),av=num(jr[da].total);
+      if(av>0){var p=Math.round(100*(der-av)/av);
+        evoCase=case_('/waf/historique.html','Évolution : hier contre avant-hier',(p>0?'+':'')+p+' %','Hier ('+dh.slice(5)+') : '+fmt(der)+' alertes ; avant-hier ('+da.slice(5)+') : '+fmt(av),p>0?' rouge':p<0?' vert':'');}}
+    var dom=cl.length&&tot>0?cl[0]:null;
+    el('pareFeu').innerHTML=
+      case_('/waf/menaces.html','Alertes du jour',total==null?'—':fmt(total),s?'journal des menaces du WAF':'session requise')
+     +case_('/waf/menaces.html','Critiques et hautes',crit==null?'—':fmt(crit),'gravité haute ou critique',crit?' rouge':'')
+     +case_('/waf/vue.html','Catégorie dominante',dom?esc(String(dom[0]).slice(0,22)):'—',dom?Math.round(100*dom[1]/tot)+' % des menaces observées':(s?'aucune menace':'session requise'))
+     +evoCase;
+  }
   function rend(d){
     el('demo').hidden=!d.demo;
-    var s=d.stats,st=d.status,en=d.enforcement,dp=d.dpiStats;
+    var s=d.stats,en=d.enforcement,dp=d.dpiStats;
     el('session').hidden=!!(d.demo||s||dp||d.gardien);
     var em=en&&en.mode,libMode={PASSIVE_ONLY:'passif (observation)',SIMULATION:'simulation',ACTIVE:'actif (mesures et blocages)'}[em];
     el('modeTitre').textContent=em?('Mode '+libMode):'Mode —';
@@ -302,24 +196,7 @@
      +tuile('',IC.pays,P?fmt(P.length):'—','Pays contactés','','','Pays distincts des destinations vues par le DPI.')
      +tuile('crit',IC.crit,N(crit),'Événements critiques','gravité haute et critique','rouge','Événements de gravité haute ou critique aujourd’hui. Source : WAF.')
      +tuile('',IC.ok,N(ecart),'Événements écartés',ecart!=null&&total?(Math.round(100*ecart/total)+' % des menaces vues'):'','vert','Menaces écartées d’emblée (non retenues). Source : WAF.');
-    var pays=s&&s.top_countries?(Array.isArray(s.top_countries)?s.top_countries.map(function(x){return {code:x.country,n:x.count};}):Object.keys(s.top_countries).map(function(k){return {code:k,n:s.top_countries[k]};})):[];
-    pays.sort(function(a,b){return b.n-a.n;});
-    etat.pays=pays;etat.cx=croise(d.alerts);if(etat.foc&&!etat.cx.tot[etat.foc])etat.foc=null;carte();
-    el('geoNote').textContent=pays.length?'Anneau au centre du pays déduit de l’adresse (base GeoLite2 locale), réparti entre les types des alertes récentes : un VPN ou un relais fausse l’origine.':'';
-    var jr=(d.history&&d.history.jours)||{},dates=Object.keys(jr).sort().slice(-14);
-    var J=dates.map(function(k){var v=jr[k],sv=v.severites||{};return {jour:k,total:num(v.total),menaces:num(sv.critical)+num(sv.high)+num(sv.medium),crit:num(sv.critical)+num(sv.high)};});
-    el('courbe').innerHTML=J.length?courbe(J):'<div class="vide">Historique indisponible.</div>';
-    el('legCourbe').innerHTML=J.length?'<span><i style="background:#29b6f6"></i>Total</span><span><i style="background:#a78bfa"></i>Menaces</span><span><i style="background:#ff4d5e"></i>Critiques</span>':'';
-    var bc=s&&s.by_category||{},cl=Object.keys(bc).map(function(k){return [k,num(bc[k])];}).sort(function(x,y){return y[1]-x[1];}),tot=cl.reduce(function(t,c){return t+c[1];},0);
-    if(s&&tot>0){var top=cl.slice(0,7),rest=tot-top.reduce(function(t,c){return t+c[1];},0);if(rest>0)top.push(['autres',rest]);
-      var acc=0,seg=top.map(function(c,i){var p=100*c[1]/tot,b=acc;acc+=p;return PAL[i%8]+' '+b+'% '+acc+'%';});
-      el('donut').style.background='conic-gradient('+seg.join(',')+')';el('donutC').innerHTML='<div><b>'+fmt(tot)+'</b>menaces<br>observées</div>';
-      el('cats').innerHTML=top.map(function(c,i){return '<div><i style="background:'+PAL[i%8]+'"></i><span title="'+esc(c[0])+'">'+esc(String(c[0]).slice(0,22))+'</span><b>'+Math.round(100*c[1]/tot)+'%</b></div>';}).join('');}
-    else{el('donut').style.background='rgba(159,179,214,.16)';el('donutC').textContent='—';el('cats').innerHTML='<div class="vide">'+(s?'Aucune menace.':'Session requise.')+'</div>';}
-    var al=d.alerts;
-    el('evNote').textContent=al?'':'session requise';
-    el('events').innerHTML=al&&al.length?al.slice(0,6).map(function(a){var g=GRAV[a.severity]||[a.severity||'—','#6f84a8'],h=String(a.timestamp||'').slice(11,19);
-      return '<tr><td>'+esc(h)+'</td><td>'+esc(a.client_ip)+'</td><td>'+drapeau(a.country)+' '+esc(a.country)+'</td><td>'+esc(a.category)+'</td><td title="'+esc((a.host||'')+(a.path||''))+'">'+esc((a.host||'')+(a.path||''))+'</td><td><span class="risque" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span></td><td><span class="act">'+esc(ACT[a.action]||a.action||'—')+'</span></td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al?'Aucun événement.':'Ouvre une session pour voir les événements.')+'</td></tr>';
+    pareFeu(s,d.history);
     var U=d.usage&&d.usage.usages;
     if(U&&U.length){var tt=U.reduce(function(t,u){return t+num(u.bytes);},0)||1;barres(el('apps'),U.slice(0,8).map(function(u){return [u.name,100*num(u.bytes)/tt];}),function(v){return Math.round(v)+' %';});}
     else el('apps').innerHTML='<div class="vide">'+(d.usage?'Aucun usage classé.':'Session requise.')+'</div>';
@@ -333,22 +210,31 @@
     el('modes').innerHTML=[['OBSERVE','Écoute et analyse sans bloquer'],['SIMULATION','Tester les règles'],['MITIGATE','Mesures limitées'],['BLOCK','Blocage actif']].map(function(m){var on=act&&act[m[0]];return '<div class="mode'+(on?' on'+((m[0]==='MITIGATE'||m[0]==='BLOCK')?' alerte':''):'')+'"><b>'+m[0]+'</b>'+esc(m[1])+(act?'<br>'+(on?'actif':'inactif'):'')+'</div>';}).join('');
     var dm=en&&en.detail;
     el('etatMode').innerHTML=em?('<i></i><span>Mode global d’application des décisions : '+esc(em)+(dm?' (campagnes : '+esc(dm.campagnes)+', acteurs : '+esc(dm.acteurs)+')':'')+'</span>'):'<span>Mode indisponible.</span>';
-    var Pp=[];if(st){Pp.push(['Règles WAF ('+fmt(st.total_rules)+' chargées)',st.enabled?1:0]);Pp.push(['Bannissement automatique',st.autoban_enabled?1:0]);}
-    (d.detections&&d.detections.detections||[]).forEach(function(x){Pp.push([x.nom,x.actif===true?1:x.actif===false?0:null]);});
-    if(dp) Pp.push(['Analyse du trafic (DPI)',dp.connected?1:0]);
-    el('prot').innerHTML=Pp.length?Pp.map(function(p){return '<div class="prot"><span>'+(p[1]===1?'✅':p[1]===0?'⛔':'❔')+'</span><span>'+esc(p[0])+'</span></div>';}).join(''):'<div class="vide">Session requise.</div>';
   }
-  var DEMO={demo:true,webfilter:{mode_global:'block',categories:[{id:'adulte',libelle:'Contenu adulte',mode:'block',requetes_7j:1240,bloque_7j:980},{id:'jeux',libelle:'Jeux d’argent',mode:'block',requetes_7j:860,bloque_7j:860},{id:'phishing',libelle:'Hameçonnage',mode:'observe',requetes_7j:140,bloque_7j:0},{id:'malware',libelle:'Logiciels malveillants',mode:'observe',requetes_7j:56,bloque_7j:0}]},status:{enabled:true,total_rules:382,autoban_enabled:true},enforcement:{mode:'ACTIVE',detail:{campagnes:'ACTIVE',acteurs:'ACTIVE'}},
-    stats:{total_threats:15933,observed_threats:1796,by_severity:{critical:25,high:189,medium:194,info:15000},top_countries:{US:2224,DE:532,GB:421,CN:398,NL:310,FR:287,SG:198,RU:142,HK:91},
+  var DEMO={demo:true,webfilter:{mode_global:'block',categories:[{id:'adulte',libelle:'Contenu adulte',mode:'block',requetes_7j:1240,bloque_7j:980},{id:'jeux',libelle:'Jeux d’argent',mode:'block',requetes_7j:860,bloque_7j:860},{id:'phishing',libelle:'Hameçonnage',mode:'observe',requetes_7j:140,bloque_7j:0},{id:'malware',libelle:'Logiciels malveillants',mode:'observe',requetes_7j:56,bloque_7j:0}]},enforcement:{mode:'ACTIVE',detail:{campagnes:'ACTIVE',acteurs:'ACTIVE'}},
+    stats:{total_threats:15933,observed_threats:1796,by_severity:{critical:25,high:189,medium:194,info:15000},
       by_category:{robots:15502,'host_anomaly:unrouted':152,'host_anomaly:ip_literal':108,scanners:81,'auth_smtp:sasl_failed':33,lfi:25,honeypot:17},leurres_touches:{telnet:7221,vnc:4475,redis:1527,mysql:1749}},
     history:{jours:{'2026-10-04':{total:7000,severites:{high:60,medium:150,critical:20}},'2026-10-05':{total:11000,severites:{high:90,medium:210,critical:30}},'2026-10-06':{total:9000,severites:{high:70,medium:160,critical:25}},'2026-10-07':{total:15000,severites:{high:120,medium:260,critical:40}},'2026-10-08':{total:13000,severites:{high:100,medium:240,critical:35}},'2026-10-09':{total:19000,severites:{high:150,medium:300,critical:50}},'2026-10-10':{total:17000,severites:{high:140,medium:280,critical:45}}}},
-    alerts:[{timestamp:'2026-10-10T07:13:51',client_ip:'57.141.0.59',country:'US',category:'robots',host:'gtl.gk2',path:'/user/login',severity:'high',action:'observe'},{timestamp:'2026-10-10T07:13:42',client_ip:'185.220.101.3',country:'DE',category:'scanner',host:'gtl.gk2',path:'/scan-ports',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.100.1',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.100.2',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.100.3',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T03:13:00',client_ip:'198.51.100.4',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T04:14:00',client_ip:'198.51.100.5',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T05:15:00',client_ip:'198.51.100.6',country:'US',category:'sql.injection',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.101.1',country:'US',category:'xss',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.101.2',country:'US',category:'xss',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.101.3',country:'US',category:'xss',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'203.0.113.1',country:'DE',category:'scan-ports',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'203.0.113.2',country:'DE',category:'scan-ports',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'203.0.113.3',country:'DE',category:'scan-ports',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T03:13:00',client_ip:'203.0.113.4',country:'DE',category:'scan-ports',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T04:14:00',client_ip:'203.0.113.5',country:'DE',category:'scan-ports',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'192.0.2.1',country:'GB',category:'robots',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'192.0.2.2',country:'GB',category:'robots',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'192.0.2.3',country:'GB',category:'robots',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T03:13:00',client_ip:'192.0.2.4',country:'GB',category:'robots',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T04:14:00',client_ip:'192.0.2.5',country:'GB',category:'robots',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.102.1',country:'CN',category:'brute-force ssh',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.102.2',country:'CN',category:'brute-force ssh',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.102.3',country:'CN',category:'brute-force ssh',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T03:13:00',client_ip:'198.51.102.4',country:'CN',category:'brute-force ssh',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.103.1',country:'NL',category:'path traversal',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.103.2',country:'NL',category:'path traversal',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.103.3',country:'NL',category:'path traversal',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.104.1',country:'FR',category:'honeypot',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.104.2',country:'FR',category:'honeypot',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.104.3',country:'FR',category:'honeypot',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T03:13:00',client_ip:'198.51.104.4',country:'FR',category:'honeypot',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.105.1',country:'SG',category:'host_anomaly:unrouted',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.105.2',country:'SG',category:'host_anomaly:unrouted',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.105.3',country:'SG',category:'host_anomaly:unrouted',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T00:10:00',client_ip:'198.51.106.1',country:'RU',category:'scanners',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T01:11:00',client_ip:'198.51.106.2',country:'RU',category:'scanners',host:'gtl.gk2',path:'/',severity:'high',action:'observe'},{timestamp:'2026-10-10T02:12:00',client_ip:'198.51.106.3',country:'RU',category:'scanners',host:'gtl.gk2',path:'/',severity:'high',action:'observe'}],
     usage:{usages:[{name:'streaming',bytes:32},{name:'web',bytes:18},{name:'social',bytes:12},{name:'dns',bytes:10}]},clients:[{name:'iPhone · .204',bytes:10.7e9,usages:[{name:'streaming',bytes:6e9},{name:'cloud',bytes:3e9},{name:'social',bytes:1.7e9}]},{name:'Android · .204',bytes:2.1e9,usages:[{name:'cloud',bytes:1.4e9},{name:'web',bytes:.7e9}]},{name:'Android · .189',bytes:613e6,usages:[{name:'web',bytes:400e6},{name:'messaging',bytes:213e6}]},{name:'TV Salon',bytes:387e6,usages:[{name:'streaming',bytes:387e6}]}],
-    dpiStats:{connected:true,total_flows:1551979,protocols:new Array(11).fill(0)},dpiPays:new Array(49).fill(0),gardien:{appareils:{connectes:14,total:38}},detections:{detections:[{nom:'Anti-robots',actif:true},{nom:'Leurres de service',actif:true}]}};
+    dpiStats:{connected:true,total_flows:1551979,protocols:new Array(11).fill(0)},dpiPays:new Array(49).fill(0),gardien:{appareils:{connectes:14,total:38}}};
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxSocVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)+12},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
-  if(q.get('demo')){rend(DEMO);return;}
+  // ---- Campagnes en cours (#3919) : lecture accessoire et discrète (404/401/403 → « Relevé indisponible », jamais le bandeau de session) ; rendu en texte seul par cartes-campagnes.js.
+  var CAMP_LE=0,CAMP_PAUSE=55000,CAMP_CLE=null;
+  function rendCamps(r){
+    var z=el('campagnes'),C=window.SbxCartes,R=window.SbxReperes;
+    if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
+    var k=C.cle(r);if(k===CAMP_CLE) return;
+    CAMP_CLE=k;C.synthese(document,R,z,r,4);
+  }
+  function chargeCamps(force){
+    if(!force&&(document.hidden||Date.now()-CAMP_LE<CAMP_PAUSE)) return;
+    CAMP_LE=Date.now();
+    jget('/api/v1/waf/populations').then(function(r){CAMP_PAUSE=r?55000:115000;rendCamps(r);});
+  }
+  // ---- Fin des campagnes
+  if(q.get('demo')){rend(DEMO);rendCamps(window.SbxCartes?window.SbxCartes.exemple(Math.floor(Date.now()/1000)-300):null);return;}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
@@ -356,11 +242,11 @@
     var w='/api/v1/waf/',dp='/api/v1/dpi/';
     // Lectures agrégées d'abord (/pub/, la porte qui existe sur l'hôte admin) ; les routes « legacy » ne renvoient pas `connected` et affichaient un faux ⛔.
     var dpi=function(n){return jget(dp+'pub/'+n).then(function(x){return x!==null?x:jget(dp+n);});};
-    Promise.all([jget(w+'stats'),jget(w+'status'),jget(w+'alerts?limit=500'),jget(w+'history'),jget(w+'detections'),jget(w+'enforcement/mode'),dpi('stats'),dpi('usage'),dpi('clients'),dpi('countries'),jget('/api/v1/ad-guard/adblock-tv/gardien'),jget('/api/v1/webfilter/etat')]).then(function(r){
-      rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,history:r[3],detections:r[4],enforcement:r[5],dpiStats:r[6],usage:r[7],clients:Array.isArray(r[8])?r[8]:null,dpiPays:Array.isArray(r[9])?r[9]:null,gardien:r[10],webfilter:r[11]});
+    Promise.all([jget(w+'stats'),jget(w+'history'),jget(w+'enforcement/mode'),dpi('stats'),dpi('usage'),dpi('clients'),dpi('countries'),jget('/api/v1/ad-guard/adblock-tv/gardien'),jget('/api/v1/webfilter/etat')]).then(function(r){
+      rend({stats:r[0],history:r[1],enforcement:r[2],dpiStats:r[3],usage:r[4],clients:Array.isArray(r[5])?r[5]:null,dpiPays:Array.isArray(r[6])?r[6]:null,gardien:r[7],webfilter:r[8]});
     });
   }
-  el('rafraichir').addEventListener('click',charge);
-  charge();setInterval(charge,60000);
+  el('rafraichir').addEventListener('click',function(){charge();chargeCamps(true);});
+  charge();chargeCamps(true);setInterval(function(){charge();chargeCamps(false);},60000);
 })();
 </script>

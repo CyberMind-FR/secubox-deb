@@ -445,7 +445,7 @@ function carteCampagne(R,c){
   if(pays.length){var lp=h('div','cpl');pays.forEach(function(x){var k=typeof x.code==='string'&&/^[A-Za-z]{2}$/.test(x.code)?x.code.toUpperCase():'??';add(lp,cPuce(R,[R.drapeau(k),k],cPct(x.part),'','part des adresses'));});add(cc,lp);}
   var txt;
   if(!noms.length)txt='Cible : non relevée';
-  else if(fam==='messagerie')txt='Comptes visés : '+noms.join(', ')+' (masqués)';
+  else if(fam==='messagerie'&&noms.every(function(x){return x.slice(-1)==='…';}))txt='Comptes visés : '+noms.join(', ')+' (masqués)';
   else txt='Cible : '+noms.map(function(x){return x.replace(/\.secubox\.in$/,'');}).join(', ');
   add(cc,h('p','ccible',txt),h('p','cper','Active du '+cDate(c.premier)+' au '+cDate(c.dernier)));
   var pop=cPopulation(c.signature);

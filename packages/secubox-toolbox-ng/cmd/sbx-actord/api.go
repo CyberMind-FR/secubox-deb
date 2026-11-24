@@ -281,12 +281,14 @@ type campagne struct {
 	nbCibles    int
 
 	// #3919 : de quoi lire la campagne sans ouvrir ses acteurs (enrichissement.go).
+	// Parts calculées sur les adresses vues depuis moins de 48 h ; absentes (et non
+	// nulles) quand aucune ne l'est : d'où les pointeurs.
 	Famille    string         `json:"famille"`
 	CiblesNoms []string       `json:"cibles_noms"` // vue complète seulement
-	Classes    map[string]int `json:"classes"`
-	PaysTop    []PaysPart     `json:"pays_top"`
-	Une        int            `json:"une"`
-	Le3        int            `json:"le3"`
+	Classes    map[string]int `json:"classes,omitempty"`
+	PaysTop    []PaysPart     `json:"pays_top,omitempty"`
+	Une        *int           `json:"une,omitempty"`
+	Le3        *int           `json:"le3,omitempty"`
 	Rotation   bool           `json:"rotation"`
 }
 

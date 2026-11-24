@@ -157,8 +157,8 @@ func TestRotationSeuils(t *testing.T) {
 		t.Fatalf("attendu 1 campagne, obtenu %d", len(cs))
 	}
 	c := cs[0]
-	if c.Rotation || c.Une != 0 || c.Le3 != 0 {
-		t.Errorf("rotation=%v une=%d le3=%d, attendu false/0/0", c.Rotation, c.Une, c.Le3)
+	if c.Rotation || c.Une == nil || *c.Une != 0 || c.Le3 == nil || *c.Le3 != 0 {
+		t.Errorf("rotation=%v une=%v le3=%v, attendu false/0/0", c.Rotation, c.Une, c.Le3)
 	}
 	if c.Famille != "messagerie" {
 		t.Errorf("famille = %q, attendu messagerie", c.Famille)

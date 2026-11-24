@@ -39,6 +39,8 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --propositions /run/secubox/actord-propositions.json \
   --mesures /run/secubox/actord-mesures.json \
   --workers 1
+# #3919 : recharge la base ASN et les catalogues de classes de réseau (sans redémarrer ni rejouer).
+ExecReload=/bin/kill -HUP $MAINPID
 # --workers 1 (#3320) : bbolt n'admet qu'un ecrivain ; un second worker ne
 # faisait qu'attendre le verrou. Le worker unique ecrit par lots.
 # INGESTION : la socket /run/secubox/actord.sock doit appartenir au groupe

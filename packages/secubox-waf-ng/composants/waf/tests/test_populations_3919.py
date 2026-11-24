@@ -216,8 +216,7 @@ def test_cves_bornees_a_20():
     assert len(cves) == 20 and cves == sorted(cves) and len(set(cves)) == 20
 
 
-# test_acl_datascope : DOCUMENTÉ, pas testé ici. Le cache doit rester lisible par le groupe `secubox-datascope`
-# (tâche 12 pose l'ACL dans le postinst) : ecrire_cache écrit en 0640, jamais en 0600 (vérifié par test_double_tampon).
+# Accès de DataScope au cache : reporté à #3921 ; ecrire_cache écrit en 0640 (vérifié par test_double_tampon).
 
 
 def test_recouvrement():
@@ -260,9 +259,57 @@ def test_memoire_bornee(monkeypatch):
 def test_etat_inactive_et_bannie():
     r = _calc([_ligne("8.1.0.1", "scanners", il_y_a_s=2 * JOUR),
                _ligne("8.2.0.1", "aspirateur_ua", action="banned")])
-    assert _pop(r, "famille:balayage_web")["etat"] == "inactive"
+    i = _pop(r, "famille:balayage_web")
+    assert i["etat"] == "inactive" and i["actives_24h"] == 0 and i["bannies_24h"] == 0
     c = _pop(r, "famille:collecte")
-    assert c["etat"] == "bannie" and c["bans"] == 1
+    assert c["etat"] == "bannie" and c["bans"] == 1 and c["actives_24h"] == 1 and c["bannies_24h"] == 1
+
+
+@pytest.mark.parametrize("bannies,etat", [(0, "observee"), (1, "observee"), (4, "observee"), (5, "bannie"), (10, "bannie")])
+def test_bannie_exige_la_moitie_des_adresses_actives(bannies, etat):
+    """Un seul ban sur mille adresses ne fait pas une population « bannie » (revue I3)."""
+    lignes = [_ligne(f"8.{i}.0.1", "scanners", action="banned" if i < bannies else "detect") for i in range(10)]
+    # adresses muettes depuis plus de 24 h, toutes bannies alors : hors du compte
+    lignes += [_ligne(f"9.{i}.0.1", "scanners", il_y_a_s=2 * JOUR, action="banned") for i in range(50)]
+    p = _pop(_calc(lignes), "famille:balayage_web")
+    assert p["actives_24h"] == 10 and p["bannies_24h"] == bannies and p["etat"] == etat
+    assert p["bans"] == bannies + 50 and p["adresses"] == 60
+
+
+def test_ban_ancien_d_une_adresse_encore_active_ne_compte_pas():
+    lignes = [_ligne("8.1.0.1", "scanners", il_y_a_s=3 * JOUR, action="banned"), _ligne("8.1.0.1", "scanners")]
+    p = _pop(_calc(lignes), "famille:balayage_web")
+    assert p["actives_24h"] == 1 and p["bannies_24h"] == 0 and p["bans"] == 1 and p["etat"] == "observee"
+
+
+@pytest.mark.parametrize("meme,attendu", [(30, True), (29, False)])
+def test_rotation_de_famille_exige_un_pivot(meme, attendu):
+    """60 adresses à une tentative : rotation si la première cible reçoit la moitié des événements au moins, sinon non."""
+    lignes = [_ligne(f"8.{i}.0.1", "scanners", host="pivot.exemple.test" if i < meme else f"h{i}.exemple.test") for i in range(60)]
+    p = _pop(_calc(lignes), "famille:balayage_web")
+    assert p["adresses"] == 60 and p["le3"] == 100 and p["rotation"] is attendu
+
+
+def test_rotation_du_profileur_inchangee():
+    ips = [f"8.{i}.0.1" for i in range(60)]
+    lignes = [_ligne(ip, "scanners", host=f"h{i}.exemple.test") for i, ip in enumerate(ips)]
+    r = _calc(lignes, campagnes_profileur=[{"signature": "00aa11bb22cc33dd", "attaquants": ips}])
+    assert _pop(r, "profileur:00aa11bb22cc33dd")["rotation"] is True
+
+
+@pytest.mark.parametrize("hote", ["203.0.113.9", "203.0.113.9:443", "[2001:db8::1]", "[2001:db8::1]:443", "2001:db8::1",
+                                  "203.0.113.9.", "010.1.2.3", "3405803785", "0xcb007109", "exemple.0x7f"])
+def test_jamais_un_hote_adresse(hote):
+    assert P._hote(hote) is None
+    etat = [{"signature": "0123abcd" + "e" * 56, "hote": hote, "sources": 70, "dernier": int(MAINTENANT) - 30}]
+    r = _calc([_ligne("8.1.0.1", "scanners", host=hote)], rotation=etat)
+    assert all(p["cibles"] == [] and p["nom_cible"] == "" for p in r["populations"]) and len(r["populations"]) == 2
+
+
+def test_hotes_ordinaires_gardes():
+    for h in ("forge.exemple.test", "git2", "a1.exemple.test", "smtp"):
+        assert P._hote(h) == h
+    assert P._hote("Forge.exemple.test:443") == "forge.exemple.test"
 
 
 def test_campagne_actord_rapprochee():
@@ -283,7 +330,18 @@ def test_lignes_du_journal_tournes_et_gzip(tmp_path):
         f.write("a1\na2\n")
     (tmp_path / "waf-threats.log.3.gz").write_bytes(b"\x1f\x8b pas du gzip")   # corrompu : ignoré
     (tmp_path / "autre.log").write_text("zz\n")
-    assert [x.strip() for x in P.lignes_du_journal(str(tmp_path))] == ["a1", "a2", "b1", "c1", "c2"]
+    # le plus récent d'abord : au plafond d'adresses, ce sont les plus anciennes qui manquent
+    assert [x.strip() for x in P.lignes_du_journal(str(tmp_path))] == ["c1", "c2", "b1", "a1", "a2"]
+
+
+def test_plafond_garde_les_adresses_du_jour(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "MAX_ADRESSES", 3)
+    (tmp_path / "waf-threats.log").write_text("\n".join(_ligne(f"8.{i}.0.1", "scanners") for i in range(2)) + "\n")
+    (tmp_path / "waf-threats.log.1").write_text(
+        "\n".join(_ligne(f"9.{i}.0.1", "scanners", il_y_a_s=2 * JOUR) for i in range(5)) + "\n")
+    r = _calc(P.lignes_du_journal(str(tmp_path), maintenant=MAINTENANT))
+    p = _pop(r, "famille:balayage_web")
+    assert r["complet"] is False and p["adresses"] == 3 and p["actives_24h"] == 2
 
 
 def test_lignes_du_journal_ignore_les_vieux_fichiers(tmp_path):
@@ -488,11 +546,11 @@ def test_lanceur_nice_et_processus(waf, monkeypatch):
     monkeypatch.setattr(asyncio, "create_subprocess_exec", faux_exec)
     assert asyncio.run(waf._lancer_populations()) == 0
     argv, kw = appels[0]
-    assert list(argv) == ["nice", "-n", "15", sys.executable, "-m", "api.populations", "--ecrire",
+    assert list(argv) == ["nice", "-n", "10", "ionice", "-c", "2", "-n", "7", sys.executable, "-m", "api.populations", "--ecrire",
                           str(waf.POPULATIONS_CACHE)]
     assert kw["cwd"] == str(Path(waf.__file__).resolve().parent.parent)
     assert (Path(kw["cwd"]) / "api" / "populations.py").is_file()
-    assert waf.POPULATIONS_PERIODE == 600 and waf.POPULATIONS_DELAI == 300
+    assert waf.POPULATIONS_PERIODE == 600 and waf.POPULATIONS_DELAI == 540 < waf.POPULATIONS_PERIODE
 
 
 def test_lanceur_jamais_deux_a_la_fois(waf, monkeypatch):
@@ -516,6 +574,40 @@ def test_lanceur_jamais_deux_a_la_fois(waf, monkeypatch):
 
     asyncio.run(scenario())
     assert lances == [1, 1]
+
+
+def test_lanceur_arrete_attend_la_fin_du_processus(waf, monkeypatch):
+    """À l'arrêt de l'API, le processus est tué ET attendu : jamais deux passes à la fois après un redémarrage."""
+    import asyncio
+    suite = []
+
+    class Proc:
+        returncode = None
+
+        async def communicate(self):
+            await asyncio.sleep(10)
+
+        def kill(self):
+            suite.append("tué")
+
+        async def wait(self):
+            suite.append("attendu")
+            return -9
+
+    async def faux_exec(*argv, **kw):
+        return Proc()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", faux_exec)
+
+    async def scenario():
+        t = asyncio.create_task(waf._lancer_populations())
+        await asyncio.sleep(0.02)
+        t.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await t
+
+    asyncio.run(scenario())
+    assert suite == ["tué", "attendu"]
 
 
 def test_lanceur_tue_au_dela_du_delai(waf, monkeypatch):

@@ -76,7 +76,7 @@ func main() {
 		reseauxClasses = flag.String("reseaux-classes",
 			"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
 			"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
-		campEtat = flag.String("campagnes-etat", "/run/secubox/authwatch-campagnes.json",
+		campEtat = flag.String("campagnes-etat", "/run/secubox-authwatch/campagnes.json",
 			"état des campagnes par compte visé, écrit toutes les 60 s par renommage atomique (\"\" = désactivé)")
 		leurres = flag.String("leurres", "",
 			"ports leurres : `defaut` pour la liste connue, ou « 3389:rdp,5900:vnc »")

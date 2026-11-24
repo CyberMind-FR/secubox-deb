@@ -159,8 +159,8 @@ def test_onglets_gardent_les_ecrans_et_encadrent_les_vues(navigateur):
     assert p.is_visible("#e0") and not p.is_visible("#e1")
     p.click("#t2")
     assert p.is_visible("#e2") and p.get_attribute("#t2", "aria-selected") == "true" and not p.is_visible("#e0")
-    p.click("#tm")
-    assert p.get_attribute("#vueFrame", "src") == "/waf/menaces.html?embed=1" and p.is_visible("#e4")
+    p.click("#td")
+    assert p.get_attribute("#vueFrame", "src") == "/dpi/vue.html?embed=1" and p.is_visible("#e4")
     p.click("#tn")
     assert p.get_attribute("#vueFrame", "src") == "reseau.html?embed=1"
     assert err == []
@@ -169,10 +169,10 @@ def test_onglets_gardent_les_ecrans_et_encadrent_les_vues(navigateur):
 
 def test_la_hauteur_de_la_vue_encadree_suit_son_annonce(navigateur):
     ctx, p, _, _ = ouvre(navigateur, "http://sbx.test/soc/", OK)
-    p.click("#tm")
+    p.click("#td")
     p.wait_for_function("document.getElementById('vueFrame').contentDocument.body && document.getElementById('vueFrame').contentDocument.body.textContent.includes('vue')")
-    cadre = [f for f in p.frames if f.url.endswith("/waf/menaces.html?embed=1")][0]
-    cadre.evaluate("parent.postMessage({sbxWafVue: 900, onglet: 'menaces'}, location.origin)")
+    cadre = [f for f in p.frames if f.url.endswith("/dpi/vue.html?embed=1")][0]
+    cadre.evaluate("parent.postMessage({sbxdpiVue: 900}, location.origin)")
     p.wait_for_function("document.getElementById('vueFrame').style.height === '904px'")
     ctx.close()
 
