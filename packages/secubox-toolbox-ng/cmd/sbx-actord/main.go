@@ -192,6 +192,7 @@ func (s *Server) pruneLoop(retention time.Duration) {
 	defer t.Stop()
 	for range t.C {
 		before := time.Now().Add(-retention).Unix()
+		s.purgerSources() // #3919 : rétention propre aux fiches par source (48 h)
 		if n := s.purgerMemoire(before); n > 0 {
 			log.Printf("actord: graphe — %d acteur(s) non vus depuis la retention retire(s)", n)
 		}

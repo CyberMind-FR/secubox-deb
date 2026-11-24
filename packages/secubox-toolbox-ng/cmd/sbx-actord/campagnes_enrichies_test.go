@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,4 +222,119 @@ func BenchmarkCampagnesEnrichies(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = s.campagnes()
 	}
+}
+
+// TestCompteAuthwatchMasque : une cible d'authwatch est un compte par son
+// origine, même sans « @ » : « root » sort masqué par reseau.MasquerCompte
+// (« roo… » : plus de 3 caractères, les 3 premiers restent).
+func TestCompteAuthwatchMasque(t *testing.T) {
+	s := serveur(t)
+	s.annuaire = annuaireEssai(t)
+	now := time.Now().Unix()
+	for i := 0; i < 2; i++ {
+		s.correlate(&envelope.Envelope{
+			EventID: envelope.NewEventID(), Timestamp: now - int64(i),
+			Sensor: envelope.SensorAuthWatch, SrcIP: fmt.Sprintf("198.51.100.%d", i+1),
+			DstService: "root", RuleID: "auth_ssh_bruteforce", Severity: 50,
+		})
+	}
+	cs := s.campagnes()
+	if len(cs) != 1 {
+		t.Fatalf("attendu 1 campagne, obtenu %d", len(cs))
+	}
+	if got := cs[0].CiblesNoms; len(got) != 1 || got[0] != reseau.MasquerCompte("root") || got[0] == "root" {
+		t.Errorf("cibles_noms = %v, attendu [%s]", got, reseau.MasquerCompte("root"))
+	}
+	for _, f := range s.sources {
+		if f.cible == "root" {
+			t.Error("la fiche garde le compte en clair")
+		}
+	}
+	if cs[0].Famille != "acces_distant" {
+		t.Errorf("famille = %q, attendu acces_distant", cs[0].Famille)
+	}
+}
+
+func evtSource(ip string, ts int64, cible string) *envelope.Envelope {
+	return &envelope.Envelope{
+		EventID: "e", Timestamp: ts, Sensor: envelope.SensorWAF, SrcIP: ip,
+		DstService: cible, ASN: 64496, GeoCountry: "US", BehaviorTags: []string{"scanners"},
+	}
+}
+
+// TestPlafondSourcesEviction : plein, le registre évince les fiches les plus
+// anciennes (par dernier), jamais la nouvelle, et ne dépasse pas le plafond.
+func TestPlafondSourcesEviction(t *testing.T) {
+	s := &Server{sourcesMax: 100}
+	now := time.Now().Unix()
+	for i := 0; i < 100; i++ { // la fiche i a dernier = now-1000+i : 0 est la plus ancienne
+		s.noterSource(evtSource(fmt.Sprintf("203.0.113.%d", i), now-1000+int64(i), "forge.exemple.test"))
+	}
+	if len(s.sources) != 100 {
+		t.Fatalf("précondition : %d fiches", len(s.sources))
+	}
+	s.noterSource(evtSource("198.51.100.1", now, "forge.exemple.test"))
+	if len(s.sources) > 100 {
+		t.Fatalf("%d fiches, plafond 100 dépassé", len(s.sources))
+	}
+	if s.sources["198.51.100.1"] == nil {
+		t.Error("la nouvelle adresse doit être retenue")
+	}
+	for i := 0; i < 10; i++ { // 10 % du plafond évincés : les 10 plus anciennes
+		if s.sources[fmt.Sprintf("203.0.113.%d", i)] != nil {
+			t.Errorf("203.0.113.%d (ancienne) aurait dû être évincée", i)
+		}
+	}
+	if s.sources["203.0.113.10"] == nil || s.sources["203.0.113.99"] == nil {
+		t.Error("les fiches récentes doivent rester")
+	}
+	// Une adresse connue ne déclenche aucune éviction.
+	avant := len(s.sources)
+	s.noterSource(evtSource("203.0.113.50", now, "forge.exemple.test"))
+	if len(s.sources) != avant {
+		t.Error("une adresse déjà connue ne doit rien évincer")
+	}
+}
+
+// TestRetentionSources : une fiche muette depuis plus de 48 h est oubliée ; un
+// événement plus vieux que 48 h (rejeu) n'en crée pas.
+func TestRetentionSources(t *testing.T) {
+	s := &Server{}
+	now := time.Now().Unix()
+	s.noterSource(evtSource("203.0.113.1", now-49*3600, "forge.exemple.test"))
+	if len(s.sources) != 0 {
+		t.Error("un événement hors rétention ne doit pas créer de fiche")
+	}
+	s.noterSource(evtSource("203.0.113.2", now-47*3600, "forge.exemple.test"))
+	s.noterSource(evtSource("203.0.113.3", now, "forge.exemple.test"))
+	defer func(o func() int64) { maintenant = o }(maintenant)
+	maintenant = func() int64 { return now + 2*3600 }
+	s.purgerSources()
+	if s.sources["203.0.113.2"] != nil || s.sources["203.0.113.3"] == nil {
+		t.Errorf("purge 48 h incorrecte : %v", s.sources)
+	}
+}
+
+// TestOctetsParFiche : coût mémoire d'une fiche à une cible (clé d'adresse,
+// entrée de map et chaîne de cible comprises), mesuré sur 100 000 fiches.
+func TestOctetsParFiche(t *testing.T) {
+	const n = 100000
+	s := &Server{}
+	now := time.Now().Unix()
+	var m0, m1 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&m0)
+	for i := 0; i < n; i++ {
+		// Chaînes neuves, comme celles d'une enveloppe décodée ; l'enveloppe
+		// devient ordure, seul ce que la fiche retient reste compté.
+		s.noterSource(evtSource(fmt.Sprintf("2001:db8::%x:%x", i>>16, i&0xffff), now, strings.Clone("forge.exemple.test")))
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&m1)
+	par := float64(m1.HeapAlloc-m0.HeapAlloc) / n
+	t.Logf("%.0f octets par fiche (%d fiches)", par, len(s.sources))
+	if par > 200 {
+		t.Errorf("%.0f octets par fiche, attendu ≤ 200", par)
+	}
+	runtime.KeepAlive(s)
 }

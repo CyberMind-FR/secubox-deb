@@ -286,6 +286,5 @@ func (s *Server) purgerMemoire(avant int64) int {
 	for _, id := range ids {
 		delete(s.accum, id)
 	}
-	s.oublierSources(avant)
 	return len(ids)
 }

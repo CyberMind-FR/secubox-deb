@@ -8,6 +8,7 @@ package main
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
@@ -30,15 +31,53 @@ import (
 // dictionnaire viserait sinon des centaines de noms par adresse.
 const ciblesParSourceMax = 16
 
-// ficheSource : ce qu'actord retient d'une adresse source.
+// BORNES MÉMOIRE DES FICHES (#3919, revue). Les fiches ne vivent qu'en
+// mémoire, et secubox-actord.service tourne sous GOMEMLIMIT=180MiB /
+// MemoryMax=256M. À ~1 000 adresses nouvelles par heure, garder les fiches
+// aussi longtemps que les acteurs (360 h) en ferait ~360 000. D'où :
+//   - une rétention PROPRE aux fiches, 48 h, indépendante de celle des acteurs ;
+//   - un plafond dur de 200 000 fiches : plein, on ÉVINCE les plus anciennes
+//     (par `dernier`) plutôt que de refuser les nouvelles — une campagne en
+//     cours compte plus qu'une adresse muette depuis deux jours ;
+//   - une fiche compacte (voir ficheSource), ~150 o pour une source à une cible.
+const (
+	sourcesMaxDefaut = 200000
+	retentionSources = 48 * 3600 // secondes
+	// evictionPart : part du plafond libérée d'un coup quand il est atteint.
+	// Évincer par lot (un tri toutes les 20 000 adresses nouvelles) plutôt
+	// qu'une fiche à la fois (un balayage complet par adresse nouvelle).
+	evictionPart = 10
+)
+
+// Familles indexées : un compteur par famille dans un tableau fixe, sans map.
+var famillesIndex = [...]string{
+	reseau.FamilleMessagerie, reseau.FamilleAccesDistant, reseau.FamilleCollecte,
+	reseau.FamilleBalayageWeb, reseau.FamilleAutre,
+}
+
+const familleAutreIdx = len(famillesIndex) - 1
+
+func indexFamille(f string) int {
+	for i, x := range famillesIndex {
+		if x == f {
+			return i
+		}
+	}
+	return familleAutreIdx
+}
+
+// ficheSource : ce qu'actord retient d'une adresse source. Compacte : la
+// première cible est gardée en ligne, la map n'est allouée qu'à partir de la
+// deuxième cible distincte.
 type ficheSource struct {
-	evts     int
-	asn      uint32
-	resolu   bool // ASN déjà cherché dans l'annuaire (enveloppe sans ASN)
-	pays     string
 	dernier  int64
-	familles map[string]int
-	cibles   map[string]int
+	asn      uint32 // 0 = pas encore résolu (retenté à chaque événement)
+	evts     uint32
+	familles [len(famillesIndex)]uint32
+	pays     [2]byte
+	cible    string // première cible (déjà masquée si c'est un compte)
+	nCible   uint32
+	cibles   map[string]uint32 // cibles suivantes, nil tant qu'il n'y en a qu'une
 }
 
 // PaysPart : un pays et sa part (en %) des sources d'une campagne.
@@ -47,17 +86,23 @@ type PaysPart struct {
 	Part int    `json:"part"`
 }
 
+// maintenant : horloge des fiches, remplaçable en test.
+var maintenant = func() int64 { return time.Now().Unix() }
+
 // noterSource met à jour la fiche de l'adresse d'un événement. Appelée sous s.mu.
 func (s *Server) noterSource(e *envelope.Envelope) {
-	if e.SrcIP == "" {
-		return
+	if e.SrcIP == "" || e.Timestamp < maintenant()-retentionSources {
+		return // hors rétention des fiches (rejeu au démarrage) : rien à retenir
 	}
 	if s.sources == nil {
 		s.sources = map[string]*ficheSource{}
 	}
 	f := s.sources[e.SrcIP]
 	if f == nil {
-		f = &ficheSource{familles: map[string]int{}, cibles: map[string]int{}}
+		if max := s.plafondSources(); len(s.sources) >= max {
+			s.evincerSources(max)
+		}
+		f = &ficheSource{}
 		s.sources[e.SrcIP] = f
 	}
 	f.evts++
@@ -65,21 +110,62 @@ func (s *Server) noterSource(e *envelope.Envelope) {
 		f.dernier = e.Timestamp
 	}
 	if e.ASN != 0 {
-		f.asn, f.resolu = e.ASN, true
-	} else if !f.resolu {
-		// Enveloppe antérieure à l'ASN (ou capteur qui ne le porte pas) :
-		// une seule recherche par adresse, dans l'annuaire local d'actord.
-		f.asn, f.resolu = s.annuaire.Classer(e.SrcIP).ASN, true
+		f.asn = e.ASN
+	} else if f.asn == 0 {
+		// Enveloppe sans ASN : recherche dans l'annuaire local d'actord. Un
+		// échec n'est PAS mémorisé : l'annuaire peut être rechargé (SIGHUP,
+		// 24 h) et la recherche suivante aboutir.
+		f.asn = s.annuaire.Classer(e.SrcIP).ASN
 	}
-	if e.GeoCountry != "" {
-		f.pays = e.GeoCountry
+	if len(e.GeoCountry) == 2 {
+		f.pays = [2]byte{e.GeoCountry[0], e.GeoCountry[1]}
 	}
-	f.familles[familleEvenement(e)]++
-	if e.DstService != "" {
-		if _, ok := f.cibles[e.DstService]; ok || len(f.cibles) < ciblesParSourceMax {
-			f.cibles[e.DstService]++
+	f.familles[indexFamille(familleEvenement(e))]++
+	if c := cibleAffichee(e); c != "" {
+		f.noterCible(c)
+	}
+}
+
+func (f *ficheSource) noterCible(c string) {
+	switch {
+	case f.nCible == 0 || f.cible == c:
+		f.cible = c
+		f.nCible++
+	case f.cibles != nil:
+		if _, ok := f.cibles[c]; ok || len(f.cibles) < ciblesParSourceMax-1 {
+			f.cibles[c]++
+		}
+	default:
+		f.cibles = map[string]uint32{c: 1}
+	}
+}
+
+// estCompte : la cible de l'événement est un compte visé, d'après son
+// ORIGINE (capteur authwatch, catégorie auth_*) ; une adresse de messagerie
+// en est un signal de plus.
+func estCompte(e *envelope.Envelope) bool {
+	if e.Sensor == envelope.SensorAuthWatch || strings.HasPrefix(e.RuleID, "auth_") ||
+		strings.Contains(e.DstService, "@") {
+		return true
+	}
+	for _, t := range e.BehaviorTags {
+		if strings.HasPrefix(t, "auth_") {
+			return true
 		}
 	}
+	return false
+}
+
+// cibleAffichee : la cible telle que la carte la montrera. Un compte est
+// masqué DÈS L'INGESTION : la fiche ne garde jamais le compte en clair.
+func cibleAffichee(e *envelope.Envelope) string {
+	if e.DstService == "" {
+		return ""
+	}
+	if estCompte(e) {
+		return reseau.MasquerCompte(e.DstService)
+	}
+	return e.DstService
 }
 
 // familleEvenement : la famille de la catégorie de l'événement. La catégorie
@@ -99,6 +185,39 @@ func familleEvenement(e *envelope.Envelope) string {
 	return reseau.FamilleAutre
 }
 
+func (s *Server) plafondSources() int {
+	if s.sourcesMax > 0 {
+		return s.sourcesMax
+	}
+	return sourcesMaxDefaut
+}
+
+// evincerSources libère evictionPart % du plafond (au moins une fiche) en
+// retirant les fiches les plus anciennes par `dernier`. Appelée sous s.mu.
+func (s *Server) evincerSources(max int) {
+	k := max * evictionPart / 100
+	if k < 1 {
+		k = 1
+	}
+	if k > len(s.sources) {
+		k = len(s.sources)
+	}
+	if k == 0 {
+		return
+	}
+	d := make([]int64, 0, len(s.sources))
+	for _, f := range s.sources {
+		d = append(d, f.dernier)
+	}
+	sort.Slice(d, func(i, j int) bool { return d[i] < d[j] })
+	seuil := d[k-1]
+	for ip, f := range s.sources {
+		if f.dernier <= seuil {
+			delete(s.sources, ip)
+		}
+	}
+}
+
 // oublierSources retire les fiches non vues depuis `avant`. Appelée sous s.mu.
 func (s *Server) oublierSources(avant int64) {
 	for ip, f := range s.sources {
@@ -106,6 +225,13 @@ func (s *Server) oublierSources(avant int64) {
 			delete(s.sources, ip)
 		}
 	}
+}
+
+// purgerSources applique la rétention propre aux fiches (48 h).
+func (s *Server) purgerSources() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.oublierSources(maintenant() - retentionSources)
 }
 
 // part rend k/n en pourcentage entier, arrondi au plus proche (moitié vers le
@@ -117,17 +243,13 @@ func part(k, n int) int {
 	return (k*100 + n/2) / n
 }
 
-// cleCompte : une cible qui est un compte (adresse de messagerie) plutôt
-// qu'un hôte ou un service. Seule celle-là est masquée.
-func cleCompte(c string) bool { return strings.Contains(c, "@") }
-
 // enrichir calcule les champs lisibles d'une campagne depuis les fiches de
 // ses adresses. Appelée sous s.mu.
 func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 	n := len(ips)
 	classes := map[string]int{}
 	pays := map[string]int{}
-	familles := map[string]int{}
+	var familles [len(famillesIndex)]int
 	cibles := map[string]int{}
 	classeDe := map[uint32]string{} // un verrou d'annuaire par ASN, pas par adresse
 	une, le3 := 0, 0
@@ -143,8 +265,8 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 			classeDe[f.asn] = cl
 		}
 		classes[cl]++
-		if f.pays != "" {
-			pays[f.pays]++
+		if f.pays != [2]byte{} {
+			pays[string(f.pays[:])]++
 		}
 		if f.evts == 1 {
 			une++
@@ -152,11 +274,14 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 		if f.evts >= 1 && f.evts <= 3 {
 			le3++
 		}
-		for k, v := range f.familles {
-			familles[k] += v
+		for i, v := range f.familles {
+			familles[i] += int(v)
+		}
+		if f.nCible > 0 {
+			cibles[f.cible] += int(f.nCible)
 		}
 		for k, v := range f.cibles {
-			cibles[k] += v
+			cibles[k] += int(v)
 		}
 	}
 
@@ -169,18 +294,16 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 		g.PaysTop = append(g.PaysTop, PaysPart{Code: k, Part: part(pays[k], n)})
 	}
 	g.CiblesNoms = []string{}
-	for _, k := range premiers(cibles, 3) {
-		if cleCompte(k) {
-			k = reseau.MasquerCompte(k)
-		}
-		g.CiblesNoms = append(g.CiblesNoms, k)
-	}
+	// Les comptes y sont déjà masqués (cibleAffichee, à l'ingestion).
+	g.CiblesNoms = append(g.CiblesNoms, premiers(cibles, 3)...)
 	// La famille est la plus fréquente parmi les événements rangés ; « autre »
-	// seulement quand aucun ne l'est.
+	// seulement quand aucun ne l'est. Égalité : ordre alphabétique.
 	g.Famille = reseau.FamilleAutre
-	delete(familles, reseau.FamilleAutre)
-	if p := premiers(familles, 1); len(p) == 1 {
-		g.Famille = p[0]
+	meilleur := 0
+	for i, v := range familles[:familleAutreIdx] {
+		if v > meilleur || v == meilleur && v > 0 && famillesIndex[i] < g.Famille {
+			meilleur, g.Famille = v, famillesIndex[i]
+		}
 	}
 	g.Une, g.Le3 = part(une, n), part(le3, n)
 	g.Rotation = g.Le3 >= 80 && n >= 50

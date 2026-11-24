@@ -46,7 +46,9 @@ type Server struct {
 	// (enrichissement.go). annuaire nil = classes « inconnu ».
 	annuaire *reseau.Annuaire
 	sources  map[string]*ficheSource
-	robots   *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation
+	// sourcesMax : plafond des fiches (0 = sourcesMaxDefaut) ; réduit en test.
+	sourcesMax int
+	robots     *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation
 
 	// Clé des identifiants de campagne de la vue réduite (vue.go), tirée au
 	// premier usage et gardée en mémoire seulement.
