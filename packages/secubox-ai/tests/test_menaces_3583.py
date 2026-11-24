@@ -188,7 +188,8 @@ async def test_gk2_injoignable_releve_avec_erreurs_et_resume_refuse_sans_modele(
     gk2["pannes"].add("tout")
     vus = moteur_simule(monkeypatch, "ne doit jamais servir")
     r = await appeler("GET", "/menaces/releve")
-    assert r.status_code == 200 and len(r.json()["erreurs"]) == len(menaces.CHEMINS)
+    assert r.status_code == 200 and len(r.json()["erreurs"]) == len(menaces.CHEMINS) - len(menaces.SECONDAIRES)
+    assert r.json()["erreurs_secondaires"] == list(menaces.SECONDAIRES)
     r = await appeler("POST", "/menaces/resumer")
     assert r.status_code == 503 and "gk2" in r.json()["detail"]
     r = await appeler("POST", "/menaces/demander", json={"question": "Que se passe-t-il ?"})

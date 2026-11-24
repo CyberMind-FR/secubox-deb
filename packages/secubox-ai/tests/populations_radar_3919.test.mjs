@@ -97,7 +97,7 @@ test("tri par activité des dernières 24 h, 6 visibles, le reste replié", () =
   assert.ok(autres, "« autres populations » replié");
   assert.equal(autres.enfants.filter((x) => x.tag === "article").length, 2);
   const t = zones.rCampagnes.textContent;
-  assert.match(t, /Recouvrement entre populations : 7 adresses communes sur 7 800|Recouvrement entre populations : 7 adresses communes sur 7 800/);
+  assert.match(t, /Recouvrement entre populations : 7 adresses communes sur 7[\u202f\u00a0 ]800 — moins de 1 % : ce sont des acteurs distincts\./);
   assert.match(t, /Repères : 🔁 proxy loué/);
   assert.match(t, /🌀 rotation/);
   assert.match(t, /Détail : 5 premiers réseaux/);

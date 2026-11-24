@@ -46,6 +46,9 @@ ESSENTIELS = CHEMINS[:4]
 MAX_POPULATIONS = 40                              # le Radar en montre 6 et replie le reste ; borne du relevé servi
 # Clés servies à la page mais JAMAIS au modèle : les cibles des populations viennent d'en-têtes Host d'attaquants.
 HORS_MODELE = ("populations", "populations_meta")
+# Sources secondaires : leur échec ne va PAS dans `erreurs` (bandeaux globaux du Radar, de la Salle et des Menaces),
+# mais dans `erreurs_secondaires` ; seule leur carte le dit (« relevé indisponible »).
+SECONDAIRES = ("/waf/populations",)
 
 # Point d'injection des tests : fabrique() -> transport httpx (None = transport réel).
 FABRIQUE_TRANSPORT_GK2: Callable[[], httpx.AsyncBaseTransport | None] | None = None
@@ -182,6 +185,8 @@ async def releve_menaces(force: bool = False) -> dict:
             else:
                 log.info("menaces.gk2 rétabli")
             _panne_gk2["chemins"] = tuple(erreurs)
+        secondaires = [c for c in erreurs if c in SECONDAIRES]
+        erreurs = [c for c in erreurs if c not in SECONDAIRES]
         stats, bans, camp, alertes, posture, pops = [x if isinstance(x, dict) else {} for x in res]
         maintenant = time.time()
         liste = _liste(bans.get("bans"))
@@ -215,7 +220,7 @@ async def releve_menaces(force: bool = False) -> dict:
         categories = _compteurs(stats.get("by_category"))
         releve = {
             "quand": maintenant,
-            "erreurs": erreurs,
+            "erreurs": erreurs, "erreurs_secondaires": secondaires,
             # #3901 : une source en erreur se lit « inconnu » (None → « — »), jamais 0 : gk2 saturé le 23/11, le Radar
             # affichait « 0 ban » alors que 2 000 adresses étaient bannies.
             "chiffres": {"menaces_jour": stats.get("threats_today"), "observees_jour": stats.get("observed_today"),
@@ -307,7 +312,7 @@ def controler_resume(texte: str, releve: dict) -> str:
 def compact_releve(r: dict, sans_alertes: bool = False) -> str:
     """Le relevé tel que le modèle le lit : chiffres, sans les listes brutes."""
     return json.dumps({k: v for k, v in _visible(r).items()
-                       if k not in ("quand", "erreurs") + HORS_MODELE and not (sans_alertes and k == "alertes")},
+                       if k not in ("quand", "erreurs", "erreurs_secondaires") + HORS_MODELE and not (sans_alertes and k == "alertes")},
                       ensure_ascii=False, default=str)
 
 

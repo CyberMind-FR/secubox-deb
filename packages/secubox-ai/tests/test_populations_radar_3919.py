@@ -55,7 +55,7 @@ async def test_releve_avec_populations(gk2):  # noqa: F811
     assert r["populations_meta"]["complet"] is True
     assert r["populations_meta"]["genere_le"] == 1_790_000_000 and r["populations_meta"]["age_s"] == 42
     assert r["populations_meta"]["recouvrement"] == {"adresses_communes": 2, "adresses_total": 240}
-    assert "/waf/populations" not in r["erreurs"]
+    assert "/waf/populations" not in r["erreurs"] and r["erreurs_secondaires"] == []
     rel = (await appeler("GET", "/menaces/releve")).json()
     assert len(rel["populations"]) == 2                                    # servi à la page
 
@@ -85,6 +85,22 @@ async def test_releve_sans_populations(env, monkeypatch):  # noqa: F811
     assert r["populations"] is None and r["populations_meta"] is None
     assert menaces.motif_inutilisable(r) is None                            # les 4 essentiels sont là : résumé possible
     assert r["chiffres"]["bans_actifs"] == 948
+    # source secondaire : hors des bandeaux globaux (`erreurs`), seule la carte dit « relevé indisponible »
+    assert r["erreurs"] == [] and r["erreurs_secondaires"] == ["/waf/populations"]
+    rel = (await appeler("GET", "/menaces/releve")).json()
+    assert rel["erreurs"] == [] and rel["erreurs_secondaires"] == ["/waf/populations"] and rel["populations"] is None
+
+
+@pytest.mark.asyncio
+async def test_populations_en_panne_journalisee_une_fois(gk2, caplog):  # noqa: F811
+    gk2["pannes"].add("/waf/populations")
+    with caplog.at_level("WARNING", logger="secubox.ai.menaces"):
+        await menaces.releve_menaces(force=True)
+        await menaces.releve_menaces(force=True)
+    traces = [x for x in caplog.records if "/waf/populations" in x.getMessage()]
+    assert len(traces) == 1                                                 # une trace au changement d'état
+    r = await menaces.releve_menaces(force=True)
+    assert r["erreurs"] == [] and r["erreurs_secondaires"] == ["/waf/populations"] and r["populations"] is None
 
 
 @pytest.mark.asyncio
@@ -113,8 +129,8 @@ def _script():
 
 def test_page_charge_les_reperes_et_la_carte():
     h = PAGE.read_text(encoding="utf-8")
-    assert '<script src="reperes.js"></script>' in h
-    assert h.index('<script src="reperes.js"></script>') < h.index("<script>\n")
+    assert '<script src="/ai/reperes.js"></script>' in h
+    assert h.index('<script src="/ai/reperes.js"></script>') < h.index("<script>\n")
     assert "Campagnes et populations" in h and 'id="rCampagnes"' in h
 
 
@@ -132,7 +148,7 @@ def test_demo_trois_populations_fictives():
     demo = h[h.index("// ---- Démonstration"):h.index("// ---- Code ----")]
     corps = demo[demo.index("function demoPopulations("):]
     corps = corps[:corps.index("\n  }\n")]
-    assert corps.count("famille:") == 3 or corps.count("id: '") == 3
+    assert len(re.findall(r"\{ id: '", corps)) == 3
     for hote in re.findall(r"'([a-z0-9.-]+\.[a-z]{2,})'", corps):
         assert hote.endswith((".exemple.secubox.in", ".exemple.test")), hote
     assert not re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", corps)               # aucune adresse dans une population
