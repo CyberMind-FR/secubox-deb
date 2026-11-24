@@ -5,12 +5,12 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Fragment nftables des leurres de messagerie (#3924). Un fragment refusé ferait refuser TOUT /etc/nftables.conf au
-# démarrage : il n'entre dans /etc/nftables.d qu'après `nft -c` de l'ensemble.
-#   refusé avec lui        -> <fragment>.rejete, dit ;
-#   ensemble déjà refusé   -> <fragment>.non-verifie (sans rapport avec lui), dit ;
-#   nft ne tourne pas ici  -> <fragment>.non-verifie (chroot d'image) : la postinst suivante ou l'unité de démarrage
-#                             secubox-fragment-leurres.service le valide. Jamais un .nft non vérifié.
-# Jamais chargé ici : pris au prochain chargement de nftables. Lancé par la postinst et par l'unité (root).
+# démarrage : `nft -c` juge une COPIE de l'ensemble, hors de /etc/nftables.d, puis le fragment y entre par renommage
+# atomique.
+#   refusé avec lui      -> <fragment>.rejete, dit ; un fragment antérieur encore valide reste en place ;
+#   ensemble refusé sans lui, ou nft ne tourne pas ici (chroot d'image)
+#                        -> <fragment>.non-verifie, dit ; la prochaine mise à jour du paquet le juge.
+# Jamais chargé ici : pris au prochain chargement de nftables. Lancé par la postinst (root).
 # SBX_FRAGMENT_* : essais seulement.
 set -euo pipefail
 
@@ -25,35 +25,52 @@ nft_tourne() {
     command -v nft >/dev/null 2>&1 && printf 'table inet secubox_essai {\n}\n' | nft -c -f - >/dev/null 2>&1
 }
 
-ensemble_valide() { nft -c -f "$BASE" >/dev/null 2>&1; }
-
 [[ -f "$SRC" && -f "$BASE" ]] || exit 0
+DOSSIER="$(dirname -- "$DEST")"
 
-if ! nft_tourne; then
-    # Un fragment déjà posé a été validé : il reste. Seul un contenu nouveau attend.
+# attendre <motif> : garde le candidat hors du jeu actif. Un fragment déjà posé, donc déjà validé, reste.
+attendre() {
     if ! cmp -s "$SRC" "$DEST"; then
         install -D -m 644 "$SRC" "$DEST.non-verifie"
-        dire "nft ne peut rien valider ici : fragment gardé en $DEST.non-verifie, validé au démarrage"
+        dire "$1 : fragment gardé en $DEST.non-verifie, jugé à la prochaine mise à jour"
     fi
+    exit 0
+}
+
+nft_tourne || attendre "nft ne peut rien valider ici"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf -- "$TMP"' EXIT
+mkdir "$TMP/nftables.d"
+for f in "$DOSSIER"/*.nft; do
+    [[ -f "$f" && "$f" != "$DEST" ]] && cp -- "$f" "$TMP/nftables.d/"
+done
+sed "s#$DOSSIER/#$TMP/nftables.d/#g" "$BASE" > "$TMP/base"
+grep -qF "$TMP/nftables.d/" "$TMP/base" || printf 'include "%s/nftables.d/*.nft"\n' "$TMP" >> "$TMP/base"
+
+# copie_valide [fragment] : la copie, sans notre fragment ou avec celui donné.
+copie_valide() {
+    local notre="$TMP/nftables.d/fragment-leurres.nft"
+    rm -f -- "$notre"
+    if [[ $# -gt 0 ]]; then cp -- "$1" "$notre"; fi
+    nft -c -f "$TMP/base" >/dev/null 2>&1
+}
+
+copie_valide || attendre "$BASE est refusé par nft -c, sans rapport avec les leurres de messagerie"
+rm -f -- "$DEST.non-verifie"
+
+if copie_valide "$SRC"; then
+    if ! cmp -s "$SRC" "$DEST"; then
+        # « .nouveau » ne correspond pas à *.nft : le renommage est le seul instant où le fragment devient actif.
+        install -D -m 644 "$SRC" "$DEST.nouveau"
+        mv -f -- "$DEST.nouveau" "$DEST"
+    fi
+    rm -f -- "$DEST.rejete"
     exit 0
 fi
 
-if cmp -s "$SRC" "$DEST" && ensemble_valide; then
-    rm -f -- "$DEST.non-verifie"
-    exit 0
+install -D -m 644 "$SRC" "$DEST.rejete"
+if [[ -f "$DEST" ]] && ! copie_valide "$DEST"; then
+    rm -f -- "$DEST"
 fi
-rm -f -- "$DEST"
-if ! ensemble_valide; then
-    # Interface absente à ce stade, autre fragment fautif : le nôtre n'est pas jugé, il attend.
-    install -D -m 644 "$SRC" "$DEST.non-verifie"
-    dire "$BASE est refusé par nft -c, sans rapport avec les leurres de messagerie ; fragment gardé en $DEST.non-verifie"
-    exit 0
-fi
-rm -f -- "$DEST.non-verifie"
-install -D -m 644 "$SRC" "$DEST"
-if ! ensemble_valide; then
-    mv -f -- "$DEST" "$DEST.rejete"
-    dire "fragment refusé par nft -c, écarté en $DEST.rejete ; le pare-feu reste valide sans lui"
-    exit 0
-fi
-rm -f -- "$DEST.rejete"
+dire "fragment refusé par nft -c, écarté en $DEST.rejete ; le pare-feu reste valide sans lui"

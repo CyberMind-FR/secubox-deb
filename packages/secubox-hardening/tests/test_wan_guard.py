@@ -238,7 +238,7 @@ def test_nft_impossible_ici_puis_valide(tmp_path):
     assert r.returncode == 0 and "non-verifie" in r.stderr and "refusé" not in r.stderr
     assert attente.exists() and not dest.exists()
     assert list((tmp_path / "nftables.d").glob("*.nft")) == []
-    r = _poser(LEURRES_MAIL, base, dest)                           # démarrage ou postinst suivante
+    r = _poser(LEURRES_MAIL, base, dest)                           # mise à jour suivante
     assert r.returncode == 0 and dest.exists() and not attente.exists()
     r = _poser(LEURRES_MAIL, base, dest, faux)                     # déjà validé, même contenu : rien n'attend
     assert r.returncode == 0 and not r.stderr and dest.exists() and not attente.exists()
@@ -247,12 +247,39 @@ def test_nft_impossible_ici_puis_valide(tmp_path):
     r = _poser(nouveau, base, dest, faux)                          # contenu nouveau : l'ancien, validé, reste actif
     assert dest.read_text(encoding="utf-8") == LEURRES_MAIL.read_text(encoding="utf-8") and attente.exists()
     r = _poser(nouveau, base, dest)
-    assert "écarté" in r.stderr and not dest.exists() and not attente.exists()
+    assert "écarté" in r.stderr and not attente.exists()                    # l'ancien, encore valide, reste actif
+    assert dest.read_text(encoding="utf-8") == LEURRES_MAIL.read_text(encoding="utf-8")
 
 
-def test_unite_de_validation_au_demarrage():
-    unite = (LIVREE.parent.parent / "systemd" / "secubox-fragment-leurres.service").read_text(encoding="utf-8")
-    assert "ConditionPathExists=/etc/nftables.d/secubox-leurres-mail.nft.non-verifie" in unite
-    assert "Before=nftables.service" in unite and "ReadWritePaths=/etc/nftables.d\n" in unite
-    postinst = (LIVREE.parent.parent / "debian" / "postinst").read_text(encoding="utf-8")
-    assert "/usr/sbin/secubox-fragment-leurres || true" in postinst
+def test_postinst_seule_appelante_aucune_unite():
+    racine = LIVREE.parent.parent
+    assert "/usr/sbin/secubox-fragment-leurres || true" in (racine / "debian" / "postinst").read_text(encoding="utf-8")
+    assert not list((racine / "systemd").glob("*fragment*"))
+    assert "fragment-leurres.service" not in (racine / "debian" / "rules").read_text(encoding="utf-8")
+
+
+@sans_nft
+def test_validation_sur_une_copie(tmp_path):
+    """P2 : pendant chaque `nft -c`, le candidat n'est pas dans nftables.d ; il n'y entre qu'ensuite, par renommage."""
+    import shutil
+    base = _base_locale(tmp_path)
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    journal = tmp_path / "vu"
+    faux = tmp_path / "bin"
+    faux.mkdir()
+    (faux / "nft").write_text(f'#!/bin/sh\nls "{tmp_path}/nftables.d" >> "{journal}"\nexec {shutil.which("nft")} "$@"\n', encoding="utf-8")
+    (faux / "nft").chmod(0o755)
+    r = _poser(LEURRES_MAIL, base, dest, faux)
+    assert r.returncode == 0 and not r.stderr and journal.read_text(encoding="utf-8") == ""
+    assert [f.name for f in (tmp_path / "nftables.d").iterdir()] == [dest.name]
+
+
+@sans_nft
+def test_fragment_actif_devenu_refuse_est_retire(tmp_path):
+    base = _base_locale(tmp_path)
+    mauvais = tmp_path / "mauvais"
+    mauvais.write_text("table inet filter { casse\n", encoding="utf-8")
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    dest.write_text(mauvais.read_text(encoding="utf-8"), encoding="utf-8")
+    r = _poser(mauvais, base, dest)
+    assert r.returncode == 0 and "écarté" in r.stderr and not dest.exists()

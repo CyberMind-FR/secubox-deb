@@ -19,9 +19,8 @@ override_dh_auto_install:
 	install -D -m 644 systemd/secubox-tcp-etats.service $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.service
 	install -D -m 644 systemd/secubox-tcp-etats.timer $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.timer
 
-	# Fragment nftables des leurres de messagerie (#3924) : valide par la postinst, ou au demarrage.
+	# Fragment nftables des leurres de messagerie (#3924) : valide par la postinst.
 	install -m 755 sbin/secubox-fragment-leurres $(CURDIR)/debian/secubox-hardening/usr/sbin/
-	install -D -m 644 systemd/secubox-fragment-leurres.service $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-fragment-leurres.service
 
 	# Install API
 	cp -r api/* $(CURDIR)/debian/secubox-hardening/usr/lib/secubox/hardening/api/
@@ -55,4 +54,3 @@ override_dh_auto_install:
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening
 	dh_installsystemd --name=secubox-tcp-etats secubox-tcp-etats.timer
-	dh_installsystemd --no-start --name=secubox-fragment-leurres secubox-fragment-leurres.service
