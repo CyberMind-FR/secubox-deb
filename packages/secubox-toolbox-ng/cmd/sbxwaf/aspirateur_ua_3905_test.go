@@ -16,7 +16,7 @@ const uaAspirateur3905 = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 func TestAspirateurUABanni3905(t *testing.T) {
 	r := LoadRules(corpusLivre)
 	cat, _, mode, hit := r.MatchModes("GET", "/gandalf/secubox-deb/src/commit/d59ce53152e921324d295db78301095a373d95b1/packages", "", "", uaAspirateur3905, true)
-	if !hit || cat != "aspirateur_ua" || mode != "block" {
+	if !hit || cat != "aspirateur_ua" || mode != "escalate" {
 		t.Fatalf("aspirateur non bloqué : cat=%q mode=%q hit=%v", cat, mode, hit)
 	}
 	if seuil, duree := r.ParamsBan("aspirateur_ua"); seuil != 1 || duree != 168*time.Hour {
