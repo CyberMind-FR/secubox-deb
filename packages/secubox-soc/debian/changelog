@@ -1,3 +1,10 @@
+secubox-soc (1.13.1-1~trixie1) trixie; urgency=medium
+
+  * Guardian, « Campagnes en cours » : âge du relevé ; cartes-campagnes.js à
+    l'identique de secubox-waf-ng 1.44.1 (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 15:10:00 +0100
+
 secubox-soc (1.13.0-1~trixie1) trixie; urgency=medium
 
   * Guardian : bloc « Campagnes en cours » (ref #3919) : 4 populations

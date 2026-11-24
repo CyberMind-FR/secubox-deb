@@ -225,7 +225,7 @@
   function rendCamps(r){
     var z=el('campagnes'),C=window.SbxCartes,R=window.SbxReperes;
     if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
-    var k=C.cle(r);if(k===CAMP_CLE) return;
+    var k=C.cle(r);if(k===CAMP_CLE){C.majAge(z,r);return;}
     CAMP_CLE=k;C.synthese(document,R,z,r,4);
   }
   function chargeCamps(force){
