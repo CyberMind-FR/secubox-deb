@@ -11,6 +11,23 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 (17:00) — WAF 1.45.0 en production : bans reposés, leurres mail, campagnes à rotation en observation
+
+- **PR #3931 (intégration #3919, #3924, #3930), déployé** : gk2 waf-ng 1.45.0, toolbox-ng 0.20.0, soc 1.13.2 ; gk3 ai 2.3.2.
+  hardening 1.7.1 construit mais **pas publié** : il remplacerait `/etc/nftables.conf` de gk2, qui n'en a pas besoin.
+- **Bans (#3930)** : cause de l'affichage « 0 blocage actif, waf_arrete » corrigée (repose par lots, sans DNS, éléments
+  manquants seulement). Contrôle après redémarrage : 11 226 bans attendus, 0 manquant. Levées inscrites au journal ;
+  8 visiteurs bannis à tort levés par `wafctl unban-liste` ; les 230 adresses de l'aspirateur restent bannies.
+- **Campagnes à rotation (#3919)** : détecteur en `propose`, il ne bannit pas. Le drop-in de gk2 masque l'ExecStart de
+  l'unité : les deux drapeaux y ont été ajoutés à la main. Relecture du propriétaire à 48 h, puis décision.
+- **Leurres de messagerie (#3924)** : armés en observation ; la redirection ne vise que les adresses publiques et tombe
+  quand le conteneur mail démarre. Aucune sonde reçue au moment de l'écriture.
+- Trouvé à l'intégration : un verdict de rotation pouvait changer la catégorie d'un ban plus long, qui n'était plus prolongé.
+- Couture : 503 par intermittence, 35 à 45 s au total ; le paquet redémarre le WAF **deux fois** par montée (prévu : une).
+- Aussi publiés plus tôt : lot 1 bis (PR #3929) et fenêtre planifiée du mail 2.17.0 (PR #3927, inactive, essai à faire).
+- **Rectificatif** de l'entrée de 14:30 : la limite mémoire d'actord n'était pas la cause de son démarrage lent ; ce sont
+  les parcours de la liste libre de bbolt (corrigé en 1.44.1).
+
 ## 2026-11-24 (14:30) — populations d'attaquants et campagnes lisibles en ligne (lot 1 de #3919)
 
 - **PR #3926, déployé** : gk2 waf-ng 1.44.0, toolbox-ng 0.19.0, soc 1.13.0 ; gk3 ai 2.3.0. Cartes de campagnes dans
