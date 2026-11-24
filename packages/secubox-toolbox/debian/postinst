@@ -184,11 +184,11 @@ SBXRLEVEL
     # the /waf/ + /soc/ pages on gk2 2026-06-10).  Per-module log files +
     # subdirs inside keep their own restricted perms.
     #
-    # PROPRIÉTÉ ET GROUPE (#2490). Le propriétaire reste secubox-toolbox (le service y crée ses journaux), mais le GROUPE est `secubox` et le mode 0775 : la rotation
-    # générale de secubox-core tourne sous `su secubox secubox` et doit pouvoir créer ses `.1.gz` dans ce dossier. Avec secubox-toolbox:secubox-toolbox 0755, elle ne
-    # le pouvait plus (« error creating output file … Permission denied »), logrotate.service échouait chaque nuit et les journaux ne tournaient plus. 0775 reste
-    # traversable par tous (>= 0755) ; logrotate accepte un dossier ouvert au groupe puisque la règle porte `su`.
-    install -d -m 0775 -o secubox-toolbox -g secubox /var/log/secubox
+    # Plus de 0775 secubox-toolbox (#2490) : la rotation de secubox-core tourne
+    # désormais en `su root root` (#3826), et réattribuer le parent faisait
+    # re-chowner récursivement tout /var/log/secubox par systemd (#3916).
+    # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
+    [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
 
     # 4a. Phase 11.B (#507) — make /usr/share/secubox/www traversable so
     # the FastAPI StaticFiles mount can serve /toolbox/social.{css,js} +
@@ -374,14 +374,21 @@ done
     #   "Could not resolve host" (3-week silent regression found
     #   2026-06-08).
     if [ -d /etc/unbound/unbound.conf.d ]; then
+      # Seulement si un fichier CHANGE (#3916) : le restart inconditionnel coupait le DNS
+      # de tout le réseau à chaque mise à jour de toolbox (plus d'une minute sur gk2).
+      _ub_change=0
       for f in 99-secubox-wg.conf 98-secubox-lxc.conf; do
-        if [ -f "/usr/share/secubox/toolbox/unbound/$f" ]; then
+        if [ -f "/usr/share/secubox/toolbox/unbound/$f" ] && \
+           ! cmp -s "/usr/share/secubox/toolbox/unbound/$f" "/etc/unbound/unbound.conf.d/$f"; then
           install -m 0644 "/usr/share/secubox/toolbox/unbound/$f" \
             "/etc/unbound/unbound.conf.d/$f"
+          _ub_change=1
         fi
       done
-      if systemctl is-active --quiet unbound.service 2>/dev/null; then
-        systemctl restart unbound.service 2>/dev/null || true
+      # fast_reload : Unbound continue de répondre pendant la relecture (#3850). Repli sur
+      # restart seulement s'il le refuse (nouvelle interface d'écoute, non rechargeable à chaud).
+      if [ "$_ub_change" = 1 ] && systemctl is-active --quiet unbound.service 2>/dev/null; then
+        unbound-control fast_reload >/dev/null 2>&1 || systemctl restart unbound.service 2>/dev/null || true
       fi
     fi
 

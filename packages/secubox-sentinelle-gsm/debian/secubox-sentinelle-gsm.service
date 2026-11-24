@@ -53,7 +53,8 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 MemoryDenyWriteExecute=true
 SystemCallFilter=@system-service
 CapabilityBoundingSet=
-LogsDirectory=secubox
+# Pas de LogsDirectory=secubox (#3916) : systemd re-chownerait récursivement tout
+# /var/log/secubox (journaux du WAF compris) au démarrage. Le parent est root:root.
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 

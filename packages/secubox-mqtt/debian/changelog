@@ -1,3 +1,10 @@
+secubox-mqtt (2.7.4-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-mqtt (2.7.3-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte

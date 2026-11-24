@@ -1,3 +1,10 @@
+secubox-mesh (2.1.2-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-mesh (2.1.1-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

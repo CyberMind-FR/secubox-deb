@@ -1,3 +1,10 @@
+secubox-soc-gateway (1.1.5-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-soc-gateway (1.1.4-1~bookworm1) bookworm; urgency=low
 
   * Commentaire de severite numerique sans reference a Suricata (#2326).

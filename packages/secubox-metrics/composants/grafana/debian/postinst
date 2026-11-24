@@ -11,7 +11,8 @@ case "$1" in
 
         install -d -o secubox -g secubox -m 755 /etc/secubox
         install -d -m 0755 -o secubox -g secubox /var/lib/secubox/grafana
-        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+        # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
+        [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
 
         # Seed config from example if no live config exists
         if [ ! -f /etc/secubox/grafana.toml ] && [ -f /etc/secubox/grafana.toml.example ]; then

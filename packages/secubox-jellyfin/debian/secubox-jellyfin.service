@@ -35,7 +35,8 @@ RestartSec=5
 # (which runs NoNewPrivileges=yes). Matches secubox-picobrew.
 NoNewPrivileges=no
 ProtectHome=read-only
-LogsDirectory=secubox
+# Pas de LogsDirectory=secubox (#3916) : systemd re-chownerait récursivement tout
+# /var/log/secubox (journaux du WAF compris) au démarrage. Le parent est root:root.
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox /var/log/secubox
 

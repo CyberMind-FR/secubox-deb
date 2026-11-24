@@ -25,7 +25,8 @@ RestartSec=5
 # deleguer a lyrionctl en root : /data/lxc/<nom> appartient a l'idmap du
 # conteneur et n'est pas meme traversable par `secubox`.
 NoNewPrivileges=false
-LogsDirectory=secubox
+# Pas de LogsDirectory=secubox (#3916) : systemd re-chownerait récursivement tout
+# /var/log/secubox (journaux du WAF compris) au démarrage. Le parent est root:root.
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 

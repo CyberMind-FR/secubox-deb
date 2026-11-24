@@ -4,5 +4,9 @@ set -e
 for _s in /usr/lib/secubox/health/maintscripts/*.postinst; do
   [ -f "$_s" ] && { sh "$_s" "$@" || echo "health : postinst de $(basename "$_s") en échec" >&2; }
 done
+if [ "$1" = configure ]; then
+    [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
+    [ -e /var/log/secubox/watchdog.log ] || install -m 0640 -o secubox -g secubox /dev/null /var/log/secubox/watchdog.log  # #3916 : le service ne peut pas créer dans le parent root
+fi
 #DEBHELPER#
 exit 0

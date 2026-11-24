@@ -15,9 +15,8 @@ case "$1" in
         chmod 700 /var/lib/secubox/soc-gateway
 
         # Ensure log directory exists with correct permissions
-        mkdir -p /var/log/secubox
-        chown root:adm /var/log/secubox
-        chmod 0755 /var/log/secubox
+        # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
+        [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
 
         # Create config directory
         mkdir -p /etc/secubox

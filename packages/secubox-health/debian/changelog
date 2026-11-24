@@ -1,3 +1,10 @@
+secubox-health (1.4.2-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-health (1.4.1-1~trixie1) trixie; urgency=medium
 
   * Réparer : relance aussi la minuterie qui déclenche l'unité si elle est

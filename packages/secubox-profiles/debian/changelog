@@ -1,3 +1,10 @@
+secubox-profiles (0.29.1-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-profiles (0.29.0-1~trixie1) trixie; urgency=medium
 
   * Nouvelle lecture GET /api/v1/profiles/module/{id} (require_jwt) : état

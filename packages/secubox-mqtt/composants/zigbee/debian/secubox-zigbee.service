@@ -35,7 +35,8 @@ RestartSec=5
 # specific scripts, and ProtectSystem + ReadWritePaths still apply
 # to the python process itself.
 NoNewPrivileges=false
-LogsDirectory=secubox
+# Pas de LogsDirectory=secubox (#3916) : systemd re-chownerait récursivement tout
+# /var/log/secubox (journaux du WAF compris) au démarrage. Le parent est root:root.
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 

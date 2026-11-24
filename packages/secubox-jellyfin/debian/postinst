@@ -15,7 +15,8 @@ case "$1" in
         [ -d /etc/secubox ] || install -d -m 0755 -o secubox -g secubox /etc/secubox
         install -d -m 0755 -o secubox -g secubox /var/lib/secubox
         install -d -m 0755 -o secubox -g secubox /var/lib/secubox/jellyfin
-        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+        # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
+        [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
         # /var/cache/secubox parent stays root:0755 (shared); own only the leaf.
         [ -d /var/cache/secubox ] || install -d -m 0755 /var/cache/secubox
         install -d -m 0755 -o secubox -g secubox /var/cache/secubox/jellyfin

@@ -7,6 +7,8 @@ case "$1" in
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
+    [ -e /var/log/secubox/repairs.log ] || install -m 0640 -o secubox -g secubox /dev/null /var/log/secubox/repairs.log  # #3916 : le service ne peut pas créer dans le parent root
     systemctl daemon-reload
     # Le standalone secubox-hub.service (:8001) est un VESTIGE : le module
     # `hub` est servi par secubox-aggregator (aggregator.toml) et la route
