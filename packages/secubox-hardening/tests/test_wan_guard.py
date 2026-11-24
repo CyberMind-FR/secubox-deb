@@ -7,6 +7,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 _spec = importlib.util.spec_from_file_location(
     "wan_guard", Path(__file__).parent.parent / "api" / "wan_guard.py")
 wg = importlib.util.module_from_spec(_spec)
@@ -118,7 +120,102 @@ def test_leurres_de_messagerie_par_redirection_seulement():
     locaux, publics = (set(map(int, m.split(","))) for m in re.findall(r"\{([\d, ]+)\}", regles[0]))
     assert locaux == {18025, 18465, 18587, 18993, 18995} <= wg.LEURRES
     assert publics == {25, 465, 587, 993, 995}
-    assert "table inet filter" in texte and "flush" not in texte
-    # Livrée, mais jamais chargée par la postinst : elle AJOUTE une règle, la recharger la doublerait.
-    assert "secubox-leurres-mail.nft" in (racine / "debian" / "rules").read_text(encoding="utf-8")
-    assert "secubox-leurres-mail" not in (racine / "debian" / "postinst").read_text(encoding="utf-8")
+    assert "flush chain inet filter leurres_mail" in texte and texte.count("flush ") == 1   # sa chaîne, rien d'autre
+    rules = (racine / "debian" / "rules").read_text(encoding="utf-8")
+    assert "usr/share/secubox/hardening/secubox-leurres-mail.nft" in rules        # jamais conffile dans /etc/nftables.d
+    assert "etc/nftables.d/secubox-leurres-mail.nft" not in rules
+
+
+def _nft_reel():
+    import shutil
+    import subprocess
+    if not shutil.which("nft") or not shutil.which("unshare"):
+        return False
+    return subprocess.run(["unshare", "-rn", "nft", "list", "ruleset"], capture_output=True, timeout=20).returncode == 0
+
+
+sans_nft = pytest.mark.skipif(not _nft_reel(), reason="nft ou unshare -rn indisponible")
+LEURRES_MAIL = LIVREE.parent / "secubox-leurres-mail.nft"
+
+
+def _base_locale(tmp_path):
+    """La base livrée, ses trois inclusions ramenées sous tmp_path."""
+    texte = BASE.read_text(encoding="utf-8")
+    for d, sous in (("/etc/secubox/hardening/nft-input-trust.d", "trust"), ("/etc/secubox/hardening/nft-site.d", "site"),
+                    ("/etc/nftables.d", "nftables.d")):
+        (tmp_path / sous).mkdir()
+        assert d in texte
+        texte = texte.replace(d, str(tmp_path / sous))
+    base = tmp_path / "nftables.conf"
+    base.write_text(texte, encoding="utf-8")
+    return base
+
+
+@sans_nft
+def test_leurres_de_messagerie_valides_et_rejouables(tmp_path):
+    """I6, M7 : vrai nft ; base + fragment acceptés, le fragment rejoué trois fois ne double ni règle ni saut."""
+    import subprocess
+    base = _base_locale(tmp_path)
+    (tmp_path / "nftables.d" / LEURRES_MAIL.name).write_text(LEURRES_MAIL.read_text(encoding="utf-8"), encoding="utf-8")
+    r = subprocess.run(["unshare", "-rn", "sh", "-ec",
+                        'nft -c -f "$1"; nft -f "$1"; nft -f "$2"; nft -f "$2"; nft list chain inet filter leurres_mail; '
+                        'nft list chain inet filter input', "sh", str(base), str(LEURRES_MAIL)],
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.count("ct status dnat") == 1 and r.stdout.count("jump leurres_mail") == 1
+
+
+@sans_nft
+def test_leurres_de_messagerie_sans_base_inertes(tmp_path):
+    """Base plus ancienne (pas de saut) : accepté, sans effet."""
+    import subprocess
+    r = subprocess.run(["unshare", "-rn", "nft", "-c", "-f", str(LEURRES_MAIL)], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+
+
+def _poser(src, base, dest, chemin_nft=None):
+    """La fonction de la postinst, extraite telle quelle."""
+    import os
+    import subprocess
+    postinst = (LIVREE.parent.parent / "debian" / "postinst").read_text(encoding="utf-8")
+    fonction = postinst[postinst.index("poser_fragment_leurres() {"):]
+    fonction = fonction[:fonction.index("\n}\n") + 3]
+    env = dict(os.environ)
+    if chemin_nft:
+        env["PATH"] = f"{chemin_nft}:{env['PATH']}"
+    cmd = ["bash", "-ec", fonction + '\nposer_fragment_leurres "$1" "$2" "$3"', "bash", str(src), str(base), str(dest)]
+    return subprocess.run(([] if chemin_nft else ["unshare", "-rn"]) + cmd, capture_output=True, text=True, timeout=30, env=env)
+
+
+@sans_nft
+def test_postinst_pose_le_fragment_valide(tmp_path):
+    base = _base_locale(tmp_path)
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    for _ in range(2):
+        r = _poser(LEURRES_MAIL, base, dest)
+        assert r.returncode == 0 and not r.stderr, r.stderr
+        assert dest.read_text(encoding="utf-8") == LEURRES_MAIL.read_text(encoding="utf-8")
+
+
+@sans_nft
+def test_postinst_ecarte_un_fragment_refuse(tmp_path):
+    """I6 : jamais un pare-feu cassé au démarrage."""
+    import subprocess
+    base = _base_locale(tmp_path)
+    mauvais = tmp_path / "mauvais"
+    mauvais.write_text("table inet filter { pas du nft }\n", encoding="utf-8")
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    r = _poser(mauvais, base, dest)
+    assert r.returncode == 0 and "écarté" in r.stderr and not dest.exists()
+    assert (tmp_path / "nftables.d" / "secubox-leurres-mail.nft.rejete").exists()
+    assert subprocess.run(["unshare", "-rn", "nft", "-c", "-f", str(base)], capture_output=True, timeout=30).returncode == 0
+
+
+@sans_nft
+def test_postinst_base_deja_refusee(tmp_path):
+    """Une base déjà refusée n'est pas imputée au fragment : il n'est pas posé, et c'est dit."""
+    base = _base_locale(tmp_path)
+    (tmp_path / "nftables.d" / "autre.nft").write_text("n'importe quoi\n", encoding="utf-8")
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    r = _poser(LEURRES_MAIL, base, dest)
+    assert r.returncode == 0 and "sans rapport" in r.stderr and not dest.exists()

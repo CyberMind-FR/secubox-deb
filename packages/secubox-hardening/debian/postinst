@@ -1,6 +1,29 @@
 #!/bin/bash
 set -e
 
+# Fragment des leurres de messagerie (#3924). Un fragment refusé ferait refuser TOUT /etc/nftables.conf au démarrage :
+# il n'est posé que si l'ensemble est déjà valide, et écarté (.rejete) si l'ensemble ne l'est plus avec lui. Jamais
+# chargé ici : pris au prochain chargement de nftables.
+poser_fragment_leurres() {
+    local src="$1" base="$2" dest="$3"
+    [ -f "$src" ] && [ -f "$base" ] && command -v nft >/dev/null 2>&1 || return 0
+    if cmp -s "$src" "$dest" && nft -c -f "$base" >/dev/null 2>&1; then
+        return 0
+    fi
+    rm -f -- "$dest"
+    if ! nft -c -f "$base" >/dev/null 2>&1; then
+        echo "secubox-hardening: $base est refusé par nft -c, sans rapport avec les leurres de messagerie ; fragment $dest non posé" >&2
+        return 0
+    fi
+    install -D -m 644 "$src" "$dest"
+    if ! nft -c -f "$base" >/dev/null 2>&1; then
+        mv -f -- "$dest" "$dest.rejete"
+        echo "secubox-hardening: fragment refusé par nft -c, écarté en $dest.rejete ; le pare-feu reste valide sans lui" >&2
+        return 0
+    fi
+    rm -f -- "$dest.rejete"
+}
+
 case "$1" in
     configure)
         # Apply sysctl hardening on install. `sysctl --system`, jamais `-p` sur ce seul fichier (#3209) : il porte
@@ -63,6 +86,9 @@ PY
             fi
             rm -f "$tmp"
         fi
+
+        poser_fragment_leurres /usr/share/secubox/hardening/secubox-leurres-mail.nft "$BASE" \
+            /etc/nftables.d/secubox-leurres-mail.nft
 
         # Enable and start service
         systemctl daemon-reload
