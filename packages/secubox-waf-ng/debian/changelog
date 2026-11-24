@@ -1,3 +1,18 @@
+secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : détecteur de campagnes à rotation web (ref #3919), actif en
+    « propose » (--rotation propose --rotation-verdict differe) : campagnes
+    établies, comptées et écrites dans rotation-etat.json et l'audit, aucun
+    ban ni ligne de menace. « auto » : décision du propriétaire. Un seul
+    processus le porte (verrou rotation-etat.json.verrou).
+  * sbxwaf --rotation-rejeu : rejeu hors ligne sur des journaux nginx.
+  * Une vue de code de la forge (/x/y/src/branch/…/a.js) est une page, pas
+    une preuve de navigateur.
+  * AppArmor : verrou du détecteur, liste des sorties Tor de secubox-ipblock.
+  * Indices partagés : famille « rotation » neutre, jamais envoyée aux pairs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 20:00:00 +0100
+
 secubox-waf-ng (1.44.3-1~trixie1) trixie; urgency=medium
 
   * Page Modes : leurres de messagerie d'authwatch (ref #3924). submission,

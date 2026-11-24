@@ -89,13 +89,28 @@ def correlable(e: Evt) -> bool:
     return not (a.get("exclu_correlation") or a.get("local") or a.get("autotest")) and bool(e.ip_src)
 
 
-def _charger(db, debut, fin):
-    """Événements corrélables de la fenêtre, SANS les requêtes servies par le leurre de la box (`REDIRIGES`) : elles
-    ne sont preuve d'aucune règle (ni plusieurs sources, ni retour après ban : pas de boucle leurre → ban)."""
+def _bannies_rotation(db, maintenant):
+    """Adresses dont le dernier ban écrit par gk2 (7 j) est un ban de rotation (#3919) : `bans_actifs` ne porte pas de
+    famille, son apparition ou sa disparition n'est alors preuve de rien."""
+    dernier = dict(db.execute(
+        "SELECT ip_src, famille FROM evenements WHERE source = 'bans' AND ip_src IS NOT NULL AND horodatage >= ? "
+        "AND horodatage <= ? ORDER BY horodatage, id",
+        (iso(maintenant - timedelta(seconds=RETOUR_BAN_S)), iso(maintenant))))
+    return {ip for ip, f in dernier.items() if f == "rotation"}
+
+
+def _hors_preuve(e: Evt, rotation) -> bool:
+    return e.famille in regles.HORS_PREUVE or e.source == "bans_actifs" and e.ip_src in rotation
+
+
+def _charger(db, debut, fin, rotation=frozenset()):
+    """Événements corrélables de la fenêtre, SANS les requêtes servies par le leurre de la box ni les verdicts de
+    rotation (`HORS_PREUVE`) : ils ne sont preuve d'aucune règle (ni plusieurs sources, ni retour après ban : pas de
+    boucle leurre → ban)."""
     evts = [_evt(x) for x in db.execute(
         f"SELECT {_COLS} FROM evenements WHERE horodatage >= ? AND horodatage <= ? ORDER BY horodatage, id",
         (debut, fin))]
-    return [e for e in evts if correlable(e) and e.famille not in regles.REDIRIGES]
+    return [e for e in evts if correlable(e) and not _hors_preuve(e, rotation)]
 
 
 def _fin_ban(e: Evt):
@@ -111,7 +126,7 @@ def _fin_ban(e: Evt):
     return None
 
 
-def _contexte(db, maintenant):
+def _contexte(db, maintenant, rotation=frozenset()):
     """Faits de gk2 regardés au-delà de la fenêtre : fins de ban, membres des campagnes, blocs."""
     depuis = iso(maintenant - timedelta(seconds=RETOUR_BAN_S))
     fin = iso(maintenant)
@@ -121,7 +136,7 @@ def _contexte(db, maintenant):
     fins, membres = {}, {}
     for e in decisions:
         f = _fin_ban(e)
-        if f and f <= fin:
+        if f and f <= fin and not _hors_preuve(e, rotation):    # ban de rotation : pas une sanction
             fins.setdefault(e.ip_src, []).append((f, e))
         if e.famille == "campagne" and e.sous_famille:
             membres.setdefault(e.sous_famille, {}).setdefault(e.ip_src, e)
@@ -209,8 +224,9 @@ def correler(db, maintenant, fenetre_s=FENETRE_S, calme_s=CALME_S, clos_s=CLOS_S
         raise ValueError("horodatage sans fuseau")
     db.execute("BEGIN IMMEDIATE")
     try:
-        evts = _charger(db, iso(maintenant - timedelta(seconds=fenetre_s)), iso(maintenant))
-        ctx = _contexte(db, maintenant)
+        rotation = _bannies_rotation(db, maintenant)
+        evts = _charger(db, iso(maintenant - timedelta(seconds=fenetre_s)), iso(maintenant), rotation)
+        ctx = _contexte(db, maintenant, rotation)
         touches = []
         for regle in regles.REGLES:
             for c in regle(evts, ctx):

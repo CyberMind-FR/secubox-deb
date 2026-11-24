@@ -101,17 +101,44 @@ func (c *Crawlers) VerifieConclu(ip string) (string, bool) {
 	}
 	c.mu.Unlock()
 	nom, conclu := c.verifieSansCache(ip, a)
+	c.memoriser(ip, nom, conclu, now)
+	return nom, conclu
+}
+
+// VerifieSur est Verifie à TROIS états (#3919) : (domaine, true) robot vérifié ; ("", true) pas un robot ; ("", false) on ne sait pas (DNS en panne,
+// délai dépassé, adresse invalide). Un doute en mémoire est revérifié, et un doute n'est jamais mémorisé ici : rien ne change pour les autres appelants.
+func (c *Crawlers) VerifieSur(ip string) (string, bool) {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return "", false
+	}
+	a = a.Unmap()
+	ip = a.String()
+	now := c.now()
+	c.mu.Lock()
+	e, ok := c.cache[ip]
+	c.mu.Unlock()
+	if ok && now.Before(e.exp) && e.conclu {
+		return e.nom, true
+	}
+	nom, sur := c.verifieSansCache(ip, a)
+	if sur {
+		c.memoriser(ip, nom, true, now)
+	}
+	return nom, sur
+}
+
+func (c *Crawlers) memoriser(ip, nom string, conclu bool, now time.Time) {
 	ttl := crawlerTTLNegatif
 	if nom != "" {
 		ttl = crawlerTTLPositif
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.cache) >= crawlerCacheMax {
 		c.faireDeLaPlace(now)
 	}
 	c.cache[ip] = crawlerEntree{nom: nom, exp: now.Add(ttl), conclu: conclu}
-	c.mu.Unlock()
-	return nom, conclu
 }
 
 // faireDeLaPlace (c.mu tenu) : les entrées échues, sinon les négatives. Un robot connu n'est chassé que par d'autres robots connus : le perdre

@@ -19,6 +19,7 @@
 #   - rw   : /var/lib/secubox/waf/**      (journal des bans)
 #   - r    : /usr/share/GeoIP/**          (pays d'origine)
 #   - r    : /var/lib/GeoIP/GeoLite2-ASN.mmdb, /usr/share/secubox/waf/reseaux-classes.toml (réseau, #3919)
+#   - r    : /var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt (détecteur de rotation, #3919)
 #   - network inet, inet6 : upstream TCP connections + listener
 #   - network netlink raw + capability net_admin : nft (#1693)
 #
@@ -95,6 +96,14 @@
   /var/lib/secubox/          r,
   /var/lib/secubox/waf/      rw,
   /var/lib/secubox/waf/**    rw,
+
+  # ── Détecteur de rotation (#3919) ────────────────────────────────────────
+  # rotation-etat.json et rotation-navigateurs.bin (et leurs .tmp) : couverts
+  # par ** ci-dessus, l'audit par /var/log/secubox/waf/**. Le verrou « un seul
+  # processus » demande `k` : sans lui flock est refusé et le détecteur ne
+  # démarre pas. Liste des sorties Tor de secubox-ipblock, ce fichier seul.
+  /var/lib/secubox/waf/rotation-etat.json.verrou rwk,
+  "/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt" r,
 
   # ── Géolocalisation (pays d'origine des menaces) ────────────────────────
   /usr/share/GeoIP/          r,

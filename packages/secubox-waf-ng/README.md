@@ -449,7 +449,7 @@ pas) ; jamais un compte en clair ; effaçable sans risque, elle se refait. Un re
 `inactive` sans activité depuis 24 h. `rotation` d'une population de famille (`famille:…`) : 50 adresses, 80 % à trois
 tentatives ou moins, et une même cible pour la moitié des tentatives au moins. Jamais une adresse, un compte en clair ni un mot de
 passe. Sources facultatives, absentes sans erreur : `/run/secubox-authwatch/campagnes.json`,
-`/var/lib/secubox/waf/rotation-etat.json` (détecteur non livré dans ce lot), sbx-actord.
+`/var/lib/secubox/waf/rotation-etat.json` (détecteur de rotation, ci-dessous), sbx-actord.
 
 **Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
 `classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
@@ -462,6 +462,35 @@ pas dans la corrélation d'actord (`signatureDe`), donc ni dans la confiance, ni
 `secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une
 ACL de fichier, une ACL par défaut ouvrirait tous les fichiers à venir du dossier, et la traversée seule ouvrirait ses
 autres fichiers lisibles par tous. Accès à concevoir dans #3921 (copie publiée dans un dossier à part).
+
+### Détecteur de campagnes à rotation web (1.45.0)
+
+Une campagne à rotation fait tourner une même requête sur des milliers d'adresses louées, une à trois visites chacune : aucune
+ne franchit seule un seuil. sbxwaf la reconnaît à sa **signature** (navigateur déclaré exact, JA4, hôte) : 50 sources sans
+preuve de navigateur en 1 h, dont 80 % à trois pages ou moins et 60 % en `proxy_loue`/`hebergeur`. Sans base ASN : jamais.
+
+| Option | Livré | Sens |
+|---|---|---|
+| `--rotation` | `propose` | `off`, `propose` (tout est établi, compté, écrit ; **aucun ban, aucune ligne de menace**), `auto` |
+| `--rotation-verdict` | `differe` | `differe` : adresse jugée 10 s après une page servie, si aucune preuve (ressource, cookie, référent…) n'est venue d'elle, ni dans les 7 jours ; `immediat` |
+| `--rotation-etat` | `/var/lib/secubox/waf/rotation-etat.json` | état, verrou (`.verrou`) ; mémoire des navigateurs `rotation-navigateurs.bin` à côté (0640, condensés salés, 7 j) |
+| `--rotation-max-heure` | 1500 | verdicts par heure glissante |
+| `--rotation-sorties-tor` | `/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt` | jamais bannies ; illisible : `tor_garde: false` dans l'état |
+
+Seules les classes `proxy_loue` et `hebergeur` sont bannissables (24 h, `rotation:<8 hex>`) ; jamais une adresse privée ou
+protégée, un robot vérifié ou invérifiable, une sortie Tor, une source d'établissement. Passer en `auto` est une décision du
+propriétaire, à écrire dans l'unité **et** dans `conf/honeypot.conf` (miroir, testé). **Un seul processus** porte le détecteur :
+le verrou l'impose, un second sbxwaf le laisse désactivé et le dit dans son journal. Un verdict ne nourrit rien d'autre : ni actord,
+ni récidive, ni indices partagés, ni riposte de SecuBox AI, ni tentatives du SOC.
+
+**Rejeu hors ligne** (lecture seule, sans privilège, sans réseau ; rapport JSON sur la sortie) :
+
+```
+sbxwaf --rotation-rejeu [--rotation-rejeu-adresses] [--rotation-rejeu-sans-grace=false] copie/secubox-hosts.log*
+```
+
+Majorant (approximations dans le rapport). Ne pas donner `secubox-hosts.log` **et** les journaux par vhost : double compte.
+`suspects_faux_positifs` : seul `preuve_apres` informe ; `structurels` est nul par construction.
 
 ## Migration / cutover
 

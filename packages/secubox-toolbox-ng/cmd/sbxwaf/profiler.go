@@ -93,6 +93,11 @@ func construireProfils(r io.Reader) map[string]*AttackerProfile {
 		if json.Unmarshal(sc.Bytes(), &e) != nil || e.ClientIP == "" {
 			continue
 		}
+		// #3919 : une ligne du détecteur de rotation est un VERDICT, pas une sonde. La compter ferait entrer une adresse dans le ban de campagne (seuil de
+		// sondes) et réunirait toutes les adresses jugées en une fausse campagne.
+		if strings.HasPrefix(e.Category, "rotation:") {
+			continue
+		}
 		// Clé = JA4 quand il est présent (#1070 phase E) : l'empreinte TLS
 		// survit à la rotation d'IP, donc regroupe mieux un même attaquant que
 		// l'IP seule. Repli sur l'IP sinon.

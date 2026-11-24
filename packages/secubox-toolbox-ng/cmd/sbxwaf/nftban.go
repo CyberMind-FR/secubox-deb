@@ -253,7 +253,12 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 	defer b.poseMu.Unlock()
 	set := b.setDe(a)
 	secs, expire := int64(duree.Seconds()), now.Add(duree).Unix()
+	aussiLong := false
 	if actif, ok := b.store.Actif(ip, now.Unix()); ok {
+		// #3919 : un verdict de rotation ne remplace pas la ligne d'un ban au moins aussi long d'une autre famille. La réévaluation lit la dernière
+		// catégorie, et `rotation:` n'est jamais prolongé : un leurre de 7 jours perdrait sa gradation.
+		aussiLong = (actif.Expires == 0 || actif.Expires >= expire) && strings.HasPrefix(cat, "rotation:") &&
+			!strings.HasPrefix(actif.Category, "rotation:")
 		switch {
 		case actif.Expires == 0:
 			expire = 0
@@ -298,7 +303,7 @@ func (b *NftBanner) banAt(ip, cat, sev string, duree time.Duration, now time.Tim
 	b.mu.Lock()
 	b.dernierBan = reel
 	b.mu.Unlock()
-	if b.store != nil {
+	if b.store != nil && !aussiLong {
 		_ = b.store.Append(BanRecord{
 			IP: ip, Category: cat, Severity: sev,
 			At: now.Unix(), Expires: expire, Action: "ban",

@@ -952,3 +952,25 @@ def test_bases_geoip_ordre_de_repli(monkeypatch, tmp_path):
     cache = tmp_path / "p.json"
     assert P.rafraichir(str(tmp_path), str(cache), str(tmp_path / "absent.json"), MAINTENANT) is True
     assert P.lire_cache(str(cache))["manques"] == ["base_pays"]
+
+
+# ── état réel du détecteur de rotation (tâche 12) : fichier écrit par le code Go, voir TestRotationEtatReference ─────────
+
+ETAT_GO = Path(__file__).resolve().parents[4] / "secubox-toolbox-ng" / "cmd" / "sbxwaf" / "testdata" / "rotation-etat-propose.json"
+
+
+def test_rotation_etat_reel_du_detecteur_en_propose():
+    """`propose` : rien n'est banni ni écrit au journal ; la campagne vient de l'état seul et s'affiche « observee »,
+    même quand des adresses auraient été bannies (`a_bannir`)."""
+    etat = json.loads(ETAT_GO.read_text())
+    c = etat["campagnes"][0]
+    assert etat["mode"] == "propose" and c["bannies"] == 0 and c["a_bannir"] == 2
+    ident = "rotation:" + c["signature"][:8]
+    p = _pop(_calc([], maintenant=etat["genere_le"] + 600, rotation=P._liste(etat, "campagnes")), ident)
+    assert p["etat"] == "observee" and p["rotation"] is True and p["famille"] == "collecte" and p["bans"] == 0
+    assert p["adresses"] == p["actives_24h"] == c["sources"] == 63 and (p["une"], p["le3"]) == (100, 100)
+    assert p["classes"] == c["classes"] == {"acces": 1, "hebergeur": 15, "proxy_loue": 82}
+    assert p["nom_cible"] == "forge.exemple.test" and (p["premier"], p["dernier"]) == (c["etablie_le"], c["dernier"])
+    # un jour plus tard sans nouvelle source : inactive
+    vieux = _pop(_calc([], maintenant=etat["genere_le"] + 2 * 86400, rotation=P._liste(etat, "campagnes")), ident)
+    assert vieux["etat"] == "inactive"

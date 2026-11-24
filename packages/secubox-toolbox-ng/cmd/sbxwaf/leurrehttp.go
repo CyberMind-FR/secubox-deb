@@ -438,6 +438,7 @@ func (l *LeurreHTTP) LeurrerLe404(resp *http.Response) bool {
 		l.theatre.Avance(l.theatre.Cle(clientIP(r), signatureEnTetes(r)), famille, alea)
 	}
 
+	exclureDuVerdict(r.Context()) // #3919 : un 404 maquillé n'ouvre pas de verdict de rotation
 	resp.StatusCode = http.StatusOK
 	resp.Status = "200 OK"
 	resp.Body = io.NopCloser(strings.NewReader(corps))

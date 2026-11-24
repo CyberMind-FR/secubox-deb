@@ -1,3 +1,11 @@
+secubox-ai (2.3.2-1~trixie1) trixie; urgency=medium
+
+  * Corrélateur, dossiers et riposte : un verdict de rotation de gk2
+    (rotation:<8 hex>) n'est ni tentative, ni preuve, ni récidive ; un ban de
+    rotation échu n'est pas une sanction (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 17:30:00 +0100
+
 secubox-ai (2.3.1-1~trixie1) trixie; urgency=medium
 
   * Radar, populations : âge du relevé (refait toutes les 30 min sur gk2),
