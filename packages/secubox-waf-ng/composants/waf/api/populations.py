@@ -361,6 +361,10 @@ class _Agregat:
         self.complet = True
 
 
+#: Leurres de messagerie d'authwatch (#3924) : leurs lignes de gravité `audit` (compte réel, mode observer) ne font pas un
+#: attaquant — ce peut être le téléphone du propriétaire. Seules les autres (ban d'un compte inexistant) comptent.
+LEURRES_MAIL = ("auth_smtp:leurre", "auth_imap:leurre")
+
 # La catégorie lue SANS décoder la ligne : dans du JSON, un guillemet venu d'un attaquant est toujours échappé (`\\"`),
 # `"category":"` sans barre oblique ne peut donc être que la vraie clé.
 _CATEGORIE = re.compile(r'"category": ?"([^"\\]*)"')
@@ -408,7 +412,7 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
         genre = utiles.get(cat)
         if genre is None:
             genre = _utile(cat)
-        if not genre:
+        if not genre or (e.get("severity") == "audit" and cat.startswith(LEURRES_MAIL)):
             continue
         t = _horodatage(e.get("timestamp"))
         if t is None or t < debut or t > fin:

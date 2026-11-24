@@ -142,6 +142,17 @@ def test_profileur_population_si_10_adresses():
     assert not any(x["id"] == "profileur:44ee55ff66007788" for x in r["populations"])
 
 
+def test_leurres_de_messagerie_audit_hors_populations():
+    """#3924 : un compte réel (téléphone du propriétaire) ou le mode observer ne fait pas un attaquant ; un ban, si."""
+    cats = ("auth_smtp:leurre", "auth_imap:leurre", "auth_imap:leurre_pop3")
+    lignes = [_ligne(f"8.{i}.0.1", c, host="smtp", path="gk2…", tool="authwatch", severity="audit")
+              for i, c in enumerate(cats)]
+    assert _calc(lignes)["populations"] == []
+    lignes += [_ligne(f"9.{i}.0.1", c, host="smtp", path="…", tool="authwatch", action="banned") for i, c in enumerate(cats)]
+    lignes += [_ligne("9.9.0.1", "auth_smtp:sasl_failed", host="smtp", path="x", severity="audit")]   # hors leurres : compte
+    assert _pop(_calc(lignes), "famille:messagerie")["adresses"] == 4
+
+
 def test_autre_exclu():
     r = _calc([_ligne("8.1.0.1", "sqli"), _ligne("8.2.0.1", "xss")])
     assert r["populations"] == []
