@@ -1,3 +1,11 @@
+secubox-ad-guard (1.33.6-1~trixie1) trixie; urgency=medium
+
+  * Contrôleur, verbes quarantaine/evasion : un geste qui ne change rien
+    (adresse déjà levée, entrée identique) répond « inchange » sans rendu ni
+    rechargement d'Unbound (11-36 s chaque minute sur gk2) (ref #3910).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 07:30:00 +0100
+
 secubox-ad-guard (1.33.5-1~trixie1) trixie; urgency=medium
 
   * adult-sync (ref #3893) : exemptions adultes en forme compacte, une ligne
