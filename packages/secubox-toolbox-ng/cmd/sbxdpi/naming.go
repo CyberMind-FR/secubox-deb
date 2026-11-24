@@ -51,12 +51,16 @@ import (
 // Bornes. Toutes les tables sont plafonnées : un balayage qui touche des
 // milliers d'adresses ne doit pas faire enfler le démon.
 const (
-	nomsCap      = 4000            // adresses nommées gardées en mémoire
-	ptrCap       = 1500            // résultats de DNS inverse mémorisés
-	ptrFileCap   = 256             // file d'attente de résolution
-	ptrTimeout   = 2 * time.Second // au-delà, l'adresse reste anonyme
-	ouiPath      = "/usr/share/ieee-data/oui.txt"
-	voisinsEvery = 90 * time.Second
+	nomsCap    = 4000            // adresses nommées gardées en mémoire
+	ptrCap     = 1500            // résultats de DNS inverse mémorisés
+	ptrFileCap = 256             // file d'attente de résolution
+	ptrTimeout = 2 * time.Second // au-delà, l'adresse reste anonyme
+	// #3899 : un résultat vieillit. Sans durée de vie, la table plafonnée finissait pleine pour toujours et
+	// plus aucune réponse n'y entrait : chaque relevé redemandait les mêmes adresses (750 PTR/min sur gk2).
+	ptrTTLPositif = 24 * time.Hour
+	ptrTTLNegatif = 1 * time.Hour
+	ouiPath       = "/usr/share/ieee-data/oui.txt"
+	voisinsEvery  = 90 * time.Second
 )
 
 // identite : un nom, et d'où il vient. La source n'est pas décorative — c'est
@@ -75,6 +79,11 @@ type nommeur struct {
 	observe map[string]string // IP → nom vu dans un flux (SNI/DNS)
 	voisins map[string]string // IP → constructeur, via ARP + OUI
 	ptr     map[string]string // IP → nom inverse ("" = résolu, sans résultat)
+	ptrExp  map[string]time.Time
+	attente map[string]bool // adresses déjà en file (#3899) : une seule mise en file tant qu'elles attendent
+
+	inverse func(ctx context.Context, ip string) ([]string, error) // nil → résolveur du système
+	now     func() time.Time
 
 	aliasPath  string
 	aliasMtime int64
@@ -269,10 +278,81 @@ func (n *nommeur) Observe(ip, host string) {
 // demandePTR met une adresse en file. Non bloquant : si la file est pleine,
 // l'adresse reste anonyme ce tour-ci plutôt que de retarder un flux.
 func (n *nommeur) demandePTR(ip string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.attente[ip] {
+		return
+	}
 	select {
 	case n.file <- ip:
+		if n.attente == nil {
+			n.attente = map[string]bool{}
+		}
+		n.attente[ip] = true
 	default:
 	}
+}
+
+func (n *nommeur) maintenant() time.Time {
+	if n.now != nil {
+		return n.now()
+	}
+	return time.Now()
+}
+
+// ptrValide : la réponse mémorisée est encore bonne (sans date : posée telle quelle, gardée).
+// Appelant sous verrou (lecture au moins).
+func (n *nommeur) ptrValide(ip string, t time.Time) (string, bool) {
+	rev, ok := n.ptr[ip]
+	if !ok {
+		return "", false
+	}
+	if exp, daté := n.ptrExp[ip]; daté && !t.Before(exp) {
+		return "", false
+	}
+	return rev, true
+}
+
+// resoutPTR résout une adresse de la file et mémorise le résultat, même table pleine (#3899) :
+// les expirées partent d'abord, et si la table l'est encore elle repart de zéro.
+func (n *nommeur) resoutPTR(ctx context.Context, ip string) {
+	inverse := n.inverse
+	if inverse == nil {
+		inverse = net.DefaultResolver.LookupAddr
+	}
+	c, annule := context.WithTimeout(ctx, ptrTimeout)
+	noms, err := inverse(c, ip)
+	annule()
+	nom := ""
+	if err == nil && len(noms) > 0 {
+		nom = strings.TrimSuffix(noms[0], ".")
+	}
+	t := n.maintenant()
+	ttl := ptrTTLNegatif
+	if nom != "" {
+		ttl = ptrTTLPositif
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.attente, ip)
+	if _, deja := n.ptr[ip]; !deja && len(n.ptr) >= ptrCap {
+		for k, exp := range n.ptrExp {
+			if !t.Before(exp) {
+				delete(n.ptr, k)
+				delete(n.ptrExp, k)
+			}
+		}
+		if len(n.ptr) >= ptrCap {
+			n.ptr = map[string]string{}
+			n.ptrExp = map[string]time.Time{}
+		}
+	}
+	if n.ptrExp == nil {
+		n.ptrExp = map[string]time.Time{}
+	}
+	// On mémorise même l'ÉCHEC (chaîne vide) : sans cela, une adresse sans PTR serait redemandée à chaque snapshot.
+	n.ptr[ip] = nom
+	n.ptrExp[ip] = t.Add(ttl)
 }
 
 // BoucleInverse résout les adresses en attente. Un seul travailleur : le DNS
@@ -291,20 +371,7 @@ func (n *nommeur) BoucleInverse(ctx context.Context) {
 			n.relitVoisins()
 			n.relitAlias()
 		case ip := <-n.file:
-			c, annule := context.WithTimeout(ctx, ptrTimeout)
-			noms, err := net.DefaultResolver.LookupAddr(c, ip)
-			annule()
-			nom := ""
-			if err == nil && len(noms) > 0 {
-				nom = strings.TrimSuffix(noms[0], ".")
-			}
-			n.mu.Lock()
-			if len(n.ptr) < ptrCap {
-				// On mémorise même l'ÉCHEC (chaîne vide) : sans cela, une
-				// adresse sans PTR serait redemandée à chaque snapshot.
-				n.ptr[ip] = nom
-			}
-			n.mu.Unlock()
+			n.resoutPTR(ctx, ip)
 		}
 	}
 }
@@ -329,7 +396,7 @@ func (n *nommeur) Nomme(ip string) identite {
 	estSoi := n.soi[ip]
 	obs := n.observe[ip]
 	vois := n.voisins[ip]
-	rev, aPTR := n.ptr[ip]
+	rev, aPTR := n.ptrValide(ip, n.maintenant())
 	n.mu.RUnlock()
 
 	switch {
