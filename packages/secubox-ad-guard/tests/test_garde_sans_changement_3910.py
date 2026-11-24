@@ -41,3 +41,21 @@ def test_lever_present_recharge_toujours(monde, capsys):
     assert ctl("evasion", "lever", TV) == 0
     r = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert r["ok"] is True and not r.get("inchange") and "control" in _appels(monde)
+
+
+def test_rendu_interrompu_refait_meme_sans_changement(monde, capsys):
+    """Passage tué entre l'écriture de l'état et le rechargement : le marqueur force le rendu à la tentative suivante."""
+    declarer(monde)
+    racine = monde["tmp"] / "racine"
+    racine.mkdir(mode=0o700, exist_ok=True)
+    (racine / "garde-rendu-en-attente").write_text("")
+    assert ctl("evasion", "lever", "192.168.1.112") == 0
+    r = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert not r.get("inchange") and "control" in _appels(monde)
+    assert not (racine / "garde-rendu-en-attente").exists()      # rechargé : marqueur retiré
+
+
+def test_marqueur_retire_apres_geste_reussi(monde, capsys):
+    declarer(monde)
+    ctl("evasion", "poser", TV, "aa:bb:cc:dd:ee:01", "pubs.exemple.fr")
+    assert not (monde["tmp"] / "racine" / "garde-rendu-en-attente").exists()

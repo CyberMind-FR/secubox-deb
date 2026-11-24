@@ -53,6 +53,7 @@ CONTROL = os.environ.get("SECUBOX_ADGUARD_TV_CONTROL", "unbound-control")
 # Dossier de ROOT, hors de l'arbre de `secubox` (le postinst fait `chown -R secubox /var/lib/secubox/ad-guard`) : tout ce que root y écrit
 # (instantané, marque « désactivé », verrou) ne peut pas être détourné par un lien symbolique posé par un compte non privilégié.
 APPLIQUE = Path(os.environ.get("SECUBOX_ADGUARD_TV_APPLIQUE", "/var/lib/secubox-adguard-tv/applique.json"))
+RENDU_EN_ATTENTE = "garde-rendu-en-attente"   # #3910 : dans le dossier de root, à côté d'applique.json
 AUDIT = Path(os.environ.get("SECUBOX_ADGUARD_TV_AUDIT", "/var/log/secubox/audit.log"))
 
 
@@ -1263,11 +1264,18 @@ def garde(argv: list[str]) -> int:
         etat = dnstv.valider_etat(etat)
     except dnstv.ErreurTV as e:
         return _garde_refus(str(e))
-    if etat.get(cle, []) == avant.get(cle, []):
-        # #3910 : rien à changer (adresse déjà levée, entrée déjà posée à l'identique) → ni rendu ni rechargement
-        # d'Unbound (11-36 s sur gk2), que secubox-garde-passage relançait chaque minute.
+    try:
+        attente = dossier_root() / RENDU_EN_ATTENTE
+    except SystemExit as e:
+        return _garde_refus(str(e)[:200])
+    if etat.get(cle, []) == avant.get(cle, []) and not attente.exists():
+        # #3910 : rien à changer (adresse déjà levée, entrée déjà posée à l'identique) et aucun rendu interrompu
+        # → ni rendu ni rechargement d'Unbound (11-36 s sur gk2), que secubox-garde-passage relançait chaque minute.
         print(json.dumps({"ok": True, "verbe": verbe, "geste": geste, "inchange": True, cle: etat.get(cle, [])}))
         return 0
+    # Marqueur posé AVANT l'écriture de l'état, retiré après le rechargement : un geste tué entre les deux (délai du
+    # passage) laisse le marqueur, et la tentative suivante refait le rendu au lieu de répondre « inchange ».
+    os.close(os.open(attente, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600))
     _ecrire_etat_root(etat)
     try:
         etat, table, actives = charger_avec_regles()
@@ -1278,6 +1286,7 @@ def garde(argv: list[str]) -> int:
         _ecrire_etat_root(avant)                                         # rendu refusé : l'état d'avant est remis, rien ne reste à moitié
         audit(f"{verbe}-{geste}-refuse", f"{detail} {e}"[:200])
         return _garde_refus(str(e)[:200])
+    attente.unlink(missing_ok=True)
     ecrire_instantane(instantane(etat, actives, etats_regles()))
     audit(f"{verbe}-{geste}", detail)
     print(json.dumps({"ok": True, "verbe": verbe, "geste": geste, cle: etat.get(cle, [])}))

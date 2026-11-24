@@ -1,3 +1,11 @@
+secubox-garde (0.3.11-1~trixie1) trixie; urgency=medium
+
+  * secubox-garde-passage : TimeoutStartSec 55 → 300 s et MemoryMax 192 → 448 Mo ;
+    le contrôleur ad-guard (même groupe de contrôle) régénère Unbound avec
+    unbound-checkconf (~300 Mo) et tournait en swap, tué à 55 s (ref #3910).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 08:10:00 +0100
+
 secubox-garde (0.3.10-1~trixie1) trixie; urgency=medium
 
   * Profils AppArmor secubox-garde et secubox-garde-passage : audit.log en

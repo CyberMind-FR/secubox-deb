@@ -66,3 +66,8 @@ def test_profils_ecrivent_audit_en_w():
     for profil in ("secubox-garde", "secubox-garde-passage"):
         txt = (ici / profil).read_text(encoding="utf-8")
         assert "  /var/log/secubox/audit.log w," in txt and "audit.log a," not in txt, profil
+
+
+def test_unite_laisse_le_temps_et_la_memoire_au_rendu():
+    unite = (Path(__file__).resolve().parents[1] / "debian" / "secubox-garde-passage.service").read_text(encoding="utf-8")
+    assert "TimeoutStartSec=300" in unite and "MemoryMax=448M" in unite
