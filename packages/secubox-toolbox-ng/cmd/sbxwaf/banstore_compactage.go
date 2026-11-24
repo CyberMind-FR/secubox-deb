@@ -217,10 +217,14 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 	if !os.SameFile(st, actuel) {
 		return bilan, fmt.Errorf("%s remplacé pendant le compactage : abandon", s.path)
 	}
+	if s.idx != nil {
+		s.suivre(f, s.idx.horizon) // index à jour jusqu'ici : il survit au rename (deplacer)
+	}
 	if _, err := f.Seek(n, io.SeekStart); err != nil {
 		return bilan, err
 	}
-	if _, err := io.Copy(w, f); err != nil {
+	recopies, err := io.Copy(w, f)
+	if err != nil {
 		return bilan, err
 	}
 	if err := w.Flush(); err != nil {
@@ -244,6 +248,7 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 		return bilan, err
 	}
 	ok = true
+	s.deplacer(fin, n, recopies)
 	if err := syncDossier(dir); err != nil {
 		return bilan, err
 	}

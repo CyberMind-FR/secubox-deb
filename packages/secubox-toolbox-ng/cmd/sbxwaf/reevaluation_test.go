@@ -64,6 +64,9 @@ func (f *fauxNftElems) run(_ context.Context, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cmds = append(f.cmds, args)
+	if len(args) >= 5 && args[0] == "-j" && args[1] == "-s" {
+		args = append([]string{"-j"}, args[2:]...) // sans compteurs : même liste
+	}
 	if len(args) >= 4 && args[0] == "-j" && args[1] == "list" && args[2] == "set" {
 		var el []string
 		if args[5] == "waf_ban" {

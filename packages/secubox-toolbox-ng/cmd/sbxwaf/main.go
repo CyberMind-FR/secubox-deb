@@ -1569,6 +1569,7 @@ func main() {
 	// #3919 : annuaire de réseaux, câblé INDÉPENDAMMENT de --actor-socket (le
 	// journal en profite même sans actord). Rechargé au SIGHUP et toutes les
 	// 24 h : une base ASN mise à jour est prise sans redémarrer le WAF.
+	var classerReseau func(ip string) reseau.Info
 	if *geoipASN != "" {
 		var catalogues []string
 		for _, c := range strings.Split(*reseauxClasses, ",") {
@@ -1578,6 +1579,7 @@ func main() {
 		}
 		ann := reseau.Ouvrir(*geoipASN, catalogues...)
 		tl.SetReseau(ann)
+		classerReseau = ann.Classer
 		defer ann.Close()
 		hupReseau := make(chan os.Signal, 1)
 		signal.Notify(hupReseau, syscall.SIGHUP)
@@ -1671,23 +1673,27 @@ func main() {
 			nb.EcrireEtat() // actif=false : le tableau de bord le dit, au lieu d'afficher « 0 ban »
 		} else {
 			srv.nftBan = nb
-			n := nb.Reload()
-			log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
-				*nftTable, *nftBanDuration, n)
+			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. La repose ne consulte que leur mémoire, sans DNS (#3930).
+			nb.robots = NewCrawlers()
+			if classerReseau != nil {
+				nb.robotPlausible = func(ip string) bool { return asnMoteurs[classerReseau(ip).ASN] }
+			}
+			// Les bans du journal, sans retarder l'écoute : au-delà de 3 s la repose finit en arrière-plan.
+			if n, fini := nb.PremiereRepose(3 * time.Second); fini {
+				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
+					*nftTable, *nftBanDuration, n)
+			} else {
+				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, rechargement des bans en cours)",
+					*nftTable, *nftBanDuration)
+			}
 			// Veille (#1693) : la table ne vit que dans le noyau, et tout
 			// rechargement du pare-feu (`flush ruleset`) l'efface. Toutes les 30 s
 			// on vérifie qu'elle bloque encore — sinon recréée et bans du journal
 			// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
 			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
 			// à l'échéance reste assuré par le timeout nft du noyau.
-			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. Branchés APRÈS le premier Reload (le DNS ne retarde pas le démarrage),
-			// puis les bans déjà posés sur eux sont levés en arrière-plan.
-			nb.robots = NewCrawlers()
-			go func() {
-				if n := nb.LibererRobots(); n > 0 {
-					log.Printf("sbxwaf: %d ban(s) levé(s) sur des robots d'indexation vérifiés", n)
-				}
-			}()
+			// Bans déjà posés sur des robots vérifiés : levés en arrière-plan, à débit DNS borné (nftban_robots.go).
+			go nb.VeillerRobots(time.Hour)
 			go nb.Veiller(30*time.Second, 2*time.Minute)
 			// #3816 : journal compacté après le premier Reload (ne retarde pas le démarrage), puis chaque heure.
 			go store.VeillerCompactage(CompactageBans{Fenetre: *banStoreFenetre, ArchivesMois: *banStoreArchives, Seuil: *banStoreSeuil},
@@ -1751,7 +1757,7 @@ func main() {
 			signal.Notify(hup, syscall.SIGHUP)
 			go func() {
 				for range hup {
-					nb.Reparer("rechargement signalé")
+					go nb.Reparer("rechargement signalé") // la repose ne retarde pas la seconde vérification
 					time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
 				}
 			}()

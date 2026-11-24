@@ -6,6 +6,7 @@ package main
 
 import (
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,12 +15,20 @@ import (
 type dns struct {
 	inv  map[string][]string
 	dir  map[string][]string
+	mu   sync.Mutex
 	nbRq int
 }
 
+func (d *dns) compte() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.nbRq++
+	return d.nbRq
+}
+
 func (d *dns) install(c *Crawlers) {
-	c.inverse = func(ip string) ([]string, error) { d.nbRq++; return d.inv[ip], nil }
-	c.direct = func(nom string) ([]string, error) { d.nbRq++; return d.dir[nom], nil }
+	c.inverse = func(ip string) ([]string, error) { d.compte(); return d.inv[ip], nil }
+	c.direct = func(nom string) ([]string, error) { d.compte(); return d.dir[nom], nil }
 }
 
 func TestCrawlers_GooglebotVerifieParDNSInverseConfirme(t *testing.T) {

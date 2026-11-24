@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
 	"strings"
@@ -32,12 +33,13 @@ const (
 	crawlerTTLPositif = 24 * time.Hour
 	crawlerTTLNegatif = 1 * time.Hour
 	crawlerDelaiDNS   = 2 * time.Second
-	crawlerCacheMax   = 4096
+	crawlerCacheMax   = 65536 // ~8 Mo plein ; des dizaines de milliers de bans ne doivent pas chasser les robots connus (#3930)
 )
 
 type crawlerEntree struct {
-	nom string
-	exp time.Time
+	nom    string
+	exp    time.Time
+	conclu bool // réponse ferme ; faux : le DNS n'a pas répondu, le doute demeure
 }
 
 type Crawlers struct {
@@ -79,37 +81,73 @@ func domaineRobot(nom string) string {
 
 // Verifie rend le domaine du moteur si l'adresse est un robot vérifié, "" sinon (y compris sur erreur DNS : le doute ne vaut pas exemption).
 func (c *Crawlers) Verifie(ip string) string {
+	nom, _ := c.VerifieConclu(ip)
+	return nom
+}
+
+// VerifieConclu est Verifie qui dit aussi si la réponse est ferme (faux : panne DNS, à revérifier un jour).
+func (c *Crawlers) VerifieConclu(ip string) (string, bool) {
 	a, err := netip.ParseAddr(ip)
 	if err != nil {
-		return ""
+		return "", true
 	}
+	a = a.Unmap()
 	ip = a.String()
 	now := c.now()
 	c.mu.Lock()
 	if e, ok := c.cache[ip]; ok && now.Before(e.exp) {
 		c.mu.Unlock()
-		return e.nom
+		return e.nom, e.conclu
 	}
 	c.mu.Unlock()
-	nom := c.verifieSansCache(ip, a)
+	nom, conclu := c.verifieSansCache(ip, a)
 	ttl := crawlerTTLNegatif
 	if nom != "" {
 		ttl = crawlerTTLPositif
 	}
 	c.mu.Lock()
 	if len(c.cache) >= crawlerCacheMax {
-		for k, e := range c.cache {
-			if now.After(e.exp) {
-				delete(c.cache, k)
-			}
-		}
-		if len(c.cache) >= crawlerCacheMax {
-			c.cache = map[string]crawlerEntree{}
+		c.faireDeLaPlace(now)
+	}
+	c.cache[ip] = crawlerEntree{nom: nom, exp: now.Add(ttl), conclu: conclu}
+	c.mu.Unlock()
+	return nom, conclu
+}
+
+// faireDeLaPlace (c.mu tenu) : les entrées échues, sinon les négatives. Un robot connu n'est chassé que par d'autres robots connus : le perdre
+// laisserait un lot déjà préparé le rebannir (#3930).
+func (c *Crawlers) faireDeLaPlace(now time.Time) {
+	for k, e := range c.cache {
+		if now.After(e.exp) {
+			delete(c.cache, k)
 		}
 	}
-	c.cache[ip] = crawlerEntree{nom: nom, exp: now.Add(ttl)}
-	c.mu.Unlock()
-	return nom
+	if len(c.cache) < crawlerCacheMax {
+		return
+	}
+	for k, e := range c.cache {
+		if e.nom == "" {
+			delete(c.cache, k)
+		}
+	}
+	if len(c.cache) >= crawlerCacheMax {
+		c.cache = map[string]crawlerEntree{}
+	}
+}
+
+// Connu rend le domaine du moteur si l'adresse est un robot DÉJÀ vérifié ; jamais de DNS.
+func (c *Crawlers) Connu(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ""
+	}
+	a = a.Unmap()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.cache[a.String()]; ok && c.now().Before(e.exp) {
+		return e.nom
+	}
+	return ""
 }
 
 // Resolu : la vérification de cette adresse est déjà connue (robot ou non), valide dans le cache.
@@ -120,15 +158,16 @@ func (c *Crawlers) Resolu(ip string) bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e, ok := c.cache[a.String()]
+	e, ok := c.cache[a.Unmap().String()]
 	return ok && c.now().Before(e.exp)
 }
 
-func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) string {
+func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) (string, bool) {
 	noms, err := c.inverse(ip)
 	if err != nil {
-		return ""
+		return "", absenceDNS(err)
 	}
+	conclu := true
 	for _, n := range noms {
 		dom := domaineRobot(n)
 		if dom == "" {
@@ -136,13 +175,20 @@ func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) string {
 		}
 		ips, err := c.direct(strings.TrimSuffix(n, "."))
 		if err != nil {
+			conclu = conclu && absenceDNS(err)
 			continue
 		}
 		for _, x := range ips {
-			if b, err := netip.ParseAddr(x); err == nil && b == a {
-				return dom
+			if b, err := netip.ParseAddr(x); err == nil && b.Unmap() == a {
+				return dom, true
 			}
 		}
 	}
-	return ""
+	return "", conclu
+}
+
+// absenceDNS : le DNS a répondu « ce nom n'existe pas » (ferme), par opposition à un délai, un SERVFAIL ou un refus.
+func absenceDNS(err error) bool {
+	var e *net.DNSError
+	return errors.As(err, &e) && e.IsNotFound
 }

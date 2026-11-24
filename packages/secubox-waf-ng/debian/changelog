@@ -1,3 +1,24 @@
+secubox-waf-ng (1.44.2-1~trixie1) trixie; urgency=high
+
+  * Repose des bans (ref #3930) : à 10 000 bans, un « nft add element » et un
+    DNS inverse par adresse duraient des heures ; l'état n'était plus publié
+    (page « waf_arrete ») et la table n'était plus réparée. Désormais par lots
+    de 1 000 (nft -f -), sans DNS, et seulement les bans manquants (un ajout
+    sur un élément présent change son échéance depuis le noyau 6.12). Un lot
+    refusé est recoupé jusqu'à l'élément fautif. 50 000 bans : 52 exécutions.
+  * Veille : état écrit toutes les 30 s quoi que fasse nft, table recréée même
+    pendant une repose. Champs ajoutés à nft-etat.json : repose_en_cours,
+    derniere_repose, bans_attendus, bans_poses.
+  * Démarrage : l'écoute n'attend pas la repose plus de 3 s ; le contrôle des
+    compteurs ne lit plus les éléments ; un seul « list set » à la fois.
+  * Robots vérifiés : libérés en arrière-plan à 5 vérifications/s et 20 min par
+    passe (démarrage, puis chaque heure), réseaux des moteurs d'abord ; une
+    panne DNS est retentée, un robot connu n'est plus chassé de la mémoire.
+  * Journal des bans : index suivi au fil du fichier au lieu d'une relecture
+    complète toutes les 30 s.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 17:30:00 +0100
+
 secubox-waf-ng (1.44.1-1~trixie1) trixie; urgency=medium
 
   * Relevé des populations (ref #3919) : toutes les 30 min au lieu de 10

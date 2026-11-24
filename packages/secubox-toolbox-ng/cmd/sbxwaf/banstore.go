@@ -6,7 +6,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +42,7 @@ type BanStore struct {
 	path      string
 	mu        sync.Mutex
 	compactMu sync.Mutex
+	idx       *indexBans // dernier état par adresse, relu au fil du fichier (#3930) ; sous mu
 }
 
 func NewBanStore(path string) *BanStore {
@@ -83,32 +87,139 @@ func (s *BanStore) ActiveBans(now int64) []BanRecord {
 	defer s.mu.Unlock()
 	f, err := os.Open(s.path)
 	if err != nil {
+		s.idx = nil
 		return nil // journal absent = aucun ban
 	}
 	defer f.Close()
-
-	dernier := map[string]BanRecord{} // ip → dernière décision
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		var r BanRecord
-		if json.Unmarshal(sc.Bytes(), &r) != nil || r.IP == "" {
-			continue // ligne corrompue : on l'ignore, on ne casse pas la relecture
-		}
-		dernier[r.IP] = r
-	}
-
+	s.suivre(f, now)
 	var actifs []BanRecord
-	for _, r := range dernier {
-		if r.Action != "ban" {
-			continue // dernier état = unban
-		}
+	if n := len(s.idx.dernier); n > 0 {
+		actifs = make([]BanRecord, 0, n)
+	}
+	for ip, r := range s.idx.dernier {
 		if r.Expires != 0 && r.Expires <= now {
+			if r.Expires <= now-margeIndex {
+				delete(s.idx.dernier, ip)
+			}
 			continue // échu
 		}
 		actifs = append(actifs, r)
 	}
 	return actifs
+}
+
+// INDEX DU JOURNAL (#3930). À 1 000 bans par heure et 31 jours gardés, le journal compte des centaines de milliers de
+// lignes (~80 Mo) ; la réévaluation (30 s), la repose (2 min) et les campagnes (5 min) le relisaient chaque fois en
+// entier, sous le verrou qu'Append attend. L'index garde le dernier ban de chaque adresse et ne relit que les octets
+// ajoutés. Il repart de zéro si le fichier a changé d'inode, raccourci ou été réécrit (empreinte des derniers octets lus).
+type indexBans struct {
+	fichier   os.FileInfo
+	lu        int64  // octets consommés : fin d'une ligne complète
+	empreinte []byte // derniers octets avant lu
+	dernier   map[string]BanRecord
+	horizon   int64 // plus grand `now` servi : les échus d'avant horizon-margeIndex sont oubliés
+}
+
+const (
+	margeIndex       = 3600
+	tailleEmpreinte  = 64
+	ligneMaxLectures = 1024 * 1024
+)
+
+// suivre met l'index à jour depuis f (mu tenu).
+func (s *BanStore) suivre(f *os.File, now int64) {
+	st, err := f.Stat()
+	x := s.idx
+	if err != nil || x == nil || !os.SameFile(st, x.fichier) || st.Size() < x.lu || now < x.horizon-margeIndex || !x.memeDebut(f) {
+		x = &indexBans{dernier: map[string]BanRecord{}}
+		s.idx = x
+	}
+	x.fichier = st
+	if now > x.horizon {
+		x.horizon = now
+	}
+	if _, err := f.Seek(x.lu, io.SeekStart); err != nil {
+		return
+	}
+	r := bufio.NewReaderSize(f, 256*1024)
+	var long []byte
+	var taille int64 // octets de la ligne en cours
+	for {
+		morceau, err := r.ReadSlice('\n')
+		taille += int64(len(morceau))
+		if errors.Is(err, bufio.ErrBufferFull) {
+			if taille <= ligneMaxLectures {
+				long = append(long, morceau...)
+			}
+			continue
+		}
+		ligne := morceau
+		if len(long) > 0 {
+			ligne = append(long, morceau...)
+		}
+		if taille <= ligneMaxLectures {
+			x.appliquer(ligne, now)
+		} // sinon : ligne démesurée, ignorée comme une ligne corrompue
+		if err != nil {
+			break // fin de fichier ; une fin sans « \n » est lue mais non consommée (écriture en cours)
+		}
+		x.lu += taille
+		long, taille = long[:0], 0
+	}
+	x.marquer(f)
+}
+
+func (x *indexBans) appliquer(ligne []byte, now int64) {
+	var r BanRecord
+	if json.Unmarshal(ligne, &r) != nil || r.IP == "" {
+		return // ligne corrompue : on l'ignore, on ne casse pas la relecture
+	}
+	if r.Action != "ban" || (r.Expires != 0 && r.Expires <= now-margeIndex) {
+		delete(x.dernier, r.IP)
+		return
+	}
+	x.dernier[r.IP] = r
+}
+
+func (x *indexBans) lireEmpreinte(f *os.File) []byte {
+	n := x.lu
+	if n > tailleEmpreinte {
+		n = tailleEmpreinte
+	}
+	b := make([]byte, n)
+	if _, err := f.ReadAt(b, x.lu-n); err != nil {
+		return nil
+	}
+	return b
+}
+
+func (x *indexBans) marquer(f *os.File) { x.empreinte = x.lireEmpreinte(f) }
+
+func (x *indexBans) memeDebut(f *os.File) bool {
+	b := x.lireEmpreinte(f)
+	return b != nil && bytes.Equal(b, x.empreinte)
+}
+
+// deplacer suit le compactage (mu tenu) : `fin` octets recopiés tels quels depuis l'octet n de l'ancien fichier terminent
+// le nouveau, et le reste rend le même état (banstore_compactage.go) : l'index vaut toujours, seule sa position change.
+func (s *BanStore) deplacer(nouveau os.FileInfo, n, fin int64) {
+	x := s.idx
+	if x == nil {
+		return
+	}
+	s.idx = nil // relu en entier si quoi que ce soit ne colle pas
+	f, err := os.Open(s.path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !os.SameFile(st, nouveau) || x.lu < n {
+		return
+	}
+	x.fichier, x.lu = st, nouveau.Size()-fin+(x.lu-n)
+	x.marquer(f)
+	s.idx = x
 }
 
 // CompteCategorie compte les bans de `ip` dont la catégorie commence par `prefixe`, posés depuis `depuis` (secondes Unix). Sert à graduer la durée
@@ -125,9 +236,13 @@ func (s *BanStore) CompteCategorie(ip, prefixe string, depuis int64) int {
 	}
 	defer f.Close()
 	n := 0
+	motif := []byte(`"` + ip + `"`) // l'essentiel du coût est le décodage : seules les lignes de l'adresse le méritent
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), motif) {
+			continue
+		}
 		var r BanRecord
 		if json.Unmarshal(sc.Bytes(), &r) == nil && r.Action == "ban" && r.IP == ip && r.At >= depuis && strings.HasPrefix(r.Category, prefixe) {
 			n++
@@ -150,9 +265,13 @@ func (s *BanStore) DepuisChaine(ip string, maintenant int64) time.Duration {
 	}
 	defer f.Close()
 	debut, fin := int64(0), int64(0)
+	motif := []byte(`"` + ip + `"`)
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), motif) {
+			continue
+		}
 		var r BanRecord
 		if json.Unmarshal(sc.Bytes(), &r) != nil || r.IP != ip || r.Action != "ban" {
 			continue
