@@ -29,6 +29,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 // entreeMenace reproduit exactement logEntry de sbxwaf/threatlog.go.
@@ -48,12 +50,36 @@ type entreeMenace struct {
 	// Leurres de service (#3728) : profil du visiteur et identifiants tentés.
 	Agent  string  `json:"agent,omitempty"`
 	Essais []Essai `json:"essais,omitempty"`
+	// #3919 : réseau de la source, et campagne par compte visé si établie.
+	ASN          uint32 `json:"asn,omitempty"`
+	ASNOrg       string `json:"asn_org,omitempty"`
+	ReseauClasse string `json:"reseau_classe,omitempty"`
+	Campagne     string `json:"campagne,omitempty"`
+}
+
+// classeur est ce que le journal demande à l'annuaire de réseaux ;
+// *reseau.Annuaire le satisfait, un test y met un annuaire factice.
+type classeur interface {
+	Classer(ip string) reseau.Info
 }
 
 type JournalMenaces struct {
-	chemin string
-	mu     sync.Mutex
+	chemin    string
+	mu        sync.Mutex
+	reseau    classeur   // #3919 : facultatif
+	campagnes *Campagnes // #3919 : facultatif
 }
+
+// SetReseau branche (facultativement) l'annuaire de réseaux.
+func (j *JournalMenaces) SetReseau(c classeur) {
+	if a, ok := c.(*reseau.Annuaire); ok && a == nil {
+		c = nil
+	}
+	j.reseau = c
+}
+
+// SetCampagnes branche le suivi des campagnes, pour étiqueter les lignes.
+func (j *JournalMenaces) SetCampagnes(c *Campagnes) { j.campagnes = c }
 
 func NewJournalMenaces(chemin string) *JournalMenaces {
 	return &JournalMenaces{chemin: chemin}
@@ -94,6 +120,13 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 		Agent:     s.Agent,
 		Essais:    s.Essais,
 	}
+	// #3919 : classé avec l'adresse d'origine, avant le masquage en « local ».
+	if j.reseau != nil && ip != "local" {
+		if info := j.reseau.Classer(s.IP); info.ASN != 0 {
+			e.ASN, e.ASNOrg, e.ReseauClasse = info.ASN, info.Org, info.Classe
+		}
+	}
+	e.Campagne = j.campagnes.IdentifiantSiEtablie(s.Cible, time.Now())
 	data, err := json.Marshal(e)
 	if err != nil {
 		return
