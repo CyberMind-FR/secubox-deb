@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#3919 : Guardian a un bloc compact « Campagnes en cours » (4 lignes au plus), tout entier lien vers /waf/campagnes.html ;
+"""#3919 : Guardian a un bloc compact « Campagnes en cours » (4 lignes au plus), tout entier lien vers /waf/#campaigns (l'onglet, avec le menu) ;
 aucune carte ni panneau du WAF (#3922). Le rendu partagé est essayé sous node dans secubox-waf-ng (cartes_campagnes_3919.test.mjs)."""
 import json
 import re
@@ -24,9 +24,9 @@ def _releve(pops, **extra):
 
 
 def test_bloc_entier_lien_vers_le_waf():
-    m = re.search(r'<a class="pan[^"]*" [^>]*href="/waf/campagnes\.html"[^>]*>(.*?)</a>', G, re.S)
+    m = re.search(r'<a class="pan[^"]*" [^>]*href="/waf/#campaigns"[^>]*>(.*?)</a>', G, re.S)
     assert m and 'target="_top"' in m.group(0) and "Campagnes en cours" in m.group(1) and 'id="campagnes"' in m.group(1)
-    assert "<a " not in m.group(1)
+    assert "<a " not in m.group(1) and "/waf/campagnes.html" not in G      # ouverte seule, cette page n'a pas le menu d'administration
 
 
 def test_scripts_relatifs_seulement():

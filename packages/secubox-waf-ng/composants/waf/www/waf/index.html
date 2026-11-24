@@ -422,7 +422,7 @@
         const HAUTEUR_MAX = { campagnes: 16000 };
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
-            const px = (h, onglet) => Math.min(HAUTEUR_MAX[onglet] || 4000, Math.max(300, +h + 4)) + 'px';
+            const px = (h, onglet) => Math.min(Object.prototype.hasOwnProperty.call(HAUTEUR_MAX, onglet) ? HAUTEUR_MAX[onglet] : 4000, Math.max(300, +h + 4)) + 'px';
             if (e.data.sbxwafVue) { const f = $('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
             if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue, e.data.onglet); }
             if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue); }

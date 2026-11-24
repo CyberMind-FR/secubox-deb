@@ -113,6 +113,7 @@ def test_navigateur_demo_400_px_sans_debordement(nav, suffixe):
     p.evaluate("document.querySelectorAll('#populations details').forEach(function(d){d.open=true;})")
     assert p.evaluate("document.documentElement.scrollWidth") <= 400
     assert p.evaluate("[...document.querySelectorAll('#populations *')].filter(function(e){return e.scrollWidth>e.clientWidth+1&&/auto|scroll/.test(getComputedStyle(e).overflowX);}).length") == 0
+    assert p.evaluate("[...document.querySelectorAll('#populations .puce')].every(function(e){var c=getComputedStyle(e);return c.whiteSpace==='normal'&&c.textOverflow!=='ellipsis'&&e.scrollWidth<=e.clientWidth+1;})")
     assert "/api/v1/waf/populations" not in p.appels
     p.context.close()
 
@@ -121,11 +122,31 @@ def test_hote_encadre_sans_second_defilement(nav):
     """L'hôte /waf/ donne au cadre toute la hauteur annoncée : au téléphone, aucune barre interne."""
     index = (W / "index.html").read_text(encoding="utf-8")
     m = re.search(r"const HAUTEUR_MAX = \{ campagnes: (\d+) \}", index)
-    assert m and int(m.group(1)) >= 12000
+    assert m and int(m.group(1)) >= 12000 and "Object.prototype.hasOwnProperty.call(HAUTEUR_MAX, onglet)" in index
     p = _ouvre(nav, {}, "?demo=1&embed=1", 360)
     h = p.evaluate("Math.ceil(document.getElementById('cadre').getBoundingClientRect().height)")
     assert h < int(m.group(1))
     p.set_viewport_size({"width": 360, "height": h + 4})      # ce que fait l'hôte : la hauteur annoncée ne doit plus bouger
     p.wait_for_timeout(200)
     assert p.evaluate("Math.ceil(document.getElementById('cadre').getBoundingClientRect().height)") == h
+    p.context.close()
+
+
+def test_lien_du_soc_ouvre_l_onglet_campagnes_avec_les_cartes(nav):
+    """/waf/#campaigns (lien de Guardian) : l'hôte ouvre l'onglet Campagnes et encadre la page, sans défilement interne à 400 px."""
+    p = nav.new_context(viewport={"width": 400, "height": 800}).new_page()
+
+    def servir(r):
+        u = r.request.url.split("?")[0].split("g.test")[1]
+        f = W / (u[len("/waf/"):] or "index.html")
+        if u.startswith("/waf/") and f.is_file():
+            return r.fulfill(status=200, content_type="text/javascript" if u.endswith(".js") else "text/html", body=f.read_text(encoding="utf-8"))
+        return r.fulfill(status=404, body="")
+    p.route("http://g.test/**", servir)
+    p.goto("http://g.test/waf/?demo=1#campaigns")
+    p.frame_locator("#pageFrame").locator("#populations article").first.wait_for(timeout=5000)
+    p.wait_for_timeout(500)
+    assert p.locator('#wafTabs [data-tab="campaigns"]').get_attribute("aria-selected") == "true" and p.locator("#pageCard").is_visible()
+    cadre, doc = p.evaluate("(function(){var f=document.getElementById('pageFrame');return [f.clientHeight,f.contentDocument.documentElement.scrollHeight];})()")
+    assert cadre > 4000 and doc <= cadre
     p.context.close()
