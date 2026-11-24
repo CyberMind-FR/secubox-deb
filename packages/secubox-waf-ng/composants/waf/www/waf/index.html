@@ -417,11 +417,14 @@
         document.querySelectorAll('#wafTabs .waf-tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
         // Hauteur des cadres : vue.html poste `sbxwafVue` ; les pages d'onglet postent `sbxWafVue` + `onglet` (#2354) ou `sbxVue` + `onglet`.
+        // #3919 : empilées sur un téléphone, les cartes de campagne dépassent 4000 px, et un cadre coupé ajoute un second défilement. Cette page mesure
+        // son cadre (jamais le document) : sa hauteur ne dépend pas de celle de l'iframe, une borne plus haute ne la fait pas grandir.
+        const HAUTEUR_MAX = { campagnes: 16000 };
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
-            const px = (h) => Math.min(4000, Math.max(300, +h + 4)) + 'px';
+            const px = (h, onglet) => Math.min(HAUTEUR_MAX[onglet] || 4000, Math.max(300, +h + 4)) + 'px';
             if (e.data.sbxwafVue) { const f = $('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
-            if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue); }
+            if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue, e.data.onglet); }
             if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue); }
         });
 
