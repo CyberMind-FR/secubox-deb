@@ -689,7 +689,12 @@ def test_unite_credentials_avec_repli_et_audit_en_ajout():
 def test_version_2_0():
     from api.main import VERSION
     assert VERSION.startswith("2.")                                    # #3725 : secubox-ai V2 (phases 4 à 7)
-    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1)")
+    # L'API annonce la version X.Y du paquet ; un correctif du paquet (X.Y.Z) peut ne pas toucher l'API.
+    tete = re.match(r"secubox-ai \((\d+)\.(\d+)\.(\d+)-\d+~trixie1\) trixie;",
+                    (PAQUET / "debian" / "changelog").read_text(encoding="utf-8"))
+    assert tete, "tête du changelog"
+    paquet, api = tuple(int(x) for x in tete.groups()), tuple(int(x) for x in VERSION.split("."))
+    assert paquet >= api and paquet[:2] == api[:2], (paquet, api)
 
 
 def test_cle_lue_absente_ou_repli(tmp_path, monkeypatch):

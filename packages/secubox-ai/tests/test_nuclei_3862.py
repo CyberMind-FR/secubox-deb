@@ -816,7 +816,11 @@ def test_profil_collecteur_compile():
 def test_paquet_2_1_0():
     from api.main import VERSION
     assert tuple(int(x) for x in VERSION.split(".")[:2]) >= (2, 1)     # 2.1.x puis 2.2.0 (Salle SBX-SOC)
-    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1) trixie;")
+    # 2.1.0 au moins, et l'entrée de ce tour reste au changelog (la version courante est vérifiée par test_version_2_0)
+    changelog = (PAQUET / "debian" / "changelog").read_text(encoding="utf-8")
+    tete = re.match(r"secubox-ai \((\d+)\.(\d+)\.(\d+)-\d+~trixie1\) trixie;", changelog)
+    assert tete and tuple(int(x) for x in tete.groups()) >= (2, 1, 0)
+    assert "\nsecubox-ai (2.1.0-1~trixie1) trixie;" in changelog
     control = (PAQUET / "debian" / "control").read_text(encoding="utf-8")
     assert " git,\n" in control and " python3-yaml,\n" in control
     rules = (PAQUET / "debian" / "rules").read_text(encoding="utf-8")
