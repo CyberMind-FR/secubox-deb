@@ -616,6 +616,13 @@ cmd_services_relance() {
 SERVICES_VEILLES="postfix@- dovecot rspamd"
 cmd_veille() {
     local svc ko=""
+    # Fenêtre en train d'ouvrir ou de fermer le conteneur (#3925) : les services sont en transition, la veille se tait
+    # (borné : un marqueur oublié depuis plus de 30 min ne la réduit pas au silence).
+    if [[ -e "$FENETRE_MARQUEUR" ]] && grep -qE '^phase=(ouverture|fermeture)$' "$FENETRE_MARQUEUR" 2>/dev/null \
+       && (( $(date +%s) - $(stat -c %Y "$FENETRE_MARQUEUR" 2>/dev/null || echo 0) < 1800 )); then
+        log "fenetre en cours d'ouverture ou de fermeture : veille suspendue"
+        return 0
+    fi
     if ! lxc_running "$CONTAINER"; then
         log "conteneur mail '$CONTAINER' a l'arret : rien a veiller"
         return 0
@@ -645,6 +652,404 @@ cmd_veille() {
     fi
     log "services de courrier en service : $SERVICES_VEILLES"
 }
+
+# Fenêtre de relance planifiée (#3925). Sur la box de production le conteneur mail reste arrêté (lxc.start.auto=0)
+# pour économiser la mémoire ; les rapports de 05:07, 05:34 et du lundi 07:20 ont besoin du relais SMTP. La minuterie
+# secubox-mail-fenetre.timer l'éveille pour une fenêtre bornée, puis le remet en veille. Inerte tant que
+# [fenetre] actif = false. RÈGLE : on n'arrête jamais qu'une instance que NOUS avons démarrée. Elle est identifiée par
+# le PID de l'init du conteneur et son instant de démarrage (champ 22 de /proc/PID/stat), gardés dans le marqueur ;
+# un conteneur déjà en marche, démarré à la main, par un autre outil ou au boot (lxc.start.auto = 1) n'est jamais touché.
+FENETRE_LOCK="${FENETRE_LOCK:-/run/secubox-mail-fenetre.lock}"
+FENETRE_MARQUEUR="${FENETRE_MARQUEUR:-/run/secubox-mail-fenetre.active}"
+FENETRE_CRITIQUE_MO="${FENETRE_CRITIQUE_MO:-120}"
+FENETRE_CEDE="${FENETRE_CEDE:-/run/secubox-mail-fenetre.cede}"
+FEN_SMTP_PHASE=0
+FEN_PROPRIETAIRE=0 FEN_IDENT="" FEN_ARRETE=0 FEN_BAS=0 FEN_ARRET_MEM=350 FEN_MEMOIRE_ARRET=0
+FEN_DEBUT="" FEN_MOTIF="" FEN_FIN="" FEN_TICKS=""
+
+# Mesures et gestes bruts. Tout fils lancé ferme le descripteur 9 (verrou) : un conteneur démarré par la fenêtre ne
+# doit jamais tenir le verrou après elle. Bornes de temps sur chaque appel au conteneur (un conteneur figé ne gèle rien).
+_fen_sleep() { sleep "$1" 9>&- & wait $!; }
+_fen_mem_mo() { awk '/^MemAvailable:/ { printf "%d", $2/1024; exit }' "${FENETRE_MEMINFO:-/proc/meminfo}" 2>/dev/null; }
+_fen_charge() { awk '{ print $1; exit }' "${FENETRE_LOADAVG:-/proc/loadavg}" 2>/dev/null; }
+_fen_ticks() { awk -v h="$(getconf CLK_TCK 2>/dev/null || echo 100)" '{ printf "%d", $1*h }' "${FENETRE_UPTIME:-/proc/uptime}" 2>/dev/null; }
+_fen_attach() { timeout 20 lxc-attach -P "$LXC_PATH" -n "$CONTAINER" -- "$@" 9>&-; }
+_fen_lxc_stop() { timeout "$2" lxc-stop -P "$LXC_PATH" -n "$CONTAINER" -t "$1" 9>&-; }
+# Démarrage direct (pas cmd_start) : « déjà en marche » échoue ici, ce qui distingue « je l'ai démarré » de « un autre
+# l'avait démarré ». Même décalage préalable du rootfs que cmd_start (#1729).
+_fen_lxc_start() {
+    if [ "$(stat -c %u "$LXC_PATH/$CONTAINER/rootfs" 2>/dev/null || echo 0)" -lt 100000 ]; then
+        secubox-lxc-decaler "$LXC_PATH/$CONTAINER/rootfs" 9>&- || error "décalage du rootfs impossible"
+    fi
+    timeout 90 lxc-start -P "$LXC_PATH" -n "$CONTAINER" -d 9>&-
+}
+_fen_lxc_kill() { timeout 20 lxc-stop -P "$LXC_PATH" -n "$CONTAINER" -k 9>&-; }
+_fen_smtp_repond() { timeout 3 bash -c "exec 3<>/dev/tcp/${LXC_IP}/25" >/dev/null 2>&1 9>&-; }
+
+# État EXACT du conteneur : « STOPPED », « RUNNING »… ; « ERREUR » si lxc-info échoue (jamais pris pour un arrêt).
+_fen_etat() {
+    local e
+    e="$(timeout 20 lxc-info -P "$LXC_PATH" -n "$CONTAINER" -sH 2>/dev/null 9>&-)" || { echo ERREUR; return 0; }
+    echo "${e:-ERREUR}"
+}
+# Identité de l'instance : « PIDinit:instant-de-démarrage » (vide si indéterminable).
+_fen_identite() {
+    local pid st
+    pid="$(timeout 20 lxc-info -P "$LXC_PATH" -n "$CONTAINER" -pH 2>/dev/null 9>&-)" || return 1
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    st="$(sed -E 's/^.*\) //' "${FENETRE_PROC:-/proc}/$pid/stat" 2>/dev/null | awk '{ print $20 }')"
+    [[ "$st" =~ ^[0-9]+$ ]] || return 1
+    echo "${pid}:${st}"
+}
+_fen_auto1() { grep -Eq '^[[:space:]]*lxc\.start\.auto[[:space:]]*=[[:space:]]*1' "$LXC_PATH/$CONTAINER/config" 2>/dev/null; }
+
+# _fen_entier <valeur> <défaut> <min> <max> : entier décimal (10#, pas d'octal), 9 chiffres au plus, borné.
+_fen_entier() {
+    local v="$1" def="$2" min="$3" max="$4"
+    [[ "$v" =~ ^[0-9]{1,9}$ ]] || v="$def"
+    v=$(( 10#$v ))
+    (( v < min )) && v="$min"
+    (( v > max )) && v="$max"
+    echo "$v"
+}
+
+# _fen_journal <priorité> <message> : sortie + journal secubox-mail (jamais de secret : durée, mémoire, motif filtré).
+_fen_journal() {
+    local prio="$1" msg="$2"
+    case "$prio" in warning|err) warn "$msg" ;; *) log "$msg" ;; esac
+    logger -t secubox-mail -p "mail.${prio}" "fenetre : ${msg} (#3925)" 2>/dev/null || true
+}
+
+# Marqueur (clé=valeur, écrit atomiquement). phase : ouverture | ouverte | fermeture.
+_fen_marq_ecrire() {
+    local phase="$1" ident="$2" tmp
+    tmp="${FENETRE_MARQUEUR}.$$"
+    printf 'debut=%s\nmotif=%s\nfin=%s\nticks=%s\nphase=%s\nidentite=%s\n' \
+        "$FEN_DEBUT" "$FEN_MOTIF" "$FEN_FIN" "$FEN_TICKS" "$phase" "$ident" > "$tmp" && mv -f "$tmp" "$FENETRE_MARQUEUR"
+}
+_fen_marq() { sed -n "s/^$1=//p" "$FENETRE_MARQUEUR" 2>/dev/null | head -1; }
+_fen_marq_phase() {
+    [[ -e "$FENETRE_MARQUEUR" ]] || return 0
+    local tmp="${FENETRE_MARQUEUR}.$$"
+    sed "s/^phase=.*/phase=$1/" "$FENETRE_MARQUEUR" > "$tmp" && mv -f "$tmp" "$FENETRE_MARQUEUR"
+}
+
+# Un geste humain (« mailctl start|restart ») reprend la main : il retire le marqueur, la fenêtre le voit et laisse le
+# conteneur tourner. cmd_start, lui, n'y touche pas.
+# Tout « mailctl start|restart » pendant une fenêtre (donc aussi backupctl stop/start) cède la propriété : le conteneur
+# n'est plus remis en veille par la fenêtre. Trace dans /run : la fenêtre suivante le signale tant qu'il tourne.
+_fen_trace_cede() {
+    _fen_auto1 && return 0
+    printf 'date=%s\nraison=%s\n' "$(date '+%F %T')" "$1" > "$FENETRE_CEDE" 2>/dev/null || true
+}
+fenetre_cede() {
+    if [[ -e "$FENETRE_MARQUEUR" ]]; then
+        rm -f "$FENETRE_MARQUEUR" 2>/dev/null || true
+        _fen_journal warning "demarrage manuel pendant la fenetre : propriete cedee, le conteneur '$CONTAINER' restera en marche jusqu'a un arret manuel (lxc.start.auto = 0)"
+        _fen_trace_cede "demarrage manuel pendant la fenetre"
+    fi
+    return 0
+}
+
+# Abandon de propriété : le conteneur reste comme il est, le marqueur disparaît.
+_fen_ceder() {
+    _fen_journal warning "$1 : propriete cedee, le conteneur '$CONTAINER' est laisse tel quel (non remis en veille par la fenetre)"
+    _fen_trace_cede "$1"
+    FEN_PROPRIETAIRE=0
+    rm -f "$FENETRE_MARQUEUR"
+    trap - EXIT TERM INT HUP
+}
+
+# Arrêt vérifié : lxc-stop propre, deuxième essai, puis lxc-stop -k ; vrai seulement si l'état EXACT est STOPPED.
+_fen_arreter() {
+    _fen_lxc_stop 60 90 >/dev/null 2>&1 || true
+    [[ "$(_fen_etat)" == STOPPED ]] && return 0
+    _fen_journal warning "arret propre sans effet : deuxieme essai"
+    _fen_lxc_stop 30 45 >/dev/null 2>&1 || true
+    [[ "$(_fen_etat)" == STOPPED ]] && return 0
+    _fen_journal warning "arret force (lxc-stop -k)"
+    _fen_lxc_kill >/dev/null 2>&1 || true
+    [[ "$(_fen_etat)" == STOPPED ]]
+}
+
+# Fermeture, idempotente, utilisable seule (« mailctl fenetre-fermer », ExecStopPost) : n'arrête que si le marqueur existe,
+# que l'instance est LA NÔTRE (identité, ou à défaut démarrée après l'ouverture) et que lxc.start.auto vaut toujours 0.
+_fen_fermer_fenetre() {
+    [[ -e "$FENETRE_MARQUEUR" ]] || return 0
+    trap '' TERM INT HUP
+    local m_id m_ticks etat ident
+    m_id="$(_fen_marq identite)"; m_ticks="$(_fen_marq ticks)"
+    etat="$(_fen_etat)"
+    case "$etat" in
+        STOPPED) rm -f "$FENETRE_MARQUEUR"; _fen_journal info "conteneur '$CONTAINER' deja arrete : marqueur retire"; return 0 ;;
+        RUNNING) ;;
+        *) _fen_journal warning "etat du conteneur '$CONTAINER' indeterminable (${etat}) : marqueur conserve"; return 1 ;;
+    esac
+    if _fen_auto1; then
+        rm -f "$FENETRE_MARQUEUR"; _fen_journal info "lxc.start.auto = 1 : le conteneur n'est pas a nous"; return 0
+    fi
+    ident="$(_fen_identite)" || ident=""
+    if [[ -z "$ident" ]]; then
+        # Identité illisible : ce n'est PAS une preuve d'instance différente. Marqueur gardé, nouvel essai plus tard.
+        _fen_journal warning "identite de l'instance illisible : marqueur conserve, le conteneur '$CONTAINER' n'est pas touche (nouvel essai a la prochaine fermeture ou fenetre)"
+        return 1
+    fi
+    if [[ -n "$m_id" ]]; then
+        [[ "$ident" == "$m_id" ]] || { rm -f "$FENETRE_MARQUEUR"; _fen_journal info "instance differente de la notre : le conteneur '$CONTAINER' n'est pas touche"; return 0; }
+    else
+        [[ "$m_ticks" =~ ^[0-9]+$ && "${ident#*:}" -ge "$m_ticks" ]] \
+            || { rm -f "$FENETRE_MARQUEUR"; _fen_journal info "instance non prouvee comme la notre : le conteneur '$CONTAINER' n'est pas touche"; return 0; }
+    fi
+    # Dernière relecture avant le geste irréversible : un humain a pu reprendre la main depuis le début de la fermeture.
+    [[ -e "$FENETRE_MARQUEUR" ]] || { _fen_journal warning "marqueur retire juste avant l'arret : le conteneur '$CONTAINER' est laisse en marche"; return 0; }
+    if _fen_auto1; then rm -f "$FENETRE_MARQUEUR"; _fen_journal info "lxc.start.auto = 1 apparu : le conteneur n'est pas a nous"; return 0; fi
+    _fen_marq_phase fermeture
+    FEN_PROPRIETAIRE=0
+    _fen_journal info "fin de fenetre : remise en veille du conteneur '$CONTAINER'"
+    if _fen_arreter; then
+        rm -f "$FENETRE_MARQUEUR"
+        _antispam_audit "fenetre_fermee"
+        return 0
+    fi
+    _fen_journal err "conteneur '$CONTAINER' toujours en marche apres arret force : marqueur conserve"
+    return 1
+}
+_fen_sortie() { [[ "$FEN_PROPRIETAIRE" == 1 ]] && _fen_fermer_fenetre; return 0; }
+_fen_signal() { exit 143; }
+
+# Garde mémoire commune à toutes les phases. 1 = arrêt demandé : sous le seuil critique tout de suite, sous
+# arret_memoire_mo (ou mesure illisible) sur 4 contrôles de suite.
+_fen_garde_memoire() {
+    local mem; mem="$(_fen_mem_mo)"
+    if [[ "$mem" =~ ^[0-9]+$ ]]; then
+        if (( mem < FENETRE_CRITIQUE_MO )); then
+            _fen_journal warning "memoire ${mem} Mo sous le seuil critique (${FENETRE_CRITIQUE_MO} Mo) : arret immediat"
+            FEN_MEMOIRE_ARRET=1; return 1
+        fi
+        if (( mem < FEN_ARRET_MEM )); then FEN_BAS=$(( FEN_BAS + 1 )); else FEN_BAS=0; fi
+    else
+        FEN_BAS=$(( FEN_BAS + 1 ))
+    fi
+    if (( FEN_BAS >= 4 )); then
+        _fen_journal warning "memoire ${mem:-illisible} Mo < ${FEN_ARRET_MEM} Mo sur 4 controles : arret anticipe"
+        FEN_MEMOIRE_ARRET=1; return 1
+    fi
+    return 0
+}
+
+# Contrôle de propriété, une fois par tour. Retourne 1 (et cède) si le conteneur n'est plus à nous : marqueur retiré,
+# lxc.start.auto passé à 1, autre instance, ou STOPPED exact deux fois de suite. Un lxc-info en échec ne cède jamais.
+_fen_controle() {
+    [[ -e "$FENETRE_MARQUEUR" ]] || { _fen_ceder "marqueur retire : le proprietaire reprend la main"; return 1; }
+    _fen_auto1 && { _fen_ceder "lxc.start.auto = 1 apparu"; return 1; }
+    local etat ident
+    etat="$(_fen_etat)"
+    case "$etat" in
+        RUNNING)
+            FEN_ARRETE=0
+            if [[ -n "$FEN_IDENT" ]]; then
+                ident="$(_fen_identite)" || ident=""
+                if [[ -n "$ident" && "$ident" != "$FEN_IDENT" ]]; then _fen_ceder "autre instance du conteneur"; return 1; fi
+            fi ;;
+        STOPPED)
+            FEN_ARRETE=$(( FEN_ARRETE + 1 ))
+            if (( FEN_ARRETE >= 2 )); then
+                if (( FEN_SMTP_PHASE )); then
+                    _fen_journal err "conteneur '$CONTAINER' arrete pendant l'attente du port 25 : echec de l'ouverture"
+                    FEN_PROPRIETAIRE=0; rm -f "$FENETRE_MARQUEUR"; trap - EXIT TERM INT HUP
+                    return 2
+                fi
+                _fen_ceder "conteneur arrete par un autre outil"; return 1
+            fi ;;
+        *) : ;;
+    esac
+    return 0
+}
+
+# Courrier ACTIF (« * » après l'identifiant) dans la file Postfix ; le différé n'est pas attendu.
+_fen_file_active() {
+    _fen_attach postqueue -p 2>/dev/null | grep -cE '^[0-9A-Za-z]+\*' || true
+}
+
+cmd_fenetre_fermer() {
+    exec 9>"$FENETRE_LOCK" || { error "verrou $FENETRE_LOCK impossible"; return 1; }
+    flock -n 9 || { log "fenetre en cours : rien a fermer"; return 0; }
+    _fen_fermer_fenetre
+}
+
+cmd_fenetre() {
+    local duree_arg="" motif="fenetre planifiee"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --duree) duree_arg="${2:-}"; shift 2 || { error "--duree attend une valeur"; return 2; } ;;
+            --motif) motif="${2:-}"; shift 2 || { error "--motif attend une valeur"; return 2; } ;;
+            *) error "option inconnue"; return 2 ;;
+        esac
+    done
+    motif="$(printf '%s' "$motif" | LC_ALL=C tr -cd '[:print:]' | tr -d '\\' | cut -c1-80)"
+    [[ -n "$motif" ]] || motif="fenetre planifiee"
+
+    if [[ "$(config_get_section "fenetre" "actif" "false")" != "true" ]]; then
+        log "fenetre inactive ([fenetre] actif = false) : rien a faire"
+        return 0
+    fi
+    local duree_min memoire_min charge_max duree_s
+    duree_min="$(_fen_entier "${duree_arg:-$(config_get_section "fenetre" "duree_min" 90)}" 90 10 240)"
+    memoire_min="$(_fen_entier "$(config_get_section "fenetre" "memoire_min_mo" 1400)" 1400 500 8192)"
+    charge_max="$(_fen_entier "$(config_get_section "fenetre" "charge_max" 25)" 25 1 1000)"
+    FEN_ARRET_MEM="$(_fen_entier "$(config_get_section "fenetre" "arret_memoire_mo" 350)" 350 150 4000)"
+    duree_s="${FENETRE_DUREE_S:-$(( duree_min * 60 ))}"
+    FEN_BAS=0 FEN_ARRETE=0 FEN_MEMOIRE_ARRET=0 FEN_IDENT=""
+
+    # Une seule fenêtre à la fois ; le descripteur 9 est fermé pour tout fils.
+    exec 9>"$FENETRE_LOCK" || { error "verrou $FENETRE_LOCK impossible"; return 1; }
+    if ! flock -n 9; then
+        log "fenetre deja en cours : rien a faire"
+        return 0
+    fi
+
+    if ! lxc_exists "$CONTAINER"; then
+        log "conteneur mail '$CONTAINER' absent : rien a faire"
+        return 0
+    fi
+    # Marqueur périmé d'une fenêtre qui n'a pas pu se fermer (crash, KILL) : adopté et fermé, jamais ignoré.
+    if [[ -e "$FENETRE_MARQUEUR" ]]; then
+        _fen_journal warning "marqueur d'une fenetre precedente : fermeture"
+        _fen_fermer_fenetre || { error "fenetre precedente non fermee : on n'en ouvre pas une autre"; return 1; }
+        trap - TERM INT HUP
+    fi
+    local etat
+    etat="$(_fen_etat)"
+    case "$etat" in
+        STOPPED) rm -f "$FENETRE_CEDE" ;;
+        RUNNING)
+            log "conteneur mail '$CONTAINER' deja en marche : il n'est pas a nous, rien a faire"
+            if [[ -r "$FENETRE_CEDE" ]]; then
+                _fen_journal warning "conteneur laisse en marche depuis la cession de propriete ($(tr '\n' ' ' < "$FENETRE_CEDE")) : a arreter a la main (lxc.start.auto = 0)"
+            fi
+            return 0 ;;
+        ERREUR) _fen_journal warning "etat du conteneur '$CONTAINER' indeterminable (lxc-info en echec) : abandon"; return 1 ;;
+        *) log "conteneur mail '$CONTAINER' en transition (${etat}) : rien a faire"; return 0 ;;
+    esac
+    if _fen_auto1; then
+        log "conteneur mail '$CONTAINER' en demarrage automatique (lxc.start.auto = 1) : gere ailleurs, rien a faire"
+        return 0
+    fi
+
+    # Garde de pression : mesure illisible = refus ; nouvelle chance toutes les 60 s, 10 min au plus.
+    local attendu=0 pas_att="${FENETRE_PAS_ATTENTE:-60}" max_att="${FENETRE_ATTENTE_MAX:-600}" mem charge ok
+    while :; do
+        mem="$(_fen_mem_mo)"; charge="$(_fen_charge)"; ok=0
+        if [[ "$mem" =~ ^[0-9]+$ && "$charge" =~ ^[0-9]+([.][0-9]+)?$ ]] && (( mem >= memoire_min )) \
+           && awk -v c="$charge" -v m="$charge_max" 'BEGIN { exit !(c <= m) }'; then ok=1; fi
+        (( ok )) && break
+        if awk -v a="$attendu" -v m="$max_att" 'BEGIN { exit !(a >= m) }'; then
+            error "fenetre abandonnee : memoire ${mem:-illisible} Mo (min ${memoire_min}), charge ${charge:-illisible} (max ${charge_max})"
+            logger -t secubox-mail -p mail.warning "fenetre : abandonnee apres ${attendu}s, memoire ${mem:-illisible} Mo, charge ${charge:-illisible} (#3925)" 2>/dev/null || true
+            return 1
+        fi
+        log "pression (memoire ${mem:-illisible} Mo, charge ${charge:-illisible}) : nouvelle tentative dans ${pas_att}s"
+        _fen_sleep "$pas_att"
+        attendu="$(awk -v a="$attendu" -v p="$pas_att" 'BEGIN { print a + p }')"
+    done
+
+    # Nouvelle vérification JUSTE avant d'écrire le marqueur : pendant l'attente quelqu'un a pu démarrer le conteneur.
+    etat="$(_fen_etat)"
+    if [[ "$etat" != STOPPED ]]; then
+        _fen_journal info "conteneur '$CONTAINER' non arrete apres l'attente (${etat}) : il n'est pas a nous, abandon"
+        return 0
+    fi
+    if _fen_auto1; then log "lxc.start.auto = 1 apparu : abandon"; return 0; fi
+
+    FEN_DEBUT="$(date +%s)"; FEN_MOTIF="$motif"; FEN_FIN=$(( FEN_DEBUT + duree_s )); FEN_TICKS="$(_fen_ticks)"
+    _fen_marq_ecrire ouverture "" || { error "marqueur impossible"; return 1; }
+    FEN_PROPRIETAIRE=1
+    trap _fen_sortie EXIT
+    trap _fen_signal TERM INT HUP
+    _fen_journal info "ouverture de fenetre (${motif}) : ${duree_s}s, memoire ${mem} Mo, charge ${charge}"
+    _antispam_audit "fenetre_ouverte"
+
+    # Démarrage direct, relu juste avant : marqueur encore là, état STOPPED exact ; « déjà en marche » = pas à nous.
+    if [[ "$(_fen_etat)" != STOPPED ]]; then _fen_ceder "conteneur non arrete juste avant le demarrage"; return 0; fi
+    [[ -e "$FENETRE_MARQUEUR" ]] || { _fen_ceder "marqueur retire avant le demarrage : le proprietaire reprend la main"; return 0; }
+    if ! _fen_lxc_start >/dev/null 2>&1; then
+        if [[ "$(_fen_etat)" == RUNNING ]]; then _fen_ceder "conteneur deja en marche (demarre par un autre)"; return 0; fi
+        _fen_journal warning "demarrage du conteneur '$CONTAINER' en echec"
+        _fen_fermer_fenetre || true
+        return 1
+    fi
+    local _w
+    for _w in 1 2 3 4 5 6 7 8 9 10; do
+        [[ "$(_fen_etat)" == RUNNING ]] && break
+        _fen_sleep "${FENETRE_PAS_IDENT:-1}"
+    done
+    if [[ "$(_fen_etat)" != RUNNING ]]; then
+        _fen_journal warning "le conteneur '$CONTAINER' n'est pas passe a RUNNING apres le demarrage"
+        _fen_fermer_fenetre || true
+        return 1
+    fi
+    # Identité de CETTE instance ; démarrée avant notre appel = pas la nôtre (course avec un autre outil).
+    local ident=""
+    for _ in 1 2 3 4 5; do ident="$(_fen_identite)" && break; ident=""; _fen_sleep "${FENETRE_PAS_IDENT:-1}"; done
+    if [[ -n "$ident" && "$FEN_TICKS" =~ ^[0-9]+$ && "${ident#*:}" -lt "$FEN_TICKS" ]]; then
+        _fen_ceder "conteneur demarre par un autre avant nous"
+        return 0
+    fi
+    FEN_IDENT="$ident"
+    # Le marqueur peut avoir été retiré pendant l'ouverture (« mailctl start » humain) : jamais le recréer.
+    [[ -e "$FENETRE_MARQUEUR" ]] || { _fen_ceder "marqueur retire pendant l'ouverture : le proprietaire reprend la main"; return 0; }
+    _fen_marq_ecrire ouverture "$ident"
+
+    # SMTP : le port 25 doit répondre ; mêmes gardes (propriété, mémoire) que pendant la tenue.
+    local rc t=0 pas_smtp="${FENETRE_PAS_SMTP:-5}" max_smtp="${FENETRE_SMTP_MAX:-300}" smtp_ko=0
+    FEN_SMTP_PHASE=1
+    until _fen_smtp_repond; do
+        _fen_controle; rc=$?
+        case "$rc" in 1) return 0 ;; 2) return 1 ;; esac
+        _fen_garde_memoire || break
+        if awk -v a="$t" -v m="$max_smtp" 'BEGIN { exit !(a >= m) }'; then
+            _fen_journal warning "le port 25 de ${LXC_IP} ne repond pas apres ${t}s : arret du conteneur"
+            smtp_ko=1; break
+        fi
+        _fen_sleep "$pas_smtp"
+        t="$(awk -v a="$t" -v p="$pas_smtp" 'BEGIN { print a + p }')"
+    done
+    if (( smtp_ko )); then _fen_fermer_fenetre; local rc=$?; trap - EXIT TERM INT HUP; (( rc )) || rc=1; return "$rc"; fi
+    FEN_SMTP_PHASE=0
+    # La phase « ouverture » dure jusqu'à la réponse du port 25 : la veille reste muette jusque-là.
+    (( FEN_MEMOIRE_ARRET )) || { _fen_marq_phase ouverte; _fen_journal info "relais SMTP ${LXC_IP}:25 disponible"; }
+
+    # Tenue de la fenêtre : un contrôle toutes les 15 s.
+    local pas="${FENETRE_PAS:-15}"
+    while (( ! FEN_MEMOIRE_ARRET )) && (( $(date +%s) < FEN_FIN )); do
+        _fen_sleep "$pas"
+        _fen_controle || return 0
+        _fen_garde_memoire || break
+    done
+
+    # Vidange : jamais couper Postfix sur du courrier actif (bornée) ; sautée après un arrêt pour mémoire.
+    if (( ! FEN_MEMOIRE_ARRET )); then
+        local v=0 pas_v="${FENETRE_PAS_VIDANGE:-15}" max_v="${FENETRE_VIDANGE_MAX:-600}" n
+        while n="$(_fen_file_active)"; [[ "${n:-0}" -gt 0 ]]; do
+            if awk -v a="$v" -v m="$max_v" 'BEGIN { exit !(a >= m) }'; then
+                _fen_journal warning "file Postfix encore active (${n}) apres ${v}s : arret quand meme"
+                break
+            fi
+            _fen_controle || return 0
+            _fen_garde_memoire || break
+            _fen_sleep "$pas_v"
+            v="$(awk -v a="$v" -v p="$pas_v" 'BEGIN { print a + p }')"
+        done
+    else
+        _antispam_audit "fenetre_arret_memoire"
+    fi
+
+    _fen_fermer_fenetre
+    local rc=$?
+    trap - EXIT TERM INT HUP
+    return "$rc"
+}
+
 
 cmd_antispam_apprentissage() {
     local wc="$WEBMAIL_CONTAINER"
@@ -1202,6 +1607,18 @@ cmd_status() {
         echo -e "  Status:    ${YELLOW}Stopped${NC}"
     else
         echo -e "  Status:    ${RED}Not installed${NC}"
+    fi
+    echo ""
+
+    # Fenêtre de relance planifiée (#3925)
+    if [[ -e "$FENETRE_MARQUEUR" ]]; then
+        local _fm _ff _fp
+        _fm="$(_fen_marq motif)"; _ff="$(_fen_marq fin)"; _fp="$(_fen_marq phase)"
+        echo -e "  Fenêtre:   ${GREEN}ouverte${NC} (${_fm:-?}, ${_fp:-?}) jusqu'à $(date -d "@${_ff:-0}" '+%F %T' 2>/dev/null || echo '?')"
+    elif [[ "$(config_get_section "fenetre" "actif" "false")" == "true" ]]; then
+        echo "  Fenêtre:   planifiée (secubox-mail-fenetre.timer)"
+    else
+        echo "  Fenêtre:   inactive ([fenetre] actif = false)"
     fi
     echo ""
 
@@ -1949,6 +2366,8 @@ Service:
   start                Start mail services
   stop                 Stop mail services
   restart              Restart mail services
+  fenetre [--duree MIN] [--motif TXT]
+                       Fenêtre de relance planifiée : éveille le conteneur arrêté, puis le remet en veille (#3925)
 
 Users:
   user add <email>     Add mail user
@@ -2174,9 +2593,9 @@ case "${1:-}" in
     # Phase 2 — Rspamd
     rspamd)      shift; cmd_rspamd "$@" ;;
     # Service control
-    start)       shift; cmd_start "$@" ;;
+    start)       shift; fenetre_cede; cmd_start "$@" ;;
     stop)        shift; cmd_stop "$@" ;;
-    restart)     shift; cmd_restart "$@" ;;
+    restart)     shift; fenetre_cede; cmd_restart "$@" ;;
     # Users and aliases
     user)        shift; cmd_user "$@" ;;
     user-repair) shift; cmd_user_repair "$@" ;;
@@ -2208,6 +2627,8 @@ case "${1:-}" in
     redis)       cmd_redis ;;
     services)    cmd_services ;;
     veille)      cmd_veille ;;
+    fenetre)     shift; cmd_fenetre "$@" ;;
+    fenetre-fermer) cmd_fenetre_fermer ;;
     webmail)     cmd_webmail ;;
     sync)        cmd_sync ;;
     # Help

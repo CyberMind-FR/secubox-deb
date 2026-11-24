@@ -7,6 +7,9 @@ if [ "$1" = "remove" ]; then
     systemctl disable secubox-mail-ssl-renew.timer 2>/dev/null || true
     systemctl disable --now secubox-mail-veille.timer 2>/dev/null || true
     systemctl stop secubox-mail-veille.service 2>/dev/null || true
+    systemctl disable --now secubox-mail-fenetre.timer 2>/dev/null || true
+    # stop : le TERM de mailctl fenetre remet le conteneur en veille s'il l'avait éveillé.
+    systemctl stop secubox-mail-fenetre.service 2>/dev/null || true
     systemctl reload nginx 2>/dev/null || true
 fi
 #DEBHELPER#
