@@ -1,3 +1,14 @@
+secubox-soc (1.13.0-1~trixie1) trixie; urgency=medium
+
+  * Guardian : bloc « Campagnes en cours » (ref #3919) : 4 populations
+    d'attaquants au plus, actives dans les dernières 24 h, lues dans
+    /api/v1/waf/populations (famille, nom, adresses, états, barres de 7 jours).
+    Tout le bloc mène à /waf/campagnes.html ; les cartes restent dans le WAF.
+    Lecture discrète : route absente ou refusée, « Relevé indisponible ».
+    reperes.js et cartes-campagnes.js livrés dans /soc/ (copies identiques).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:30:00 +0100
+
 secubox-soc (1.12.1-1~trixie1) trixie; urgency=medium
 
   * Une place par panneau (ref #3922) : le WAF garde le détail, le SOC en donne
