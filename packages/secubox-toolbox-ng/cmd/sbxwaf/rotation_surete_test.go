@@ -378,6 +378,41 @@ func TestI2Preuves(t *testing.T) {
 	}
 }
 
+// Vue de code d'une forge (/propriétaire/dépôt/src/branch/…/x.js) : une PAGE HTML, quelle que soit l'extension du fichier montré. Un robot qui n'ouvre que
+// cela n'est pas un navigateur. Au moindre doute (fichier brut, autre site, en-tête de sous-ressource, référent), la preuve reste.
+func TestRotationVuesDeForge(t *testing.T) {
+	for _, p := range []string{"/p/d/src/branch/main/app.js", "/p/d/src/commit/0a1b2c3d4e/img/x.png", "/p/d/blame/branch/main/a.mjs",
+		"/p/d/commits/branch/main/a.svg"} {
+		if preuveNavigateur(p, http.Header{}) || !estNavigation("GET", p, http.Header{}) {
+			t.Errorf("%s : une page, pas une ressource", p)
+		}
+		for _, kv := range [][2]string{{"Referer", "https://forge.exemple.test/p/d"}, {"Sec-Fetch-Dest", "image"}, {"Cookie", "s=1"}} {
+			x := http.Header{}
+			x.Set(kv[0], kv[1])
+			if !preuveNavigateur(p, x) {
+				t.Errorf("%s avec %v : une preuve", p, kv)
+			}
+		}
+	}
+	for _, p := range []string{"/src/app.js", "/src/branch/app.js", "/d/src/branch/app.js", "/a/b/c/src/branch/app.js", "/p/d/src/app.js", "/p/d/src/branches/app.js",
+		"/p/d/raw/branch/main/x.png", "/p/d/media/branch/main/x.png", "/p/d/src/branch.js", "/static/app/src/tag/index.js", "/static/app/src/commit/index.js", "/static/app/src/commit/0a1b2c3.js", "/assets/css/index.css"} {
+		if !preuveNavigateur(p, http.Header{}) {
+			t.Errorf("%s : la preuve reste", p)
+		}
+	}
+	// De bout en bout : le robot qui ne lit que du code est jugé comme un autre.
+	r := NewRotation(cfgEssai(t, "propose"), &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
+	t0 := time.Now()
+	etablir(r, 0, 60, t0)
+	ip, t1 := adressePublique(100), t0.Add(5*time.Second)
+	p := "/p/d/src/branch/main/app.js"
+	r.Servie(r.Observe(RotationRequete{IP: ip, UA: uaFictif, Hote: hoteFictif, Navigation: estNavigation("GET", p, http.Header{}), Preuve: preuveNavigateur(p, http.Header{})}, t1), t1)
+	avancer(r, t1, t1.Add(20*time.Second))
+	if c := r.campagnesActives(); len(c) != 1 || c[0].ABannir != 1 {
+		t.Fatalf("%+v", c)
+	}
+}
+
 func TestI2PageAvecRessource(t *testing.T) {
 	h := "forge.exemple.test"
 	for _, s := range []string{`<link rel="stylesheet" href="/a.css">`, `<LINK REL=stylesheet HREF=a.css>`, `<img src='x.png'>`,

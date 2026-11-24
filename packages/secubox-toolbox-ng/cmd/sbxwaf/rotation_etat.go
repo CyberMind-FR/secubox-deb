@@ -8,12 +8,15 @@ import (
 	"bufio"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -55,6 +58,28 @@ func (r *Rotation) chargerTor(t time.Time) {
 		r.etatSale = true
 		r.mu.Unlock()
 	}
+}
+
+// rotationVerrou garde le verrou ouvert jusqu'à la fin du processus (le noyau le rend, même après un arrêt brutal).
+var rotationVerrou *os.File
+
+// verrouillerRotation prend le verrou exclusif du détecteur, à côté de son état. Tenu par un autre processus, ou impossible à prendre : erreur, et le
+// détecteur ne démarre pas (échec sûr).
+func verrouillerRotation(etat string) error {
+	if etat == "" {
+		return errors.New("--rotation-etat vide : pas de verrou possible")
+	}
+	chemin := etat + ".verrou"
+	f, err := os.OpenFile(chemin, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o640)
+	if err != nil {
+		return fmt.Errorf("verrou : %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return fmt.Errorf("verrou %s (un autre sbxwaf porte déjà le détecteur ?) : %w", chemin, err)
+	}
+	rotationVerrou = f
+	return nil
 }
 
 // ── État ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

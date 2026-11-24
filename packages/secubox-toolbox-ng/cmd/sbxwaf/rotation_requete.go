@@ -102,10 +102,43 @@ func ressourceDePage(chemin string) bool {
 	ext := chemin[i:]
 	for _, e := range extensionsRessource {
 		if len(ext) == len(e) && contientPli(ext, e) {
-			return true
+			return !vueDeForge(chemin)
 		}
 	}
 	return false
+}
+
+// vueDeForge : « /propriétaire/dépôt/{src|blame|commits}/{branch|commit/<hex>}/… », la vue HTML d'un fichier (Gitea). Son extension est celle du fichier
+// MONTRÉ, pas d'une ressource chargée. Forme exacte, deux segments devant : les fichiers bruts (/raw/, /media/), qu'une page affiche, et le « /src/ »
+// d'un autre site restent des ressources.
+func vueDeForge(chemin string) bool {
+	n, i := 0, 0
+	for i = 0; i < len(chemin); i++ {
+		if chemin[i] == '/' {
+			if n++; n == 3 {
+				break
+			}
+		}
+	}
+	if n < 3 || chemin[0] != '/' {
+		return false
+	}
+	reste, ok := chemin[i+1:], false
+	for _, p := range [...]string{"src/", "blame/", "commits/"} {
+		if strings.HasPrefix(reste, p) {
+			reste, ok = reste[len(p):], true
+			break
+		}
+	}
+	if !ok || strings.HasPrefix(reste, "branch/") {
+		return ok
+	}
+	reste, ok = strings.CutPrefix(reste, "commit/")
+	k := 0
+	for k < len(reste) && (reste[k] >= '0' && reste[k] <= '9' || reste[k] >= 'a' && reste[k] <= 'f') {
+		k++
+	}
+	return ok && k >= 7 && k < len(reste) && reste[k] == '/'
 }
 
 // cheminSansPage : clients légitimes sans page (ACME et autres /.well-known/, git par HTTP, robots.txt).

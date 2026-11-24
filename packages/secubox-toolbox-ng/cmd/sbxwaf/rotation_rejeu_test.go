@@ -140,7 +140,7 @@ func TestRejeuHoteDuFichier(t *testing.T) {
 
 func TestRejeuPageProbable(t *testing.T) {
 	for chemin, oui := range map[string]bool{"/": true, "/a/b": true, "/index.html": true, "/a.php": true, "/v1.2": true, "/a.zip": false, "/a.tar.gz": false, "/a.deb": false,
-		"/flux.rss": false, "/x.JSON": false, "/a.patch": false, "/a.css": false, "/d/p/src/branch/m/x.json": true, "/d/p/raw/branch/m/x.txt": false} {
+		"/flux.rss": false, "/x.JSON": false, "/a.patch": false, "/a.css": false, "/d/p/src/branch/m/x.json": true, "/d/p/src/branch/m/x.js": true, "/src/x.json": false, "/d/p/raw/branch/m/x.txt": false} {
 		if pageProbable(chemin) != oui {
 			t.Errorf("%s : %v", chemin, !oui)
 		}
@@ -307,17 +307,39 @@ func TestRejeuSuspectsFauxPositifs(t *testing.T) {
 	f := ecrireJournal(t, d, hoteFictif+"_access.log", b.String())
 	r := rejouerEssai(t, louees(), true, f)
 	s := r.SuspectsFauxPositifs
-	if s.Adresses != 4 || s.PreuveA24h != 3 || s.ParPreuve["ressource"] != 1 || s.ParPreuve["referent"] != 1 || s.ParPreuve["revalidation"] != 1 || s.RobotsDeclares != 1 ||
-		s.PriveLanMaillage != 0 || s.PreuveAvant != 0 || s.PreuveApres != 3 || len(s.Exemples) != 4 {
+	z := s.Structurels
+	// Seule `preuve_apres` informe : le robot déclaré (structurel) n'entre pas dans `adresses`.
+	if s.Adresses != 3 || s.PreuveApres != 3 || s.ParPreuve["ressource"] != 1 || s.ParPreuve["referent"] != 1 || s.ParPreuve["revalidation"] != 1 ||
+		z.RobotsDeclares != 1 || z.PriveLanMaillage != 0 || z.PreuveAvant != 0 || len(s.Exemples) != 3 {
 		t.Fatalf("suspects : %+v", s)
 	}
-	if r = rejouerEssai(t, louees(), false, f); r.SuspectsFauxPositifs.Adresses != 4 || len(r.SuspectsFauxPositifs.Exemples) != 0 {
+	if r = rejouerEssai(t, louees(), false, f); r.SuspectsFauxPositifs.Adresses != 3 || len(r.SuspectsFauxPositifs.Exemples) != 0 {
 		t.Fatalf("suspects sans adresses : %+v", r.SuspectsFauxPositifs)
 	}
 	for ip, oui := range map[string]bool{"10.10.0.5": true, "192.168.1.2": true, "100.64.3.4": true, "fd00::1": true, "203.0.113.9": true, "198.51.100.4": false} {
 		if adresseDeConfiance(netip.MustParseAddr(ip), parseCIDRs("203.0.113.0/24")) != oui {
 			t.Errorf("%s : %v", ip, !oui)
 		}
+	}
+}
+
+// Invariant : une adresse qui a donné une preuve avant son verdict finit dans epargnees.preuve, jamais parmi les bannies ; `preuve_avant` vaut donc 0,
+// même pour une ligne écrite en retard. Une preuve à la seconde du verdict ou avant n'est pas « après ».
+func TestRejeuPreuveAvantImpossible(t *testing.T) {
+	d := t.TempDir()
+	var b strings.Builder
+	campagneSynthetique(&b, 0, 60, rejeuT0, 10*time.Minute)
+	x := rejeuT0.Add(11 * time.Minute)
+	b.WriteString(ligneNginx(adressePublique(100), x, "GET", "/p", 200, "-", uaFictif))
+	b.WriteString(ligneNginx(adressePublique(100), x.Add(10*time.Second), "GET", "/a.css", 200, "-", uaFictif)) // à l'échéance exacte
+	b.WriteString(ligneNginx(adressePublique(101), x.Add(time.Minute), "GET", "/p", 200, "-", uaFictif))
+	b.WriteString(ligneNginx(adressePublique(102), x.Add(2*time.Minute), "GET", "/q", 200, "-", "Autre/1"))
+	b.WriteString(ligneNginx(adressePublique(101), x.Add(62*time.Second), "GET", "/a.css", 200, "-", uaFictif)) // datée d'avant le verdict, écrite après
+	f := ecrireJournal(t, d, hoteFictif+"_access.log", b.String())
+	r := rejouerEssai(t, louees(), false, f)
+	s := r.SuspectsFauxPositifs
+	if r.Epargnees["preuve"] != 1 || s.Structurels.PreuveAvant != 0 || s.PreuveApres != 1 || s.Adresses != 1 {
+		t.Fatalf("épargnées %v, suspects %+v", r.Epargnees, s)
 	}
 }
 

@@ -75,8 +75,8 @@ func init() {
 	}
 }
 
-// pageProbable : chemin sans extension de ressource, de téléchargement ni de texte brut. Les vues de code d'une forge (« /src/… », « /blame/… ») sont
-// des pages, quelle que soit l'extension du fichier montré.
+// pageProbable : chemin sans extension de ressource, de téléchargement ni de texte brut. Les vues de code d'une forge (vueDeForge) sont des pages, quelle
+// que soit l'extension du fichier montré.
 func pageProbable(chemin string) bool {
 	if ressourceDePage(chemin) {
 		return false
@@ -88,7 +88,7 @@ func pageProbable(chemin string) bool {
 	if _, non := extensionsSansPage[strings.ToLower(chemin[i:])]; !non {
 		return true
 	}
-	return strings.Contains(chemin, "/src/") || strings.Contains(chemin, "/blame/")
+	return vueDeForge(chemin)
 }
 
 // analyserLigne lit le format combiné de nginx, précédé ou non de l'hôte (« $host » ou « $host:$port », formats sbx_host, sbx_masque, vhost_combined).

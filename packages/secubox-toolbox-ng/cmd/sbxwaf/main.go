@@ -1805,6 +1805,13 @@ func main() {
 			}
 			// Campagnes à rotation (#3919) : garde-fous dans rotation.go ; mêmes plages protégées ; sans annuaire, aucune campagne ne s'établit.
 			if *rotationMode == "propose" || *rotationMode == "auto" {
+				// Un SEUL processus porte le détecteur : ailleurs, la page et ses ressources seraient vues séparément, et un vrai visiteur passerait pour muet.
+				if err := verrouillerRotation(*rotationEtat); err != nil {
+					log.Printf("sbxwaf: rotation DÉSACTIVÉE — %v", err)
+					*rotationMode = "off"
+				}
+			}
+			if *rotationMode == "propose" || *rotationMode == "auto" {
 				var cl classeur
 				if annuaire != nil {
 					cl = annuaire

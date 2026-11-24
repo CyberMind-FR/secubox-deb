@@ -131,17 +131,25 @@ type rejeuVhost struct {
 	AuraientEteBannies int `json:"auraient_ete_bannies"`
 }
 
-// rejeuSuspects : adresses qui auraient été bannies et que le reste des journaux innocente (une adresse peut avoir plusieurs motifs).
+// rejeuSuspects : adresses qui auraient été bannies et qui se sont montrées navigateurs STRICTEMENT APRÈS leur verdict, dans les 24 h. C'est le seul
+// compteur qui informe (`adresses` = `preuve_apres`) ; un faux ban n'y est pas prouvé, une adresse louée peut avoir changé de client.
 type rejeuSuspects struct {
-	Adresses         int            `json:"adresses"`
-	PreuveA24h       int            `json:"preuve_a_24h"`
-	PreuveAvant      int            `json:"preuve_avant"`
-	PreuveApres      int            `json:"preuve_apres"`
-	ParPreuve        map[string]int `json:"par_preuve"`
-	PriveLanMaillage int            `json:"prive_lan_maillage"`
-	RobotsDeclares   int            `json:"robots_declares"`
-	Exemples         []string       `json:"exemples,omitempty"`
+	Lecture     string           `json:"lecture"`
+	Adresses    int              `json:"adresses"`
+	PreuveApres int              `json:"preuve_apres"`
+	ParPreuve   map[string]int   `json:"par_preuve"`
+	Exemples    []string         `json:"exemples,omitempty"`
+	Structurels rejeuStructurels `json:"structurels"`
 }
+
+// rejeuStructurels : contrôles nuls (ou presque) PAR CONSTRUCTION ; zéro n'y prouve rien, autre chose dénonce un défaut. Jamais comptés dans `adresses`.
+type rejeuStructurels struct {
+	PreuveAvant      int `json:"preuve_avant"`       // épargnée par le détecteur (epargnees.preuve)
+	PriveLanMaillage int `json:"prive_lan_maillage"` // jamais observée, ou garde « protegee »
+	RobotsDeclares   int `json:"robots_declares"`    // jamais suivie sous ce nom : seulement une adresse qui en change
+}
+
+const rejeuLectureSuspects = "seul preuve_apres informe (preuve de navigateur après le verdict, 24 h au plus, même IPv4 ou même /64) ; structurels : nuls par construction, sans valeur de preuve"
 
 // rejeuBannie : une adresse qui aurait été bannie (bornée par le plafond horaire du détecteur).
 type rejeuBannie struct {
@@ -199,7 +207,7 @@ func Rejouer(fichiers []string, cfg RotationConfig, a classeur, adresses bool, s
 		Campagnes: []*rejeuCampagne{}, HotesAvecCampagne: []string{}, Epargnees: map[string]int{}, ParVhost: map[string]*rejeuVhost{}}
 	rap.GenereLe = dateRejeu(time.Now().Unix())
 	rap.AuraientEteBannies.ParClasse = map[string]int{}
-	rap.SuspectsFauxPositifs.ParPreuve = map[string]int{}
+	rap.SuspectsFauxPositifs = rejeuSuspects{Lecture: rejeuLectureSuspects, ParPreuve: map[string]int{}}
 
 	flux, lues, mal, sansLigne, erreurs := reperer(fichiers)
 	if len(flux)+sansLigne == 0 {
@@ -217,7 +225,10 @@ func Rejouer(fichiers []string, cfg RotationConfig, a classeur, adresses bool, s
 		for a, b := range j.bannies {
 			j.origines[origine(a)] = append(j.origines[origine(a)], b)
 		}
+		fin := j.horloge
+		j.horloge = flux[0].premier
 		_, _, e = fusionner(flux, j.innocenter)
+		j.horloge = fin
 		for _, x := range e {
 			if !strings.Contains(fmt.Sprint(erreurs), x.Fichier) {
 				erreurs = append(erreurs, x)
@@ -382,8 +393,10 @@ func (j *rejeu) verdict(v rotVerdict, raison string, t time.Time) {
 // ── Seconde lecture : ce qui innocente ───────────────────────────────────────────────────────────────────────────────
 
 // innocenter cherche, autour de chaque verdict (± 24 h), les preuves et les robots déclarés venus de la même origine (IPv4, ou /64 IPv6). Une preuve
-// AVANT le verdict ne devrait pas exister : ce serait un défaut du détecteur ou du rejeu.
+// AVANT le verdict ne devrait pas exister : ce serait un défaut du détecteur ou du rejeu. Même horloge monotone qu'à la première lecture : une ligne
+// écrite en retard vient après.
 func (j *rejeu) innocenter(_ string, l *rejeuLigne) {
+	j.horloge = max(j.horloge, l.t)
 	nature := l.naturePreuve()
 	robot := l.ua != "" && (automateDeclare(l.ua) || strings.Contains(l.ua, "://"))
 	if nature == "" && !robot {
@@ -394,17 +407,16 @@ func (j *rejeu) innocenter(_ string, l *rejeuLigne) {
 		return
 	}
 	for _, b := range j.origines[origine(a)] {
-		if l.t < b.premier-rejeuInnocente || l.t > b.dernier+rejeuInnocente {
+		if j.horloge < b.premier-rejeuInnocente || j.horloge > b.dernier+rejeuInnocente {
 			continue
 		}
 		b.robot = b.robot || robot
-		if nature != "" {
-			b.preuves[nature] = true
-			if l.t <= b.premier {
-				b.avant = true
-			} else {
-				b.apres = true
-			}
+		switch {
+		case nature == "":
+		case j.horloge <= b.premier:
+			b.avant = true
+		default:
+			b.apres, b.preuves[nature] = true, true
 		}
 	}
 }
@@ -435,28 +447,23 @@ func (j *rejeu) conclure() {
 	for _, b := range j.bannies {
 		prive := adresseDeConfiance(b.adr, j.cfg.Protegees)
 		if prive {
-			s.PriveLanMaillage++
+			s.Structurels.PriveLanMaillage++
 		}
 		if b.robot {
-			s.RobotsDeclares++
-		}
-		if len(b.preuves) > 0 {
-			s.PreuveA24h++
+			s.Structurels.RobotsDeclares++
 		}
 		if b.avant {
-			s.PreuveAvant++
+			s.Structurels.PreuveAvant++
 		}
 		if b.apres {
-			s.PreuveApres++
-		}
-		for n := range b.preuves {
-			s.ParPreuve[n]++
-		}
-		if prive || b.robot || len(b.preuves) > 0 {
 			s.Adresses++
+			s.PreuveApres++
 			if j.adresses {
 				s.Exemples = append(s.Exemples, b.adr.String())
 			}
+		}
+		for n := range b.preuves {
+			s.ParPreuve[n]++
 		}
 	}
 	sort.Strings(s.Exemples)
