@@ -25,14 +25,24 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 type Comptes struct {
-	connus map[string]bool
-	charge bool
+	mu        sync.Mutex
+	chemins   []string
+	empreinte string // date et taille de chaque fichier, à la dernière lecture
+	connus    map[string]bool
+	charge    bool
 }
+
+// comptesRepos : un fichier modifié depuis moins longtemps est peut-être en cours
+// d'écriture. Plutôt qu'une liste tronquée, on ne sait rien jusqu'au repos.
+const comptesRepos = 2 * time.Second
 
 // NewComptes lit une liste de comptes. Deux formats acceptes, parce que les
 // deux existent sur la box :
@@ -48,18 +58,64 @@ type Comptes struct {
 //
 // Les commentaires et les lignes vides sont ignores.
 func NewComptes(chemins []string) (*Comptes, error) {
-	c := &Comptes{connus: make(map[string]bool)}
-	for _, chemin := range chemins {
-		chemin = strings.TrimSpace(chemin)
-		if chemin == "" {
+	c := &Comptes{}
+	for _, x := range chemins {
+		if x = strings.TrimSpace(x); x != "" {
+			c.chemins = append(c.chemins, x)
+		}
+	}
+	c.empreinte, _ = c.mesure()
+	if err := c.lire(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// mesure rend date et taille de chaque fichier, et la date la plus récente.
+func (c *Comptes) mesure() (empreinte string, recente time.Time) {
+	for _, chemin := range c.chemins {
+		st, err := os.Stat(chemin)
+		if err != nil {
+			empreinte += chemin + "|absent;"
 			continue
 		}
+		empreinte += fmt.Sprintf("%s|%d|%d;", chemin, st.ModTime().UnixNano(), st.Size())
+		if st.ModTime().After(recente) {
+			recente = st.ModTime()
+		}
+	}
+	return empreinte, recente
+}
+
+// actualise relit les fichiers s'ils ont changé (verrou tenu). Illisible ou en
+// cours d'écriture : on ne sait rien, donc on ne conclut rien.
+func (c *Comptes) actualise() {
+	empreinte, recente := c.mesure()
+	if empreinte == c.empreinte {
+		return
+	}
+	c.charge = false
+	if d := time.Since(recente); d >= 0 && d < comptesRepos {
+		return
+	}
+	c.empreinte = empreinte
+	if err := c.lire(); err != nil {
+		c.charge, c.empreinte = false, ""
+		return
+	}
+	log.Printf("sbx-authwatch: liste des comptes relue (%d entrée(s))", len(c.connus))
+}
+
+// lire charge les fichiers.
+func (c *Comptes) lire() error {
+	c.connus, c.charge = make(map[string]bool), false
+	for _, chemin := range c.chemins {
 		f, err := os.Open(chemin)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue // un chemin absent n'est pas une erreur : on cumule ce qu'on trouve
 			}
-			return nil, fmt.Errorf("%s : %w", chemin, err)
+			return fmt.Errorf("%s : %w", chemin, err)
 		}
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
@@ -79,11 +135,11 @@ func NewComptes(chemins []string) (*Comptes, error) {
 		}
 		_ = f.Close()
 		if err := sc.Err(); err != nil {
-			return nil, fmt.Errorf("%s : %w", chemin, err)
+			return fmt.Errorf("%s : %w", chemin, err)
 		}
 	}
 	c.charge = len(c.connus) > 0
-	return c, nil
+	return nil
 }
 
 // ajoute enregistre l'adresse ET sa partie locale : les journaux montrent les
@@ -101,7 +157,15 @@ func (c *Comptes) ajoute(nom string) {
 
 // Charge dit si une liste exploitable a ete lue. Sans elle, aucune certitude
 // n'est tiree : mieux vaut rester patient que bannir un utilisateur reel.
-func (c *Comptes) Charge() bool { return c != nil && c.charge }
+func (c *Comptes) Charge() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.actualise()
+	return c.charge
+}
 
 // Inexistant dit si la cible n'est PAS un compte de la box.
 //
@@ -111,7 +175,9 @@ func (c *Comptes) Inexistant(cible string) bool {
 	if !c.Charge() || strings.TrimSpace(cible) == "" {
 		return false
 	}
-	return !c.connus[strings.ToLower(strings.TrimSpace(cible))]
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.charge && !c.connus[strings.ToLower(strings.TrimSpace(cible))]
 }
 
 // Taille rend le nombre d'entrees, formes locales comprises.
@@ -119,5 +185,7 @@ func (c *Comptes) Taille() int {
 	if c == nil {
 		return 0
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return len(c.connus)
 }

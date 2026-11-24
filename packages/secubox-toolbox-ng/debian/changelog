@@ -1,19 +1,27 @@
 secubox-toolbox-ng (0.20.0-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch : leurres de messagerie (ref #3924), ÉTEINTS par défaut
-    (SBX_MAIL_CONTENEUR dans /etc/secubox/authwatch/authwatch.env).
+    (SBX_MAIL_CONTENEUR dans /etc/default/secubox-authwatch, lu par
+    authwatch lui-même et seulement s'il est à root).
     Pendant l'arrêt du conteneur de courrier, sondé toutes les 30 s
     (--mail-sonde), une table nft propre à authwatch redirige 25, 465, 587,
     993 et 995 vers des ports locaux ; la règle du site n'est pas touchée.
-    Deux sondes ratées l'activent, une réussie la retire ; arrêt et
-    plantage la retirent (ExecStopPost), et elle expire seule en trois
-    périodes. 110 et 143 : leurres permanents si rien d'autre n'y écoute.
-  * Toute réponse d'échec est temporaire (451, 454, [UNAVAILABLE],
-    [SYS/TEMP]) : aucun message accepté ni perdu. Aucun mot de passe gardé,
-    journalisé ni haché ; compte masqué au journal. Une visite simple n'est
-    jamais un signal ; une authentification suit les règles ordinaires.
-    465, 993, 995 : adresse et cadence comptées dans
-    /run/secubox-authwatch/leurres-mail.json (0600), jamais de ban.
+    Il faut deux sondes ratées, un conteneur CONNU arrêté ou absent (cgroup,
+    socket LXC) et une adresse qui soit bien la sienne. Une sonde réussie,
+    un conteneur qui démarre, l'arrêt et le plantage (ExecStopPost) la
+    retirent, et elle expire seule en trois périodes. 110 et 143 : leurres
+    permanents si rien d'autre n'y écoute. --simulation ne redirige rien.
+  * Port 25 : 421 dès la bannière, sans capture. 587, 143, 110 :
+    authentification en clair non annoncée, STARTTLS annoncé et refusé ;
+    seul le compte est lu, échecs tous temporaires. Aucun mot de passe
+    gardé, journalisé ni haché ; un compte ne s'affiche (masqué) que s'il
+    existe, et ne part jamais vers sbx-actord.
+  * Seul bannit un compte INEXISTANT, liste de comptes chargée et leurre
+    réglé « bannir » (défaut : observer). Le reste est une ligne « detect »
+    de gravité audit. 465, 993, 995 : adresse et cadence comptées par jour
+    dans /run/secubox-authwatch/leurres-mail.json (0600), jamais de ban.
+  * Liste des comptes réels relue quand elle change.
+  * Unité : LimitCORE=0, UMask=0027.
   * --leurres refuse les ports de messagerie, et identifiants.go n'y
     capture jamais rien.
   * Famille « messagerie » : auth_imap* s'ajoute à auth_smtp*.

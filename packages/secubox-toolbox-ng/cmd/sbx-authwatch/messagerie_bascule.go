@@ -77,15 +77,17 @@ func scriptBascule(leurres []LeurreMail, echeance time.Duration) string {
 		"}\n"
 }
 
-// BasculeMail est la machine à états. Les trois fonctions sont injectables.
+// BasculeMail est la machine à états. Ses fonctions sont injectables.
 type BasculeMail struct {
 	intervalle time.Duration
 	sonder     func(context.Context) bool
+	etat       func() error // nil : conteneur connu arrêté ou absent
 	nft        func(context.Context, string) error
 	ouvrir     func(context.Context) ([]LeurreMail, func())
 
 	mu     sync.Mutex
 	echecs int
+	motif  string // dernière raison de ne pas prendre la place, dite une fois
 	actif  bool
 	depuis time.Time
 	ports  []LeurreMail
@@ -93,7 +95,7 @@ type BasculeMail struct {
 }
 
 // NewBasculeMail : `conteneur` est l'adresse IPv4 privée du conteneur de courrier.
-func NewBasculeMail(conteneur string, intervalle time.Duration, b *Banneur, m *ServeurMail) (*BasculeMail, error) {
+func NewBasculeMail(conteneur, nom string, lxcpaths []string, intervalle time.Duration, b *Banneur, m *ServeurMail) (*BasculeMail, error) {
 	p := net.ParseIP(conteneur)
 	if p == nil || p.To4() == nil || !p.IsPrivate() {
 		return nil, fmt.Errorf("--mail-conteneur %q : adresse IPv4 privée attendue", conteneur)
@@ -101,8 +103,13 @@ func NewBasculeMail(conteneur string, intervalle time.Duration, b *Banneur, m *S
 	if intervalle < sondeIntervalMin || intervalle > sondeIntervalMax {
 		return nil, fmt.Errorf("--mail-sonde %s : entre %s et %s", intervalle, sondeIntervalMin, sondeIntervalMax)
 	}
+	if !nomConteneur.MatchString(nom) {
+		return nil, fmt.Errorf("--mail-nom %q : nom de conteneur attendu", nom)
+	}
+	lxc := EtatLXC{Nom: nom, Adresse: p.String(), LxcPaths: lxcpaths, Cgroup: "/sys/fs/cgroup", ProcUnix: "/proc/net/unix"}
 	return &BasculeMail{
 		intervalle: intervalle,
+		etat:       lxc.Remplacable,
 		sonder:     func(ctx context.Context) bool { return sondeMail(ctx, p.String()) },
 		nft: func(ctx context.Context, script string) error {
 			ctx, fin := context.WithTimeout(ctx, 10*time.Second)
@@ -159,10 +166,22 @@ func (b *BasculeMail) tour(ctx context.Context) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if debout {
-		b.echecs = 0
+		b.echecs, b.motif = 0, ""
 		b.desactive(ctx, "le conteneur répond")
 		return
 	}
+	// Muet mais EN MARCHE (démarrage, gel, panne de postfix) ou état inconnu :
+	// on ne prend pas sa place, et on la rend.
+	if err := b.etat(); err != nil {
+		b.echecs = 0
+		b.desactive(ctx, err.Error())
+		if b.motif != err.Error() {
+			b.motif = err.Error()
+			log.Printf("sbx-authwatch: leurres de messagerie non activés — %v, bien qu'il ne réponde pas", err)
+		}
+		return
+	}
+	b.motif = ""
 	if b.echecs < sondeEchecsPour {
 		b.echecs++
 	}
@@ -234,15 +253,19 @@ func (b *BasculeMail) Boucle(ctx context.Context) {
 // EtatMail : fichier d'état (root seul : il porte les adresses de visiteurs qui
 // ne sont pas des attaquants).
 type EtatMail struct {
-	Actif  bool                  `json:"actif"`
-	Depuis int64                 `json:"depuis,omitempty"`
-	TLS    map[string]ServiceTLS `json:"tls"`
+	Actif    bool                  `json:"actif"`
+	Depuis   int64                 `json:"depuis,omitempty"`
+	Paniques int                   `json:"paniques"`
+	TLS      map[string]ServiceTLS `json:"tls"`
 }
 
 // EcrireEtat publie l'état par renommage atomique, 0600.
-func (b *BasculeMail) EcrireEtat(d *DecompteTLS, chemin string, maintenant time.Time) error {
+func (b *BasculeMail) EcrireEtat(m *ServeurMail, chemin string, maintenant time.Time) error {
+	m.mu.Lock()
+	paniques := m.paniques
+	m.mu.Unlock()
 	b.mu.Lock()
-	e := EtatMail{Actif: b.actif, TLS: d.Etat(maintenant)}
+	e := EtatMail{Actif: b.actif, Paniques: paniques, TLS: m.tls.Etat(maintenant)}
 	if b.actif {
 		e.Depuis = b.depuis.Unix()
 	}

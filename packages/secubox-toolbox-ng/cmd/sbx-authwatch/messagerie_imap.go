@@ -6,7 +6,8 @@
 package main
 
 // LEURRES IMAP (143) ET POP3 (110), EN CLAIR, PERMANENTS (#3924).
-// Réponses d'échec temporaires : [UNAVAILABLE] (RFC 5530), [SYS/TEMP] (RFC 3206).
+// L'authentification en clair n'est PAS annoncée (LOGINDISABLED, ni USER ni SASL) ;
+// STARTTLS et STLS le sont, et refusés. Réponses d'échec temporaires : [UNAVAILABLE] (RFC 5530), [SYS/TEMP] (RFC 3206).
 
 import (
 	"bytes"
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	imapAccueil  = "* OK [CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN AUTH=LOGIN] IMAP4 ready\r\n"
-	imapCapacite = "* CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN AUTH=LOGIN\r\n"
+	imapAccueil  = "* OK [CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED] IMAP4 ready\r\n"
+	imapCapacite = "* CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED\r\n"
 	imapSature   = "* BYE [UNAVAILABLE] Service temporarily unavailable\r\n"
 	imapRefus    = " NO [UNAVAILABLE] Temporary authentication failure\r\n"
 	imapIndispo  = " NO [UNAVAILABLE] Service temporarily unavailable\r\n"
@@ -24,7 +25,7 @@ const (
 	pop3Accueil  = "+OK POP3 ready\r\n"
 	pop3Sature   = "-ERR [SYS/TEMP] Service temporarily unavailable\r\n"
 	pop3Refus    = "-ERR [SYS/TEMP] Temporary authentication failure\r\n"
-	pop3Capacite = "+OK\r\nUSER\r\nSASL PLAIN LOGIN\r\nRESP-CODES\r\n.\r\n"
+	pop3Capacite = "+OK\r\nSTLS\r\nRESP-CODES\r\n.\r\n"
 )
 
 // etiquette valide une étiquette IMAP : seul octet du client qu'on recopie.
@@ -82,7 +83,7 @@ func dialogueIMAP(s *sessionMail) {
 			}
 		case "AUTHENTICATE":
 			meca, initiale := mot(args)
-			if _, err := s.sasl(meca, initiale, func(b string) error { return s.ecrit("+ " + b + "\r\n") }); err != nil {
+			if err := s.sasl(meca, initiale, func(b string) error { return s.ecrit("+ " + b + "\r\n") }); err != nil {
 				return
 			}
 			rep = tag + imapRefus
@@ -105,7 +106,8 @@ func dialogueIMAP(s *sessionMail) {
 }
 
 // loginIMAP lit « LOGIN compte secret » (atome, chaîne entre guillemets ou
-// littéral). Le compte est copié, le secret sauté.
+// littéral). Le compte est copié, le secret sauté ; annoncé en littéral synchrone,
+// il n'est pas demandé du tout.
 func (s *sessionMail) loginIMAP(args []byte) (complet bool, err error) {
 	brut, reste, err := s.chaineIMAP(args)
 	if err != nil || brut == nil {
@@ -119,7 +121,12 @@ func (s *sessionMail) loginIMAP(args []byte) (complet bool, err error) {
 			return false, err
 		}
 	}
-	secret, suite, err := s.chaineIMAP(bytes.TrimLeft(reste, " "))
+	reste = bytes.TrimLeft(reste, " ")
+	if len(reste) > 1 && reste[0] == '{' && !bytes.HasSuffix(reste, []byte("+}")) {
+		s.note(compte)
+		return true, nil
+	}
+	secret, suite, err := s.chaineIMAP(reste)
 	if err != nil || secret == nil {
 		return false, err
 	}
@@ -194,7 +201,6 @@ func dialoguePOP3(s *sessionMail) {
 	if s.ecrit(pop3Accueil) != nil {
 		return
 	}
-	compte := ""
 	for i := 0; i < mailCommandes; i++ {
 		lig, err := s.lec.ligne()
 		if err != nil {
@@ -211,22 +217,23 @@ func dialoguePOP3(s *sessionMail) {
 		case "NOOP":
 			rep = "+OK\r\n"
 		case "USER":
-			compte, rep = compteDe(args), "+OK\r\n"
+			// Refusé dès le compte : « +OK » inviterait à livrer le secret.
+			s.note(compteDe(args))
+			rep = pop3Refus
 		case "PASS":
 			zero(args)
-			s.note(compte)
-			compte, rep = "", pop3Refus
+			rep = pop3Refus
 		case "APOP":
 			nom, _, _ := bytes.Cut(args, []byte{' '})
 			s.note(compteDe(nom))
 			rep = pop3Refus
 		case "AUTH":
 			if len(args) == 0 {
-				rep = "+OK\r\nPLAIN\r\nLOGIN\r\n.\r\n"
+				rep = "+OK\r\n.\r\n"
 				break
 			}
 			meca, initiale := mot(args)
-			if _, err := s.sasl(meca, initiale, func(b string) error { return s.ecrit("+ " + b + "\r\n") }); err != nil {
+			if err := s.sasl(meca, initiale, func(b string) error { return s.ecrit("+ " + b + "\r\n") }); err != nil {
 				return
 			}
 			rep = pop3Refus

@@ -99,6 +99,10 @@ func main() {
 		mailConteneur = flag.String("mail-conteneur", "",
 			"adresse IPv4 du conteneur de courrier : pendant son arrêt, des leurres de messagerie "+
 				"répondent à sa place (#3924) ; 110 et 143 permanents (\"\" = désactivé)")
+		mailNom   = flag.String("mail-nom", "", "nom du conteneur de courrier (défaut : « mail »)")
+		mailLxc   = flag.String("mail-lxcpaths", "/data/lxc,/var/lib/lxc", "chemins LXC où chercher sa configuration")
+		reglagesF = flag.String("reglages", "/etc/default/secubox-authwatch",
+			"réglages de l'opérateur (SBX_MAIL_CONTENEUR, SBX_MAIL_NOM) ; ignorés si le fichier n'est pas à root seul en écriture")
 		mailSonde = flag.Duration("mail-sonde", 30*time.Second,
 			"période de la sonde du conteneur de courrier ; la redirection expire seule après trois périodes")
 		mailEtat = flag.String("mail-etat", "/run/secubox-authwatch/leurres-mail.json",
@@ -288,22 +292,35 @@ func main() {
 	// Une valeur invalide coupe CES leurres, jamais la surveillance.
 	finMail := make(chan struct{})
 	close(finMail)
+	reglages := lireReglages(*reglagesF, 0)
+	if *mailConteneur == "" {
+		*mailConteneur = reglages["SBX_MAIL_CONTENEUR"]
+	}
+	if *mailNom == "" {
+		if *mailNom = reglages["SBX_MAIL_NOM"]; *mailNom == "" {
+			*mailNom = "mail"
+		}
+	}
 	if *mailConteneur != "" {
 		serveurMail := NewServeurMail(signaux, lb)
-		bascule, err := NewBasculeMail(*mailConteneur, *mailSonde, banneur, serveurMail)
+		bascule, err := NewBasculeMail(*mailConteneur, *mailNom, listeNonVide(*mailLxc), *mailSonde, banneur, serveurMail)
 		if err != nil {
 			log.Printf("sbx-authwatch: leurres de messagerie désactivés — %v", err)
 		} else {
 			serveurMail.Permanents(ctx)
-			finMail = make(chan struct{})
-			go func() { defer close(finMail); bascule.Boucle(ctx) }()
+			if *simule {
+				log.Printf("sbx-authwatch: simulation — aucune redirection de messagerie")
+			} else {
+				finMail = make(chan struct{})
+				go func() { defer close(finMail); bascule.Boucle(ctx) }()
+			}
 			if *mailEtat != "" {
 				go func() {
 					var dit bool
 					tic := time.NewTicker(60 * time.Second)
 					defer tic.Stop()
 					for {
-						if err := bascule.EcrireEtat(serveurMail.tls, *mailEtat, time.Now()); err != nil && !dit {
+						if err := bascule.EcrireEtat(serveurMail, *mailEtat, time.Now()); err != nil && !dit {
 							dit = true
 							log.Printf("sbx-authwatch: état des leurres de messagerie non écrit (%s) : %v", *mailEtat, err)
 						}
@@ -405,11 +422,8 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 				acteur.Emet(sig, !simule) // signal certain : sanction, sauf simulation
 				continue
 			}
-			// #3924 : leurre de messagerie réglé « observer » — journal seulement.
-			// Réglé « bannir », il suit les règles ORDINAIRES ci-dessous.
-			if sig.LeurreMail != "" && modesLeurres.Observe(sig.LeurreMail) {
-				journal.Inscrit(sig, "detect", 1)
-				acteur.Emet(sig, false)
+			if sig.LeurreMail != "" {
+				traiteMail(ctx, sig, comptes, banneur, journal, simule, acteur)
 				continue
 			}
 			// Tout signal retenu nourrit le graphe, sanctionné ou non : observer
@@ -424,7 +438,7 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// certitude que si une liste a EFFECTIVEMENT ete chargee.
 			if comptes.Inexistant(sig.Cible) {
 				sig.Severite = "high"
-				sig.Detail = sig.Detail + " — compte inexistant « " + compteAffiche(sig) + " »"
+				sig.Detail = sig.Detail + " — compte inexistant « " + sig.Cible + " »"
 				appliquer(ctx, sig, 1, banneur, journal, simule)
 				continue
 			}
@@ -437,7 +451,7 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// suffit.
 			if campagnes != nil {
 				if sources, campagne := campagnes.Note(sig.Cible, sig.IP, maintenant); campagne {
-					sig.Detail = sig.Detail + " — campagne sur « " + compteAffiche(sig) + " »"
+					sig.Detail = sig.Detail + " — campagne sur « " + sig.Cible + " »"
 					appliquer(ctx, sig, sources, banneur, journal, simule)
 					continue
 				}
@@ -451,6 +465,29 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			appliquer(ctx, sig, total, banneur, journal, simule)
 		}
 	}
+}
+
+// graviteAudit : gravité neutre (aucun corrélateur ne tient l'adresse pour hostile).
+const graviteAudit = "audit"
+
+// traiteMail décide d'un signal de leurre de messagerie (#3924). UN SEUL cas
+// bannit : leurre réglé « bannir », liste de comptes chargée, compte lisible et
+// inexistant. Tout le reste — compte réel, liste absente, compte illisible, mode
+// observer — est une ligne « detect » de gravité neutre, sans compteur, sans
+// campagne et sans émission vers sbx-actord.
+func traiteMail(ctx context.Context, sig Signal, comptes *Comptes, banneur *Banneur,
+	journal *JournalMenaces, simule bool, acteur *Acteur) {
+	inexistant := comptes.Inexistant(sig.Cible)
+	sig.CompteReel = comptes.Charge() && sig.Cible != "" && !inexistant
+	sig.Severite = graviteAudit
+	if !inexistant || !modesLeurres.BannitMail(sig.LeurreMail) {
+		journal.Inscrit(sig, "detect", 1)
+		return
+	}
+	sig.Severite = "high"
+	sig.Detail += " — compte inexistant"
+	appliquer(ctx, sig, 1, banneur, journal, simule)
+	acteur.Emet(sig, !simule)
 }
 
 func appliquer(ctx context.Context, sig Signal, total int,
@@ -471,6 +508,16 @@ func appliquer(ctx context.Context, sig Signal, total int,
 	}
 	journal.Inscrit(sig, "banned", total)
 	log.Printf("sbx-authwatch: BAN %s ← %s (%s, total %d)", sig.IP, sig.Categorie, sig.Detail, total)
+}
+
+// listeNonVide découpe une liste à virgules.
+func listeNonVide(s string) (out []string) {
+	for _, x := range strings.Split(s, ",") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // analyseSources traduit « hote,mail:/chemin » en sources.

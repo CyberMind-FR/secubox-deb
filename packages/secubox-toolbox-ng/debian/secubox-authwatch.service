@@ -19,14 +19,13 @@ ExecStart=/usr/sbin/sbx-authwatch \
     --seuil 6 \
     --fenetre 10m \
     --duree-ban 4h \
-    --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche \
-    --mail-conteneur=${SBX_MAIL_CONTENEUR}
-# #3924 : leurres de messagerie pendant l'arrêt du conteneur de courrier, ÉTEINTS tant que SBX_MAIL_CONTENEUR est vide.
-# Pour les armer, écrire dans /etc/secubox/authwatch/authwatch.env (root:root 0640), puis relancer l'unité :
+    --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche
+# #3924 : leurres de messagerie pendant l'arrêt du conteneur de courrier, ÉTEINTS tant que SBX_MAIL_CONTENEUR n'est pas
+# réglé dans /etc/default/secubox-authwatch (root, 0644 ou 0640) :
 #     SBX_MAIL_CONTENEUR=10.100.0.10
-# Jamais de drop-in ExecStart : il masquerait les options des versions suivantes.
-Environment=SBX_MAIL_CONTENEUR=
-EnvironmentFile=-/etc/secubox/authwatch/authwatch.env
+# Lu par authwatch lui-même, par descripteur et root seulement (R36). JAMAIS d'EnvironmentFile= : systemd poserait
+# n'importe quelle variable (LD_PRELOAD) dans cette unité root. Jamais de drop-in ExecStart non plus : il masquerait
+# les options des versions suivantes.
 # Arrêt ou plantage : la redirection des ports de messagerie disparaît avec le service (elle expire seule sinon).
 ExecStopPost=-/usr/sbin/nft "add table ip secubox_leurres_mail; delete table ip secubox_leurres_mail"
 # #3728 : les leurres sont ouverts sur le WAN (secubox-hardening) ; le régime bannière tient la conversation juste
@@ -57,6 +56,9 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
+# Aucun vidage mémoire : les leurres de messagerie lisent des secrets qu'ils effacent (#3924).
+LimitCORE=0
+UMask=0027
 LockPersonality=true
 # Le seul chemin en ecriture partage : le journal de menaces du WAF.
 ReadWritePaths=/var/log/secubox/waf

@@ -126,7 +126,11 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 			e.ASN, e.ASNOrg, e.ReseauClasse = info.ASN, info.Org, info.Classe
 		}
 	}
-	e.Campagne = j.campagnes.IdentifiantSiEtablie(s.Cible, time.Now())
+	// L'identifiant est un condensé du compte : jamais celui d'un nom inconnu reçu
+	// par un leurre de messagerie.
+	if s.LeurreMail == "" || s.CompteReel {
+		e.Campagne = j.campagnes.IdentifiantSiEtablie(s.Cible, time.Now())
+	}
 	data, err := json.Marshal(e)
 	if err != nil {
 		return
@@ -145,13 +149,18 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 }
 
 // compteAffiche : le compte visé tel qu'il s'affiche. Sur un leurre de messagerie
-// (#3924) c'est peut-être un compte réel — ou un mot de passe tapé dans le
-// mauvais champ : masqué.
+// (#3924), un compte réel s'affiche masqué ; un nom inconnu, pas du tout : ce peut
+// être un mot de passe tapé dans le mauvais champ.
 func compteAffiche(s Signal) string {
-	if s.LeurreMail != "" && s.Cible != "" {
+	switch {
+	case s.LeurreMail == "":
+		return s.Cible
+	case s.CompteReel:
 		return reseau.MasquerCompte(s.Cible)
+	case s.Cible != "":
+		return "…"
 	}
-	return s.Cible
+	return ""
 }
 
 // cheminDe — `path` porte le compte visé ; pour un leurre, le premier compte tenté (journal seulement, jamais l'acteur).

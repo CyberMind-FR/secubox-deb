@@ -13,19 +13,24 @@
 //
 // CE N'EST PAS UN LEURRE COMME LES AUTRES. Sur 3389 personne n'a rien à faire ;
 // sur 25, de vrais serveurs de courrier se présentent, et sur 993 le téléphone
-// du propriétaire. D'où quatre règles :
+// du propriétaire. D'où cinq règles :
 //
 //   - RIEN N'EST ACCEPTÉ, RIEN N'EST PERDU : toute réponse d'échec est
 //     TEMPORAIRE (4xx, [UNAVAILABLE], [SYS/TEMP]) ; jamais un 5xx, jamais un
 //     354. L'expéditeur garde son message et le représente.
-//   - UNE VISITE N'EST PAS UN SIGNAL. Seule une authentification menée à son
-//     terme en est un ; elle suit les règles ordinaires (compte inexistant,
-//     campagne, compteur), jamais le « premier contact » des autres leurres.
+//   - UNE VISITE N'EST PAS UN SIGNAL. Seule une authentification tentée en est
+//     un, et elle ne bannit que si la liste des comptes est chargée et que le
+//     compte N'EXISTE PAS : le leurre refuse même le bon mot de passe, son refus
+//     ne prouve rien contre un compte réel (ni compteur, ni campagne).
+//   - ON NE DEMANDE PAS DE MOT DE PASSE : l'authentification n'est pas annoncée
+//     (STARTTLS l'est, et refusé) ; un client bien réglé s'arrête. Dès que le
+//     compte est connu, on refuse sans solliciter le secret (PLAIN en deux temps
+//     excepté : compte et secret y sont indissociables).
 //   - LE MOT DE PASSE N'EXISTE PAS ICI : lu dans un tampon fixe, effacé aussitôt,
 //     jamais converti en chaîne, ni journalisé, ni haché, ni rendu. C'est peut-
 //     être celui d'un vrai compte — l'exact contraire d'identifiants.go.
-//   - LE COMPTE est masqué partout où il s'affiche ; en clair, il ne sert que
-//     de clé en mémoire (campagnes, comptes réels).
+//   - LE COMPTE ne s'affiche (masqué) que s'il EXISTE : un nom inconnu peut être
+//     un mot de passe tapé dans le mauvais champ. Ni haché, ni envoyé à actord.
 //
 // 465, 993 et 995 sont chiffrés d'emblée : pas de certificat ici, donc pas de
 // poignée de main. On ferme ; l'adresse et la cadence sont comptées, rien
@@ -68,7 +73,8 @@ const (
 // LeurreMail — un port de messagerie tenu à la place du conteneur.
 type LeurreMail struct {
 	Nom       string // nom du réglage de la page Modes
-	Service   string // service porté au journal ; vide = jamais de signal (TLS)
+	Service   string // service porté au journal ; vide = jamais de signal
+	Compte    bool   // connexions comptées par adresse (TLS)
 	Categorie string // catégorie du signal : auth_smtp*/auth_imap* (famille « messagerie »)
 	Port      int    // port public
 	Local     int    // port local de redirection ; 0 = écoute directe sur Port, permanente
@@ -78,11 +84,11 @@ type LeurreMail struct {
 
 // LeurresMailRelais remplacent le conteneur pendant son arrêt (redirection nft).
 var LeurresMailRelais = []LeurreMail{
-	{Nom: "smtp", Service: "smtp", Categorie: "auth_smtp:leurre", Port: 25, Local: 18025, Saturee: smtpSature, dialogue: dialogueSMTP25},
-	{Nom: "smtps", Port: 465, Local: 18465, dialogue: dialogueTLS},
-	{Nom: "submission", Service: "smtp", Categorie: "auth_smtp:leurre_submission", Port: 587, Local: 18587, Saturee: smtpSature, dialogue: dialogueSMTP587},
-	{Nom: "imaps", Port: 993, Local: 18993, dialogue: dialogueTLS},
-	{Nom: "pop3s", Port: 995, Local: 18995, dialogue: dialogueTLS},
+	{Nom: "smtp", Port: 25, Local: 18025, Saturee: smtpSature, dialogue: dialogueSMTP25},
+	{Nom: "smtps", Compte: true, Port: 465, Local: 18465, dialogue: dialogueTLS},
+	{Nom: "submission", Service: "smtp", Categorie: "auth_smtp:leurre", Port: 587, Local: 18587, Saturee: smtpSature, dialogue: dialogueSMTP587},
+	{Nom: "imaps", Compte: true, Port: 993, Local: 18993, dialogue: dialogueTLS},
+	{Nom: "pop3s", Compte: true, Port: 995, Local: 18995, dialogue: dialogueTLS},
 }
 
 // LeurresMailPermanents : ports en clair que la box ne sert pas.
@@ -220,7 +226,7 @@ func (s *sessionMail) ecrit(t string) error {
 	return err
 }
 
-// note retient un compte visé par une authentification menée à son terme.
+// note compte une authentification tentée et retient le compte visé.
 func (s *sessionMail) note(compte string) {
 	s.essais++
 	if compte == "" {
@@ -268,72 +274,56 @@ func decode64(src []byte) []byte {
 }
 
 // comptePlain lit le compte d'une réponse SASL PLAIN (authzid NUL authcid NUL
-// secret) et efface le reste, source comprise.
+// secret) et efface le reste, source comprise. Toute forme douteuse — champs en
+// désordre, secret vide (« compte NUL secret NUL »), authzid différent — rend "" :
+// le champ du milieu pourrait être le secret.
 func comptePlain(src []byte) string {
 	d := decode64(src)
 	zero(src)
 	defer zero(d)
-	p := bytes.SplitN(d, []byte{0}, 3)
-	if len(p) != 3 {
+	p := bytes.Split(d, []byte{0})
+	if len(p) != 3 || len(p[2]) == 0 || (len(p[0]) > 0 && !bytes.Equal(p[0], p[1])) {
 		return ""
 	}
-	if c := compteDe(p[1]); c != "" {
-		return c
-	}
-	return compteDe(p[0])
+	return compteDe(p[1])
 }
 
-// sasl joue PLAIN ou LOGIN. `complet` : le client a mené l'échange à son terme
-// (il a livré son secret, jeté ici) ; une annulation « * » n'est pas un essai.
-// Un autre mécanisme n'est pas joué : c'est un essai sans compte.
-func (s *sessionMail) sasl(mecanisme, initiale []byte, invite func(string) error) (complet bool, err error) {
-	suite := func(b64 string) ([]byte, error) {
-		if err := invite(b64); err != nil {
-			return nil, err
-		}
-		return s.lec.ligne()
+// sasl joue PLAIN ou LOGIN jusqu'au COMPTE ; LOGIN n'invite jamais à livrer le
+// secret. Une annulation « * » n'est pas un essai ; un autre mécanisme n'est pas
+// joué : c'est un essai sans compte.
+func (s *sessionMail) sasl(mecanisme, initiale []byte, invite func(string) error) (err error) {
+	var b64 string
+	switch string(mecanisme) {
+	case "PLAIN":
+	case "LOGIN":
+		b64 = "VXNlcm5hbWU6"
+	default:
+		s.note("")
+		return nil
 	}
-	annule := func(b []byte) bool { return len(b) == 1 && b[0] == '*' }
+	plain := b64 == ""
 	if len(initiale) == 1 && initiale[0] == '=' {
 		initiale = initiale[:0] // réponse initiale vide (RFC 4954)
 	}
-	switch string(mecanisme) {
-	case "PLAIN":
-		if len(initiale) == 0 {
-			if initiale, err = suite(""); err != nil {
-				return false, err
-			}
-			if annule(initiale) {
-				return false, nil
-			}
+	if len(initiale) == 0 {
+		if err = invite(b64); err != nil {
+			return err
 		}
-		s.note(comptePlain(initiale))
-		return true, nil
-	case "LOGIN":
-		if len(initiale) == 0 {
-			if initiale, err = suite("VXNlcm5hbWU6"); err != nil {
-				return false, err
-			}
-			if annule(initiale) {
-				return false, nil
-			}
+		if initiale, err = s.lec.ligne(); err != nil {
+			return err
 		}
-		d := decode64(initiale)
-		compte := compteDe(d)
-		zero(d)
-		secret, err := suite("UGFzc3dvcmQ6")
-		if err != nil {
-			return false, err
+		if len(initiale) == 1 && initiale[0] == '*' {
+			return nil
 		}
-		if annule(secret) {
-			return false, nil
-		}
-		zero(secret)
-		s.note(compte)
-		return true, nil
 	}
-	s.note("")
-	return true, nil
+	if plain {
+		s.note(comptePlain(initiale))
+		return nil
+	}
+	d := decode64(initiale)
+	s.note(compteDe(d))
+	zero(d)
+	return nil
 }
 
 // mot sépare le premier mot du reste, mis en majuscules SUR PLACE : rien de ce que
@@ -365,6 +355,7 @@ type ServeurMail struct {
 	totale  time.Duration
 
 	mu        sync.Mutex
+	paniques  int
 	parIP     map[string]int
 	parLeurre map[string]int
 }
@@ -435,7 +426,7 @@ func (m *ServeurMail) Sert(ctx context.Context, ln net.Listener, l LeurreMail) {
 			continue
 		}
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		if l.Service == "" && !m.exempte(ip) {
+		if l.Compte && !m.exempte(ip) {
 			m.tls.Note(l.Nom, ip, time.Now())
 		}
 		if !m.reserve(l.Nom, ip) {
@@ -450,6 +441,16 @@ func (m *ServeurMail) Sert(ctx context.Context, ln net.Listener, l LeurreMail) {
 			defer conn.Close()
 			s := nouvelleSession(conn, m.ligne, m.totale)
 			defer s.lec.efface()
+			// Une panique ferme CETTE connexion, pas la surveillance. Ni sa valeur
+			// ni sa pile ne sont écrites : elles peuvent porter des octets reçus.
+			defer func() {
+				if recover() != nil {
+					m.mu.Lock()
+					m.paniques++
+					m.mu.Unlock()
+					log.Printf("sbx-authwatch: leurre %s : panique sur une connexion, fermée", l.Nom)
+				}
+			}()
 			l.dialogue(s)
 			// Rupture avant le signal : le ban jetterait aussi nos derniers octets.
 			_ = conn.Close()
@@ -460,8 +461,8 @@ func (m *ServeurMail) Sert(ctx context.Context, ln net.Listener, l LeurreMail) {
 
 // emet pousse un signal par COMPTE visé (un seul sans compte lisible). Jamais
 // d'`Essais` : le chemin des identifiants en clair n'est pas emprunté. Gravité
-// moyenne : l'échec vient du leurre, pas du visiteur — un compte inexistant est
-// relevé à haute par la boucle de décision, qui connaît les comptes réels.
+// « audit », neutre pour le maillage : la boucle de décision, qui connaît les
+// comptes réels, la relève à haute pour un compte inexistant.
 func (m *ServeurMail) emet(ctx context.Context, l LeurreMail, ip string, s *sessionMail) {
 	if l.Service == "" || s.essais == 0 || m.exempte(ip) {
 		return
@@ -471,7 +472,7 @@ func (m *ServeurMail) emet(ctx context.Context, l LeurreMail, ip string, s *sess
 		comptes = []string{""}
 	}
 	for _, c := range comptes {
-		sig := Signal{IP: ip, Service: l.Service, Categorie: l.Categorie, Severite: "medium",
+		sig := Signal{IP: ip, Service: l.Service, Categorie: l.Categorie, Severite: graviteAudit,
 			Detail: fmt.Sprintf("authentification sur le leurre %s (port %d)", l.Nom, l.Port),
 			Cible:  c, LeurreMail: l.Nom}
 		select {

@@ -12,13 +12,20 @@ GO = (PAQUET / "cmd" / "sbx-authwatch" / "messagerie.go").read_text(encoding="ut
 DROPIN = PAQUET.parent / "secubox-hardening" / "nft" / "secubox-leurres-mail.nft"
 
 
-def test_eteints_par_defaut_et_reglables_sans_dropin():
-    lignes = [ln for ln in UNITE.splitlines() if not ln.startswith("#")]
-    commande = "\n".join(lignes).split("ExecStart=", 1)[1].split("\nEnvironment=", 1)[0]
-    assert commande.rstrip().endswith("--mail-conteneur=${SBX_MAIL_CONTENEUR}")
-    assert "Environment=SBX_MAIL_CONTENEUR=" in lignes                      # vide = éteints
-    assert "EnvironmentFile=-/etc/secubox/authwatch/authwatch.env" in lignes
-    assert lignes.index("Environment=SBX_MAIL_CONTENEUR=") < lignes.index("EnvironmentFile=-/etc/secubox/authwatch/authwatch.env")
+MAIN = (PAQUET / "cmd" / "sbx-authwatch" / "main.go").read_text(encoding="utf-8")
+
+
+def test_eteints_par_defaut_et_jamais_d_environmentfile():
+    """R36 : /etc/secubox appartient au compte secubox ; un EnvironmentFile y injecterait LD_PRELOAD dans une unité root."""
+    actives = "\n".join(ln for ln in UNITE.splitlines() if not ln.startswith("#"))
+    assert "EnvironmentFile" not in actives and "Environment=" not in actives
+    assert "--mail-conteneur" not in actives and "SBX_MAIL" not in actives
+    assert 'flag.String("mail-conteneur", ""' in MAIN
+    assert 'flag.String("reglages", "/etc/default/secubox-authwatch"' in MAIN and "lireReglages(*reglagesF, 0)" in MAIN
+
+
+def test_pas_de_vidage_memoire_ni_fichier_ouvert():
+    assert "\nLimitCORE=0\n" in UNITE and "\nUMask=0027\n" in UNITE
 
 
 def test_redirection_retiree_a_tout_arret():

@@ -6,9 +6,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -69,6 +71,7 @@ func TestScriptBasculeChargeParNft(t *testing.T) {
 
 type basculeFausse struct {
 	debout          bool
+	marche          error
 	scripts         []string
 	refus           bool
 	ouverts, fermes int
@@ -78,6 +81,7 @@ func basculeTest(f *basculeFausse, ports []LeurreMail) *BasculeMail {
 	return &BasculeMail{
 		intervalle: 30 * time.Second,
 		sonder:     func(context.Context) bool { return f.debout },
+		etat:       func() error { return f.marche },
 		nft: func(_ context.Context, s string) error {
 			if f.refus {
 				return errors.New("refus")
@@ -196,12 +200,13 @@ func TestNewBasculeMailValide(t *testing.T) {
 	b, _ := banneurTest(t)
 	m := NewServeurMail(nil, nil)
 	for _, c := range []struct {
-		adr string
-		d   time.Duration
-		ok  bool
-	}{{"10.100.0.10", 30 * time.Second, true}, {"1.2.3.4", 30 * time.Second, false}, {"mail", 30 * time.Second, false},
-		{"fd00::1", 30 * time.Second, false}, {"10.100.0.10", time.Second, false}, {"10.100.0.10", time.Hour, false}} {
-		if _, err := NewBasculeMail(c.adr, c.d, b, m); (err == nil) != c.ok {
+		adr, nom string
+		d        time.Duration
+		ok       bool
+	}{{"10.100.0.10", "mail", 30 * time.Second, true}, {"1.2.3.4", "mail", 30 * time.Second, false}, {"mail", "mail", 30 * time.Second, false},
+		{"fd00::1", "mail", 30 * time.Second, false}, {"10.100.0.10", "mail", time.Second, false}, {"10.100.0.10", "mail", time.Hour, false},
+		{"10.100.0.10", "../mail", 30 * time.Second, false}, {"10.100.0.10", "*", 30 * time.Second, false}} {
+		if _, err := NewBasculeMail(c.adr, c.nom, nil, c.d, b, m); (err == nil) != c.ok {
 			t.Errorf("%s %s : %v", c.adr, c.d, err)
 		}
 	}
@@ -246,10 +251,11 @@ func TestRelaisCedeUnPortPris(t *testing.T) {
 func TestEtatMailReserve(t *testing.T) {
 	f := &basculeFausse{}
 	b := basculeTest(f, LeurresMailRelais)
-	d := NewDecompteTLS()
-	d.Note("imaps", "203.0.113.1", time.Now())
+	m := NewServeurMail(nil, nil)
+	m.paniques = 2
+	m.tls.Note("imaps", "203.0.113.1", time.Now())
 	chemin := filepath.Join(t.TempDir(), "leurres-mail.json")
-	if err := b.EcrireEtat(d, chemin, time.Now()); err != nil {
+	if err := b.EcrireEtat(m, chemin, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	st, _ := os.Stat(chemin)
@@ -258,7 +264,116 @@ func TestEtatMailReserve(t *testing.T) {
 	}
 	brut, _ := os.ReadFile(chemin)
 	var e EtatMail
-	if err := json.Unmarshal(brut, &e); err != nil || e.Actif || e.TLS["imaps"].Connexions != 1 {
+	if err := json.Unmarshal(brut, &e); err != nil || e.Actif || e.Paniques != 2 || e.TLS["imaps"].Connexions != 1 {
 		t.Fatalf("%s %v", brut, err)
+	}
+}
+
+// Muet mais EN MARCHE (ou état inconnu) : on ne prend pas sa place, on la rend, et
+// on ne le dit qu'une fois.
+func TestConteneurEnMarcheJamaisRemplace(t *testing.T) {
+	var sortie bytes.Buffer
+	log.SetOutput(&sortie)
+	defer log.SetOutput(os.Stderr)
+	f := &basculeFausse{marche: errors.New("le conteneur mail est en marche")}
+	b := basculeTest(f, LeurresMailRelais)
+	for i := 0; i < 5; i++ {
+		b.tour(context.Background())
+	}
+	if b.actif || len(f.scripts) != 0 || strings.Count(sortie.String(), "non activés") != 1 {
+		t.Fatalf("actif=%v scripts=%d : %s", b.actif, len(f.scripts), sortie.String())
+	}
+	f.marche = nil
+	b.tour(context.Background())
+	if b.actif {
+		t.Fatal("les sondes ratées pendant la marche ne comptent pas")
+	}
+	b.tour(context.Background())
+	if !b.actif {
+		t.Fatal("arrêté : bascule")
+	}
+	f.marche = errors.New("le conteneur mail est en marche") // il démarre, la sonde échoue encore
+	b.tour(context.Background())
+	if b.actif || f.scripts[len(f.scripts)-1] != scriptRetrait {
+		t.Fatal("un conteneur qui démarre reprend ses ports avant de répondre")
+	}
+}
+
+func TestEtatLXC(t *testing.T) {
+	d := t.TempDir()
+	ecrit := func(chemin, texte string) {
+		t.Helper()
+		chemin = filepath.Join(d, chemin)
+		if err := os.MkdirAll(filepath.Dir(chemin), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(chemin, []byte(texte), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := EtatLXC{Nom: "mail", Adresse: "10.100.0.10", LxcPaths: []string{d + "/lxc", d + "/autre"}, Cgroup: d + "/cg", ProcUnix: d + "/unix"}
+	attend := func(quoi, motif string) {
+		t.Helper()
+		err := e.Remplacable()
+		if (motif == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), motif)) {
+			t.Fatalf("%s : %v, attendu %q", quoi, err, motif)
+		}
+	}
+	attend("cgroup absent", "cgroup v2 illisible")
+	ecrit("cg/cgroup.controllers", "cpu")
+	attend("sockets illisibles", "sockets Unix illisibles")
+	ecrit("unix", "Num RefCount\n0: 2 0 0 1 1 99 @/data/lxc/webmail/command\n0: 2 0 0 1 1 98 /run/mail/command\n")
+	attend("conteneur absent", "")
+	ecrit("lxc/mail/config", "lxc.uts.name = mail\nlxc.net.0.ipv4.address = 10.100.0.10/24\n")
+	attend("arrêté", "")
+	ecrit("cg/lxc.payload.mail/cgroup.events", "populated 0\nfrozen 0\n")
+	ecrit("cg/lxc.payload.mailing/cgroup.events", "populated 1\n")
+	attend("reste vide, voisin de même préfixe", "")
+	ecrit("cg/lxc.payload.mail-1/cgroup.events", "populated 1\nfrozen 1\n")
+	attend("gelé", "en marche")
+	ecrit("cg/lxc.payload.mail-1/cgroup.events", "populated 0\n")
+	ecrit("cg/system.slice/lxc.monitor.mail/cgroup.events", "populated 1\n")
+	attend("moniteur vivant", "en marche")
+	ecrit("cg/system.slice/lxc.monitor.mail/cgroup.events", "populated 0\n")
+	ecrit("unix", "0: 2 0 10000 1 1 97 @/data/lxc/mail/command\n")
+	attend("socket de commande", "en marche")
+	ecrit("unix", "")
+	ecrit("autre/mail/config", "lxc.net.0.ipv4.address = 10.100.0.11/24\n")
+	attend("autre adresse", "n'est pas celle")
+	ecrit("autre/mail/config", "lxc.net.0.type = veth\n")
+	attend("adresse non déclarée", "n'est pas celle")
+}
+
+func TestReglagesDeRootSeulement(t *testing.T) {
+	moi := uint32(os.Getuid())
+	f := filepath.Join(t.TempDir(), "secubox-authwatch")
+	if len(lireReglages(f, moi)) != 0 {
+		t.Fatal("absent")
+	}
+	texte := "# commentaire\nLD_PRELOAD=/tmp/x.so\nSBX_MAIL_CONTENEUR=\"10.100.0.10\"\nSBX_MAIL_NOM=mail\n"
+	if err := os.WriteFile(f, []byte(texte), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	r := lireReglages(f, moi)
+	if len(r) != 2 || r["SBX_MAIL_CONTENEUR"] != "10.100.0.10" || r["SBX_MAIL_NOM"] != "mail" {
+		t.Fatalf("%v", r)
+	}
+	if len(lireReglages(f, moi+1)) != 0 {
+		t.Error("autre propriétaire : ignoré")
+	}
+	lien := f + ".lien"
+	if err := os.Symlink(f, lien); err != nil {
+		t.Fatal(err)
+	}
+	if len(lireReglages(lien, moi)) != 0 {
+		t.Error("lien : ignoré")
+	}
+	for _, m := range []os.FileMode{0o660, 0o642} {
+		if err := os.Chmod(f, m); err != nil {
+			t.Fatal(err)
+		}
+		if len(lireReglages(f, moi)) != 0 {
+			t.Errorf("%o : ignoré", m)
+		}
 	}
 }

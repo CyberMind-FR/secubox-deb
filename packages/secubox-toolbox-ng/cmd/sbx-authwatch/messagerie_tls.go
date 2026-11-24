@@ -34,7 +34,6 @@ func dialogueTLS(s *sessionMail) {
 
 const (
 	tlsAdressesMax = 1024 // par service ; la plus ancienne cède la place
-	tlsOubli       = 24 * time.Hour
 	tlsPubliees    = 50
 )
 
@@ -46,6 +45,7 @@ type passageTLS struct {
 // DecompteTLS : connexions par service et par adresse, en mémoire bornée.
 type DecompteTLS struct {
 	mu    sync.Mutex
+	jour  string
 	total map[string]int
 	par   map[string]map[string]*passageTLS
 }
@@ -54,9 +54,18 @@ func NewDecompteTLS() *DecompteTLS {
 	return &DecompteTLS{total: map[string]int{}, par: map[string]map[string]*passageTLS{}}
 }
 
+// tourneJour remet les compteurs à zéro chaque jour (verrou tenu).
+func (d *DecompteTLS) tourneJour(quand time.Time) {
+	if j := quand.Format("2006-01-02"); j != d.jour {
+		d.jour = j
+		d.total, d.par = map[string]int{}, map[string]map[string]*passageTLS{}
+	}
+}
+
 func (d *DecompteTLS) Note(service, ip string, quand time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.tourneJour(quand)
 	d.total[service]++
 	m := d.par[service]
 	if m == nil {
@@ -95,19 +104,15 @@ type ServiceTLS struct {
 	Premieres  []AdresseTLS `json:"premieres"`
 }
 
-// Etat rend le décompte (les plus insistantes d'abord) et oublie ce qui n'a pas
-// été revu depuis 24 h.
+// Etat rend le décompte du jour, les plus insistantes d'abord.
 func (d *DecompteTLS) Etat(maintenant time.Time) map[string]ServiceTLS {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.tourneJour(maintenant)
 	out := map[string]ServiceTLS{}
 	for svc, m := range d.par {
 		tab := []AdresseTLS{}
 		for ip, p := range m {
-			if maintenant.Sub(p.dernier) > tlsOubli {
-				delete(m, ip)
-				continue
-			}
 			min := p.dernier.Sub(p.premier).Minutes()
 			if min < 1 {
 				min = 1

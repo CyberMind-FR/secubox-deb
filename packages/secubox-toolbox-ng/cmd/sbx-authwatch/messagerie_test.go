@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
@@ -71,27 +72,38 @@ func temporaireSMTP(t *testing.T, reponse string) {
 	}
 }
 
-func TestSMTP25EchecTemporaire(t *testing.T) {
-	r, s := joueMail(t, dialogueSMTP25, "EHLO mx.exemple.test\r\nMAIL FROM:<a@exemple.test>\r\nRCPT TO:<gk2@secubox.in>\r\nDATA\r\nRSET\r\nSTARTTLS\r\nQUIT\r\n")
-	attendu := smtpAccueil + smtpEhlo25 + smtpRefus + smtpRefus + smtpRefus + smtpOk + smtpTLS + smtpAdieu
-	if r != attendu {
-		t.Fatalf("obtenu %q", r)
-	}
-	temporaireSMTP(t, r)
-	for _, x := range []string{"STARTTLS\r", "PIPELINING", "CHUNKING", "AUTH"} {
-		if strings.Contains(smtpEhlo25, x) {
-			t.Errorf("%s annoncé sur 25", x)
+// Port 25 : 421 dès la bannière, avant toute négociation d'extensions, quoi que
+// dise le client. Rien n'est lu, rien n'est capturé.
+func TestSMTP25BanniereTemporaire(t *testing.T) {
+	for _, envoi := range []string{"", "EHLO mx\r\nMAIL FROM:<a@b.test>\r\n", "AUTH PLAIN " + b64("\x00root\x00"+motDePasseEssai) + "\r\n"} {
+		r, s := joueMail(t, dialogueSMTP25, envoi)
+		if r != "421 4.3.2 Service temporarily unavailable, try again later\r\n" || s.lec.lus != 0 {
+			t.Fatalf("obtenu %q, lus %d", r, s.lec.lus)
 		}
+		attendComptes(t, s, 0)
 	}
-	attendComptes(t, s, 0)
 }
 
-func TestSMTP587AnnonceAuthSansTLS(t *testing.T) {
-	r, s := joueMail(t, dialogueSMTP587, "EHLO x\r\nQUIT\r\n")
-	if !strings.Contains(r, "250-AUTH PLAIN LOGIN\r\n") || strings.Contains(r, "STARTTLS") {
-		t.Fatalf("EHLO 587 : %q", r)
+// Port 587 : STARTTLS annoncé et refusé, AUTH pas annoncé. SMTPUTF8, 8BITMIME,
+// SIZE et DSN le sont : leur absence ferait conclure certains clients à un échec
+// définitif.
+func TestSMTP587NAnnoncePasAuth(t *testing.T) {
+	r, s := joueMail(t, dialogueSMTP587, "EHLO x\r\nSTARTTLS\r\nMAIL FROM:<a@b> SMTPUTF8\r\nRCPT TO:<c@d>\r\nDATA\r\nQUIT\r\n")
+	if r != smtpAccueil+smtpEhlo+smtpTLS+smtpRefus+smtpRefus+smtpRefus+smtpAdieu {
+		t.Fatalf("%q", r)
 	}
-	attendComptes(t, s, 0) // un client bien réglé s'arrête là : aucun signal
+	for _, x := range []string{"STARTTLS", "SMTPUTF8", "8BITMIME", "SIZE", "DSN"} {
+		if !strings.Contains(r, x) {
+			t.Errorf("%s à annoncer", x)
+		}
+	}
+	for _, x := range []string{"AUTH", "CHUNKING", "BINARYMIME"} {
+		if strings.Contains(smtpEhlo, x) {
+			t.Errorf("%s annoncé", x)
+		}
+	}
+	temporaireSMTP(t, r)
+	attendComptes(t, s, 0)
 }
 
 func TestSMTPAuth(t *testing.T) {
@@ -105,29 +117,44 @@ func TestSMTPAuth(t *testing.T) {
 		{"plain minuscules", "ehlo x\r\nauth plain " + plain + "\r\n", 1, []string{"gege@gk2.net"}},
 		{"PLAIN en deux temps", "EHLO x\r\nAUTH PLAIN\r\n" + plain + "\r\nQUIT\r\n", 1, []string{"gege@gk2.net"}},
 		{"PLAIN initiale vide", "EHLO x\r\nAUTH PLAIN =\r\n" + plain + "\r\n", 1, []string{"gege@gk2.net"}},
-		{"PLAIN authzid seul", "AUTH PLAIN " + b64("moi@x\x00\x00"+motDePasseEssai) + "\r\n", 1, []string{"moi@x"}},
-		{"LOGIN", "AUTH LOGIN\r\n" + b64("root") + "\r\n" + b64(motDePasseEssai) + "\r\n", 1, []string{"root"}},
-		{"LOGIN initiale", "AUTH LOGIN " + b64("root") + "\r\n" + b64(motDePasseEssai) + "\r\n", 1, []string{"root"}},
-		{"trois essais, mêmes comptes", strings.Repeat("AUTH PLAIN "+plain+"\r\n", 5), 3, []string{"gege@gk2.net"}},
+		{"PLAIN authzid égal", "AUTH PLAIN " + b64("moi\x00moi\x00"+motDePasseEssai) + "\r\n", 1, []string{"moi"}},
+		{"LOGIN : secret jamais demandé", "AUTH LOGIN\r\n" + b64("root") + "\r\nQUIT\r\n", 1, []string{"root"}},
+		{"LOGIN initiale", "AUTH LOGIN " + b64("root") + "\r\nQUIT\r\n", 1, []string{"root"}},
+		{"LOGIN, secret enfilé", "AUTH LOGIN\r\n" + b64("root") + "\r\n" + b64(motDePasseEssai) + "\r\n", 1, []string{"root"}},
+		{"trois essais, même compte", strings.Repeat("AUTH PLAIN "+plain+"\r\n", 5), 3, []string{"gege@gk2.net"}},
 		{"annulé", "AUTH LOGIN\r\n*\r\nQUIT\r\n", 0, nil},
-		{"annulé au secret", "AUTH LOGIN\r\n" + b64("root") + "\r\n*\r\nQUIT\r\n", 0, nil},
-		{"coupé avant le secret", "AUTH LOGIN\r\n" + b64("root") + "\r\n", 0, nil},
+		{"PLAIN annulé", "AUTH PLAIN\r\n*\r\nQUIT\r\n", 0, nil},
 		{"mécanisme inconnu", "AUTH CRAM-MD5\r\nQUIT\r\n", 1, nil},
 		{"base64 cassé", "AUTH PLAIN !!!!" + motDePasseEssai + "\r\nQUIT\r\n", 1, nil},
 		{"AUTH nu", "AUTH\r\nQUIT\r\n", 1, nil},
 	}
 	for _, c := range cas {
-		for nom, d := range map[string]func(*sessionMail){"25": dialogueSMTP25, "587": dialogueSMTP587} {
-			t.Run(nom+" "+c.nom, func(t *testing.T) {
-				r, s := joueMail(t, d, c.envoi)
-				temporaireSMTP(t, r)
-				if c.essais > 0 && !strings.Contains(r, smtpAuth) {
-					t.Errorf("454 attendu : %q", r)
-				}
-				attendComptes(t, s, c.essais, c.comptes...)
-				sansSecret(t, r, s)
-			})
+		t.Run(c.nom, func(t *testing.T) {
+			r, s := joueMail(t, dialogueSMTP587, c.envoi)
+			temporaireSMTP(t, r)
+			if c.essais > 0 && !strings.Contains(r, smtpAuth) {
+				t.Errorf("454 attendu : %q", r)
+			}
+			if strings.Contains(r, "UGFzc3dvcmQ6") {
+				t.Error("mot de passe demandé")
+			}
+			attendComptes(t, s, c.essais, c.comptes...)
+			sansSecret(t, r, s)
+		})
+	}
+}
+
+// PLAIN mal formé : le champ du milieu pourrait être le secret, rien n'est gardé.
+func TestPlainDouteuxSansCompte(t *testing.T) {
+	p := motDePasseEssai
+	for _, x := range []string{"user\x00" + p + "\x00", "user\x00" + p, p, "user\x00" + p + "\x00user", "\x00" + p + "\x00",
+		"\x00user\x00" + p + "\x00", "\x00\x00" + p, p + "\x00\x00", "\x00\x00\x00", ""} {
+		if c := comptePlain([]byte(b64(x))); c != "" {
+			t.Errorf("%q → %q", x, c)
 		}
+	}
+	if c := comptePlain([]byte(b64("\x00user\x00" + p))); c != "user" {
+		t.Errorf("forme correcte → %q", c)
 	}
 }
 
@@ -138,15 +165,13 @@ func TestSMTPBruit(t *testing.T) {
 		strings.Repeat("A", 4000) + "\r\n", "MAIL FROM:" + strings.Repeat("x", 900) + "\r\n" + strings.Repeat("NOOP\r\n", 500),
 		strings.Repeat("NOOP\r\n", 1000), "BDAT 10 LAST\r\n550 salut\r\n", "AUTH PLAIN " + strings.Repeat("A", 5000) + "\r\n",
 	} {
-		for _, d := range []func(*sessionMail){dialogueSMTP25, dialogueSMTP587} {
-			r, s := joueMail(t, d, e)
-			temporaireSMTP(t, r)
-			if s.essais != 0 || s.lec.lus > mailOctetsMax {
-				t.Errorf("%.20q : essais=%d lus=%d", e, s.essais, s.lec.lus)
-			}
-			if !strings.Contains(r, "421 4.3.2") {
-				t.Errorf("%.20q : fermeture temporaire attendue, obtenu %q", e, r)
-			}
+		r, s := joueMail(t, dialogueSMTP587, e)
+		temporaireSMTP(t, r)
+		if s.essais != 0 || s.lec.lus > mailOctetsMax {
+			t.Errorf("%.20q : essais=%d lus=%d", e, s.essais, s.lec.lus)
+		}
+		if !strings.Contains(r, "421 4.3.2") {
+			t.Errorf("%.20q : fermeture temporaire attendue, obtenu %q", e, r)
 		}
 	}
 }
@@ -162,13 +187,13 @@ func TestIMAP(t *testing.T) {
 	}{
 		{"LOGIN atomes", "a1 LOGIN gege@gk2.net " + p + "\r\na2 LOGOUT\r\n", 1, []string{"gege@gk2.net"}, "a1 NO [UNAVAILABLE]"},
 		{"LOGIN guillemets", "a1 login \"ge\\\"ge\" \"" + p + "\"\r\na2 LOGOUT\r\n", 1, []string{`ge"ge`}, "a1 NO [UNAVAILABLE]"},
-		{"LOGIN littéraux", fmt.Sprintf("a1 LOGIN {4}\r\ngege {%d}\r\n%s\r\na2 LOGOUT\r\n", len(p), p), 1, []string{"gege"}, "+ OK\r\n+ OK\r\na1 NO [UNAVAILABLE]"},
+		{"LOGIN littéraux", fmt.Sprintf("a1 LOGIN {4}\r\ngege {%d}\r\n%s\r\na2 LOGOUT\r\n", len(p), p), 1, []string{"gege"}, "+ OK\r\na1 NO [UNAVAILABLE]"},
 		{"LOGIN littéraux+", fmt.Sprintf("a1 LOGIN {4+}\r\ngege {%d+}\r\n%s\r\na2 LOGOUT\r\n", len(p), p), 1, []string{"gege"}, "a1 NO [UNAVAILABLE]"},
 		{"AUTHENTICATE PLAIN", "a1 AUTHENTICATE PLAIN\r\n" + plain + "\r\na2 LOGOUT\r\n", 1, []string{"gege@gk2.net"}, "+ \r\na1 NO [UNAVAILABLE]"},
 		{"AUTHENTICATE PLAIN initiale", "a1 AUTHENTICATE PLAIN " + plain + "\r\na2 LOGOUT\r\n", 1, []string{"gege@gk2.net"}, "a1 NO [UNAVAILABLE]"},
-		{"AUTHENTICATE LOGIN", "a1 AUTHENTICATE LOGIN\r\n" + b64("root") + "\r\n" + b64(p) + "\r\na2 LOGOUT\r\n", 1, []string{"root"}, "a1 NO [UNAVAILABLE]"},
+		{"AUTHENTICATE LOGIN", "a1 AUTHENTICATE LOGIN\r\n" + b64("root") + "\r\na2 LOGOUT\r\n", 1, []string{"root"}, "a1 NO [UNAVAILABLE]"},
 		{"LOGIN sans secret", "a1 LOGIN gege\r\na2 LOGOUT\r\n", 0, nil, "a1 BAD"},
-		{"STARTTLS", "a1 CAPABILITY\r\na2 STARTTLS\r\na3 LOGOUT\r\n", 0, nil, "a2 NO [UNAVAILABLE]"},
+		{"STARTTLS", "a1 CAPABILITY\r\na2 STARTTLS\r\na3 LOGOUT\r\n", 0, nil, imapCapacite + "a1 OK done\r\na2 NO [UNAVAILABLE]"},
 		{"littéral géant", "a1 LOGIN {999999999}\r\n", 0, nil, "* BYE [UNAVAILABLE]"},
 		{"verbe inconnu jamais renvoyé", p + " x\r\n", 0, nil, "* BYE [UNAVAILABLE]"},
 		{"secret hors tour jamais renvoyé", "motdepasse\r\n", 0, nil, "* BYE [UNAVAILABLE]"},
@@ -178,7 +203,7 @@ func TestIMAP(t *testing.T) {
 	for _, c := range cas {
 		t.Run(c.nom, func(t *testing.T) {
 			r, s := joueMail(t, dialogueIMAP, c.envoi)
-			if !strings.Contains(r, c.contient) || strings.Contains(r, "motdepasse") || strings.Contains(r, "STARTTLS") {
+			if !strings.Contains(r, c.contient) || strings.Contains(r, "motdepasse") || !strings.HasPrefix(r, "* OK [CAPABILITY IMAP4rev1 STARTTLS LOGINDISABLED]") || strings.Contains(r, "AUTH=") {
 				t.Errorf("réponse %q", r)
 			}
 			attendComptes(t, s, c.essais, c.comptes...)
@@ -195,10 +220,10 @@ func TestPOP3(t *testing.T) {
 		comptes    []string
 	}{
 		{"USER PASS", "CAPA\r\nUSER gege@gk2.net\r\nPASS " + p + "\r\nQUIT\r\n", 1, []string{"gege@gk2.net"}},
-		{"USER seul", "USER gege@gk2.net\r\nQUIT\r\n", 0, nil},
+		{"USER seul : refusé sans demander PASS", "USER gege@gk2.net\r\nQUIT\r\n", 1, []string{"gege@gk2.net"}},
 		{"APOP", "APOP gege 0123456789abcdef\r\nQUIT\r\n", 1, []string{"gege"}},
 		{"AUTH PLAIN", "AUTH PLAIN\r\n" + b64("\x00gege\x00"+p) + "\r\nQUIT\r\n", 1, []string{"gege"}},
-		{"AUTH LOGIN", "AUTH LOGIN\r\n" + b64("gege") + "\r\n" + b64(p) + "\r\nQUIT\r\n", 1, []string{"gege"}},
+		{"AUTH LOGIN", "AUTH LOGIN\r\n" + b64("gege") + "\r\nQUIT\r\n", 1, []string{"gege"}},
 		{"AUTH liste, STLS", "AUTH\r\nSTLS\r\nQUIT\r\n", 0, nil},
 		{"bruit", "GET / HTTP/1.0\r\n\r\n", 0, nil},
 		{"essais bornés", strings.Repeat("USER a\r\nPASS "+p+"\r\n", 9), 3, []string{"a"}},
@@ -210,6 +235,9 @@ func TestPOP3(t *testing.T) {
 				if strings.HasPrefix(l, "-ERR") && !strings.HasPrefix(l, "-ERR [SYS/TEMP]") {
 					t.Errorf("échec non temporaire : %q", l)
 				}
+			}
+			if strings.Contains(r, "SASL") || strings.Contains(r, "USER") || strings.Contains(r, "PLAIN") {
+				t.Errorf("authentification en clair annoncée : %q", r)
 			}
 			if c.essais > 0 && !strings.Contains(r, pop3Refus) {
 				t.Errorf("refus temporaire attendu : %q", r)
@@ -334,8 +362,7 @@ func leurre(nom string) LeurreMail {
 
 func TestSignalMailSansIdentifiants(t *testing.T) {
 	for nom, envoi := range map[string]string{
-		"smtp":       "EHLO x\r\nAUTH PLAIN " + b64("\x00gege@gk2.net\x00"+motDePasseEssai) + "\r\nQUIT\r\n",
-		"submission": "EHLO x\r\nAUTH LOGIN\r\n" + b64("gege@gk2.net") + "\r\n" + b64(motDePasseEssai) + "\r\nQUIT\r\n",
+		"submission": "EHLO x\r\nAUTH PLAIN " + b64("\x00gege@gk2.net\x00"+motDePasseEssai) + "\r\nQUIT\r\n",
 		"imap":       "a LOGIN gege@gk2.net " + motDePasseEssai + "\r\nb LOGOUT\r\n",
 		"pop3":       "USER gege@gk2.net\r\nPASS " + motDePasseEssai + "\r\nQUIT\r\n",
 	} {
@@ -346,7 +373,7 @@ func TestSignalMailSansIdentifiants(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s : signal attendu", nom)
 		}
-		if s.Cible != "gege@gk2.net" || s.Severite != "medium" || s.Categorie != l.Categorie || s.LeurreMail != nom {
+		if s.Cible != "gege@gk2.net" || s.Severite != graviteAudit || s.Categorie != l.Categorie || s.LeurreMail != nom {
 			t.Errorf("%s : %+v", nom, s)
 		}
 		if len(s.Essais) != 0 || strings.HasPrefix(s.Categorie, "leurre") || strings.Contains(fmt.Sprintf("%+v", s), motDePasseEssai) {
@@ -360,13 +387,49 @@ func TestSignalMailSansIdentifiants(t *testing.T) {
 
 // Une visite du port 25 n'est pas un signal : de vrais serveurs y passent.
 func TestVisiteSimpleJamaisUnSignal(t *testing.T) {
-	for _, nom := range []string{"smtp", "submission"} {
-		_, ch, adr := serveurTest(t, leurre(nom), "203.0.113.51", "")
+	for _, nom := range []string{"smtp", "submission", "imap", "pop3"} {
+		m, ch, adr := serveurTest(t, leurre(nom), "203.0.113.51", "")
 		parle(t, adr, "EHLO mx\r\nMAIL FROM:<a@b.test>\r\nRCPT TO:<gk2@secubox.in>\r\nQUIT\r\n")
 		parle(t, adr, "GET / HTTP/1.0\r\n\r\n")
 		if s, ok := signalMail(t, ch); ok {
 			t.Fatalf("%s : %+v", nom, s)
 		}
+		if len(m.tls.Etat(time.Now())) != 0 {
+			t.Errorf("%s : visite comptée", nom)
+		}
+	}
+}
+
+// Une panique ferme la connexion, rend la place et se compte ; le leurre sert encore.
+func TestPaniqueIsolee(t *testing.T) {
+	l := leurre("submission")
+	vrai := l.dialogue
+	premier := true
+	l.dialogue = func(s *sessionMail) {
+		if premier {
+			premier = false
+			panic(motDePasseEssai)
+		}
+		vrai(s)
+	}
+	var sortie bytes.Buffer
+	log.SetOutput(&sortie)
+	m, _, adr := serveurTest(t, l, "203.0.113.55", "")
+	if r := parle(t, adr, ""); r != "" {
+		t.Errorf("%q", r)
+	}
+	if r := parle(t, adr, "QUIT\r\n"); !strings.Contains(r, smtpAdieu) {
+		t.Errorf("le leurre doit servir encore : %q", r)
+	}
+	for limite := time.Now().Add(time.Second); m.ouvertes() > 0 && time.Now().Before(limite); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	log.SetOutput(os.Stderr)
+	m.mu.Lock()
+	n := m.paniques
+	m.mu.Unlock()
+	if n != 1 || m.ouvertes() != 0 || strings.Contains(sortie.String(), motDePasseEssai) {
+		t.Fatalf("paniques %d, ouvertes %d, %s", n, m.ouvertes(), sortie.String())
 	}
 }
 
@@ -407,7 +470,7 @@ func TestTLSCompteJamaisSignale(t *testing.T) {
 
 func TestDecompteTLSBorne(t *testing.T) {
 	d := NewDecompteTLS()
-	t0 := time.Unix(1_800_000_000, 0)
+	t0 := time.Date(2026, 11, 24, 0, 5, 0, 0, time.Local)
 	for i := 0; i < tlsAdressesMax+300; i++ {
 		d.Note("imaps", fmt.Sprintf("8.%d.%d.%d", i>>16, i>>8&255, i&255), t0.Add(time.Duration(i)*time.Second))
 	}
@@ -417,8 +480,8 @@ func TestDecompteTLSBorne(t *testing.T) {
 	if e := d.Etat(t0.Add(time.Hour)); len(e["imaps"].Premieres) != tlsPubliees {
 		t.Fatalf("%d publiées", len(e["imaps"].Premieres))
 	}
-	if e := d.Etat(t0.Add(72 * time.Hour)); e["imaps"].Adresses != 0 {
-		t.Fatal("oubli après 24 h")
+	if e := d.Etat(t0.Add(72 * time.Hour)); len(e) != 0 || len(d.total) != 0 {
+		t.Fatal("compteurs remis à zéro chaque jour")
 	}
 }
 
@@ -426,7 +489,7 @@ func TestDecompteTLSBorne(t *testing.T) {
 // tout est rendu ensuite, sans goroutine perdue.
 func TestPlafondsEtLenteur(t *testing.T) {
 	avant := runtime.NumGoroutine()
-	m, ch, adr := serveurTestDelai(t, leurre("smtp"), "203.0.113.54", "", 400*time.Millisecond)
+	m, ch, adr := serveurTestDelai(t, leurre("submission"), "203.0.113.54", "", 400*time.Millisecond)
 	var muettes []net.Conn
 	for i := 0; i < mailParIP; i++ {
 		c, err := net.Dial("tcp4", adr)
@@ -506,10 +569,11 @@ func decide(t *testing.T, comptes *Comptes, camp *Campagnes, modes string, sigs 
 	for _, s := range sigs {
 		ch <- s
 	}
+	compteurEssai := NewCompteur(10*time.Minute, 6, 30*time.Minute)
 	arret := make(chan struct{})
 	go func() {
 		defer close(arret)
-		traite(ctx, ch, NewCompteur(10*time.Minute, 6, 30*time.Minute), camp, comptes, b, j, lb, false, nil)
+		traite(ctx, ch, compteurEssai, camp, comptes, b, j, lb, false, nil)
 	}()
 	for limite := time.Now().Add(2 * time.Second); len(ch) > 0 && time.Now().Before(limite); {
 		time.Sleep(5 * time.Millisecond)
@@ -517,8 +581,11 @@ func decide(t *testing.T, comptes *Comptes, camp *Campagnes, modes string, sigs 
 	time.Sleep(50 * time.Millisecond)
 	fin()
 	<-arret
+	if compteurEssai.Suivies() != 0 || camp.Suivies() != 0 {
+		t.Error("un leurre de messagerie ne nourrit ni le compteur ni les campagnes")
+	}
 	brut, _ := os.ReadFile(chemin)
-	return fx.bannies, lignesJournal(t, chemin), string(brut) + sortie.String()
+	return fx.liste(), lignesJournal(t, chemin), string(brut) + sortie.String()
 }
 
 func sigMail(nom, ip, compte string) Signal {
@@ -535,66 +602,80 @@ func comptesReels(t *testing.T) *Comptes {
 	return c
 }
 
-func TestCompteInexistantBanniCompteMasque(t *testing.T) {
-	bans, lignes, tout := decide(t, comptesReels(t), NewCampagnes(time.Hour, 5), "", sigMail("submission", "203.0.113.60", "gerald@gk2.net"))
+const modesBannir = `{"modes": {"submission": "bannir", "imap": "bannir", "pop3": "bannir"}}`
+
+func TestCompteInexistantBanniSansSonNom(t *testing.T) {
+	bans, lignes, tout := decide(t, comptesReels(t), NewCampagnes(time.Hour, 1), modesBannir, sigMail("submission", "203.0.113.60", "gerald@gk2.net"))
 	if len(bans) != 1 || len(lignes) != 1 || lignes[0]["action"] != "banned" || lignes[0]["severity"] != "high" {
 		t.Fatalf("bans %v lignes %v", bans, lignes)
 	}
-	if strings.Contains(tout, "gerald@gk2.net") || lignes[0]["path"] != "ger…" || lignes[0]["category"] != "auth_smtp:leurre_submission" {
-		t.Fatalf("compte non masqué : %s", tout)
+	if strings.Contains(tout, "ger") || lignes[0]["path"] != "…" || lignes[0]["category"] != "auth_smtp:leurre" {
+		t.Fatalf("nom inconnu affiché : %s", tout)
 	}
-	if _, ok := lignes[0]["essais"]; ok {
-		t.Fatal("jamais d'essais pour la messagerie")
+	for _, k := range []string{"essais", "campagne"} {
+		if _, ok := lignes[0][k]; ok {
+			t.Fatalf("%s présent", k)
+		}
 	}
 }
 
-// Le leurre refuse MÊME le bon mot de passe : sur un compte réel, jamais plus vite
-// que les règles d'aujourd'hui (3 échecs SASL de poids 2) — ici six essais.
-func TestCompteReelPatient(t *testing.T) {
+// Le leurre refuse MÊME le bon mot de passe : un compte réel, une liste absente
+// ou un compte illisible ne bannissent JAMAIS, quel que soit le nombre d'essais.
+func TestJamaisDeBanSansCertitude(t *testing.T) {
 	var sigs []Signal
-	for i := 0; i < 5; i++ {
-		sigs = append(sigs, sigMail("submission", "203.0.113.61", "gk2@secubox.in"))
+	for i := 0; i < 20; i++ {
+		sigs = append(sigs, sigMail("submission", "203.0.113.61", "gk2@secubox.in"), sigMail("imap", fmt.Sprintf("203.0.113.%d", 100+i), "gk2@secubox.in"),
+			sigMail("pop3", "203.0.113.62", ""))
 	}
-	bans, lignes, tout := decide(t, comptesReels(t), NewCampagnes(time.Hour, 5), "", sigs...)
-	if len(bans) != 0 || len(lignes) != 5 || lignes[4]["action"] != "warning" {
-		t.Fatalf("bans %v lignes %v", bans, lignes)
-	}
-	if strings.Contains(tout, "gk2@secubox.in") {
-		t.Fatal("compte réel en clair")
-	}
-	bans, _, _ = decide(t, comptesReels(t), NewCampagnes(time.Hour, 5), "", append(sigs, sigs[0])...)
-	if len(bans) != 1 {
-		t.Fatalf("la règle ordinaire s'applique ensuite : %v", bans)
-	}
-}
-
-func TestCampagneSurCompteReel(t *testing.T) {
-	var sigs []Signal
-	for i := 0; i < 5; i++ {
-		sigs = append(sigs, sigMail("imap", fmt.Sprintf("203.0.113.%d", 70+i), "gk2@secubox.in"))
-	}
-	bans, lignes, tout := decide(t, comptesReels(t), NewCampagnes(time.Hour, 5), "", sigs...)
-	if len(bans) != 1 || bans[0] != "203.0.113.74" {
-		t.Fatalf("seule la cinquième source participe à une campagne établie : %v", bans)
-	}
-	if lignes[4]["campagne"] != IdentifiantCampagne("gk2@secubox.in") || strings.Contains(tout, "gk2@secubox.in") {
-		t.Fatalf("identifiant de campagne sans compte en clair : %v", lignes[4])
+	for _, comptes := range []*Comptes{comptesReels(t), nil, {}} {
+		bans, lignes, tout := decide(t, comptes, NewCampagnes(time.Hour, 2), modesBannir, sigs...)
+		if len(bans) != 0 || len(lignes) != len(sigs) || strings.Contains(tout, "gk2@secubox.in") {
+			t.Fatalf("bans %v, %d lignes", bans, len(lignes))
+		}
+		for _, l := range lignes {
+			if l["action"] != "detect" || l["severity"] != "audit" {
+				t.Fatalf("ligne neutre attendue : %v", l)
+			}
+		}
+		if comptes.Charge() && lignes[0]["path"] != "gk2…" {
+			t.Fatalf("compte réel masqué attendu : %v", lignes[0])
+		}
 	}
 }
 
-func TestModeObserverNeBannitJamais(t *testing.T) {
-	bans, lignes, _ := decide(t, comptesReels(t), NewCampagnes(time.Hour, 1), `{"modes": {"submission": "observer"}}`,
-		sigMail("submission", "203.0.113.80", "inconnu@x"), sigMail("smtp", "203.0.113.81", "inconnu@x"))
-	if len(bans) != 1 || bans[0] != "203.0.113.81" || lignes[0]["action"] != "detect" || lignes[1]["action"] != "banned" {
-		t.Fatalf("bans %v lignes %v", bans, lignes)
+// Sens inverse des autres leurres : sans « bannir » écrit, on observe.
+func TestMessagerieObserveParDefaut(t *testing.T) {
+	for _, modes := range []string{"", `{"modes": {}}`, `{"modes": {"submission": "observer"}}`, `{"modes": {"submission": "n'importe"}}`, `{cassé`} {
+		bans, lignes, _ := decide(t, comptesReels(t), nil, modes, sigMail("submission", "203.0.113.80", "inconnu@x"))
+		if len(bans) != 0 || lignes[0]["action"] != "detect" || lignes[0]["severity"] != "audit" {
+			t.Fatalf("%q : bans %v lignes %v", modes, bans, lignes)
+		}
+		modesLeurres = nil
 	}
 }
 
-// Les ports TLS n'ont ni service ni catégorie : aucun signal ne peut en naître.
-func TestLeurresTLSSansSignal(t *testing.T) {
+// Ni compte ni condensé de compte vers sbx-actord ; rien du tout sans ban.
+func TestActeurSansCondensePourLaMessagerie(t *testing.T) {
+	h, err := envelope.NewHasher([]byte("secret-d-essai-assez-long-pour-hmac-0123456789"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := sigMail("imap", "203.0.113.81", "inconnu@x")
+	if e := enveloppe(sig, true, h); e.CredentialTokenHash != "" || e.DstService != "imap" {
+		t.Fatalf("%+v", e)
+	}
+	sig.LeurreMail = ""
+	if e := enveloppe(sig, true, h); e.CredentialTokenHash == "" {
+		t.Fatal("les autres signaux gardent l'axe du compte")
+	}
+}
+
+// Les ports TLS et le 25 n'ont ni service ni catégorie : aucun signal ne peut en naître.
+func TestLeurresMuetsSansSignal(t *testing.T) {
 	for _, l := range LeurresMailRelais {
 		tls := l.Port == 465 || l.Port == 993 || l.Port == 995
-		if tls != (l.Service == "") || tls != (l.Categorie == "") {
+		muet := tls || l.Port == 25
+		if muet != (l.Service == "") || muet != (l.Categorie == "") || tls != l.Compte {
 			t.Errorf("%+v", l)
 		}
 	}
@@ -604,9 +685,9 @@ func TestLeurresTLSSansSignal(t *testing.T) {
 func TestMotDePasseNullePart(t *testing.T) {
 	var sigs []Signal
 	for nom, envoi := range map[string]string{
-		"smtp": "AUTH PLAIN " + b64("\x00inconnu@gk2.net\x00"+motDePasseEssai) + "\r\nQUIT\r\n",
-		"imap": "a LOGIN inconnu@gk2.net \"" + motDePasseEssai + "\"\r\nb LOGOUT\r\n",
-		"pop3": "USER inconnu@gk2.net\r\nPASS " + motDePasseEssai + "\r\nQUIT\r\n",
+		"submission": "AUTH PLAIN " + b64("\x00inconnu@gk2.net\x00"+motDePasseEssai) + "\r\nQUIT\r\n",
+		"imap":       "a LOGIN inconnu@gk2.net \"" + motDePasseEssai + "\"\r\nb LOGOUT\r\n",
+		"pop3":       "USER inconnu@gk2.net\r\nPASS " + motDePasseEssai + "\r\nQUIT\r\n",
 	} {
 		_, ch, adr := serveurTest(t, leurre(nom), "203.0.113.90", "")
 		parle(t, adr, envoi)
@@ -617,7 +698,7 @@ func TestMotDePasseNullePart(t *testing.T) {
 		sigs = append(sigs, s)
 	}
 	camp := NewCampagnes(time.Hour, 1)
-	_, _, tout := decide(t, nil, camp, "", sigs...)
+	_, _, tout := decide(t, comptesReels(t), camp, modesBannir, sigs...)
 	etat := filepath.Join(t.TempDir(), "campagnes.json")
 	if err := EcrireEtat(camp, etat, time.Now()); err != nil {
 		t.Fatal(err)
@@ -630,7 +711,7 @@ func TestMotDePasseNullePart(t *testing.T) {
 			t.Fatalf("mot de passe écrit : %s", x)
 		}
 	}
-	if strings.Contains(string(brut), "inconnu@gk2.net") || !strings.Contains(string(brut), "inc…") {
+	if string(brut) != "[]\n" {
 		t.Fatalf("campagnes.json : %s", brut)
 	}
 }

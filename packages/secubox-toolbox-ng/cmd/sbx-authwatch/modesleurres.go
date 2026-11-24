@@ -13,7 +13,8 @@
 //	{"modes": {"rdp": "observer", "redis": "bannir"}}
 //
 // FERMÉ PAR DÉFAUT : fichier absent ou illisible, service absent, valeur
-// inconnue → bannir. Seul « observer » écrit en toutes lettres allège.
+// inconnue → bannir. Seul « observer » écrit en toutes lettres allège. (Leurres
+// de messagerie : l'inverse, voir BannitMail.)
 package main
 
 import (
@@ -53,6 +54,19 @@ func (m *ModesLeurres) Observe(service string) bool {
 	defer m.mu.Unlock()
 	m.relire()
 	return m.modes[service] == modeLeurreObserver
+}
+
+// BannitMail dit si un leurre de messagerie (#3924) peut bannir. SENS INVERSE des
+// autres : « bannir » doit être écrit en toutes lettres ; absent, illisible ou
+// inconnu → observer. Derrière ces ports, il y a de vrais comptes.
+func (m *ModesLeurres) BannitMail(nom string) bool {
+	if m == nil || m.chemin == "" {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.relire()
+	return m.modes[nom] == modeLeurreBannir
 }
 
 // relire recharge le fichier si sa date ou sa taille a changé (verrou tenu).

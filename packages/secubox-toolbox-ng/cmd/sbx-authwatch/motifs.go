@@ -41,8 +41,9 @@ type Signal struct {
 	Client string
 	Agent  string
 	// LeurreMail : nom du leurre de messagerie (#3924) d'où vient le signal. Il
-	// suit les règles d'authentification ordinaires, compte masqué partout.
+	// a ses propres règles (voir traiteMail).
 	LeurreMail string
+	CompteReel bool // compte connu de la box ; seul un compte réel s'affiche (masqué)
 }
 
 type motif struct {
