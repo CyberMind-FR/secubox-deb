@@ -373,6 +373,7 @@ chemin SANS `/api/v1/waf`. gk3 appelle `https://<gk2>/api/v1/waf/menaces/flux?�
 | `GET /api/v1/waf/menaces/flux` | `/menaces/flux` | `depuis=<inode>:<octet>` (début de ligne, sinon 422), `max` 1–2000 (500) |
 | `GET /api/v1/waf/enforcement` | `/enforcement` | `depuis` époque 0–4102444800, `limite` 1–1000 (200), `statut` ∈ {`active`,`expired`,`released`} |
 | `GET /api/v1/waf/campaigns` | `/campaigns` | `limite` 1–1000 (20) |
+| `GET /api/v1/waf/populations` | `/populations` | — (#3919) |
 | `GET /api/v1/waf/mesures` | `/mesures` | `depuis` époque (0), `limite` 1–2000 (500) |
 | `GET /api/v1/waf/actord/propositions` | `/actord/propositions` | — |
 | `GET /api/v1/waf/alerts` | `/alerts` | `limit` 1–500 (50), `aggregate` |
@@ -408,6 +409,48 @@ groupe manque). `actord-lecture` est un groupe en **lecture seule** (créé par 
 `secubox-waf`, aucun fichier inscriptible par lui) : sbxwaf et l'API du WAF lisent ; sbx-actord n'entre jamais dans
 `secubox-waf` (écriture de `waf-threats.log`) et `secubox` jamais dans `actord-ingest`.
 Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
+
+## Populations d'attaquants (#3919, 1.44.0)
+
+**Réseau de chaque alerte** : sbxwaf (et sbx-authwatch) ajoute `asn`, `asn_org` et `reseau_classe` aux lignes de
+`waf-threats.log`, et l'ASN à l'enveloppe de sbx-actord. Lecture locale seule, jamais un appel réseau ; base absente :
+champs vides. Le réseau qualifie, il ne bannit jamais.
+
+| Option (sbxwaf, sbx-actord, sbx-authwatch) | Défaut |
+|---|---|
+| `--geoip-asn` | `/var/lib/GeoIP/GeoLite2-ASN.mmdb` (`""` = désactivé) |
+| `--reseaux-classes` | `/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml` |
+
+**Catalogue** : classes `acces`, `mobile_partage`, `hebergeur`, `proxy_loue`, `cdn`, `relais_vie_privee`,
+`scanner_recherche` ; un ASN absent est `inconnu`, jamais déduit du nom de l'opérateur. Surcharge de l'opérateur :
+`/etc/secubox/waf/reseaux-classes.toml` (0644), même format, gagne ASN par ASN. Rechargement : toutes les 24 h, ou
+`systemctl reload secubox-actord` et `systemctl kill -s HUP --kill-whom=main secubox-authwatch` (sbxwaf : au plus 12 h,
+son unité le recycle ; jamais de signal à la main, #2629).
+
+```toml
+[classes]
+hebergeur = [64496, 64497]
+```
+
+**Relevé** : toutes les 10 min, l'API lance `python3 -m api.populations` (compte `secubox`, `nice` 15, tué à 300 s) sur
+7 jours de `waf-threats.log*` ; cache `/var/lib/secubox/waf/populations.json` (0640), double tampon : une passe
+partielle n'écrase pas un relevé complet de moins d'une heure.
+`GET /api/v1/waf/populations` (`require_lecture_ai`) rend ce cache : `{"disponible": false}` s'il manque, sinon
+`disponible`, `age_s`, `genere_le`, `complet`, `manques`, `duree_s`, le recouvrement et `populations` (`id` stable,
+`famille`, `nom_cible`, `cibles`, `adresses` et `reseaux` (nombres), `classes`, `pays_top`, `une`, `le3`, `rotation`,
+`etat`, `bans`, `premier`, `dernier`, `reseaux_top`, `serie` sur 7 jours, `cves`, `campagne_actord`). Jamais une adresse, un compte en clair ni un mot de
+passe. Sources facultatives, absentes sans erreur : `/run/secubox/authwatch-campagnes.json`,
+`/var/lib/secubox/waf/rotation-etat.json` (détecteur non livré dans ce lot), sbx-actord.
+
+**Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
+`classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
+(`sources` compte toutes les adresses) ; aucune : `classes`, `pays_top`, `une` et `le3` sont **absents**. `rotation`
+exige 50 adresses mesurées, dont 80 % à trois tentatives ou moins.
+
+**Droits** : `secubox-actord` traverse `/etc/secubox/waf` par une ACL nommée « x » (postinst), jamais par le groupe
+`secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une
+ACL de fichier, une ACL par défaut ouvrirait tous les fichiers à venir du dossier, et la traversée seule ouvrirait ses
+autres fichiers lisibles par tous. Accès à concevoir dans #3921 (copie publiée dans un dossier à part).
 
 ## Migration / cutover
 
