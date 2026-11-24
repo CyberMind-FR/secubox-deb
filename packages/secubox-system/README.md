@@ -40,6 +40,7 @@ Configuration file: `/etc/secubox/system.toml`
 
 - `GET /api/v1/system/status` - Module status
 - `GET /api/v1/system/health` - Health check
+- `GET /api/v1/system/io` - Entrées/sorties (#3907) : débits, IOPS et % occupé par disque physique, pression `/proc/pressure` (avg10), swap (pages/s), 5 services qui écrivent le plus (`io.stat` des cgroups) ; débits entre deux appels (`intervalle_s` null au premier)
 - `POST /api/v1/system/settings` `{"hostname"?, "timezone"?}` (`require_jwt`) — nom de la box par l'unité root
   `secubox-systeme-renommer@<nom>.service` (root, bac à sable : système en lecture seule sauf `/etc`, `/run`,
   `/var/log/secubox`) → `/usr/sbin/secubox-renommer` (secubox-core >= 1.8.10 : hosts, secubox.conf,
