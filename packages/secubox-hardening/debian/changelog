@@ -5,9 +5,11 @@ secubox-hardening (1.7.1-1~trixie1) trixie; urgency=medium
     comme voulus par la page de garde et fermés en IPv6. Fragment
     /etc/nftables.d/secubox-leurres-mail.nft, rejouable : sous la base en
     `policy drop`, les ports locaux ne sont acceptés que par la redirection
-    d'authwatch (chaîne leurres_mail de la base). Posé par la postinst, qui
-    valide l'ensemble par `nft -c` et l'écarte (.rejete) s'il est refusé ;
-    pris au prochain chargement de nftables, sans effet sans redirection.
+    d'authwatch (chaîne leurres_mail de la base). Posé par
+    secubox-fragment-leurres (postinst), qui valide l'ensemble par `nft -c`
+    et l'écarte (.rejete) s'il est refusé ; là où nft ne tourne pas (chroot
+    d'image), gardé en .non-verifie et validé au démarrage, avant nftables.
+    Sans effet sans redirection.
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 16:00:00 +0100
 

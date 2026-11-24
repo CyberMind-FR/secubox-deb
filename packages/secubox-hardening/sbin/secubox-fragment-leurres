@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Fragment nftables des leurres de messagerie (#3924). Un fragment refusé ferait refuser TOUT /etc/nftables.conf au
+# démarrage : il n'entre dans /etc/nftables.d qu'après `nft -c` de l'ensemble.
+#   refusé avec lui        -> <fragment>.rejete, dit ;
+#   ensemble déjà refusé   -> <fragment>.non-verifie (sans rapport avec lui), dit ;
+#   nft ne tourne pas ici  -> <fragment>.non-verifie (chroot d'image) : la postinst suivante ou l'unité de démarrage
+#                             secubox-fragment-leurres.service le valide. Jamais un .nft non vérifié.
+# Jamais chargé ici : pris au prochain chargement de nftables. Lancé par la postinst et par l'unité (root).
+# SBX_FRAGMENT_* : essais seulement.
+set -euo pipefail
+
+SRC="${SBX_FRAGMENT_SRC:-/usr/share/secubox/hardening/secubox-leurres-mail.nft}"
+BASE="${SBX_FRAGMENT_BASE:-/etc/nftables.conf}"
+DEST="${SBX_FRAGMENT_DEST:-/etc/nftables.d/secubox-leurres-mail.nft}"
+
+dire() { echo "secubox-hardening: $*" >&2; }
+
+# nft peut-il valider QUOI QUE CE SOIT ici ? Distingue un chroot sans netlink d'un fichier refusé.
+nft_tourne() {
+    command -v nft >/dev/null 2>&1 && printf 'table inet secubox_essai {\n}\n' | nft -c -f - >/dev/null 2>&1
+}
+
+ensemble_valide() { nft -c -f "$BASE" >/dev/null 2>&1; }
+
+[[ -f "$SRC" && -f "$BASE" ]] || exit 0
+
+if ! nft_tourne; then
+    # Un fragment déjà posé a été validé : il reste. Seul un contenu nouveau attend.
+    if ! cmp -s "$SRC" "$DEST"; then
+        install -D -m 644 "$SRC" "$DEST.non-verifie"
+        dire "nft ne peut rien valider ici : fragment gardé en $DEST.non-verifie, validé au démarrage"
+    fi
+    exit 0
+fi
+
+if cmp -s "$SRC" "$DEST" && ensemble_valide; then
+    rm -f -- "$DEST.non-verifie"
+    exit 0
+fi
+rm -f -- "$DEST"
+if ! ensemble_valide; then
+    # Interface absente à ce stade, autre fragment fautif : le nôtre n'est pas jugé, il attend.
+    install -D -m 644 "$SRC" "$DEST.non-verifie"
+    dire "$BASE est refusé par nft -c, sans rapport avec les leurres de messagerie ; fragment gardé en $DEST.non-verifie"
+    exit 0
+fi
+rm -f -- "$DEST.non-verifie"
+install -D -m 644 "$SRC" "$DEST"
+if ! ensemble_valide; then
+    mv -f -- "$DEST" "$DEST.rejete"
+    dire "fragment refusé par nft -c, écarté en $DEST.rejete ; le pare-feu reste valide sans lui"
+    exit 0
+fi
+rm -f -- "$DEST.rejete"

@@ -13,8 +13,8 @@
 # Un accès direct reste refusé, et sans redirection rien n'écoute derrière.
 #
 # La base saute vers cette chaîne ; le fichier ne fait que la remplir, après l'avoir vidée : le recharger ne double rien
-# (créer, vider, remplir). Avec une base plus ancienne, la chaîne existe sans être consultée. Posé par la postinst, qui
-# valide d'abord l'ensemble de /etc/nftables.conf et l'écarte (.rejete) s'il le fait refuser.
+# (créer, vider, remplir). Avec une base plus ancienne, la chaîne existe sans être consultée. Posé par
+# secubox-fragment-leurres, qui valide l'ensemble de /etc/nftables.conf et l'écarte (.rejete) s'il le fait refuser.
 table inet filter {
 	chain leurres_mail {
 	}

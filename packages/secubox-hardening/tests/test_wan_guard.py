@@ -173,18 +173,17 @@ def test_leurres_de_messagerie_sans_base_inertes(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
-def _poser(src, base, dest, chemin_nft=None):
-    """La fonction de la postinst, extraite telle quelle."""
+SBIN = LIVREE.parent.parent / "sbin" / "secubox-fragment-leurres"
+
+
+def _poser(src, base, dest, faux_nft=None):
+    """Le script de la postinst, vrai nft dans un espace de noms ; `faux_nft` : dossier placé en tête du PATH."""
     import os
     import subprocess
-    postinst = (LIVREE.parent.parent / "debian" / "postinst").read_text(encoding="utf-8")
-    fonction = postinst[postinst.index("poser_fragment_leurres() {"):]
-    fonction = fonction[:fonction.index("\n}\n") + 3]
-    env = dict(os.environ)
-    if chemin_nft:
-        env["PATH"] = f"{chemin_nft}:{env['PATH']}"
-    cmd = ["bash", "-ec", fonction + '\nposer_fragment_leurres "$1" "$2" "$3"', "bash", str(src), str(base), str(dest)]
-    return subprocess.run(([] if chemin_nft else ["unshare", "-rn"]) + cmd, capture_output=True, text=True, timeout=30, env=env)
+    env = dict(os.environ, SBX_FRAGMENT_SRC=str(src), SBX_FRAGMENT_BASE=str(base), SBX_FRAGMENT_DEST=str(dest))
+    if faux_nft:
+        env["PATH"] = f"{faux_nft}:{env['PATH']}"
+    return subprocess.run(["unshare", "-rn", "bash", str(SBIN)], capture_output=True, text=True, timeout=30, env=env)
 
 
 @sans_nft
@@ -219,3 +218,41 @@ def test_postinst_base_deja_refusee(tmp_path):
     dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
     r = _poser(LEURRES_MAIL, base, dest)
     assert r.returncode == 0 and "sans rapport" in r.stderr and not dest.exists()
+    assert (tmp_path / "nftables.d" / "secubox-leurres-mail.nft.non-verifie").exists()      # pas jugé : il attend
+    (tmp_path / "nftables.d" / "autre.nft").unlink()
+    r = _poser(LEURRES_MAIL, base, dest)
+    assert dest.exists() and not (tmp_path / "nftables.d" / "secubox-leurres-mail.nft.non-verifie").exists()
+
+
+@sans_nft
+def test_nft_impossible_ici_puis_valide(tmp_path):
+    """N4 : chroot sans nft utilisable ≠ base refusée. Jamais un .nft non vérifié ; la passe suivante le valide."""
+    base = _base_locale(tmp_path)
+    dest = tmp_path / "nftables.d" / "secubox-leurres-mail.nft"
+    attente = tmp_path / "nftables.d" / "secubox-leurres-mail.nft.non-verifie"
+    faux = tmp_path / "bin"
+    faux.mkdir()
+    (faux / "nft").write_text("#!/bin/sh\necho 'netlink: Operation not permitted' >&2\nexit 1\n", encoding="utf-8")
+    (faux / "nft").chmod(0o755)
+    r = _poser(LEURRES_MAIL, base, dest, faux)
+    assert r.returncode == 0 and "non-verifie" in r.stderr and "refusé" not in r.stderr
+    assert attente.exists() and not dest.exists()
+    assert list((tmp_path / "nftables.d").glob("*.nft")) == []
+    r = _poser(LEURRES_MAIL, base, dest)                           # démarrage ou postinst suivante
+    assert r.returncode == 0 and dest.exists() and not attente.exists()
+    r = _poser(LEURRES_MAIL, base, dest, faux)                     # déjà validé, même contenu : rien n'attend
+    assert r.returncode == 0 and not r.stderr and dest.exists() and not attente.exists()
+    nouveau = tmp_path / "nouveau"
+    nouveau.write_text("table inet filter { casse\n", encoding="utf-8")
+    r = _poser(nouveau, base, dest, faux)                          # contenu nouveau : l'ancien, validé, reste actif
+    assert dest.read_text(encoding="utf-8") == LEURRES_MAIL.read_text(encoding="utf-8") and attente.exists()
+    r = _poser(nouveau, base, dest)
+    assert "écarté" in r.stderr and not dest.exists() and not attente.exists()
+
+
+def test_unite_de_validation_au_demarrage():
+    unite = (LIVREE.parent.parent / "systemd" / "secubox-fragment-leurres.service").read_text(encoding="utf-8")
+    assert "ConditionPathExists=/etc/nftables.d/secubox-leurres-mail.nft.non-verifie" in unite
+    assert "Before=nftables.service" in unite and "ReadWritePaths=/etc/nftables.d\n" in unite
+    postinst = (LIVREE.parent.parent / "debian" / "postinst").read_text(encoding="utf-8")
+    assert "/usr/sbin/secubox-fragment-leurres || true" in postinst

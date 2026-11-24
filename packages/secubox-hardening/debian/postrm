@@ -4,7 +4,8 @@ set -e
 # Fragment posé par la postinst (#3924), hors de dpkg.
 case "$1" in
     remove|purge)
-        rm -f /etc/nftables.d/secubox-leurres-mail.nft /etc/nftables.d/secubox-leurres-mail.nft.rejete
+        rm -f /etc/nftables.d/secubox-leurres-mail.nft /etc/nftables.d/secubox-leurres-mail.nft.rejete \
+            /etc/nftables.d/secubox-leurres-mail.nft.non-verifie
         ;;
 esac
 
