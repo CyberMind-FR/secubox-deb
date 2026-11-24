@@ -1263,6 +1263,11 @@ def garde(argv: list[str]) -> int:
         etat = dnstv.valider_etat(etat)
     except dnstv.ErreurTV as e:
         return _garde_refus(str(e))
+    if etat.get(cle, []) == avant.get(cle, []):
+        # #3910 : rien à changer (adresse déjà levée, entrée déjà posée à l'identique) → ni rendu ni rechargement
+        # d'Unbound (11-36 s sur gk2), que secubox-garde-passage relançait chaque minute.
+        print(json.dumps({"ok": True, "verbe": verbe, "geste": geste, "inchange": True, cle: etat.get(cle, [])}))
+        return 0
     _ecrire_etat_root(etat)
     try:
         etat, table, actives = charger_avec_regles()

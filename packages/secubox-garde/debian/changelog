@@ -1,3 +1,12 @@
+secubox-garde (0.3.9-1~trixie1) trixie; urgency=medium
+
+  * Levée d'évasion/quarantaine : chaque adresse levée est gardée tout de
+    suite (commit) ; un passage tué par son délai relevait les mêmes
+    adresses chaque minute sur gk2. audit.log ouvert en ajout sans création
+    (O_CREAT refusé par le profil AppArmor) (ref #3910).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 07:30:00 +0100
+
 secubox-garde (0.3.8-1~trixie1) trixie; urgency=medium
 
   * #3795 : /etat et /historique acceptent le compte de service ai-lecture

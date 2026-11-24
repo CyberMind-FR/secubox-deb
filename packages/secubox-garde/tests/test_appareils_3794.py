@@ -101,6 +101,7 @@ class _Ctl:
 
 def test_effets_ctl_et_audit(tmp_path):
     audit = tmp_path / "audit.log"
+    audit.write_text("")            # posé par secubox-core ; garde n'y fait qu'ajouter (#3910)
     ctl = _Ctl('{"ok": true}')
     e = effets.Effets(audit=audit, ctl=ctl, horloge=lambda: 5)
     assert e.isoler("192.168.1.20", MAC, 99, "TV salon — infection")["ok"]

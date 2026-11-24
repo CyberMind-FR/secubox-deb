@@ -90,6 +90,9 @@ def _lever_tout(db, effets, did, menace, mac, motif) -> bool:
             continue
         if _lever(effets, menace, ip, mac, motif).get("ok"):
             db.execute("DELETE FROM adresses WHERE decision_id=? AND ip=?", (did, ip))
+            # #3910 : gardée tout de suite. Un passage tué par son délai (TimeoutStartSec) avant le commit final
+            # relevait les mêmes adresses à chaque minute, sans fin.
+            db.commit()
     return not _adresses(db, did)
 
 

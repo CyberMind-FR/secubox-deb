@@ -18,6 +18,7 @@ import http.client
 import ipaddress
 import re
 import json
+import os
 import logging
 import socket
 import subprocess
@@ -109,7 +110,10 @@ class Effets:
         ligne = json.dumps({"ts": int(self.horloge()), "module": "garde", "action": action,
                             "cible": cible, "motif": motif, "resultat": resultat}, ensure_ascii=False)
         try:
-            with open(self.audit_chemin, "a", encoding="utf-8") as f:
+            # #3910 : ajout SANS création (O_CREAT). Le profil AppArmor n'ouvre audit.log qu'en ajout (« a ») et refusait
+            # l'ouverture « a » de Python (création demandée) ; le fichier est posé par secubox-core.
+            fd = os.open(self.audit_chemin, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
+            with os.fdopen(fd, "a", encoding="utf-8") as f:
                 f.write(ligne + "\n")
         except OSError as e:
             log.error("audit.log non écrit (%s) : %s", type(e).__name__, ligne)
