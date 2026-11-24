@@ -31,6 +31,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -86,6 +87,9 @@ func upstreamErrorCode(err error) int {
 type Server struct {
 	// mesures : l'échelle de réponse d'Actor Intelligence (délai, défi, tarpit, ban) appliquée aux requêtes (#2274). nil = désactivée.
 	mesures *MesuresWAF
+	// rotation : détecteur de campagnes à rotation web (#3919, rotation.go). nil = désactivé (--rotation off). Un SEUL processus doit le porter : les preuves
+	// d'un visiteur réparties entre plusieurs processus seraient perdues.
+	rotation *Rotation
 
 	// ca holds the loaded forging CA. May be nil when --ca-cert/--ca-key are not
 	// provided (tests, non-TLS deployments).
@@ -377,6 +381,21 @@ func (s *Server) handler() http.Handler {
 		if s.onDemand != nil {
 			s.onDemand.Maybe()
 		}
+		// #3919 : une preuve de navigateur se retient sur TOUTE requête non privée (routée ou non, inspectée ou non), AVANT toute sortie anticipée (mesures, leurre, réveil, refus).
+		cheminBrut := r.URL.RawPath
+		if cheminBrut == "" {
+			cheminBrut = r.URL.Path
+		}
+		var candidat *rotCandidat
+		preuve := false
+		if s.rotation != nil {
+			if preuve = preuveNavigateur(cheminBrut, r.Header); preuve {
+				if cip := clientIP(r); !privateCIDR(cip) {
+					s.rotation.NoterPreuve(cip, time.Now())
+				}
+			}
+		}
+
 		// Échelle de réponse (#2274) : l'adresse sous mesure est ralentie, défiée, retenue ou refusée AVANT toute autre inspection.
 		if s.mesures != nil && s.mesures.Intercepte(w, r) {
 			return
@@ -656,6 +675,13 @@ func (s *Server) handler() http.Handler {
 			}
 
 			isStatic := staticAsset(rawPath)
+
+			// #3919 : détecteur de rotation — O(1), sans E/S ; jamais pour une adresse privée, le NC ni un hôte de confiance. Un candidat n'est jugé que si
+			// sa page part en entier (plus bas, rotationServie) ; la preuve a déjà été notée plus haut.
+			if !skip && s.rotation != nil {
+				candidat = s.rotation.Observe(RotationRequete{IP: ip, UA: r.Header.Get("User-Agent"), JA4: s.lireJA4(r), Hote: host,
+					Navigation: estNavigation(r.Method, rawPath, r.Header), Preuve: preuve}, time.Now())
+			}
 
 			if !skip {
 				var bodyBytes []byte
@@ -938,6 +964,15 @@ func (s *Server) handler() http.Handler {
 			defer s.vhostSignals.End(host)
 		}
 
+		// #3919 : réponse faite à un candidat du détecteur de rotation, suivie jusqu'à sa fin. Rien pour toutes les autres requêtes.
+		suivie := s.rotation.Suivre(candidat)
+		if suivie != nil {
+			defer s.rotation.Liberer()
+			suivie.ResponseWriter = w
+			w = suivie
+			r = r.WithContext(context.WithValue(r.Context(), cleRotationReponse{}, suivie))
+		}
+
 		// Task 6.1 — media cache hit: serve from disk, bypass upstream.
 		// Only for GET requests; cache is nil-safe.
 		//
@@ -1031,6 +1066,7 @@ func (s *Server) handler() http.Handler {
 			// whatever cw captured.
 			relaye = true // #3257 : le corps part au backend (capture multipart)
 			proxy.ServeHTTP(cw, r)
+			s.rotationServie(suivie, candidat, r)
 
 			// After proxying: if the response was cacheable and we captured enough
 			// of the body, store it.  The full body was already written to the
@@ -1052,7 +1088,17 @@ func (s *Server) handler() http.Handler {
 
 		relaye = true // #3257 : le corps part au backend (capture multipart)
 		proxy.ServeHTTP(w, r)
+		s.rotationServie(suivie, candidat, r)
 	})
+}
+
+// rotationServie dépose la page d'un candidat (#3919) pour analyse, si elle est partie en entier : le verdict s'ouvrira hors de la requête. Atteinte seulement au retour NORMAL du proxy : un client qui
+// coupe ou un amont tronqué fait paniquer le proxy (ErrAbortHandler) ou annule le contexte.
+func (s *Server) rotationServie(suivie *rotationReponse, candidat *rotCandidat, r *http.Request) {
+	if suivie == nil || r.Context().Err() != nil {
+		return
+	}
+	s.rotation.Analyser(suivie, candidat, time.Now())
 }
 
 // logEscalate writes one threat record for an escalate-mode hit. `action` is
@@ -1313,6 +1359,15 @@ func splitHostPort(addr string) (host string, port int, err error) {
 	return h, p, nil
 }
 
+func cheminsCatalogues(liste string) (out []string) {
+	for _, c := range strings.Split(liste, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return
+}
+
 func main() {
 	listen := flag.String("listen", ":8080", "address to listen on (e.g. :8080 or 0.0.0.0:8080)")
 	caCert := flag.String("ca-cert", "", "path to CA certificate PEM file (required for TLS forging)")
@@ -1454,7 +1509,35 @@ func main() {
 	actorBanMin := flag.Int("actor-ban-min", 2, "sanctions LOCALES de ce WAF (hors bans automatiques) requises dans la fenêtre avant un ban automatique")
 	actorBanMaxHeure := flag.Int("actor-ban-max-heure", 20, "coupe-circuit : bans automatiques maximum par heure glissante")
 	actorBanProtegees := flag.String("actor-ban-protegees", "", "adresses/plages (CIDR, virgules) jamais bannies automatiquement, en plus du privé/local (box, Freebox, mesh)")
+	rotationMode := flag.String("rotation", "off", "détecteur de campagnes à rotation web (même signature, adresses louées) : off | propose | auto (#3919)")
+	rotationVerdict := flag.String("rotation-verdict", "differe", "verdict d'une adresse portant la signature d'une campagne établie : differe (bannie seulement si aucune preuve de navigateur — ressource, cookie, référent… — n'est venue d'elle 10 s après sa page ni dans les 7 jours) | immediat")
+	rotationEtat := flag.String("rotation-etat", "/var/lib/secubox/waf/rotation-etat.json", "état des campagnes à rotation (panneau, relevé populations)")
+	rotationMaxHeure := flag.Int("rotation-max-heure", 1500, "coupe-circuit : bans de rotation maximum par heure glissante")
+	rotationSortiesTor := flag.String("rotation-sorties-tor", "/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt", "liste locale des sorties Tor (secubox-ipblock), jamais bannies ; absente = garde inactive, signalée dans l'état")
+	rotationRejeu := flag.Bool("rotation-rejeu", false, "rejeu HORS LIGNE du détecteur de rotation sur les journaux d'accès nginx donnés en arguments (.gz admis) : rapport JSON sur la sortie standard, puis fin. Rien n'est banni ni écrit (#3919)")
+	rotationRejeuSansGrace := flag.Bool("rotation-rejeu-sans-grace", true, "rejeu : juger dès la première ligne ; false : comme en auto avec une mémoire vide, rien n'est jugé les 24 premières heures")
+	rotationRejeuAdresses := flag.Bool("rotation-rejeu-adresses", false, "rejeu : donner au plus 20 adresses en exemple par campagne (défaut : des comptes seulement)")
 	flag.Parse()
+
+	// #3919 — rejeu hors ligne du détecteur de rotation : ni écoute, ni proxy, ni nft, ni écriture.
+	if *rotationRejeu {
+		var cl classeur
+		if *geoipASN != "" {
+			cl = reseau.Ouvrir(*geoipASN, cheminsCatalogues(*reseauxClasses)...)
+		}
+		log.SetOutput(io.Discard) // les messages du détecteur (dates réelles) n'ont pas de sens ici : tout est dans le rapport
+		grace := rotationGraceVide
+		if *rotationRejeuSansGrace {
+			grace = -1
+		}
+		err := Rejouer(flag.Args(), RotationConfig{Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure, Grace: grace,
+			Protegees: parseCIDRs(*actorBanProtegees), SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "sbxwaf: rejeu : %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// #1070 phase D — mode corrélation hors-ligne : on lit le journal, on affiche
 	// les campagnes en JSON et on quitte (ni écoute, ni proxy).
@@ -1569,14 +1652,10 @@ func main() {
 	// #3919 : annuaire de réseaux, câblé INDÉPENDAMMENT de --actor-socket (le
 	// journal en profite même sans actord). Rechargé au SIGHUP et toutes les
 	// 24 h : une base ASN mise à jour est prise sans redémarrer le WAF.
+	var annuaire *reseau.Annuaire
 	if *geoipASN != "" {
-		var catalogues []string
-		for _, c := range strings.Split(*reseauxClasses, ",") {
-			if c = strings.TrimSpace(c); c != "" {
-				catalogues = append(catalogues, c)
-			}
-		}
-		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		ann := reseau.Ouvrir(*geoipASN, cheminsCatalogues(*reseauxClasses)...)
+		annuaire = ann
 		tl.SetReseau(ann)
 		defer ann.Close()
 		hupReseau := make(chan os.Signal, 1)
@@ -1671,23 +1750,27 @@ func main() {
 			nb.EcrireEtat() // actif=false : le tableau de bord le dit, au lieu d'afficher « 0 ban »
 		} else {
 			srv.nftBan = nb
-			n := nb.Reload()
-			log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
-				*nftTable, *nftBanDuration, n)
+			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. La repose ne consulte que leur mémoire, sans DNS (#3930).
+			nb.robots = NewCrawlers()
+			if annuaire != nil {
+				nb.robotPlausible = func(ip string) bool { return asnMoteurs[annuaire.Classer(ip).ASN] }
+			}
+			// Les bans du journal, sans retarder l'écoute : au-delà de 3 s la repose finit en arrière-plan.
+			if n, fini := nb.PremiereRepose(3 * time.Second); fini {
+				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
+					*nftTable, *nftBanDuration, n)
+			} else {
+				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, rechargement des bans en cours)",
+					*nftTable, *nftBanDuration)
+			}
 			// Veille (#1693) : la table ne vit que dans le noyau, et tout
 			// rechargement du pare-feu (`flush ruleset`) l'efface. Toutes les 30 s
 			// on vérifie qu'elle bloque encore — sinon recréée et bans du journal
 			// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
 			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
 			// à l'échéance reste assuré par le timeout nft du noyau.
-			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. Branchés APRÈS le premier Reload (le DNS ne retarde pas le démarrage),
-			// puis les bans déjà posés sur eux sont levés en arrière-plan.
-			nb.robots = NewCrawlers()
-			go func() {
-				if n := nb.LibererRobots(); n > 0 {
-					log.Printf("sbxwaf: %d ban(s) levé(s) sur des robots d'indexation vérifiés", n)
-				}
-			}()
+			// Bans déjà posés sur des robots vérifiés : levés en arrière-plan, à débit DNS borné (nftban_robots.go).
+			go nb.VeillerRobots(time.Hour)
 			go nb.Veiller(30*time.Second, 2*time.Minute)
 			// #3816 : journal compacté après le premier Reload (ne retarde pas le démarrage), puis chaque heure.
 			go store.VeillerCompactage(CompactageBans{Fenetre: *banStoreFenetre, ArchivesMois: *banStoreArchives, Seuil: *banStoreSeuil},
@@ -1724,6 +1807,42 @@ func main() {
 				go cb.Veiller(5 * time.Minute)
 				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
 			}
+			// Campagnes à rotation (#3919) : garde-fous dans rotation.go ; mêmes plages protégées ; sans annuaire, aucune campagne ne s'établit.
+			if *rotationMode == "propose" || *rotationMode == "auto" {
+				// Un SEUL processus porte le détecteur : ailleurs, la page et ses ressources seraient vues séparément, et un vrai visiteur passerait pour muet.
+				if err := verrouillerRotation(*rotationEtat); err != nil {
+					log.Printf("sbxwaf: rotation DÉSACTIVÉE — %v", err)
+					*rotationMode = "off"
+				}
+			}
+			if *rotationMode == "propose" || *rotationMode == "auto" {
+				var cl classeur
+				if annuaire != nil {
+					cl = annuaire
+				}
+				rot := NewRotation(RotationConfig{Mode: *rotationMode, Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure,
+					Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: parseCIDRs(*actorBanProtegees),
+					SortiesTor: *rotationSortiesTor}, nb, cl)
+				if nb.robots != nil {
+					rot.SetRobots(nb.robots.VerifieSur)
+				}
+				if srv.threatLog != nil {
+					rot.SetJournal(srv.threatLog.Record)
+				}
+				// Arrêt du service (RuntimeMaxSec, mise à jour) : la mémoire des navigateurs est écrite, puis le signal reprend son effet ordinaire.
+				arret := make(chan os.Signal, 1)
+				signal.Notify(arret, syscall.SIGTERM)
+				go func() {
+					<-arret
+					rot.EcrireMemoire(time.Now())
+					signal.Reset(syscall.SIGTERM)
+					_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+				}()
+				srv.rotation = rot
+				go rot.Veiller(2 * time.Second)
+				log.Printf("sbxwaf: rotation mode=%s verdict=%s (plafond=%d/h, annuaire=%t, sorties Tor=%s)", *rotationMode, rot.cfg.Verdict,
+					*rotationMaxHeure, annuaire != nil, *rotationSortiesTor)
+			}
 			// Échelle de réponse (#2274) : mesures d'actord appliquées aux requêtes ; le ban passe par le même banneur nft. La quarantaine du LAN est celle du NAC.
 			if *mesuresMode == "propose" || *mesuresMode == "auto" {
 				mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
@@ -1751,7 +1870,7 @@ func main() {
 			signal.Notify(hup, syscall.SIGHUP)
 			go func() {
 				for range hup {
-					nb.Reparer("rechargement signalé")
+					go nb.Reparer("rechargement signalé") // la repose ne retarde pas la seconde vérification
 					time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
 				}
 			}()

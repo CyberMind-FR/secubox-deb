@@ -45,7 +45,7 @@ from typing import Optional
 
 from veille import normaliser, outils as outils_mod, riposte
 from veille.correlation import _COLS, CALME_S, _evt, correlable
-from veille.regles import ECHELLE, REDIRIGES, Evt, iso, rang
+from veille.regles import ECHELLE, HORS_PREUVE, Evt, iso, rang
 
 FENETRE_S = 86400              # événements nouveaux regardés à chaque passe (les liens déjà faits sont gardés)
 CIBLE_S = 1800                 # même cible / même bloc : deux acteurs à moins de 30 min d'écart
@@ -346,7 +346,7 @@ def _etapes(db, did, type_, evts):
     if type_ == "acteur":
         premiers, derniers = {}, {}
         for e in evts:
-            if e.observation and e.ip_src and e.famille not in REDIRIGES:
+            if e.observation and e.ip_src and e.famille not in HORS_PREUVE:
                 premiers.setdefault(e.ip_src, e)
                 derniers[e.ip_src] = e.horodatage
         vues = sorted(premiers.values(), key=lambda e: (e.horodatage, e.id))
@@ -371,7 +371,7 @@ def _retours(db, did, connus):
                              "JOIN dossier_incidents d ON d.incident_id = i.id WHERE d.dossier_id = ? "
                              "AND i.regle = 'retour_apres_ban' ORDER BY p.evenement_id", (did,)):
         e = connus.get(eid)
-        if e is not None and e.observation and e.famille not in REDIRIGES:
+        if e is not None and e.observation and e.famille not in HORS_PREUVE:
             out.append(eid)
     return out
 

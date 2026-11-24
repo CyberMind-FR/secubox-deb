@@ -19,6 +19,9 @@ override_dh_auto_install:
 	install -D -m 644 systemd/secubox-tcp-etats.service $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.service
 	install -D -m 644 systemd/secubox-tcp-etats.timer $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.timer
 
+	# Fragment nftables des leurres de messagerie (#3924) : valide par la postinst.
+	install -m 755 sbin/secubox-fragment-leurres $(CURDIR)/debian/secubox-hardening/usr/sbin/
+
 	# Install API
 	cp -r api/* $(CURDIR)/debian/secubox-hardening/usr/lib/secubox/hardening/api/
 
@@ -44,6 +47,8 @@ override_dh_auto_install:
 	install -m 644 nft/secubox-wan-guard.nft $(CURDIR)/debian/secubox-hardening/etc/nftables.d/secubox-wan-guard.nft
 
 	install -d $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening
+	# #3924 : pose dans /etc/nftables.d par la postinst, apres validation de l'ensemble.
+	install -m 644 nft/secubox-leurres-mail.nft $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening/secubox-leurres-mail.nft
 	install -m 644 nft/nftables.conf $(CURDIR)/debian/secubox-hardening/usr/share/secubox/hardening/nftables.conf
 
 override_dh_installsystemd:

@@ -110,6 +110,8 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl unban <ip> [fin_max]` | #3930 : ligne `unban` au journal de sbxwaf (`bans.jsonl`, adresse normalisée) **avant** le retrait nft, sinon la ré-affirmation (2 min) remettait le ban ; journal présent mais lien, d'un autre compte ou non inscriptible : `refus:journal`, rien n'est levé ; audit `waf-unban`. Avec `fin_max` (ai-ban, indices, garde défont LEUR ban) : rien au journal ; un ban de sbxwaf plus court revient à la ré-affirmation |
+| `wafctl unban-liste <fichier>` | **root seul**, hors sudoers : une adresse par ligne (invalides comptées et sautées), une écriture au journal puis nft par lots de 1 000 ; audit `waf-unban-liste` |
 | `wafctl leurre <ip> <N>s` / `wafctl leurre-lever <ip>` | #3723 : redirection d'une adresse publique IPv4 ou IPv6 vers le théâtre de sbxwaf (1 h à 7 j, sinon `refus:duree`) : remplacement atomique de `/var/lib/secubox/waf/leurres-ip.json` sous verrou ; sortie `{"fin": <epoch>}` ou `refus:<motif>` (`plein` au-delà de 2 048) ; garde d'office ; sudoers `SBX_WAF_LEURRE` |
 | `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
 | `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
@@ -299,7 +301,7 @@ Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; appl
 vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
 `wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
 n'est jamais touché. `unban` : même garde (compte `garde`, portée `garde-ban`), audit `garde-unban` avant
-`wafctl unban` (chemin du retour arrière de l'ai-ban), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+`wafctl unban` sans `fin_max` (geste de l'administrateur : levée entière, écrite au journal de sbxwaf), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
 acceptées, comme pour l'ai-ban (banc et essais).
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
@@ -319,8 +321,8 @@ ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : ét
 `/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
 enregistrée.
 
-**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban et le relit au
-démarrage. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
+**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban (`wafctl unban`
+y ajoute les siennes, #3930) ; il le relit au démarrage et en ré-affirme toutes les 2 min les bans qui manquent à nft. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
 de `--ban-store-fenetre` (31 j d'office, jamais moins de 30 j : récidive leurre et campagne, plafond de chaîne de la
 réévaluation, vue `/enforcement`), le dernier état de chaque ban actif et toute chaîne de bans qui atteint la fenêtre ; le
 reste est ajouté à `bans-AAAAMM.jsonl.gz` (mois de `at`, gzip multi-membres, `zcat` le lit), archives purgées au-delà de
@@ -447,7 +449,7 @@ pas) ; jamais un compte en clair ; effaçable sans risque, elle se refait. Un re
 `inactive` sans activité depuis 24 h. `rotation` d'une population de famille (`famille:…`) : 50 adresses, 80 % à trois
 tentatives ou moins, et une même cible pour la moitié des tentatives au moins. Jamais une adresse, un compte en clair ni un mot de
 passe. Sources facultatives, absentes sans erreur : `/run/secubox-authwatch/campagnes.json`,
-`/var/lib/secubox/waf/rotation-etat.json` (détecteur non livré dans ce lot), sbx-actord.
+`/var/lib/secubox/waf/rotation-etat.json` (détecteur de rotation, ci-dessous), sbx-actord.
 
 **Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
 `classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
@@ -460,6 +462,35 @@ pas dans la corrélation d'actord (`signatureDe`), donc ni dans la confiance, ni
 `secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une
 ACL de fichier, une ACL par défaut ouvrirait tous les fichiers à venir du dossier, et la traversée seule ouvrirait ses
 autres fichiers lisibles par tous. Accès à concevoir dans #3921 (copie publiée dans un dossier à part).
+
+### Détecteur de campagnes à rotation web (1.45.0)
+
+Une campagne à rotation fait tourner une même requête sur des milliers d'adresses louées, une à trois visites chacune : aucune
+ne franchit seule un seuil. sbxwaf la reconnaît à sa **signature** (navigateur déclaré exact, JA4, hôte) : 50 sources sans
+preuve de navigateur en 1 h, dont 80 % à trois pages ou moins et 60 % en `proxy_loue`/`hebergeur`. Sans base ASN : jamais.
+
+| Option | Livré | Sens |
+|---|---|---|
+| `--rotation` | `propose` | `off`, `propose` (tout est établi, compté, écrit ; **aucun ban, aucune ligne de menace**), `auto` |
+| `--rotation-verdict` | `differe` | `differe` : adresse jugée 10 s après une page servie, si aucune preuve (ressource, cookie, référent…) n'est venue d'elle, ni dans les 7 jours ; `immediat` |
+| `--rotation-etat` | `/var/lib/secubox/waf/rotation-etat.json` | état, verrou (`.verrou`) ; mémoire des navigateurs `rotation-navigateurs.bin` à côté (0640, condensés salés, 7 j) |
+| `--rotation-max-heure` | 1500 | verdicts par heure glissante |
+| `--rotation-sorties-tor` | `/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt` | jamais bannies ; illisible : `tor_garde: false` dans l'état |
+
+Seules les classes `proxy_loue` et `hebergeur` sont bannissables (24 h, `rotation:<8 hex>`) ; jamais une adresse privée ou
+protégée, un robot vérifié ou invérifiable, une sortie Tor, une source d'établissement. Passer en `auto` est une décision du
+propriétaire, à écrire dans l'unité **et** dans `conf/honeypot.conf` (miroir, testé). **Un seul processus** porte le détecteur :
+le verrou l'impose, un second sbxwaf le laisse désactivé et le dit dans son journal. Un verdict ne nourrit rien d'autre : ni actord,
+ni récidive, ni indices partagés, ni riposte de SecuBox AI, ni tentatives du SOC.
+
+**Rejeu hors ligne** (lecture seule, sans privilège, sans réseau ; rapport JSON sur la sortie) :
+
+```
+sbxwaf --rotation-rejeu [--rotation-rejeu-adresses] [--rotation-rejeu-sans-grace=false] copie/secubox-hosts.log*
+```
+
+Majorant (approximations dans le rapport). Ne pas donner `secubox-hosts.log` **et** les journaux par vhost : double compte.
+`suspects_faux_positifs` : seul `preuve_apres` informe ; `structurels` est nul par construction.
 
 ## Migration / cutover
 

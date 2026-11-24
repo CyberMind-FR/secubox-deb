@@ -6,6 +6,7 @@ package main
 
 import (
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,12 +15,20 @@ import (
 type dns struct {
 	inv  map[string][]string
 	dir  map[string][]string
+	mu   sync.Mutex
 	nbRq int
 }
 
+func (d *dns) compte() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.nbRq++
+	return d.nbRq
+}
+
 func (d *dns) install(c *Crawlers) {
-	c.inverse = func(ip string) ([]string, error) { d.nbRq++; return d.inv[ip], nil }
-	c.direct = func(nom string) ([]string, error) { d.nbRq++; return d.dir[nom], nil }
+	c.inverse = func(ip string) ([]string, error) { d.compte(); return d.inv[ip], nil }
+	c.direct = func(nom string) ([]string, error) { d.compte(); return d.dir[nom], nil }
 }
 
 func TestCrawlers_GooglebotVerifieParDNSInverseConfirme(t *testing.T) {
@@ -89,14 +98,14 @@ func TestBan_UnRobotVerifieNEstJamaisBanni(t *testing.T) {
 	r, fx, store, _ := bancReeval(t, "auto", nil)
 	r.banneur.robots = c
 	r.banneur.BanFor("192.178.6.100", "leurre:unrouted", "medium", time.Hour)
-	if fx.vu("add element") {
+	if fx.vu("create element") {
 		t.Fatalf("on ne bannit pas Googlebot : %v", fx.cmds)
 	}
 	if len(store.ActiveBans(time.Now().Unix())) != 0 {
 		t.Fatal("et rien n'est journalisé comme ban")
 	}
 	r.banneur.BanFor("198.51.100.9", "leurre:unrouted", "medium", time.Hour) // une adresse ordinaire reste bannie
-	if !fx.vu("add element") {
+	if !fx.vu("create element") {
 		t.Fatal("les autres adresses restent bannies")
 	}
 }

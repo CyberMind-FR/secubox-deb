@@ -39,3 +39,16 @@ def test_le_leurre_n_ajoute_que_ses_propres_drapeaux():
     leurre = _drapeaux((PKG / "conf" / "honeypot.conf").read_text())
     en_plus = set(leurre) - set(unite)
     assert en_plus <= {"--honeypot", "--honeypot-secret", "--leurre-ban"}, en_plus
+
+
+def test_rotation_en_propose_et_verdict_differe():
+    """#3919 : le détecteur de rotation observe ; `auto` est une décision du propriétaire, dans les deux fichiers à la fois."""
+    for f in (PKG / "systemd" / "secubox-waf-ng.service", PKG / "conf" / "honeypot.conf", PKG / "conf" / "actor-intelligence-simulation.conf.example"):
+        d = _drapeaux(f.read_text())
+        assert d.get("--rotation") == "propose" and d.get("--rotation-verdict") == "differe", f.name
+
+
+def test_un_seul_processus_porte_le_detecteur_de_rotation():
+    """Ailleurs, la page et ses ressources seraient vues par des processus différents (verrou du binaire en plus)."""
+    porteurs = [f.name for f in (PKG / "systemd").iterdir() if "--rotation" in f.read_text()]
+    assert porteurs == ["secubox-waf-ng.service"], porteurs

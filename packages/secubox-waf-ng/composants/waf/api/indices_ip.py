@@ -13,7 +13,7 @@ Ce service ne bannit JAMAIS à l'aveugle :
 - une adresse reçue est notée avec l'instant de sa RÉCEPTION ici (premier passage qui la voit) ;
 - elle n'est bannie (24 h, `sudo -n wafctl ban <ip> 86400s --exiger-protegees`, motif `indice-maillage:<famille>`)
   que si le journal des menaces LOCAL la montre hostile APRÈS cette réception : catégorie hors des familles neutres,
-  ni `leurre_redirige` (le leurre de la box), ni gravité `audit` ;
+  ni `leurre_redirige` (le leurre de la box), ni `rotation`, ni gravité `audit` ;
 - gardes : forme (adresse publique canonique), porte et liste blanche du mode SADE (si publié sur cette box), pairs du
   maillage (wg_mesh.json, threatmesh /peers si la socket existe), robots vérifiés (FCrDNS), puis les gardes root de
   `wafctl` / `waf-blocs` (privé, box, plages protégées exigées, pairs WireGuard) ; une source de pairs illisible :
@@ -88,8 +88,9 @@ COMPTE_RESUME = "secubox"
 
 #: Familles neutres (mêmes que le corrélateur de secubox-ai, `veille/regles.NEUTRES`), plus la redirection vers le
 #: leurre de la box (`leurre_redirige`, gravité `audit`) : rien de cela ne fait d'une adresse une adresse hostile.
+#: `rotation` (#3919) : verdict du détecteur de rotation, un constat d'ABSENCE de preuve ; il ne part jamais chez les pairs.
 FAMILLES_NEUTRES = frozenset({"ban", "ban_actif", "decision", "inconnue", "body-inspect-skipped", "robots", "garde",
-                              "dns", "leurre_redirige"})
+                              "dns", "leurre_redirige", "rotation"})
 GRAVITES_NEUTRES = frozenset({"audit"})
 
 _DID = re.compile(r"^did:plc:([0-9a-f]{32})$")

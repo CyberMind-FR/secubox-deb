@@ -74,12 +74,13 @@ func TestLeurreObserveNeBannitPas(t *testing.T) {
 	signaux := make(chan Signal, 2)
 	signaux <- Signal{IP: "203.0.113.6", Service: "rdp", Categorie: "leurre:rdp", Severite: "high"}
 	signaux <- Signal{IP: "203.0.113.7", Service: "vnc", Categorie: "leurre:vnc", Severite: "high"}
-	go traite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, nil, b, j, lb, false, nil)
 	time.Sleep(100 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 1 || fx.bannies[0] != "203.0.113.7" {
-		t.Fatalf("seul vnc doit bannir, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 1 || fx.liste()[0] != "203.0.113.7" {
+		t.Fatalf("seul vnc doit bannir, obtenu %v", fx.liste())
 	}
 	lignes := lignesJournal(t, cj)
 	if len(lignes) != 2 || lignes[0]["action"] != "detect" || lignes[1]["action"] != "banned" {

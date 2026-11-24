@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Populations d'attaquants et campagnes à rotation d'adresses — conception
 
 Issue #3919 · suite du dossier de l'aspirateur Gitea (#3905) · 2026-11-24

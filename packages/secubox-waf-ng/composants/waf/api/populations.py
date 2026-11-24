@@ -74,6 +74,7 @@ INCONNU = "inconnu"
 # Toute modification là-bas se reporte ici (test_famille_table rejoue les cas de TestFamille). ─────────────────────
 FAMILLE = (
     ("auth_smtp", True, "messagerie"),
+    ("auth_imap", True, "messagerie"),
     ("auth_ssh", True, "acces_distant"),
     ("leurre", True, "acces_distant"),
     ("aspirateur_ua", False, "collecte"),
@@ -360,6 +361,10 @@ class _Agregat:
         self.complet = True
 
 
+#: Leurres de messagerie d'authwatch (#3924) : leurs lignes de gravité `audit` (compte réel, mode observer) ne font pas un
+#: attaquant — ce peut être le téléphone du propriétaire. Seules les autres (ban d'un compte inexistant) comptent.
+LEURRES_MAIL = ("auth_smtp:leurre", "auth_imap:leurre")
+
 # La catégorie lue SANS décoder la ligne : dans du JSON, un guillemet venu d'un attaquant est toujours échappé (`\\"`),
 # `"category":"` sans barre oblique ne peut donc être que la vraie clé.
 _CATEGORIE = re.compile(r'"category": ?"([^"\\]*)"')
@@ -407,7 +412,7 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
         genre = utiles.get(cat)
         if genre is None:
             genre = _utile(cat)
-        if not genre:
+        if not genre or (e.get("severity") == "audit" and cat.startswith(LEURRES_MAIL)):
             continue
         t = _horodatage(e.get("timestamp"))
         if t is None or t < debut or t > fin:
@@ -782,7 +787,7 @@ def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Opti
 
 # ── agrégats des journaux tournés, gardés sur disque ────────────────────────────────────────────────────────────
 
-VERSION_AGREGAT = 1             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
+VERSION_AGREGAT = 2             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
 MAX_AGREGATS = 12               # fichiers gardés (logrotate : 7 rotations)
 MAX_AGREGAT_OCTETS = 32 * 1024 * 1024
 _NOM_AGREGAT = re.compile(r"^(?:agregat-[0-9a-f-]+|adresses)\.json$")

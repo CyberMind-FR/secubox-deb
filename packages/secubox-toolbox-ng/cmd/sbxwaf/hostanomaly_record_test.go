@@ -52,7 +52,7 @@ func TestRecordHostAnomaly_FortDepuisWANBannitParLeWAF(t *testing.T) {
 	// Le ban nft est posé dans une goroutine : on attend l'élément.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if contains(joint(fx.dernier()), "add element inet secubox waf_ban") &&
+		if contains(joint(fx.dernier()), "create element inet secubox waf_ban") &&
 			contains(joint(fx.dernier()), "203.0.113.42") {
 			return
 		}

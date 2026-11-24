@@ -299,12 +299,36 @@ def test_garde_ban_lecture_reelle_v6_illisible_503(c_nft):
     assert c_nft.faux.appels[0][-1] == "waf_ban6" and c_nft.faux.verbes() == ["nft"]
 
 
+def _retour_arriere(c):
+    """La garde défait le ban qu'elle vient de poser : sa fin (4 h) accompagne la levée, rien n'est écrit au journal de sbxwaf."""
+    import time
+    *argv, fin = c.faux.appel("unban")
+    assert argv == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    assert abs(int(fin) - time.time() - 14400) < 30
+
+
+def test_garde_ban_wafctl_muet_defait_avec_sa_fin(c, monkeypatch):
+    vrai = c.gb._g._lancer
+    monkeypatch.setattr(c.gb._g, "_lancer", lambda argv: (None, "muet") if "ban" in argv else vrai(argv))
+    assert c.ban("198.51.100.7").json() == {"detail": {"motif": "wafctl"}}
+    _retour_arriere(c)
+
+
+def test_garde_ban_audit_impossible_defait_avec_sa_fin(c, monkeypatch):
+    def auditer(action, *a, **k):
+        if action == "garde-ban":
+            raise OSError("plein")
+    monkeypatch.setattr(c.gb, "_auditer", auditer)
+    assert c.ban("198.51.100.7").json() == {"detail": {"motif": "audit"}}
+    _retour_arriere(c)
+
+
 def test_garde_ban_journal_impossible_unban_une_seule_fois(c, monkeypatch, tmp_path):
     monkeypatch.setattr(c.gb, "JOURNAL_GARDE", tmp_path / "absent" / "garde-ban.jsonl")
     r = c.ban("198.51.100.7")
     assert r.status_code == 503 and r.json() == {"detail": {"motif": "journal"}}
     assert c.faux.verbes() == ["ban", "unban"]
-    assert c.faux.appel("unban") == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    _retour_arriere(c)
 
 
 def test_garde_ban_preexistant_jamais_d_unban(c, monkeypatch, tmp_path):
@@ -329,6 +353,7 @@ def _unban(c, cible, **extra):
 
 
 def test_garde_unban_ban_propre_actif(c):
+    # geste de l'administrateur (« Débannir ») : levée entière, sans fin_max, donc écrite au journal de sbxwaf (#3930)
     ident = c.ban("198.51.100.7").json()["id"]
     c.restes["198.51.100.7"] = 14390
     r = _unban(c, "198.51.100.7")

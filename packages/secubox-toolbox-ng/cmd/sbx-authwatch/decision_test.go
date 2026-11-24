@@ -12,19 +12,43 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 // banneurFaux capture les bannissements sans toucher a nft.
-type banneurFaux struct{ bannies []string }
+type banneurFaux struct {
+	mu      sync.Mutex
+	bannies []string
+}
+
+func (b *banneurFaux) liste() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string{}, b.bannies...)
+}
+
+// lanceTraite lance la boucle de décision ; la fonction rendue attend sa fin
+// (après annulation du contexte).
+func lanceTraite(ctx context.Context, signaux <-chan Signal, compteur *Compteur, campagnes *Campagnes, comptes *Comptes,
+	banneur *Banneur, journal *JournalMenaces, lb *ListeBlanche, simule bool, acteur *Acteur) func() {
+	fini := make(chan struct{})
+	go func() {
+		defer close(fini)
+		traite(ctx, signaux, compteur, campagnes, comptes, banneur, journal, lb, simule, acteur)
+	}()
+	return func() { <-fini }
+}
 
 func (b *banneurFaux) run(ctx context.Context, args ...string) ([]byte, error) {
 	if len(args) > 0 && args[0] == "add" {
 		// « add element inet secubox waf_ban { IP timeout Ns } »
 		for _, a := range args {
 			if strings.HasPrefix(a, "{") {
+				b.mu.Lock()
 				b.bannies = append(b.bannies, strings.Fields(strings.Trim(a, "{} "))[0])
+				b.mu.Unlock()
 			}
 		}
 	}
@@ -77,12 +101,13 @@ func TestLeurreBannitDesLePremierContact(t *testing.T) {
 	ctx, annule := context.WithCancel(context.Background())
 	signaux := make(chan Signal, 1)
 	signaux <- sig
-	go traite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, nil, b, j, lb, false, nil)
 	time.Sleep(80 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 1 || fx.bannies[0] != "203.0.113.5" {
-		t.Fatalf("le leurre doit bannir immediatement, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 1 || fx.liste()[0] != "203.0.113.5" {
+		t.Fatalf("le leurre doit bannir immediatement, obtenu %v", fx.liste())
 	}
 	lignes := lignesJournal(t, chemin)
 	if len(lignes) != 1 || lignes[0]["action"] != "banned" {
@@ -103,11 +128,11 @@ func TestJournalAttendLaRepetition(t *testing.T) {
 	sig := Signal{IP: "203.0.113.6", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "authentification SASL refusee"}
 	signaux <- sig // poids 2, seuil 6 : insuffisant
-	go traite(ctx, signaux, NewCompteur(time.Minute, 6, time.Minute), nil, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Minute, 6, time.Minute), nil, nil, b, j, lb, false, nil)
 	time.Sleep(80 * time.Millisecond)
 
-	if len(fx.bannies) != 0 {
-		t.Fatalf("un echec isole ne doit pas bannir, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 0 {
+		t.Fatalf("un echec isole ne doit pas bannir, obtenu %v", fx.liste())
 	}
 	if l := lignesJournal(t, chemin); len(l) != 1 || l[0]["action"] != "warning" {
 		t.Fatalf("l'echec doit etre journalise en warning, obtenu %v", l)
@@ -117,8 +142,9 @@ func TestJournalAttendLaRepetition(t *testing.T) {
 	signaux <- sig
 	time.Sleep(120 * time.Millisecond)
 	annule()
-	if len(fx.bannies) != 1 || fx.bannies[0] != "203.0.113.6" {
-		t.Fatalf("le seuil franchi doit bannir, obtenu %v", fx.bannies)
+	arret()
+	if len(fx.liste()) != 1 || fx.liste()[0] != "203.0.113.6" {
+		t.Fatalf("le seuil franchi doit bannir, obtenu %v", fx.liste())
 	}
 }
 
@@ -135,12 +161,13 @@ func TestListeBlancheJamaisBannieMaisTracee(t *testing.T) {
 		signaux <- Signal{IP: "203.0.113.7", Service: "rdp", Categorie: "leurre:rdp",
 			Severite: "high", Detail: "leurre"}
 	}
-	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, false, nil)
 	time.Sleep(120 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 0 {
-		t.Fatalf("une adresse en liste blanche ne doit JAMAIS etre bannie, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 0 {
+		t.Fatalf("une adresse en liste blanche ne doit JAMAIS etre bannie, obtenu %v", fx.liste())
 	}
 	lignes := lignesJournal(t, chemin)
 	if len(lignes) != 3 {
@@ -160,12 +187,13 @@ func TestSimulationNeBannitJamais(t *testing.T) {
 	signaux := make(chan Signal, 1)
 	signaux <- Signal{IP: "203.0.113.8", Service: "vnc", Categorie: "leurre:vnc",
 		Severite: "high", Detail: "leurre"}
-	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, true, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, true, nil)
 	time.Sleep(80 * time.Millisecond)
 	annule()
+	arret()
 
-	if len(fx.bannies) != 0 {
-		t.Fatalf("la simulation ne doit rien bannir, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 0 {
+		t.Fatalf("la simulation ne doit rien bannir, obtenu %v", fx.liste())
 	}
 	if l := lignesJournal(t, chemin); len(l) != 1 || l[0]["action"] != "detect" {
 		t.Fatalf("la simulation doit journaliser en detect, obtenu %v", l)
@@ -180,8 +208,8 @@ func TestAdressePriveeRefuseeParLeBanneur(t *testing.T) {
 			t.Errorf("%s aurait du etre refusee", ip)
 		}
 	}
-	if len(fx.bannies) != 0 {
-		t.Fatalf("aucune commande nft ne doit partir, obtenu %v", fx.bannies)
+	if len(fx.liste()) != 0 {
+		t.Fatalf("aucune commande nft ne doit partir, obtenu %v", fx.liste())
 	}
 }
 
@@ -195,9 +223,10 @@ func TestCompteVisePorteDansLeJournal(t *testing.T) {
 	signaux := make(chan Signal, 1)
 	signaux <- Signal{IP: "203.0.113.90", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "SASL refusee", Cible: "gerald@gk2.net"}
-	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), nil, nil, b, j, lb, false, nil)
+	arret := lanceTraite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), nil, nil, b, j, lb, false, nil)
 	time.Sleep(80 * time.Millisecond)
 	annule()
+	arret()
 
 	lignes := lignesJournal(t, chemin)
 	if len(lignes) != 1 {

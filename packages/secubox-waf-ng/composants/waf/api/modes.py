@@ -54,7 +54,12 @@ MAILLAGE = ipaddress.ip_network("10.10.0.0/24")
 #: RFC 1918 + ULA (pas `is_private`, qui compte aussi les plages de documentation).
 PRIVES = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"))
 LEURRES = (("rdp", 3389), ("vnc", 5900), ("telnet", 23), ("smb", 445), ("mysql", 3306), ("postgres", 5432),
-           ("redis", 6379), ("mongodb", 27017), ("elasticsearch", 9200), ("mssql", 1433))
+           ("redis", 6379), ("mongodb", 27017), ("elasticsearch", 9200), ("mssql", 1433),
+           ("submission", 587), ("imap", 143), ("pop3", 110))      # messagerie (#3924)
+#: Leurres de messagerie : « observer » tant que « bannir » n'est pas écrit (miroir de BannitMail d'authwatch).
+LEURRES_MAIL = frozenset({"submission", "imap", "pop3"})
+#: Messagerie sans capture (#3924) : sbx-authwatch y observe toujours, sans réglage possible.
+LEURRES_FIXES = (("smtp", 25), ("smtps", 465), ("imaps", 993), ("pop3s", 995))
 _HOTE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$")
 _EXPLICITE = re.compile(r"^\^[a-z0-9_-]+(\\\.[a-z0-9_-]+)+\$$")
 
@@ -304,12 +309,13 @@ class ModesLeurres(BaseModel):
 
 
 def _leurres(modes: dict) -> dict:
-    return {"leurres": [{"service": n, "port": p, "mode": modes.get(n, "bannir")} for n, p in LEURRES]}
+    return {"leurres": [{"service": n, "port": p, "mode": modes.get(n, "observer" if n in LEURRES_MAIL else "bannir")} for n, p in LEURRES]
+            + [{"service": n, "port": p, "mode": "observer", "fixe": True} for n, p in LEURRES_FIXES]}
 
 
 @router.get("/leurres-service/modes", dependencies=[Depends(require_lecture)])
 def leurres_modes():
-    """Mode de chaque leurre (absent = bannir, comportement d'origine)."""
+    """Mode de chaque leurre (absent = bannir, comportement d'origine ; messagerie : absent = observer)."""
     return _leurres(_ctl([WAFCTL, "leurres-modes", "lister"]).get("modes") or {})
 
 

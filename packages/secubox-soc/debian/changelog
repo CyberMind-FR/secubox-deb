@@ -1,3 +1,10 @@
+secubox-soc (1.13.2-1~trixie1) trixie; urgency=medium
+
+  * SADE, carte 3 : un verdict de rotation (rotation:<8 hex>) ne compte pas
+    parmi les tentatives laissées passer (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 17:30:00 +0100
+
 secubox-soc (1.13.1-1~trixie1) trixie; urgency=medium
 
   * Guardian, « Campagnes en cours » : âge du relevé ; cartes-campagnes.js à

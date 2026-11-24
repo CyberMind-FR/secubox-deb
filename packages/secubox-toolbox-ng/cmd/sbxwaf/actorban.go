@@ -119,7 +119,7 @@ func adresseProtegee(ip string, protegees []*net.IPNet) bool {
 	return false
 }
 
-// sanctions compte, par IP, les bans posés par le WAF lui-même dans la fenêtre (hors bans automatiques).
+// sanctions compte, par IP, les bans posés par le WAF lui-même dans la fenêtre (hors bans automatiques et bans de rotation).
 func (a *ActorBan) sanctions(depuis int64) map[string]int {
 	out := map[string]int{}
 	if a.store == nil {
@@ -136,7 +136,8 @@ func (a *ActorBan) sanctions(depuis int64) map[string]int {
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
 		var r BanRecord
-		if json.Unmarshal(sc.Bytes(), &r) != nil || r.Action != "ban" || r.At < depuis || strings.HasPrefix(r.Category, "actor:") {
+		if json.Unmarshal(sc.Bytes(), &r) != nil || r.Action != "ban" || r.At < depuis || strings.HasPrefix(r.Category, "actor:") ||
+			strings.HasPrefix(r.Category, "rotation:") { // #3919 : un verdict de rotation est un constat d'absence, pas une sanction
 			continue
 		}
 		out[r.IP]++

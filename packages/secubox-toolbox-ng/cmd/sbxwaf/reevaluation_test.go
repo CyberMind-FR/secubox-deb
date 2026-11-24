@@ -64,6 +64,9 @@ func (f *fauxNftElems) run(_ context.Context, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cmds = append(f.cmds, args)
+	if len(args) >= 5 && args[0] == "-j" && args[1] == "-s" {
+		args = append([]string{"-j"}, args[2:]...) // sans compteurs : même liste
+	}
 	if len(args) >= 4 && args[0] == "-j" && args[1] == "list" && args[2] == "set" {
 		var el []string
 		if args[5] == "waf_ban" {
@@ -149,7 +152,7 @@ func TestTick_LibereCeluiQuiN_InsistePas_SansToucherNft(t *testing.T) {
 	r, fx, store, dir := bancReeval(t, "auto", map[string][2]int64{"198.51.100.6": {1, 30}})
 	poseBan(store, "198.51.100.6", "campagne:abc", now-14370, now+30)
 	r.Tick()
-	if fx.vu("delete element") || fx.vu("add element") {
+	if fx.vu("delete element") || fx.vu("create element") {
 		t.Fatalf("RELEASE : le timeout nft fait le travail, rien n'est posé ni retiré : %v", fx.cmds)
 	}
 	ev := lignesJSON(t, filepath.Join(dir, "reeval.jsonl"))

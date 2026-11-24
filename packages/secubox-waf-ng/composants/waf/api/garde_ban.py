@@ -211,7 +211,7 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
         r, panne = _g._lancer(_g._argv("ban", cible, geste.duree_s))
         if r is None:
             log.error("garde-ban : wafctl injoignable (%s) pour %s", panne, cible)
-            _g._defaire(cible, "garde-ban")
+            _g._defaire(cible, "garde-ban", fin_max=int(_g._maintenant()) + geste.duree_s)
             raise _refus(503, "wafctl", geste.cible, user)
         if r.returncode != 0:
             raise _refus(*_g._statut_motif(_g._motif_sortie(r)), geste.cible, user)
@@ -223,13 +223,13 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
             _ecrire_journal(entree)
         except OSError:
             # hors journal, le ban échapperait aux plafonds
-            if _g._defaire(cible, "garde-ban"):
+            if _g._defaire(cible, "garde-ban", fin_max=int(_g._maintenant()) + geste.duree_s):
                 raise _refus(503, "journal", geste.cible, user) from None
             raise _refus(500, "incoherent", geste.cible, user) from None
         try:
             _auditer("garde-ban", f"{resume} motif {geste.motif}", user)
         except Exception:  # noqa: BLE001 — un ban non audité n'existe pas : il est retiré
-            defait = _g._defaire(cible, "garde-ban")
+            defait = _g._defaire(cible, "garde-ban", fin_max=int(_g._maintenant()) + geste.duree_s)
             try:
                 _ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "annule", "id": ident,
                                  "cible": geste.cible, "cause": "audit"})
@@ -305,8 +305,8 @@ def _unbans_heure(entrees: List[dict], maintenant: int) -> int:
 @router.post("/unban")
 def garde_unban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
     """Seulement une adresse qui a un ban de la garde actif dans garde-ban.jsonl (409 `pas_garde` sinon) : un ban
-    étranger n'est jamais levé. Application par `wafctl unban` (chemin du retour arrière de l'ai-ban), journal
-    `annule` + `geste: unban`, audit `garde-unban` avant le geste. Plafond propre : 60/h. Avant wafctl, l'élément
+    étranger n'est jamais levé. Application par `wafctl unban` SANS fin_max : geste de l'administrateur (« Débannir »),
+    donc levée entière, écrite au journal de sbxwaf (#3930) ; journal `annule` + `geste: unban`, audit `garde-unban` avant le geste. Plafond propre : 60/h. Avant wafctl, l'élément
     vivant est relu : absent → 200 `deja_leve` sans wafctl ; échéance restante (ou permanente) au-delà de la `fin` de
     la garde + 120 s → 409 `etranger` (ban repris par un autre) ; ensemble ou échéance illisible → 503 `etat`."""
     geste: GesteGardeUnban = _g._valider(GesteGardeUnban, corps)

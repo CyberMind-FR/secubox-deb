@@ -21,7 +21,8 @@ GARDE_NFT = Path("/etc/nftables.d/secubox-wan-guard.nft")
 # Frontaux voulus côté LAN/WAN : jamais signalés comme exposés.
 FRONTAUX = {22, 80, 443, 9443}
 # Écoutes de leurre de sbx-authwatch (#3728) : OUVERTES exprès, un contact y vaut ban. Listées à part, jamais « exposées ».
-LEURRES = {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017}
+# #3924 : 110 et 143 (permanents), 18025… (ports locaux, ouverts pendant l'arrêt du conteneur de courrier).
+LEURRES = {23, 110, 143, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 18025, 18465, 18587, 18993, 18995, 27017}
 
 _RE_PORTS = re.compile(r'iifname\s+"(?P<iface>[^"]+)"\s+tcp\s+dport\s+\{(?P<ports>[^}]*)\}')
 

@@ -421,6 +421,34 @@ def test_leurre_redirige_jamais_hostile(db):
     assert d.niveau == "observer" and _proposer(db, d) == []
 
 
+def test_verdict_de_rotation_jamais_hostile_3919(db):
+    """Une ligne `rotation:<8 hex>` (mode auto du détecteur de gk2) est un constat d'absence : ni tentative, ni couche, ni
+    récidive ; le ban de rotation échu n'est pas une sanction, même vu par la disparition des bans actifs."""
+    assert "rotation" in regles.NEUTRES and "rotation" not in regles.SURES
+    _ajout(db, "bans", T0 - timedelta(days=1), ip=A, cat="rotation:0a1b2c3d", sev="high",
+           exp=int((T0 - timedelta(minutes=30)).timestamp()))
+    _ajout(db, "bans_actifs", T0 - timedelta(minutes=29), ip=A, famille="ban_actif", etat="disparu")
+    for k in range(150):
+        _waf(db, A, T0 - timedelta(minutes=25) + timedelta(seconds=5 * k), cat="rotation:0a1b2c3d", sev="critical",
+             action="banned")
+    _auth(db, A, T0 - timedelta(minutes=10), "smtp", sev="medium")
+    incidents = correlation.correler(db, T0)
+    assert not [i for i in incidents if i.regle in ("retour_apres_ban", "multi_source") and i.cle == A]
+    d = {x.cle: x for x in dossiers.construire(db, T0)}[A]
+    s = riposte.signaux(d, T0)
+    assert s.tentatives == 1 and s.couches == 1 and s.recidive is False and s.critique is False
+    assert d.niveau == "observer" and _proposer(db, d) == []
+
+
+def test_ban_ordinaire_apres_un_ban_de_rotation_reste_une_sanction_3919(db):
+    _ajout(db, "bans", T0 - timedelta(days=2), ip=A, cat="rotation:0a1b2c3d", sev="high",
+           exp=int((T0 - timedelta(days=1)).timestamp()))
+    _ajout(db, "bans", T0 - timedelta(hours=5), ip=A, cat="sqli", sev="high",
+           exp=int((T0 - timedelta(minutes=30)).timestamp()))
+    _waf(db, A, T0 - timedelta(minutes=5), cat="sqli:x")
+    assert [i.cle for i in correlation.correler(db, T0) if i.regle == "retour_apres_ban"] == [A]
+
+
 # ── migration ──
 
 def test_migration_0006_rejouable(tmp_path):

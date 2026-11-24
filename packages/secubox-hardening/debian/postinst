@@ -64,6 +64,9 @@ PY
             rm -f "$tmp"
         fi
 
+        # Fragment nftables des leurres de messagerie (#3924) : validé avant d'être posé, jamais chargé ici.
+        /usr/sbin/secubox-fragment-leurres || true
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-hardening.service

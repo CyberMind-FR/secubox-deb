@@ -76,6 +76,11 @@ func (a *Acteur) Emet(sig Signal, banni bool) {
 	if a == nil || a.emetteur == nil {
 		return
 	}
+	a.emetteur.Emit(enveloppe(sig, banni, a.hacheur))
+}
+
+// enveloppe construit ce qui part vers sbx-actord.
+func enveloppe(sig Signal, banni bool, hacheur *envelope.Hasher) *envelope.Envelope {
 	action := envelope.ActionObserve
 	if banni {
 		action = envelope.ActionBlock
@@ -97,10 +102,10 @@ func (a *Acteur) Emet(sig Signal, banni bool) {
 	}
 	// LE COMPTE VISÉ, HACHÉ. C'est l'axe à 30 points, et la raison d'être de
 	// cette émission.
-	if a.hacheur != nil && sig.Cible != "" {
-		e.CredentialTokenHash = a.hacheur.Hash(strings.ToLower(sig.Cible))
+	if hacheur != nil && sig.Cible != "" && sig.LeurreMail == "" { // #3924 : jamais sur un leurre de messagerie
+		e.CredentialTokenHash = hacheur.Hash(strings.ToLower(sig.Cible))
 	}
-	a.emetteur.Emit(e)
+	return e
 }
 
 // Close ferme l'émetteur. Sans effet si l'émission est désactivée.

@@ -62,6 +62,7 @@ func (s *Server) wakeUpstreamFailure(w http.ResponseWriter, r *http.Request, cod
 	if !s.wakeOnRefusal(code, host) {
 		return false
 	}
+	exclureDuVerdict(r.Context()) // #3919 : l'écran de réveil n'est pas la page demandée
 	s.wakerProxy().ServeHTTP(w, r)
 	return true
 }
