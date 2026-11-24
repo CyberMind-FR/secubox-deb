@@ -58,3 +58,11 @@ def test_audit_sans_creation(tmp_path):
     os.chmod(absent, 0o600)
     ef.audit("rouvrir", "192.168.1.112", "test", "ok")
     assert '"action": "rouvrir"' in absent.read_text()
+
+
+def test_profils_ecrivent_audit_en_w():
+    """« a » seul refusait chaque write() (revérifié en MAY_WRITE par le noyau de gk2)."""
+    ici = Path(__file__).resolve().parents[1] / "apparmor"
+    for profil in ("secubox-garde", "secubox-garde-passage"):
+        txt = (ici / profil).read_text(encoding="utf-8")
+        assert "  /var/log/secubox/audit.log w," in txt and "audit.log a," not in txt, profil

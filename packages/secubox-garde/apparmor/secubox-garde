@@ -48,7 +48,9 @@ profile secubox-garde flags=(attach_disconnected) {
   /etc/secubox-comptes-service/ai-lecture/*.pub r,
 
   # Demandes de l'administrateur : ajout seul au journal d'audit.
-  /var/log/secubox/audit.log a,
+  # #3910 : « w » et non « a » — le noyau revérifie chaque write() avec MAY_WRITE, « a » refusait toute ligne.
+  # Le code ouvre le fichier O_WRONLY|O_APPEND sans O_CREAT : ajout seul, jamais de création ni de troncature.
+  /var/log/secubox/audit.log w,
 
   # État : base des décisions, dépôts (réglages, clé SMS) appliqués par l'aide root du passage.
   /var/lib/secubox/garde/ rw,
