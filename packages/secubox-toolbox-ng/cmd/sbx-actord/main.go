@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 func main() {
@@ -54,6 +56,11 @@ func main() {
 		propsPath  = flag.String("propositions", "", "fichier où publier les propositions de blocage (acteurs en DENY/QUARANTINE) ; vide = désactivé")
 		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
 		sinceDur   = flag.Duration("since", 0, "avec --replay : ne rejoue que les événements plus récents que cette durée")
+		geoipASN   = flag.String("geoip-asn", "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+			"base MaxMind des ASN, lue LOCALEMENT (\"\" = désactivée) : ASN des sources dont l'enveloppe n'en porte pas (#3919)")
+		reseauxClasses = flag.String("reseaux-classes",
+			"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
+			"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
 	)
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.LUTC)
@@ -79,6 +86,18 @@ func main() {
 	}
 	defer led.Close()
 
+	// #3919 : annuaire de réseaux, ouvert AVANT le rejeu (qui remplit les
+	// fiches par source). Toujours ouvert : sans base ASN, le catalogue classe
+	// encore les ASN portés par les enveloppes.
+	var catalogues []string
+	for _, c := range strings.Split(*reseauxClasses, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			catalogues = append(catalogues, c)
+		}
+	}
+	ann := reseau.Ouvrir(*geoipASN, catalogues...)
+	defer ann.Close()
+
 	srv := &Server{
 		store:      st,
 		shadow:     *shadow,
@@ -86,6 +105,7 @@ func main() {
 		ledger:     led,
 		accum:      map[string]*actorSignals{},
 		rebuildMax: *rebuildMax,
+		annuaire:   ann,
 	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
 
@@ -134,6 +154,24 @@ func main() {
 	// Arrêt propre.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// #3919 : annuaire rechargé au SIGHUP et toutes les 24 h (comme sbxwaf et
+	// authwatch). Capter SIGHUP évite aussi qu'il arrête le démon.
+	hupReseau := make(chan os.Signal, 1)
+	signal.Notify(hupReseau, syscall.SIGHUP)
+	go func() {
+		tic := time.NewTicker(24 * time.Hour)
+		defer tic.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hupReseau:
+			case <-tic.C:
+			}
+			ann.Recharger()
+		}
+	}()
 	log.Printf("actord: démarré (db=%s, retention=%s, rejeu max=%d)", *dbPath, *retention, *rebuildMax)
 	<-ctx.Done()
 	log.Printf("actord: arrêt")

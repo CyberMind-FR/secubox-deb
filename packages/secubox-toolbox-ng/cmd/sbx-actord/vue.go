@@ -136,6 +136,13 @@ type campagneReduite struct {
 	Continuite  int      `json:"continuite"`
 	Premier     int64    `json:"premier"`
 	Dernier     int64    `json:"dernier"`
+	// #3919 : les mêmes champs lisibles que la vue complète, SAUF cibles_noms.
+	Famille  string         `json:"famille"`
+	Classes  map[string]int `json:"classes"`
+	PaysTop  []PaysPart     `json:"pays_top"`
+	Une      int            `json:"une"`
+	Le3      int            `json:"le3"`
+	Rotation bool           `json:"rotation"`
 }
 
 func (s *Server) campagneReduite(c *campagne) campagneReduite {
@@ -146,6 +153,8 @@ func (s *Server) campagneReduite(c *campagne) campagneReduite {
 		NbCibles: c.nbCibles, Inexistants: c.Inexistants,
 		Priorite: c.Priorite, Continuite: c.Continuite,
 		Premier: c.Premier, Dernier: c.Dernier,
+		Famille: c.Famille, Classes: c.Classes, PaysTop: c.PaysTop,
+		Une: c.Une, Le3: c.Le3, Rotation: c.Rotation,
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 // Server porte l'état partagé du démon. Phase 0/1 : SHADOW — on ingère, on
@@ -41,7 +42,11 @@ type Server struct {
 	inexistants map[string]bool
 	ledger      *evidence.Ledger
 	accum       map[string]*actorSignals
-	robots      *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation
+	// #3919 : annuaire de réseaux (ASN → classe) et fiches par adresse source
+	// (enrichissement.go). annuaire nil = classes « inconnu ».
+	annuaire *reseau.Annuaire
+	sources  map[string]*ficheSource
+	robots   *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation
 
 	// Clé des identifiants de campagne de la vue réduite (vue.go), tirée au
 	// premier usage et gardée en mémoire seulement.

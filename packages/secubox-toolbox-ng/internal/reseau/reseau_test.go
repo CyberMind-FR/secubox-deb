@@ -140,3 +140,54 @@ func TestRechargerGardeAncienneBase(t *testing.T) {
 		t.Error("l'ancienne base ne doit pas être fermée sur échec")
 	}
 }
+
+// TestFamille : la table des familles de campagne (#3919). Mêmes cas que la
+// copie Python (tâche 5) : une règle par ligne, plus le repli.
+func TestFamille(t *testing.T) {
+	cas := []struct{ in, want string }{
+		{"auth_smtp_bruteforce", "messagerie"},
+		{"auth_ssh_bruteforce", "acces_distant"},
+		{"leurre_ssh", "acces_distant"},
+		{"aspirateur_ua", "collecte"},
+		{"recon_crawler", "collecte"},
+		{"robots", "collecte"},
+		{"scanners", "balayage_web"},
+		{"honeypot", "balayage_web"},
+		{"lfi", "balayage_web"},
+		{"api_abuse", "balayage_web"},
+		{"waf_fingerprint", "balayage_web"},
+		{"host_anomaly:unrouted", "balayage_web"},
+		{"rotation:asn", "collecte"},
+		{"inconnue", "autre"},
+	}
+	for _, c := range cas {
+		if got := Famille(c.in); got != c.want {
+			t.Errorf("Famille(%q) = %q, attendu %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestClasseASN : la classe d'un ASN déjà connu (porté par l'enveloppe), sans
+// passer par la base.
+func TestClasseASN(t *testing.T) {
+	d := t.TempDir()
+	livre := filepath.Join(d, "livre.toml")
+	if err := os.WriteFile(livre, []byte(catalogueLivre), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := Ouvrir("", livre)
+	defer a.Close()
+	if got := a.ClasseASN(212238); got != ClasseProxyLoue {
+		t.Errorf("212238 = %q, attendu proxy_loue", got)
+	}
+	if got := a.ClasseASN(64496); got != ClasseInconnu {
+		t.Errorf("64496 = %q, attendu inconnu", got)
+	}
+	if got := a.ClasseASN(0); got != ClasseInconnu {
+		t.Errorf("0 = %q, attendu inconnu", got)
+	}
+	var n *Annuaire
+	if got := n.ClasseASN(212238); got != ClasseInconnu {
+		t.Errorf("nil = %q, attendu inconnu", got)
+	}
+}

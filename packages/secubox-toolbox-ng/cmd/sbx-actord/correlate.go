@@ -111,6 +111,7 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 		}
 	}
 	a := s.graph.Observe(obs)
+	s.noterSource(e)
 	acc := s.accum[a.ID]
 	if acc == nil {
 		acc = &actorSignals{windows: map[int64]bool{}, days: map[string]bool{}}
@@ -285,5 +286,6 @@ func (s *Server) purgerMemoire(avant int64) int {
 	for _, id := range ids {
 		delete(s.accum, id)
 	}
+	s.oublierSources(avant)
 	return len(ids)
 }

@@ -124,6 +124,20 @@ func (a *Annuaire) Classer(ip string) Info {
 	return Info{ASN: e.ASN, Org: e.Org, Classe: classe}
 }
 
+// ClasseASN rend la classe d'un ASN déjà connu (porté par une enveloppe),
+// sans consulter la base ; « inconnu » hors catalogue. Sûr avec un récepteur nil.
+func (a *Annuaire) ClasseASN(asn uint32) string {
+	if a == nil || asn == 0 {
+		return ClasseInconnu
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if c := a.classes[asn]; c != "" {
+		return c
+	}
+	return ClasseInconnu
+}
+
 // Recharger rouvre la base et relit les catalogues. Si la nouvelle base est
 // illisible, l'ancienne est gardée (une mise à jour tronquée ne doit pas
 // aveugler le WAF).

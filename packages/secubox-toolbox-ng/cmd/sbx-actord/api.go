@@ -279,6 +279,15 @@ type campagne struct {
 	Premier     int64    `json:"premier"`
 	Dernier     int64    `json:"dernier"`
 	nbCibles    int
+
+	// #3919 : de quoi lire la campagne sans ouvrir ses acteurs (enrichissement.go).
+	Famille    string         `json:"famille"`
+	CiblesNoms []string       `json:"cibles_noms"` // vue complète seulement
+	Classes    map[string]int `json:"classes"`
+	PaysTop    []PaysPart     `json:"pays_top"`
+	Une        int            `json:"une"`
+	Le3        int            `json:"le3"`
+	Rotation   bool           `json:"rotation"`
 }
 
 func (s *Server) handleCampaigns(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +372,7 @@ func (s *Server) campagnes() []*campagne {
 		g.Sources = len(ips[sig])
 		g.Pays = len(pays[sig])
 		g.nbCibles = len(vues[sig])
+		s.enrichir(g, ips[sig])
 		sort.Strings(g.Acteurs)
 		out = append(out, g)
 	}
