@@ -72,6 +72,10 @@ try:
 except ImportError:  # standalone
     import php_signaux as _php_signaux
 try:
+    from api import populations as _populations
+except ImportError:  # standalone
+    import populations as _populations
+try:
     from api.application import application as _application, lire_etat as _lire_etat_nft
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
@@ -92,6 +96,9 @@ VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
 LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
+# Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés en tâche de fond, lu par gk3.
+POPULATIONS_CACHE = Path("/var/cache/secubox/waf/populations.json")
+POPULATIONS_PERIODE = 600  # s
 _history_lock = threading.Lock()
 
 
@@ -1010,13 +1017,19 @@ def _rafraichir_php_signaux(maintenant: Optional[float] = None) -> None:
     _php_signaux.ecrire_cache(PHP_SIGNAUX_CACHE, etat)
 
 
+def _rafraichir_populations(maintenant: Optional[float] = None) -> None:
+    """Balaie 7 jours du journal des menaces et écrit le relevé des populations (#3919). Tâche de fond seulement."""
+    _populations.rafraichir(str(Path(THREATS_LOG).parent), str(POPULATIONS_CACHE), CAMPAIGNS_FILE,
+                            maintenant if maintenant is not None else time.time())
+
+
 async def _warm_loop():
     """Background refresher. Survives individual failures so a single
     bad log line can't kill the loop."""
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = 0.0
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = 0.0
     _leurres_panne = ""
     while True:
         try:
@@ -1055,6 +1068,12 @@ async def _warm_loop():
             except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
                 log.warning("filtres-ia : calcul en échec : %s", e)
             dernier_filtres_ia = time.time()
+        if time.time() - dernier_populations >= POPULATIONS_PERIODE:   # #3919 : relevé populations, lu par gk3
+            try:
+                await asyncio.to_thread(_rafraichir_populations)
+            except Exception as e:  # noqa: BLE001 — le relevé précédent reste servi, avec son âge
+                log.warning("populations : calcul en échec : %s", e)
+            dernier_populations = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1107,6 +1126,18 @@ async def waf_campaigns(limite: int = Query(20, ge=1, le=1000)):
         c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
         c["nb_attaquants"] = len(c.get("attaquants", []))
     return {"available": True, "attaquants": data.get("attaquants", 0), "campagnes": camps}
+
+
+@app.get("/populations", dependencies=[Depends(require_lecture_ai)])
+async def waf_populations():
+    """Populations d'attaquants sur 7 jours (#3919), lues par gk3 : le cache de la tâche de fond tel quel, avec son
+    âge. Jamais de calcul ici ; cache absent ou illisible → `{"disponible": False}` (jamais un zéro inventé)."""
+    releve = await asyncio.to_thread(_populations.lire_cache, str(POPULATIONS_CACHE))
+    if releve is None:
+        return {"disponible": False}
+    genere = releve.get("genere_le")
+    age = int(_maintenant() - genere) if isinstance(genere, (int, float)) and not isinstance(genere, bool) else None
+    return {**releve, "disponible": True, "age_s": age}
 
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
