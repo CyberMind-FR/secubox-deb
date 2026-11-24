@@ -49,7 +49,7 @@ FABRIQUE_TRANSPORT_GK2: Callable[[], httpx.AsyncBaseTransport | None] | None = N
 
 _cache: dict = {"quand": 0.0, "releve": None}
 _panne_gk2: dict = {"chemins": ()}   # dernier état journalisé (on ne trace que les changements)
-DERNIER_RESUME: dict = {"texte": "", "quand": 0.0, "en_cours": None, "propositions": []}
+DERNIER_RESUME: dict = {"texte": "", "quand": 0.0, "essai": 0.0, "en_cours": None, "propositions": []}
 INSTANTANES: deque = deque(maxlen=90)   # un relevé chiffré toutes les ~2 min : 3 h d'historique, de VRAIES tendances
 _instantanes_charges = [False]
 _verrou_boucle: dict = {}
@@ -61,7 +61,7 @@ def _reinitialiser() -> None:
     """État en mémoire remis à zéro (tests ; équivaut à un redémarrage du module)."""
     _cache.update(quand=0.0, releve=None)
     _panne_gk2["chemins"] = ()
-    DERNIER_RESUME.update(texte="", quand=0.0, en_cours=None, propositions=[])
+    DERNIER_RESUME.update(texte="", quand=0.0, essai=0.0, en_cours=None, propositions=[])
     INSTANTANES.clear()
     _instantanes_charges[0] = False
 
@@ -213,9 +213,13 @@ async def releve_menaces(force: bool = False) -> dict:
         releve = {
             "quand": maintenant,
             "erreurs": erreurs,
+            # #3901 : une source en erreur se lit « inconnu » (None → « — »), jamais 0 : gk2 saturé le 23/11, le Radar
+            # affichait « 0 ban » alors que 2 000 adresses étaient bannies.
             "chiffres": {"menaces_jour": stats.get("threats_today"), "observees_jour": stats.get("observed_today"),
-                         "bans_actifs": len(liste), "alertes_derniere_heure": f"{recents}+" if sature else recents,
-                         "attaquants_campagnes": camp.get("attaquants"), "campagnes": len(les_campagnes)},
+                         "bans_actifs": None if "/waf/bans" in erreurs else len(liste),
+                         "alertes_derniere_heure": None if "/waf/alerts" in erreurs else (f"{recents}+" if sature else recents),
+                         "attaquants_campagnes": camp.get("attaquants"),
+                         "campagnes": None if "/waf/campaigns" in erreurs else len(les_campagnes)},
             "categories": dict(Counter(categories).most_common(8)),
             "gravite": stats.get("by_severity") if isinstance(stats.get("by_severity"), dict) else {},
             "pays": [f"{x.get('country')} {x.get('count')}" for x in _liste(stats.get("top_countries"))[:5]],
@@ -575,7 +579,9 @@ async def tour_veille() -> str | None:
     """Un tour de la veille : résumé automatique seulement si le moteur de texte est DÉJÀ en marche et libre. Ne démarre
     jamais le moteur pour cela et ne passe jamais devant une demande de l'administrateur. Rend la tâche lancée."""
     minutes = reglages.lire_prefs()["menaces"]["resume_auto_min"]
-    if not minutes or time.time() - DERNIER_RESUME["quand"] < minutes * 60 or taches.COMPTEURS["en_cours"]:
+    # #3901 : un essai, réussi ou non, compte pour l'intervalle (un résumé en échec était relancé à chaque tour).
+    dernier = max(DERNIER_RESUME["quand"], DERNIER_RESUME["essai"])
+    if not minutes or time.time() - dernier < minutes * 60 or taches.COMPTEURS["en_cours"]:
         return None
     if _resume_en_cours() or _cache["releve"] is None or motif_inutilisable(_cache["releve"]):
         return None
@@ -584,6 +590,7 @@ async def tour_veille() -> str | None:
     r = await releve_menaces(force=True)
     if motif_inutilisable(r) or _resume_en_cours() or taches.COMPTEURS["en_cours"]:
         return None
+    DERNIER_RESUME["essai"] = time.time()
     return _lancer_resume(r, "Résumé automatique des menaces de gk2", automatique=True)
 
 

@@ -200,7 +200,7 @@ async def test_gk2_injoignable_releve_avec_erreurs_et_resume_refuse_sans_modele(
 async def test_reponse_gk2_mal_formee_comptee_en_erreur(gk2):
     gk2["donnees"]["/waf/bans"] = ["pas", "un", "objet"]
     r = await menaces.releve_menaces()
-    assert r["erreurs"] == ["/waf/bans"] and r["chiffres"]["bans_actifs"] == 0
+    assert r["erreurs"] == ["/waf/bans"] and r["chiffres"]["bans_actifs"] is None   # #3901 : inconnu, pas 0
     assert menaces.motif_inutilisable(r)
 
 

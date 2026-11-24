@@ -1,3 +1,12 @@
+secubox-ai (2.2.1-1~trixie1) trixie; urgency=medium
+
+  * Menaces : une source de gk2 en erreur (bans, campagnes, alertes) se lit
+    « — » et non plus 0 ; gk2 saturé, le Radar affichait « 0 ban » pour
+    ~2 000 adresses bannies. Le résumé automatique en échec attend son
+    intervalle au lieu d'être relancé à chaque tour (ref #3901).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 05:50:00 +0100
+
 secubox-ai (2.2.0-1~trixie1) trixie; urgency=medium
 
   * Onglet Salle (ref #TBD), porté du POC gk0 : vue SBX-SOC d'une page, premier
