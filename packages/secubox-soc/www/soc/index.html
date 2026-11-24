@@ -9,7 +9,7 @@
 
   ELLE NE PEINT RIEN QU'ELLE N'A OBSERVÉ. Elle lit les SOURCES VIVANTES de la box : le WAF (menaces, bans, campagnes
   corrélées, géo), les métriques, les profils, la sentinelle GSM, et encadre les pages de même origine (Guardian, Réseau
-  en direct, /waf/*, /dpi/vue.html, /actor-intelligence/). Un panneau qui ne peut pas lire sa source le DIT : une mesure
+  en direct, /dpi/vue.html, /actor-intelligence/ ; le détail du WAF s'ouvre dans /waf/, une place par panneau, #3922). Un panneau qui ne peut pas lire sa source le DIT : une mesure
   absente s'affiche « — », jamais 0 (« rien ne nous attaque » et « on ne voit plus rien » ne se ressemblent pas).
   Page en lecture seule : aucun appel d'écriture.
   `?embed=1` : sans menu ; `?demo=1` : données fictives annoncées par un bandeau, sans menu ni appel d'API.
@@ -50,6 +50,7 @@
 
   .onglets{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .onglet{font:inherit;font-size:.78rem;font-weight:500;color:var(--doux);background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:999px;padding:6px 13px;min-height:32px;cursor:pointer;display:flex;gap:7px;align-items:center}
+  .onglet.lien{text-decoration:none}
   .onglet:hover{border-color:var(--trait2);color:var(--texte)}
   .onglet[aria-selected="true"]{color:var(--texte);border-color:var(--cyan);background:rgba(41,182,246,.16)}
   .onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
@@ -182,12 +183,7 @@
     <button class="onglet" role="tab" aria-selected="true" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tn" data-vue="reseau.html?embed=1"><span class="pt"></span>Réseau en direct</button>
     <span class="grp" aria-hidden="true">Pare-feu</span>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tm" data-vue="/waf/menaces.html?embed=1"><span class="pt"></span>Menaces</button>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="ta" data-vue="/waf/attaquants.html?embed=1"><span class="pt"></span>Attaquants</button>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tc" data-vue="/waf/campagnes.html?embed=1"><span class="pt"></span>Campagnes</button>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="ts" data-vue="/waf/surfaces.html?embed=1"><span class="pt"></span>Surfaces</button>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tv" data-vue="/waf/visites.html?embed=1"><span class="pt"></span>Visites</button>
-    <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="th" data-vue="/waf/historique.html?embed=1"><span class="pt"></span>Historique</button>
+    <a class="onglet lien" id="twaf" href="/waf/" target="_top" title="Le détail des menaces, attaquants, campagnes, surfaces, visites et historique vit dans le WAF (#3922)"><span class="pt"></span>Détail dans le WAF ↗</a>
     <span class="grp" aria-hidden="true">Réseau &amp; acteurs</span>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="td" data-vue="/dpi/vue.html?embed=1"><span class="pt"></span>Trafic (DPI)</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tr" data-vue="/actor-intelligence/?embed=1"><span class="pt"></span>Renseignement</button>
@@ -197,7 +193,7 @@
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e3" id="t3"><span class="pt"></span>Centrale d'alertes</button>
   </div>
 
-  <!-- ÉCRAN 4 — LES VUES RASSEMBLÉES (#2358) : une page Aurora de même origine par onglet, une seule source (/waf, /dpi, /actor-intelligence), hauteur annoncée par la page -->
+  <!-- ÉCRAN 4 — LES VUES RASSEMBLÉES (#2358) : une page Aurora de même origine par onglet, une seule source (/dpi, /actor-intelligence), hauteur annoncée par la page -->
   <section class="ecran" id="e4" role="tabpanel" hidden>
     <iframe id="vueFrame" title="Vue SecuBox"></iframe>
   </section>
@@ -815,7 +811,7 @@
     if (!DEMO) { return url; }
     return url + (url.indexOf("?") === -1 ? "?" : "&") + "demo=1";
   }
-  var onglets = [].slice.call(document.querySelectorAll(".onglet"));
+  var onglets = [].slice.call(document.querySelectorAll(".onglet:not(.lien)"));
   onglets.forEach(function (o) {
     o.addEventListener("click", function () {
       var cible = o.getAttribute("aria-controls");

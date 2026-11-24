@@ -13,8 +13,8 @@ playwright = pytest.importorskip("playwright.sync_api")
 WWW = Path(__file__).resolve().parents[1] / "www" / "soc"
 PAGE = WWW / "guardian.html"
 STATS = {"total_threats": 15933, "observed_threats": 1796, "by_severity": {"critical": 25, "high": 139, "medium": 194, "info": 15000}, "top_countries": {"US": 9, "FR": 1},
-         "by_category": {"robots": 15500, "lfi": 25}, "leurres_touches": {"telnet": 7221, "vnc": 4475}}
-ALERTES = {"alerts": [{"timestamp": "2026-10-11T07:13:51", "client_ip": "1.2.3.4", "country": "US", "category": "<img src=x onerror=window.xss=1>", "host": "h", "path": "/p", "severity": "high", "action": "banned"}]}
+         "by_category": {"<img src=x onerror=window.xss=1>": 15500, "lfi": 25}, "leurres_touches": {"telnet": 7221, "vnc": 4475}}
+HISTORIQUE = {"jours": {"2026-10-10": {"total": 100}, "2026-10-11": {"total": 150}}}
 
 
 @pytest.fixture(scope="module")
@@ -42,11 +42,12 @@ def ouvre(nav, reponses, url="http://g.test/soc/guardian.html"):
 
 
 def test_les_mesures_sont_affichees_le_mode_est_celui_du_waf_et_les_noms_echappes(nav):
-    p, externes, erreurs = ouvre(nav, {"/api/v1/waf/stats": STATS, "/api/v1/waf/alerts": ALERTES, "/api/v1/waf/enforcement/mode": {"mode": "ACTIVE", "detail": {"campagnes": "ACTIVE", "acteurs": "ACTIVE"}}})
+    p, externes, erreurs = ouvre(nav, {"/api/v1/waf/stats": STATS, "/api/v1/waf/history": HISTORIQUE, "/api/v1/waf/enforcement/mode": {"mode": "ACTIVE", "detail": {"campagnes": "ACTIVE", "acteurs": "ACTIVE"}}})
     t = p.inner_text("body").replace(" ", " ")
     assert "15 933" in t and "1 796 observées" in t and "164" in t                    # critiques = critique + haute
     assert "Mode actif" in t and p.locator(".mode.on").count() == 3                    # OBSERVE, MITIGATE, BLOCK
-    assert p.evaluate("window.xss") is None and "<img" in t
+    assert p.evaluate("window.xss") is None and "<img" in t                            # catégorie dominante du WAF : échappée
+    assert "+50 %" in t and p.locator("#pareFeu a[href^='/waf/'][target='_top']").count() == 4   # bande « Pare-feu applicatif » (#3922)
     assert not externes and not erreurs
     p.context.close()
 
