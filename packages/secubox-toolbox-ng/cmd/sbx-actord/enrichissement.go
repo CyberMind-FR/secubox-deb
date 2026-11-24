@@ -6,9 +6,11 @@
 package main
 
 import (
+	"net"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
@@ -156,16 +158,63 @@ func estCompte(e *envelope.Envelope) bool {
 	return false
 }
 
+// servicesAuthwatch : LISTE FERMÉE des services que sbx-authwatch met dans
+// DstService (motifs, leurres, bannières, filtres livrés). Un nom de cette liste
+// s'affiche tel quel ; tout autre reste un compte, masqué. Un service déclaré par
+// l'opérateur et absent d'ici est donc masqué : c'est le sens sûr de l'erreur.
+// TestServicesConnusSuiventAuthwatch échoue si authwatch en gagne un.
+var servicesAuthwatch = map[string]bool{
+	"ssh": true, "smtp": true, "imap": true, "ftp": true, // motifs, bannières
+	"rdp": true, "vnc": true, "telnet": true, "smb": true, "mysql": true, // leurres
+	"postgres": true, "redis": true, "mongodb": true, "elasticsearch": true, "mssql": true,
+	"gitea": true, "nextcloud": true, "peertube": true, // services.json livré
+}
+
+// cibleMax borne une cible retenue (en caractères) : l'hôte vient de l'attaquant.
+const cibleMax = 64
+
 // cibleAffichee : la cible telle que la carte la montrera. Un compte est
-// masqué DÈS L'INGESTION : la fiche ne garde jamais le compte en clair.
+// masqué DÈS L'INGESTION : la fiche ne garde jamais le compte en clair. Un hôte
+// qui est une adresse n'est pas retenu : aucune adresse ne sort par les cibles.
 func cibleAffichee(e *envelope.Envelope) string {
-	if e.DstService == "" {
+	c := strings.TrimSpace(e.DstService)
+	if c == "" {
 		return ""
 	}
 	if estCompte(e) {
-		return reseau.MasquerCompte(e.DstService)
+		if s := strings.ToLower(c); e.Sensor == envelope.SensorAuthWatch && servicesAuthwatch[s] {
+			return s
+		}
+		return reseau.MasquerCompte(c)
 	}
-	return e.DstService
+	if estAdresseLitterale(c) {
+		return ""
+	}
+	if utf8.RuneCountInString(c) > cibleMax {
+		// Copie (conversion de runes) : la chaîne longue n'est pas retenue.
+		c = string([]rune(c)[:cibleMax])
+	}
+	return c
+}
+
+// estAdresseLitterale : l'hôte (port compris) est une adresse IP, écriture
+// décimale, octale ou hexadécimale incluse (dernier label numérique).
+func estAdresseLitterale(hote string) bool {
+	h := strings.TrimSuffix(hote, ".")
+	if strings.HasPrefix(h, "[") {
+		return true
+	}
+	if strings.Count(h, ":") == 1 {
+		h = strings.TrimSuffix(h[:strings.IndexByte(h, ':')], ".")
+	}
+	if net.ParseIP(h) != nil {
+		return true
+	}
+	d := strings.ToLower(h[strings.LastIndexByte(h, '.')+1:])
+	if x, ok := strings.CutPrefix(d, "0x"); ok {
+		return strings.Trim(x, "0123456789abcdef") == ""
+	}
+	return d != "" && strings.Trim(d, "0123456789") == ""
 }
 
 // familleEvenement : la famille de la catégorie de l'événement. La catégorie
