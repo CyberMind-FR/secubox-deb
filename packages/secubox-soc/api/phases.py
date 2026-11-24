@@ -208,6 +208,8 @@ def _menaces_24h(maintenant: float) -> Tuple[Optional[int], Optional[int], bool]
             n = o.get("servies", 1)
             if _entier(n) and n >= 0:
                 servies += n
+        elif str(o.get("category") or "").startswith("rotation:"):
+            continue    # verdict du détecteur de rotation (#3919) : un constat d'absence, pas une tentative
         elif o.get("action") == "detect" and o.get("client_ip") not in (None, "", "local") \
                 and o.get("severity") != "audit":
             tentatives += 1

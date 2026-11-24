@@ -22,7 +22,10 @@ CATEGORIES_SURES = SURES = frozenset({"scanners", "recon_crawler", "host_anomaly
 REDIRIGES = frozenset({"leurre_redirige"})
 # Ni sûres ni d'attaque : décisions, trafic sans portée offensive, inconnues, leurre de la box.
 NEUTRES = frozenset({"ban", "ban_actif", "decision", "inconnue", "body-inspect-skipped", "robots", "garde", "dns"}) \
-    | REDIRIGES
+    | REDIRIGES | {"rotation"}
+# Verdict du détecteur de rotation de gk2 (#3919) : un constat d'ABSENCE de preuve de navigateur, pas une tentative. Comme
+# une requête servie par le leurre, il n'est preuve d'aucune règle ; un ban de rotation échu ne fait pas une récidive.
+HORS_PREUVE = REDIRIGES | {"rotation"}
 LEURRES = frozenset({"leurre", "honeypot"})
 # Sources qui portent des DÉCISIONS de gk2 (faits), pas des tentatives observées.
 DECISIONS = frozenset({"bans", "bans_actifs", "decisions", "reevaluations"})
