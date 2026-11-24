@@ -1,3 +1,11 @@
+secubox-waf-ng (1.43.7-1~trixie1) trixie; urgency=medium
+
+  * waf-rules 1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h. Environ
+    1 000 adresses neuves par heure : 7 j menaient waf_ban vers 170 000
+    entrées sur gk2 (ref #3905).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:59:51 +0100
+
 secubox-waf-ng (1.43.6-1~trixie1) trixie; urgency=medium
 
   * waf-rules 1.8.1 : aspirateur_ua en mode escalate, le seul qui lit
