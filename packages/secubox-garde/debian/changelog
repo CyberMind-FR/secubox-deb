@@ -1,3 +1,12 @@
+secubox-garde (0.3.10-1~trixie1) trixie; urgency=medium
+
+  * Profils AppArmor secubox-garde et secubox-garde-passage : audit.log en
+    « w » (et non « a ») ; le noyau revérifie chaque write() en MAY_WRITE et
+    refusait toute ligne d'audit. Le code reste en ajout seul, sans création
+    (ref #3910).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 07:50:00 +0100
+
 secubox-garde (0.3.9-1~trixie1) trixie; urgency=medium
 
   * Levée d'évasion/quarantaine : chaque adresse levée est gardée tout de
