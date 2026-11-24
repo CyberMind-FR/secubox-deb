@@ -71,6 +71,12 @@ func main() {
 		log.Fatal("actord: --shadow=false non supporté en Phase 0/1 (aucun enforcement livré)")
 	}
 
+	// #3919 : SIGHUP (ExecReload) est capté AVANT le rejeu, qui dure des dizaines de
+	// secondes : non capté, il arrête le démon, et systemd tient cet arrêt pour une
+	// sortie propre (Restart=on-failure ne relance pas). Le signal reste en file.
+	hupReseau := make(chan os.Signal, 1)
+	signal.Notify(hupReseau, syscall.SIGHUP)
+
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o750); err != nil {
 		log.Fatalf("actord: création du répertoire du store : %v", err)
 	}
@@ -155,10 +161,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// #3919 : annuaire rechargé au SIGHUP et toutes les 24 h (comme sbxwaf et
-	// authwatch). Capter SIGHUP évite aussi qu'il arrête le démon.
-	hupReseau := make(chan os.Signal, 1)
-	signal.Notify(hupReseau, syscall.SIGHUP)
+	// #3919 : annuaire rechargé au SIGHUP (capté dès le démarrage) et toutes les 24 h.
 	go func() {
 		tic := time.NewTicker(24 * time.Hour)
 		defer tic.Stop()

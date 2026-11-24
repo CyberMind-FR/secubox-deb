@@ -243,10 +243,22 @@ func part(k, n int) int {
 	return (k*100 + n/2) / n
 }
 
+// rotationFiches et rotationLe3 : seuils de l'indicateur de rotation (spec 5.3).
+const (
+	rotationFiches = 50
+	rotationLe3    = 80
+)
+
 // enrichir calcule les champs lisibles d'une campagne depuis les fiches de
 // ses adresses. Appelée sous s.mu.
+//
+// DÉNOMINATEUR : LES ADRESSES QUI ONT UNE FICHE, PAS TOUTES (#3919). Une fiche
+// vit 48 h, une campagne des jours : compter les adresses sorties de la fenêtre
+// (ou évincées) comme « inconnu » diluait toutes les parts et éteignait
+// `rotation` à tort. `sources` garde son sens (toutes les adresses). Aucune
+// fiche : parts absentes du JSON, jamais un zéro inventé.
 func (s *Server) enrichir(g *campagne, ips map[string]bool) {
-	n := len(ips)
+	n := 0 // adresses qui ont encore une fiche
 	classes := map[string]int{}
 	pays := map[string]int{}
 	var familles [len(famillesIndex)]int
@@ -256,9 +268,9 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 	for ip := range ips {
 		f := s.sources[ip]
 		if f == nil {
-			classes[reseau.ClasseInconnu]++
 			continue
 		}
+		n++
 		cl, ok := classeDe[f.asn]
 		if !ok {
 			cl = s.annuaire.ClasseASN(f.asn)
@@ -285,14 +297,6 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 		}
 	}
 
-	g.Classes = make(map[string]int, len(classes))
-	for k, v := range classes {
-		g.Classes[k] = part(v, n)
-	}
-	g.PaysTop = []PaysPart{}
-	for _, k := range premiers(pays, 3) {
-		g.PaysTop = append(g.PaysTop, PaysPart{Code: k, Part: part(pays[k], n)})
-	}
 	g.CiblesNoms = []string{}
 	// Les comptes y sont déjà masqués (cibleAffichee, à l'ingestion).
 	g.CiblesNoms = append(g.CiblesNoms, premiers(cibles, 3)...)
@@ -305,8 +309,19 @@ func (s *Server) enrichir(g *campagne, ips map[string]bool) {
 			meilleur, g.Famille = v, famillesIndex[i]
 		}
 	}
-	g.Une, g.Le3 = part(une, n), part(le3, n)
-	g.Rotation = g.Le3 >= 80 && n >= 50
+	if n == 0 {
+		return // rien de mesuré : parts absentes, rotation fausse
+	}
+	g.Classes = make(map[string]int, len(classes))
+	for k, v := range classes {
+		g.Classes[k] = part(v, n)
+	}
+	for _, k := range premiers(pays, 3) {
+		g.PaysTop = append(g.PaysTop, PaysPart{Code: k, Part: part(pays[k], n)})
+	}
+	pUne, pLe3 := part(une, n), part(le3, n)
+	g.Une, g.Le3 = &pUne, &pLe3
+	g.Rotation = pLe3 >= rotationLe3 && n >= rotationFiches
 }
 
 // premiers rend les max clés de plus forte valeur, égalités par ordre

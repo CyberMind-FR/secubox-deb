@@ -138,10 +138,10 @@ type campagneReduite struct {
 	Dernier     int64    `json:"dernier"`
 	// #3919 : les mêmes champs lisibles que la vue complète, SAUF cibles_noms.
 	Famille  string         `json:"famille"`
-	Classes  map[string]int `json:"classes"`
-	PaysTop  []PaysPart     `json:"pays_top"`
-	Une      int            `json:"une"`
-	Le3      int            `json:"le3"`
+	Classes  map[string]int `json:"classes,omitempty"`
+	PaysTop  []PaysPart     `json:"pays_top,omitempty"`
+	Une      *int           `json:"une,omitempty"`
+	Le3      *int           `json:"le3,omitempty"`
 	Rotation bool           `json:"rotation"`
 }
 
