@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 # SecuBox DataScope — /etc/secubox/datascope.toml (#3853). Valeurs absentes = défauts du paquet.
-# Les variables SECUBOX_DATASCOPE_DB, _CACHE, _NAC_DB, _NETSTATS et _MODULES priment (tests).
+# Les variables SECUBOX_DATASCOPE_DB, _CACHE, _NAC_DB, _NETSTATS, _MODULES et _POPULATIONS priment (tests).
 
 [stockage]
 # Le postinst règle « base » sur /data/secubox-datascope/datascope.db si /data est un point de montage.
@@ -14,4 +14,5 @@ cache = "/var/cache/secubox/datascope"
 nac_db = "/var/lib/secubox/nac/devices.db"
 netstats = "/var/lib/secubox/hub/netstats.json"
 modules = "/var/cache/secubox/health/modules.json"
+populations = "/var/lib/secubox/waf/populations.json"
 modules_perime_s = 300
