@@ -165,3 +165,14 @@ def test_passe_eclaircit_a_chaque_ecriture(cfg, monkeypatch):
     collecte.passe(cfg, NOW)
     collecte.passe(cfg, NOW + 1)  # inchangé : pas d'éclaircissement
     assert appels == [NOW]
+
+
+def test_passe_eclaircissement_en_echec_ne_defait_pas_l_ecriture(cfg, monkeypatch):
+    def boum(db, m):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(paysage_store, "eclaircir", boum)
+    _releve(cfg, NOW - 600)
+    s = collecte.passe(cfg, NOW)["sources"]["paysage"]
+    assert s["etat"] == "ok" and s["ecrit"] is True and "OperationalError" in s["motif"]
+    assert len(_instantanes(cfg)) == 1

@@ -65,3 +65,11 @@ def test_difference_tolere_metriques_manquantes():
     assert r["hausses"] == [] and r["baisses"] == []
     assert difference({}, {}) == {"apparus": [], "disparus": [], "hausses": [], "baisses": [],
                                   "rotation_levee": [], "rotation_tombee": []}
+
+
+def test_difference_ignore_les_noeuds_autres():
+    avant = {"noeuds": [{"id": "autres:populations", "type": "autres"}, {"id": "pop:a", "type": "population"}]}
+    apres = {"noeuds": [{"id": "autres:noeuds", "type": "autres"}, {"id": "pop:a", "type": "population"},
+                        {"id": "pop:b", "type": "population"}]}
+    r = difference(avant, apres)
+    assert r["apparus"] == ["pop:b"] and r["disparus"] == []

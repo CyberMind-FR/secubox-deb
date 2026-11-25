@@ -61,5 +61,7 @@ def difference(avant: Optional[dict], apres: dict) -> dict:
             levee.append(ident)
         elif ra is True and rb is False:
             tombee.append(ident)
-    return {"apparus": sorted(b.keys() - a.keys()), "disparus": sorted(a.keys() - b.keys()),
+    # Les nœuds « autres:* » (repli « + N autres ») ne sont pas des entités : leur apparition n'est pas un événement.
+    return {"apparus": sorted(i for i in b.keys() - a.keys() if not i.startswith("autres:")),
+            "disparus": sorted(i for i in a.keys() - b.keys() if not i.startswith("autres:")),
             "hausses": hausses, "baisses": baisses, "rotation_levee": levee, "rotation_tombee": tombee}

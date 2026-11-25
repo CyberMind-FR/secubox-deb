@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 BUDGET_OCTETS = 60 * 1024 * 1024
 FENETRE_FINE_S = 48 * 3600
 RETENTION_S = 30 * 86400
+TENDANCE_GRAPHES_MAX = 750  # 30 j x 24 h = 720 instantanés horaires au plus
 
 
 def _ts(epoch: float) -> str:
@@ -71,10 +72,36 @@ def lire(db: sqlite3.Connection, ts: str) -> Optional[Dict[str, Any]]:
     return d
 
 
-def chronologie(db: sqlite3.Connection, de: float, a: float) -> List[Dict[str, Any]]:
-    return [_entete(r) for r in db.execute(
+def chronologie(db: sqlite3.Connection, de: float, a: float, limite: Optional[int] = None) -> List[Dict[str, Any]]:
+    """En-têtes entre `de` et `a`, par époque croissante. `limite` : seuls les plus récents sont gardés."""
+    if limite is None:
+        return [_entete(r) for r in db.execute(
+            "SELECT ts, epoch, partiel, compteurs_json FROM paysage_instantanes WHERE epoch >= ? AND epoch <= ?"
+            " ORDER BY epoch", (de, a))]
+    lignes = [_entete(r) for r in db.execute(
         "SELECT ts, epoch, partiel, compteurs_json FROM paysage_instantanes WHERE epoch >= ? AND epoch <= ?"
-        " ORDER BY epoch", (de, a))]
+        " ORDER BY epoch DESC LIMIT ?", (de, a, limite))]
+    lignes.reverse()
+    return lignes
+
+
+def proche(db: sqlite3.Connection, cible: float, epoch_max: float) -> Optional[Dict[str, Any]]:
+    """En-tête de l'instantané le plus proche de `cible` parmi ceux d'époque <= `epoch_max` (sans graphe)."""
+    r = db.execute("SELECT ts, epoch, partiel, compteurs_json FROM paysage_instantanes WHERE epoch <= ?"
+                   " ORDER BY abs(epoch - ?) LIMIT 1", (epoch_max, cible)).fetchone()
+    return _entete(r) if r else None
+
+
+def horaires(db: sqlite3.Connection, de: float, a: float):
+    """Génère (ts, epoch, graphe) : le premier instantané de chaque heure entre `de` et `a`, un graphe à la fois
+    (décompressé, rendu, puis oublié). Jamais plus de TENDANCE_GRAPHES_MAX ; au-delà, les plus récents."""
+    heures = db.execute(
+        "SELECT ts, MIN(epoch) AS e FROM paysage_instantanes WHERE epoch >= ? AND epoch <= ?"
+        " GROUP BY CAST(epoch / 3600 AS INTEGER) ORDER BY e DESC LIMIT ?", (de, a, TENDANCE_GRAPHES_MAX)).fetchall()
+    for h in reversed(heures):
+        r = db.execute("SELECT graphe FROM paysage_instantanes WHERE ts = ?", (h["ts"],)).fetchone()
+        if r is not None:
+            yield h["ts"], h["e"], json.loads(zlib.decompress(r["graphe"]).decode("utf-8"))
 
 
 def eclaircir(db: sqlite3.Connection, maintenant: float) -> int:

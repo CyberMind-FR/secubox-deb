@@ -182,7 +182,10 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
         ecrit = paysage_store.ecrire(db, p.epoch, p.partiel, p.graphe, p.compteurs, diff)
         if not ecrit:
             return {"etat": "inchange", "ecrit": False}
-        paysage_store.eclaircir(db, maintenant)
+        try:
+            paysage_store.eclaircir(db, maintenant)
+        except Exception as e:  # noqa: BLE001 - l'instantané est écrit : l'éclaircissement reprendra à la passe suivante
+            return {"etat": "ok", "ecrit": True, "motif": f"éclaircissement échoué : {type(e).__name__}: {str(e)[:120]}"}
         return {"etat": "ok", "ecrit": True}
     except Exception as e:  # noqa: BLE001 - le paysage ne fait jamais échouer la passe
         return {"etat": "inaccessible", "ecrit": False, "motif": f"{type(e).__name__}: {str(e)[:120]}"}
