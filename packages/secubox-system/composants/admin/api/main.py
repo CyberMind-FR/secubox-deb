@@ -45,8 +45,6 @@ router = APIRouter()
 log = get_logger("admin")
 
 # Configuration
-DATA_DIR = Path("/var/lib/secubox/admin")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = Path("/etc/secubox/admin.toml")
 AUDIT_LOG = Path("/var/log/secubox/audit.log")
 

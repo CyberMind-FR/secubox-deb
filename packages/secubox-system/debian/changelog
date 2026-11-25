@@ -1,3 +1,11 @@
+secubox-system (1.13.7-1~trixie1) trixie; urgency=medium
+
+  * Arrêt de secubox-pilotage-agent refusé (secubox-core >= 1.8.45) : une box
+    reste administrable par son maître (ref #3946).
+  * API admin : /var/lib/secubox/admin n'est plus créé à l'import (inutilisé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
+
 secubox-system (1.13.6-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
