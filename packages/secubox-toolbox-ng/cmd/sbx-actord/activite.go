@@ -28,11 +28,12 @@ import (
 // MESURE ABSENTE ≠ ZÉRO. `depuis` dit à partir de quand on compte. Une tranche d'avant, ou dans un
 // trou (démon arrêté), vaut null ; une tranche couverte en partie est servie ET signalée partielle.
 //
-// MÉMOIRE : environ 1 Ko par acteur (3 658 acteurs sur gk2 : moins de 4 Mo), plafond activiteMax.
+// MÉMOIRE : environ 1,3 Ko par acteur (3 658 acteurs sur gk2 : moins de 5 Mo), plafond activiteMax.
 // Au plafond, un acteur nouveau n'a pas de série (null), il n'en chasse aucun.
 const (
-	heuresGardees = 50 // deux fenêtres de 24 h pleines, plus l'heure en cours
-	joursGardes   = 15 // la rétention des événements (--retention 360h)
+	heuresGardees = 50  // deux fenêtres de 24 h pleines, plus l'heure en cours
+	semaineGardee = 168 // carte de chaleur heure × jour
+	joursGardes   = 15  // la rétention des événements (--retention 360h)
 	activiteMax   = 20000
 	nomsMax       = 4096 // noms de techniques distincts retenus
 	techParActeur = 24
@@ -76,6 +77,8 @@ type activiteActeur struct {
 	jour                int64  // dernier jour écrit (epoch / 86400, UTC)
 	heures              [heuresGardees]trancheHeure
 	jours               [joursGardes]uint32
+	rangS               int64 // dernière heure écrite de `semaine`
+	semaine             [semaineGardee]uint16
 	modules             [len(modulesConnus)]uint32
 	tech                []techniqueN
 	nIPs, nPays, nCible int
@@ -134,6 +137,12 @@ func (x *activiteActeur) tranche(heure int64) *trancheHeure {
 func (x *activiteActeur) ajouterJour(jour int64, n uint32) {
 	if avancer(x.jours[:], &x.jour, jour) {
 		x.jours[jour%joursGardes] += n
+	}
+}
+
+func (x *activiteActeur) ajouterSemaine(heure int64, n int) {
+	if avancer(x.semaine[:], &x.rangS, heure) {
+		plus16(&x.semaine[heure%semaineGardee], n)
 	}
 }
 
@@ -223,6 +232,7 @@ func (t *activite) noter(a *graph.Actor, e *envelope.Envelope) {
 		plus16(&h.pays, dPays)
 		plus16(&h.cibles, dCible)
 	}
+	x.ajouterSemaine(e.Timestamp/3600, 1)
 	x.ajouterJour(e.Timestamp/86400, 1)
 	x.modules[indexModule(e.Sensor)]++
 	x.ajouterTech(t.nom(typeEvenement(*e)), 1)
@@ -287,6 +297,11 @@ func (x *activiteActeur) verser(b *activiteActeur) {
 	for r := b.jour - joursGardes + 1; b.jour > 0 && r <= b.jour; r++ {
 		if n := lireRang(b.jours[:], b.jour, r); n > 0 {
 			x.ajouterJour(r, n)
+		}
+	}
+	for r := b.rangS - semaineGardee + 1; b.rangS > 0 && r <= b.rangS; r++ {
+		if n := lireRang(b.semaine[:], b.rangS, r); n > 0 {
+			x.ajouterSemaine(r, int(n))
 		}
 	}
 	for i, n := range b.modules {
@@ -391,6 +406,39 @@ func (t *activite) serie(pas int64, n int, now int64, val func(rang int64) uint3
 func (x *activiteActeur) heureEvts(r int64) uint32 { return lireRang(x.heures[:], x.heure, r).evts }
 func (x *activiteActeur) heureBans(r int64) uint32 { return lireRang(x.heures[:], x.heure, r).bans }
 func (x *activiteActeur) jourEvts(r int64) uint32  { return lireRang(x.jours[:], x.jour, r) }
+
+func (x *activiteActeur) semaineEvts(r int64) uint32 {
+	return uint32(lireRang(x.semaine[:], x.rangS, r))
+}
+
+// serieNouveaux : des adresses, pays ou cibles NOUVEAUX par heure ; null tant que le graphe n'a pas
+// regardé chauffeNouveau heures (tout y paraîtrait nouveau).
+func (t *activite) serieNouveaux(now int64, f func(tr trancheHeure) uint16, x *activiteActeur) serieVue {
+	s := t.serie(3600, 24, now, func(r int64) uint32 { return uint32(f(lireRang(x.heures[:], x.heure, r))) })
+	for i := range s.Valeurs {
+		if s.Debut+int64(i)*3600 < t.depuisGraphe+chauffeNouveau*3600 {
+			s.Valeurs[i] = nil
+		}
+	}
+	return s
+}
+
+// seriesVue : sur 24 h, comme `heures`.
+type seriesVue struct {
+	Bans     serieVue `json:"bans"`
+	Adresses serieVue `json:"adresses"`
+	Pays     serieVue `json:"pays"`
+	Cibles   serieVue `json:"nb_cibles"`
+}
+
+func (t *activite) series(x *activiteActeur, now int64) *seriesVue {
+	return &seriesVue{
+		Bans:     t.serie(3600, 24, now, x.heureBans),
+		Adresses: t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.ips }, x),
+		Pays:     t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.pays }, x),
+		Cibles:   t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.cibles }, x),
+	}
+}
 
 // paireTendance : les 24 dernières heures PLEINES et les 24 d'avant. Absente (null) si non mesurable.
 type paireTendance struct {

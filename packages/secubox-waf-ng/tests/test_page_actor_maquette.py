@@ -15,9 +15,11 @@ def test_vue_d_ensemble_tuiles_carte_et_evenements():
     assert "/api/v1/actor/overview" in HTML
 
 
-def test_la_fiche_a_la_courbe_24h_et_les_techniques():
-    assert "function courbe(" in HTML and "activite_acteurs" in HTML
-    assert "Techniques observées" in HTML and "techniques" in HTML
+def test_la_fiche_a_les_barres_24h_7j_et_les_techniques():
+    # #3936 : barres (plus d'aire), séries d'actord ; l'échantillon de l'aperçu ne sert plus de série par acteur
+    assert "function graphe24(" in HTML and "function graphe7(" in HTML and "function courbe(" not in HTML
+    assert "activite_acteurs" not in HTML and "/api/v1/actor/activite" in HTML
+    assert "Techniques" in HTML and "d.techniques" in HTML
 
 
 def test_les_tuiles_suivent_le_score_de_la_page():

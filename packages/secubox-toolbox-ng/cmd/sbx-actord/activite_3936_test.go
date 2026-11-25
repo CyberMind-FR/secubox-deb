@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
@@ -88,6 +89,13 @@ func TestActiviteNullAvantLaCouvertureZeroApres(t *testing.T) {
 	if x.dernierBan != t36-30 {
 		t.Errorf("dernier ban %d", x.dernierBan)
 	}
+	if sem := s.act.serie(3600, semaineGardee, t36, x.semaineEvts); val(sem.Valeurs[167]) != 2 || val(sem.Valeurs[162]) != 1 || sem.Valeurs[161] != nil {
+		t.Errorf("semaine : %d %d", val(sem.Valeurs[167]), val(sem.Valeurs[162]))
+	}
+	se := s.act.series(x, t36)
+	if val(se.Bans.Valeurs[23]) != 2 || val(se.Bans.Valeurs[22]) != 0 || se.Bans.Valeurs[0] != nil || se.Adresses.Valeurs[23] != nil {
+		t.Error("séries : bans mesurés, adresses nouvelles pas encore")
+	}
 	if te := s.act.tendance(x, t36); te.Bans != nil || te.Adresses != nil {
 		t.Error("tendance annoncée sans 48 h couvertes")
 	}
@@ -138,6 +146,9 @@ func TestActiviteTendanceSurDeuxFenetresPleines(t *testing.T) {
 	}
 	if te.Adresses == nil || *te.Adresses != (paireTendance{0, 0}) {
 		t.Errorf("adresses %+v : 0 nouvelle est une mesure", te.Adresses)
+	}
+	if se := s.act.series(s.act.acteurs[a.ID], t36); val(se.Adresses.Valeurs[23]) != 0 {
+		t.Error("0 adresse nouvelle est une mesure")
 	}
 	// Sans mise en route suffisante, « nouvelle adresse » ne veut rien dire.
 	s.act.depuisGraphe = t36 - 60*3600
@@ -354,7 +365,7 @@ func TestDetailVueReduiteSansDonneeInterne(t *testing.T) {
 				t.Errorf("%s : fiche %+v", nom, o)
 			}
 			// Liste blanche figée : un champ nouveau se décide ici.
-			attendus := "campagnes couverture_depuis dernier_ban evenements genere_le heures jours mesure modules pays premier_borne reseaux techniques tendance"
+			attendus := "campagnes couverture_depuis dernier_ban evenements genere_le heures jours mesure modules pays premier_borne reseaux semaine series techniques tendance"
 			if got := clesTriees(o.Detail); got != attendus {
 				t.Errorf("%s : clés %q", nom, got)
 			}
@@ -478,6 +489,28 @@ func TestActiviteParLot(t *testing.T) {
 	if w := appel(t, s, http.MethodGet, "/activite", nil, ""); w.Code != 200 {
 		t.Errorf("sans ids : %d", w.Code)
 	}
+	// Campagnes : somme des acteurs, signature opaque en vue réduite.
+	horloge(t, time.Now().Unix())
+	p, _ := serveurPeuple(t)
+	for _, v := range []*string{nil, complete} {
+		var c lotActivite
+		w := appel(t, p, http.MethodGet, "/activite?campagnes=1", v, "")
+		_ = json.Unmarshal(w.Body.Bytes(), &c)
+		sig := p.campagnes()[0].Signature
+		if v == nil {
+			sansDonneeInterne(t, "/activite?campagnes=1", w.Body.Bytes())
+			sig = p.signatureOpaque(sig)
+		}
+		total := 0
+		for _, x := range c.Campagnes[sig] {
+			if x != nil {
+				total += int(*x)
+			}
+		}
+		if len(c.Campagnes) != 1 || total != 4 {
+			t.Errorf("campagnes : %v (total %d)", w.Body.String(), total)
+		}
+	}
 	trop := strings.Repeat("A,", 60) + "A"
 	for _, q := range []string{trop, "a/b", "A,", strings.Repeat("x", 40), "%3Cimg%3E"} {
 		if w := appel(t, s, http.MethodGet, "/activite?ids="+q, nil, ""); w.Code != http.StatusBadRequest {
@@ -528,7 +561,7 @@ func TestActiviteMemoireEtPoidsDesListes(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&m1)
 	runtime.KeepAlive(garde)
-	if ko := (int64(m1.HeapAlloc) - int64(m0.HeapAlloc)) / 1024; ko > 5000 {
+	if ko := (int64(m1.HeapAlloc) - int64(m0.HeapAlloc)) / 1024; ko > 6000 {
 		t.Errorf("%d Ko pour 3658 acteurs", ko)
 	} else {
 		t.Logf("compteurs : %d Ko pour %d acteurs", ko, len(garde))

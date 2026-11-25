@@ -458,6 +458,20 @@ exige 50 adresses mesurées, dont 80 % à trois tentatives ou moins. Un service 
 s'affiche, un compte reste masqué, un hôte qui est une adresse n'est pas retenu. **L'ASN ne sert qu'aux vues** : il n'entre
 pas dans la corrélation d'actord (`signatureDe`), donc ni dans la confiance, ni dans les mesures, ni dans les bans.
 
+**Détail et activité d'un acteur** (#3936, vue réduite comprise : ni adresse, ni cible, ni numéro de réseau) :
+
+| Route d'actord | Rend |
+|---|---|
+| `GET /actors` | ajoute `premier` et `dernier` (epoch ; `first`/`last`, des heures sans date, restent) |
+| `GET /actors/{id}` | ajoute `detail` : `couverture_depuis`, `premier_borne`, `heures` (24 h), `semaine` (168 h), `jours` (15 jours UTC), `series` (bans, adresses, pays, cibles nouveaux par heure), `tendance` (24 h pleines contre les 24 d'avant), `modules`, `techniques`, `pays` et `reseaux` (parts), `dernier_ban`, `mesure`, `campagnes` (signature opaque) ; `null` si les deux places de calcul sont prises |
+| `GET /activite?ids=…` | 24 compteurs horaires de 60 acteurs au plus, et la série d'ensemble ; `campagnes=1` : ceux des 60 premières campagnes. Non relayée par le Hall |
+
+Les compteurs sont tenus à l'ingestion, en mémoire (environ 1,4 Ko par acteur, plafond 20 000 ; aucune lecture du magasin par
+requête) et écrits toutes les heures et à l'arrêt dans `/var/lib/secubox/actor/activite.json` (0600), repris au démarrage
+s'ils rejoignent le rejeu. Une tranche d'avant `couverture_depuis`, ou démon arrêté, vaut `null`, jamais 0 ; une tranche
+mesurée en partie est listée dans `partielles`. « Nouveau » n'est dit qu'après 24 h de graphe. Ces compteurs lisent le
+graphe sans rien lui rendre : `TestCorrelationInchangee3936` fige la corrélation octet pour octet.
+
 **Droits** : `secubox-actord` traverse `/etc/secubox/waf` par une ACL nommée « x » (postinst), jamais par le groupe
 `secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une
 ACL de fichier, une ACL par défaut ouvrirait tous les fichiers à venir du dossier, et la traversée seule ouvrirait ses

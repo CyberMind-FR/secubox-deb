@@ -7,7 +7,7 @@
 
   SecuBox — Actor Intelligence (RFC-0013 §10) au profil Aurora (.claude/AURORA-REFERENCE.md), servi à admin.gk2/actor/, actor.gk2 et /actor-intelligence/ (Hall, SOC).
   Page autonome : CSS et JS en ligne, aucune dépendance, aucune injection de balisage (tout passe par createElement et textContent).
-  DONNÉES RÉELLES UNIQUEMENT : API en lecture seule de sbx-actord via l'agrégateur (/api/v1/actor/stats, /actors, /campaigns, /overview).
+  DONNÉES RÉELLES UNIQUEMENT : API en lecture seule de sbx-actord via l'agrégateur (/api/v1/actor/stats, /actors, /actors/{id}, /activite, /campaigns, /overview).
   Mesure absente = « — ». Le moteur observe et propose, il n'applique rien : cette page n'écrit jamais.
   ?embed=1 : sans menu (carte du Hall, onglet du SOC) ; ?demo=1 : données fictives annoncées par un bandeau.
 -->
@@ -117,31 +117,64 @@
   .cper{color:var(--faible);font-size:.72rem} .clien{color:var(--cyan);font-size:.74rem}
   .cdet summary,.campautres>summary{cursor:pointer;color:var(--doux);font-size:.74rem} .cdet p{margin-top:4px;color:var(--doux);font-size:.72rem}
   .campautres{display:grid;gap:6px} .campautres[open]>summary{margin-bottom:4px}
-  /* profil */
+  /* mini-histogramme : une seule teinte ; « — » = pas mesuré, ligne de base plate = zéro mesuré */
+  svg.mini{display:block;width:100%;height:18px;margin-top:4px}
+  .mini0{display:block;height:18px;margin-top:4px;font-size:.85rem;line-height:18px;color:var(--doux)}
+  .tuile svg.mini,.tuile .mini0{margin-top:auto}
+  .b{fill:var(--cyan);fill-opacity:.72} .b.m{fill-opacity:1} .b.c{fill:#7fd8ff;fill-opacity:1} .b.z{fill:#9fb3d6;fill-opacity:.45} .b.p{fill-opacity:.38}
+  .plus{justify-self:center;min-height:40px}
+  /* profil (#3936) : se lit sans effort — .85rem au moins, --doux au plus sombre */
   #retour{display:none}
-  .phead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
-  .avatar{width:50px;height:50px;border-radius:10px;display:grid;place-items:center;font-size:1.45rem;border:1px solid var(--trait);background:rgba(107,123,139,.15);flex:none}
+  .prof{display:grid;gap:12px;font-size:.9rem;line-height:1.4} .prof>*{min-width:0}
+  .phead{display:flex;align-items:center;gap:12px;flex-wrap:wrap} .phead .qui{flex:1 1 170px;min-width:0}
+  .avatar{width:54px;height:54px;border-radius:12px;display:grid;place-items:center;font-size:1.6rem;border:1px solid var(--trait);background:rgba(107,123,139,.15);flex:none}
   .avatar.n2{background:rgba(41,182,246,.16);border-color:rgba(41,182,246,.45)} .avatar.n3{background:rgba(255,159,28,.16);border-color:rgba(255,159,28,.55)} .avatar.n4{background:rgba(255,77,94,.2);border-color:rgba(255,77,94,.65)}
-  .pid{font-size:1rem;font-weight:700;color:var(--cyan);overflow-wrap:anywhere}
-  .badge{display:inline-block;font-size:.64rem;border-radius:999px;padding:1px 9px;margin:4px 4px 0 0;border:1px solid var(--trait)}
-  .badge.hi{color:var(--rouge);border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.12)} .badge.sh{color:var(--cyan);border-color:rgba(41,182,246,.45);background:rgba(41,182,246,.1)}
-  .gscore{margin-left:auto;text-align:center} .gscore b{display:block;font-size:1.5rem;color:var(--orange);font-variant-numeric:tabular-nums} .gscore span{font-size:.62rem;color:var(--faible)}
-  .sec{margin:10px 0 4px;font-size:.66rem;color:var(--faible);text-transform:uppercase;letter-spacing:.08em}
-  .vec{display:grid;gap:6px}
-  .bar{display:grid;grid-template-columns:96px 1fr 34px;align-items:center;gap:8px;font-size:.72rem}
-  .bar .k{color:var(--doux)} .bar .n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-  .piste{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .piste i{display:block;height:100%;border-radius:3px;background:var(--cyan)} .bar.hot .piste i{background:var(--orange)}
-  .facts{display:grid;gap:8px;grid-template-columns:1fr 1fr;margin:10px 0}
-  .fact{border:1px solid var(--trait);border-radius:8px;padding:6px 9px;background:rgba(18,40,78,.35);min-width:0}
-  .fact .l{font-size:.62rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em} .fact .v{font-size:.8rem;margin-top:2px;overflow-wrap:anywhere}
-  .chip{display:inline-block;font-size:.66rem;border:1px solid var(--trait);border-radius:5px;padding:0 6px;margin:0 4px 3px 0}
-  .hyp{display:grid;grid-template-columns:44px 1fr minmax(0,2fr);gap:8px;align-items:center;padding:3px 0;font-size:.74rem}
-  .hyp .p{text-align:right;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums} .hyp span:last-child{overflow-wrap:anywhere}
-  svg.actv{width:100%;height:64px;display:block;background:rgba(18,40,78,.35);border:1px solid var(--trait);border-radius:8px}
-  .axe{display:flex;justify-content:space-between;font-size:.6rem;color:var(--faible)}
-  .techs{display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
-  .tech{display:flex;align-items:center;gap:7px;border:1px solid var(--trait);border-radius:8px;background:rgba(18,40,78,.35);padding:5px 8px;font-size:.72rem;min-width:0}
-  .tech span{overflow:hidden;text-overflow:ellipsis} .tech b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .pid{font-size:1.15rem;font-weight:700;color:var(--cyan);overflow-wrap:anywhere}
+  .pbd{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+  .badge,.prof .tag{font-size:.85rem;border-radius:999px;padding:1px 10px;border:1px solid var(--trait);color:var(--doux)}
+  .prof .tag.def{color:#ff8a96;border-color:var(--rouge)} .prof .tag.def.d3{color:var(--orange);border-color:var(--orange)} .prof .tag.def.d4{color:#8ab4ff;border-color:var(--bleu)}
+  .badge.hi{color:#ff8a96;border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.12)} .badge.sh{color:var(--cyan);border-color:rgba(41,182,246,.45);background:rgba(41,182,246,.1)}
+  .badge.vif{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12);font-weight:700}
+  .vif i{display:inline-block;width:.6em;height:.6em;border-radius:50%;background:var(--vert);margin-right:6px;animation:bat 2s ease-in-out infinite}
+  @keyframes bat{50%{opacity:.3}}
+  .gscore{margin-left:auto;text-align:center} .gscore b{display:block;font-size:1.6rem;line-height:1.1;color:var(--orange);font-variant-numeric:tabular-nums} .gscore span{font-size:.85rem;color:var(--doux)}
+  .resume{margin:0;font-size:1.05rem;line-height:1.5;border-left:3px solid var(--cyan);padding:2px 0 2px 12px;overflow-wrap:anywhere}
+  .quand{margin:0;color:var(--doux);font-size:.9rem}
+  .gros{display:grid;gap:8px;grid-template-columns:1fr 1fr}
+  .gr{border:1px solid var(--trait);border-radius:12px;padding:9px 12px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .gr .l{color:var(--doux);font-size:.88rem} .gr .v{font-size:1.75rem;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;border-radius:6px}
+  .gr{display:flex;flex-direction:column} .gr .t{font-size:.85rem;color:var(--doux);min-height:1.4em;overflow-wrap:anywhere} .gr svg.mini,.gr .mini0{margin-top:auto;height:22px;line-height:22px}
+  .chg{animation:chg 1.2s ease-out} @keyframes chg{0%{background:rgba(41,182,246,.45)}100%{background:transparent}}
+  .duo{display:grid;gap:10px;grid-template-columns:1fr}
+  .blo{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(18,40,78,.3);min-width:0}
+  .blo h3{margin:0 0 6px;font-size:.95rem;font-weight:700} .blo p{margin:6px 0 0;font-size:.85rem;color:var(--doux)} .blo p:first-of-type{margin-top:2px}
+  svg.actv{width:100%;height:92px;display:block} .duo svg.actv{height:132px}
+  .duo{align-items:stretch} .duo .blo{display:flex;flex-direction:column} .duo svg.actv{flex:1 1 132px}
+  svg.actv .b{transform-box:fill-box;transform-origin:50% 100%}
+  .axe{display:flex;justify-content:space-between;font-size:.85rem;color:var(--doux);border-top:1px solid var(--trait);padding-top:3px}
+  .j7{display:grid;grid-template-columns:2.3em repeat(7,minmax(0,1fr));gap:2px 5px;text-align:center;font-size:.85rem;font-variant-numeric:tabular-nums;align-items:end}
+  .j7 svg{width:100%;height:44px;display:block} .j7 b{display:block;white-space:nowrap} .j7 .jr{color:var(--doux);white-space:nowrap}
+  .j7 svg.ch{height:120px;border-radius:4px;background:rgba(159,179,214,.06)} .ch rect{fill:var(--cyan)} .ch rect.z{fill:rgba(159,179,214,.16)}
+  .j7 .hs{align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;color:var(--doux);text-align:right;line-height:1}
+  .absent{color:var(--doux);font-size:.9rem;min-height:92px;display:grid;place-items:center;text-align:center}
+  .vec{display:grid;gap:8px 22px}
+  .bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:2px 10px;font-size:.9rem;min-width:0} .bar .piste{grid-column:1/-1}
+  .bar .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap} .bar .n b{font-weight:700} .bar.fo .n b{color:var(--orange)} .bar.mo .n b{color:var(--cyan)} .bar .n span{color:var(--doux)}
+  .bar small{color:var(--doux);font-size:.85rem}
+  .piste{height:7px;border-radius:4px;background:rgba(159,179,214,.16);overflow:hidden} .piste i{display:block;height:100%;border-radius:4px;background:var(--cyan)} .bar.fo .piste i{background:var(--orange)} .bar.fa .piste i{background:var(--doux)}
+  .plis{display:grid;gap:8px;grid-template-columns:minmax(0,1fr);align-items:start}
+  details.pli>summary .cbarre{margin:5px 0 2px}
+  details.pli{border:1px solid var(--trait);border-radius:12px;background:rgba(18,40,78,.3)}
+  details.pli>summary{cursor:pointer;padding:9px 12px;font-size:.95rem;font-weight:600;overflow-wrap:anywhere;min-height:40px}
+  details.pli>summary span{font-weight:400;color:var(--doux);font-size:.88rem}
+  details.pli>div{padding:0 12px 12px;display:grid;gap:8px} details.pli>div>*{min-width:0}
+  .lig{display:grid;grid-template-columns:minmax(0,1fr) minmax(40px,32%) 4.6em;gap:10px;align-items:center;font-size:.9rem} .lig span:first-child{overflow-wrap:anywhere} .lig b{text-align:right;font-variant-numeric:tabular-nums}
+  .sous{margin:2px 0 0;font-size:.88rem;color:var(--doux);font-weight:600}
+  .prof .note{font-size:.85rem;color:var(--doux);margin:0}
+  .campl{font:inherit;font-size:.92rem;text-align:left;color:var(--texte);background:rgba(41,182,246,.1);border:1px solid rgba(41,182,246,.45);border-radius:10px;padding:8px 12px;cursor:pointer;overflow-wrap:anywhere;width:100%}
+  .campl:hover{border-color:var(--cyan)} .campl span{display:block;color:var(--doux);font-size:.85rem}
+  .chip{display:inline-block;font-size:.85rem;border:1px solid var(--trait);border-radius:6px;padding:0 7px;margin:0 5px 4px 0;overflow-wrap:anywhere}
+  @media (prefers-reduced-motion:reduce){.vif i,.chg{animation:none}}
   .flow{display:grid;gap:6px;grid-template-columns:repeat(3,1fr)}
   .step{border:1px solid var(--trait);border-radius:8px;padding:7px 4px;text-align:center;font-size:.64rem;color:var(--doux);letter-spacing:.06em}
   .step b{display:block;font-size:.56rem;color:var(--faible)}
@@ -151,12 +184,18 @@
     .cols:not(.voit-profil) #colProfil{display:none}
     #retour{display:inline-block;margin:0 0 8px}
   }
-  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}}
+  @container a (max-width:599px){.phead .qui{flex-basis:100%;order:3}}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)} .gros{grid-template-columns:repeat(4,1fr)} .duo{grid-template-columns:1fr 1fr}}
   @container a (min-width:900px){
-    .tuiles{grid-template-columns:repeat(6,1fr)} .tuiles.t4{grid-template-columns:repeat(4,1fr)}
-    .g1{grid-template-columns:1.2fr 1fr} .cols{grid-template-columns:minmax(0,360px) minmax(0,1fr);align-items:start}
+    .gros{grid-template-columns:repeat(2,1fr)} .duo{grid-template-columns:1fr} .tuiles.t4{grid-template-columns:repeat(4,1fr)}
+    /* colonnes équilibrées : la liste prend la hauteur du profil et défile dans la sienne */
+    .cols{align-items:stretch} #colListe{position:relative;min-height:760px} #colListe>div{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px}
+    #colListe .acts{flex:1 1 auto;min-height:0;display:flex;flex-direction:column} #colListe #list{max-height:none;flex:1 1 auto;min-height:0;align-content:start} #colProfil{align-content:start}
+    .g1{grid-template-columns:1.2fr 1fr} .cols{grid-template-columns:minmax(0,380px) minmax(0,1fr)}
     .carte{grid-template-columns:1fr 130px}
   }
+  @container a (min-width:1080px){.tuiles{grid-template-columns:repeat(6,1fr)} .tuiles.t4{grid-template-columns:repeat(4,1fr)} .gros{grid-template-columns:repeat(4,1fr)} .duo,.vec,.plis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @container a (min-width:600px) and (max-width:899px){.vec,.plis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -185,13 +224,14 @@
   </div>
 
   <div class="grille cols" id="cols">
-    <div id="colListe"><section class="pan"><h2>Acteurs identifiés <i>TPI inverse</i></h2>
-      <div class="barre" id="barre"></div><div id="list"></div></section></div>
+    <div id="colListe"><div class="grille"><section class="pan acts"><h2>Acteurs identifiés <i>TPI inverse</i></h2>
+      <div class="barre" id="barre"></div><div id="list"></div></section>
+      <section class="pan"><h2>Flux de défense <i>graduée · réversible</i></h2><div class="flow" id="flow"></div>
+        <div class="note">Phase 0/1 : le moteur propose, n’applique pas. Toute action porte TTL, raison, preuve, rollback. Aucun « hack back ».</div></section>
+    </div></div>
     <div id="colProfil" class="grille">
       <button class="btn" id="retour" type="button">← Acteurs</button>
       <section class="pan"><h2>Profil acteur <i id="pver"></i></h2><div id="profile"><div class="vide">Sélectionne un acteur.</div></div></section>
-      <section class="pan"><h2>Flux de défense <i>graduée · réversible</i></h2><div class="flow" id="flow"></div>
-        <div class="note">Phase 0/1 : le moteur propose, n’applique pas. Toute action porte TTL, raison, preuve, rollback. Aucun « hack back ».</div></section>
     </div>
   </div>
   <div class="note">Observe. Correlate. Explain. Defend. — « continuité de campagne probable », jamais « même personne ».</div>
@@ -229,9 +269,13 @@ function jget(u,discret){
   return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){if(!discret&&(r.status===401||r.status===403))SESSION_REFUSEE=true;return r.ok?r.json():null;}).catch(function(){return null;});
 }
 
-var VECLBL={knowledge:'connaissance',continuity:'continuité',intent:'intention',automation:'automation',severity:'gravité',persistence:'persistance',confidence:'confiance'};
+// Les sept axes du vecteur, en mots : repère, nom, ce que l'axe regarde.
+var AXES=[['severity','⚠️','Gravité','le plus grave de ses gestes'],['continuity','\u{1F517}','Continuité','mêmes gestes d’une adresse à l’autre'],['automation','\u{1F916}','Automatisation','rythme et outillage de machine'],
+  ['persistence','⏳','Persistance','revient de jour en jour'],['intent','\u{1F3AF}','Intention','vise quelque chose de précis'],['knowledge','\u{1F9E0}','Connaissance','sait des choses non publiques'],['confidence','\u{1F4CF}','Confiance','signaux indépendants qui concordent']];
 var FLOW=['OBSERVE','DELAY','CHALLENGE','TARPIT','DENY','QUARANTINE'];
 var ACTS=[],CAMPS=[],CUR=null,CAMP=null,STATS=null,POPS=[],POPS_LE=0;
+// #3936 : séries par acteur (lot de 60 lignes), détail de l'acteur ouvert, sections ouvertes, dernières valeurs montrées.
+var ACTIV={},LOT=null,DET={},OUVERTS={},VUS={},LIM=60,ACTS_LE=0,CAMPS_LE=0;
 // La campagne est l'unité de lecture : on ouvre sur les campagnes, les acteurs restent à un clic. Tri par défaut = score.
 var FILTRE='campagnes',TRI='score';
 
@@ -263,7 +307,7 @@ function cont(a){return (a.vec&&a.vec.continuity)||0;}
 function nature(a){
   var v=a.vec||{},hyp=((a.hyp||[])[0]||[''])[0];
   if((a.bans||0)>=3)                return ['\u{1F501}','revient après sanction'];
-  if(/cibl/.test(hyp))              return ['\u{1F3AF}','campagne ciblée'];
+  if(/cibl/.test(hyp)&&num(((a.hyp||[])[0]||[])[1])>0) return ['\u{1F3AF}','campagne ciblée'];
   if((v.automation||0)>=70)         return ['\u{1F916}','outillage automatisé'];
   if((a.src&&a.src.countries||0)>1) return ['\u{1F30D}','plusieurs pays'];
   if((a.src&&a.src.ips||0)>1)       return ['\u{1F500}','change d’adresse'];
@@ -287,19 +331,22 @@ function icone(couleur,d){
   var s=sv('svg',{'class':'ic',viewBox:'0 0 24 24',fill:'none',stroke:couleur,'stroke-width':'1.7','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'});
   sv('rect',{x:'3',y:'3',width:'18',height:'18',rx:'5',fill:couleur,'fill-opacity':'.14',stroke:'none'},s);sv('path',{d:d},s);return s;
 }
-function tuile(parent,ic,l,v,s,def){
+function tuile(parent,ic,l,v,s,def,g){
   var t=h('div','tuile',null,def),hh=h('div','haut'),c=h('div');
-  add(c,h('div','l',l),h('div','v',v));add(hh,ic,c);add(t,hh);if(s)add(t,h('div','s',s));
+  add(c,h('div','l',l),h('div','v',v));add(hh,ic,c);add(t,hh);if(s)add(t,h('div','s',s));add(t,g);
   return add(parent,t);
 }
 function rendKPIs(s){
   var k=vide($('kpis'));s=s||{};
+  // Séries horaires comptées à l'ingestion (robots connus compris, comme les compteurs) ; pas de série pour les autres tuiles.
+  var ev=LOT&&LOT.evenements,bl=LOT&&LOT.bloques,mini=function(v,nom){return v?miniBarres({debut:LOT.debut,pas:LOT.pas,valeurs:v,partielles:LOT.partielles},nom):null;};
+  var te=ev&&bl?ev.map(function(x,i){return x==null||bl[i]==null?null:Math.max(0,x-bl[i]);}):null;
   tuile(k,icone('#2ecc71','M12 7l5 2v3c0 3-2 5-5 6-3-1-5-3-5-6V9z'),'Posture',s.posture||'—','annoncée par le moteur','Posture globale annoncée par le moteur de renseignement (valeur fournie par le serveur, pas une mesure de la page).');
-  tuile(k,icone('#ff4d5e','M8 8l8 8M16 8l-8 8'),'Bloquées',mes(s.blocked_24h),'24 h','Menaces écartées par le WAF sur 24 h (source : sbx-actord).');
-  tuile(k,icone('#ff9f1c','M12 7v6M12 16v1'),'Tentatives',mes(s.attempts_24h),'24 h','Tentatives hostiles vues sur 24 h, qu’elles aient été écartées ou seulement observées.');
+  tuile(k,icone('#ff4d5e','M8 8l8 8M16 8l-8 8'),'Bloquées',mes(s.blocked_24h),'24 h','Menaces écartées par le WAF sur 24 h (source : sbx-actord).',mini(bl,'Bloquées'));
+  tuile(k,icone('#ff9f1c','M12 7v6M12 16v1'),'Tentatives',mes(s.attempts_24h),'24 h','Tentatives hostiles vues sur 24 h, qu’elles aient été écartées ou seulement observées.',mini(te,'Tentatives'));
   tuile(k,icone('#a78bfa','M9 10a3 3 0 106 0 3 3 0 00-6 0M6 18c1-3 3-4 6-4s5 1 6 4'),'Acteurs',mes(s.actors),'profils corrélés','Profils d’acteurs reconstruits par corrélation d’événements (une adresse change, le profil reste).');
   tuile(k,icone('#3b82f6','M7 8h10M7 12h10M7 16h6'),'Campagnes',mes(s.campaigns),'modes opératoires partagés','Groupes d’acteurs qui rejouent le même mode opératoire. Un regroupement n’est jamais une identité.');
-  tuile(k,icone('#29b6f6','M5 17l4-5 3 3 5-7'),'Événements',mes(s.events_24h),'24 h','Événements de sécurité rattachés ou non à un acteur sur 24 h.');
+  tuile(k,icone('#29b6f6','M5 17l4-5 3 3 5-7'),'Événements',mes(s.events_24h),'24 h','Événements de sécurité rattachés ou non à un acteur sur 24 h.',mini(ev,'Événements'));
   var e=$('etat');e.className='actif';e.textContent='renseignement · '+(s.mode||'observe')+' — le WAF protège';
 }
 function rendFlow(){var f=vide($('flow'));FLOW.forEach(function(x,i){var d=h('div','step'+(i===0?' on':''));add(d,h('b',null,String(i+1)),document.createTextNode(x));add(f,d);});}
@@ -368,10 +415,10 @@ function rendBarre(){
   var t=[['score','score'],['ips','adresses'],['continuite','continuité'],['priorite','priorité'],['recent','vu récemment']];
   var g1=h('span','grp');g1.setAttribute('role','tablist');g1.setAttribute('aria-label','Filtre');
   f.forEach(function(x){var bt=h('button','fb',x[1],x[3]);bt.type='button';bt.setAttribute('role','tab');bt.setAttribute('aria-selected',FILTRE===x[0]?'true':'false');add(bt,h('i',null,'·'+x[2]));
-    bt.addEventListener('click',function(){FILTRE=x[0];rendBarre();rendList();});add(g1,bt);});
+    bt.addEventListener('click',function(){FILTRE=x[0];LIM=60;$('list').scrollTop=0;rendBarre();rendList();activiteVisible();});add(g1,bt);});
   var g2=h('span','grp tri');add(g2,document.createTextNode('trier :'));
   t.forEach(function(x){var bt=h('button','tb',x[1]);bt.type='button';bt.setAttribute('aria-pressed',TRI===x[0]?'true':'false');
-    bt.addEventListener('click',function(){TRI=x[0];rendBarre();rendList();});add(g2,bt);});
+    bt.addEventListener('click',function(){TRI=x[0];LIM=60;$('list').scrollTop=0;rendBarre();rendList();activiteVisible();});add(g2,bt);});
   add(b,g1,g2);
 }
 function trie(l){
@@ -379,7 +426,7 @@ function trie(l){
          ips:function(a,b){return (num(b.src&&b.src.ips)-num(a.src&&a.src.ips))||(b.priority-a.priority);},
          continuite:function(a,b){return cont(b)-cont(a)||b.priority-a.priority;},
          priorite:function(a,b){return b.priority-a.priority;},
-         recent:function(a,b){return String(b.last||'').localeCompare(String(a.last||''));}}[TRI];
+         recent:function(a,b){return num(b.dernier)-num(a.dernier);}}[TRI];
   return l.slice().sort(f);
 }
 function ligne(on){var d=h('div','acteur'+(on?' on':''));d.setAttribute('role','button');d.tabIndex=0;
@@ -410,6 +457,11 @@ function cPopulation(sig){   // population du Radar rapprochée de cette campagn
   if(typeof sig!=='string'||!sig)return null;
   for(var i=0;i<POPS.length;i++){var p=POPS[i];if(p&&typeof p==='object'&&p.campagne_actord===sig)return p;}
   return null;
+}
+// Activité sur 24 h de la campagne (somme de ses acteurs, 60 premières) ; pas de série : rien.
+function cMini(c){
+  if(typeof miniBarres!=='function'||typeof LOT==='undefined'||!LOT||!LOT.campagnes||!Object.prototype.hasOwnProperty.call(LOT.campagnes,c.signature))return null;
+  return miniBarres({debut:LOT.debut,pas:LOT.pas,valeurs:LOT.campagnes[c.signature],partielles:LOT.partielles},'Activité de la campagne');
 }
 function anneauCampagne(c){
   var n=num(c.nb_acteurs),r=h('div','ring',String(n));r.style.setProperty('--v',String(Math.min(100,n*2)));r.style.setProperty('--c',num(c.cibles_inexistantes)>0?'var(--orange)':'var(--cyan)');return r;
@@ -447,11 +499,12 @@ function carteCampagne(R,c){
   if(!noms.length)txt='Cible : non relevée';
   else if(fam==='messagerie'&&noms.every(function(x){return x.slice(-1)==='…';}))txt='Comptes visés : '+noms.join(', ')+' (masqués)';
   else txt='Cible : '+noms.map(function(x){return x.replace(/\.secubox\.in$/,'');}).join(', ');
-  add(cc,h('p','ccible',txt),h('p','cper','Active du '+cDate(c.premier)+' au '+cDate(c.dernier)));
+  add(cc,h('p','ccible',txt),h('p','cper','Active du '+cDate(c.premier)+' au '+cDate(c.dernier)),cMini(c));
   var pop=cPopulation(c.signature);
   if(pop)add(cc,h('p','clien','↔ même population que « '+R.nomCarte(pop.famille,(Array.isArray(pop.cibles)?pop.cibles:[]).slice(0,3).map(String))+' » dans le Radar'));
   // Détail : la signature (plus le titre), les acteurs, les compteurs bruts. Ouvrir le détail n'ouvre pas le profil.
-  var det=h('details','cdet'),ac=(Array.isArray(c.acteurs)?c.acteurs:[]).map(String);
+  var det=h('details','cdet');det.setAttribute('data-cle','camp:'+String(c.signature));
+  var ac=(Array.isArray(c.acteurs)?c.acteurs:[]).map(String);
   add(det,h('summary',null,'Détail'),h('p','csig','Signature : '+String(c.signature==null?'—':c.signature)),
     h('p',null,'Acteurs : '+(ac.length?ac.slice(0,6).join(', ')+(ac.length>6?' …':''):'—')),
     h('p',null,'Pays : '+mes(c.pays)+' · priorité '+mes(c.priorite)+' · continuité '+mes(c.continuite)));
@@ -467,24 +520,31 @@ function rendCampagnes(){
   CAMPS.forEach(function(c){if(c&&typeof c==='object')(cRepliee(c)?repliees:vues).push(c);});
   function carte(c){
     var d=R&&typeof c.famille==='string'?carteCampagne(R,c):ligneCampagne(c);
-    d.addEventListener('click',function(){CAMP=c.signature;CUR=(c.acteurs||[])[0];rendList();rendProfile();montreProfil();});
+    d.addEventListener('click',function(){CAMP=c.signature;CUR=(c.acteurs||[])[0];rendList();rendProfile();montreProfil();chargeDetail();});
     return d;
   }
   vues.forEach(function(c){add(box,carte(c));});
   if(!vues.length)add(box,h('div','vide','Aucune campagne active dans les dernières 24 h avec plusieurs adresses.'));
   if(repliees.length){
-    var dt=h('details','campautres');add(dt,h('summary',null,'Autres campagnes ('+repliees.length+') : une seule adresse, ou rien depuis 24 h'));
+    var dt=h('details','campautres');dt.setAttribute('data-cle','campautres');add(dt,h('summary',null,'Autres campagnes ('+repliees.length+') : une seule adresse, ou rien depuis 24 h'));
     repliees.forEach(function(c){add(dt,carte(c));});add(box,dt);
   }
 }
 // ---- Fin des cartes de campagne
-function rendList(){
+// La liste est refaite à chaque relevé : défilement, volets ouverts et focus sont rendus tels quels.
+function rendList(){var b=$('list'),y=b.scrollTop,f=focusCle(b);listeBrute();volets(b);b.scrollTop=y;rendFocus(b,f);}
+function focusCle(b){var e=document.activeElement;return e&&b.contains(e)?e.getAttribute('data-cle'):null;}
+function rendFocus(b,cle){if(!cle)return;var l=b.querySelectorAll('[data-cle]');for(var i=0;i<l.length;i++)if(l[i].getAttribute('data-cle')===cle){l[i].focus({preventScroll:true});return;}}
+function volets(b){var l=b.querySelectorAll('details[data-cle]');for(var i=0;i<l.length;i++){var k=l[i].getAttribute('data-cle');if(OUVERTS[k]!==undefined)l[i].open=OUVERTS[k];}}
+document.addEventListener('toggle',function(e){var k=e.target&&e.target.getAttribute&&e.target.getAttribute('data-cle');if(k&&e.target.isConnected)OUVERTS[k]=e.target.open;},true);
+function nbCibles(a){return Array.isArray(a.targets)?a.targets.length:('targets' in a)?0:(a.nb_cibles==null?null:num(a.nb_cibles));}
+function listeBrute(){
   if(FILTRE==='campagnes'){rendCampagnes();return;}
   var box=vide($('list'));
   if(!ACTS.length){add(box,h('div','vide','Aucun acteur corrélé — le moteur de renseignement observe. La protection WAF, elle, est active.'));vide($('profile'));add($('profile'),h('div','vide','—'));return;}
   var vus=trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS);
   if(!vus.length){videAvecBouton(box,'Aucun profil revu depuis plusieurs adresses pour l’instant — c’est ce que le moteur cherche.','voir tout',function(){FILTRE='tous';rendBarre();rendList();});return;}
-  vus.forEach(function(a){
+  vus.slice(0,LIM).forEach(function(a){
     var d=ligne(a.id===CUR),n=a.src&&a.src.ips||0,sc=score(a),pl=palierScore(sc),nat=nature(a);
     // Le nombre d'adresses est le critère : un profil revu depuis sept adresses est une personnalité qui revient malgré le changement d'IP.
     if(n>1){var m=h('div','multi n'+(n>=7?'4':n>=4?'3':'2'),null,'Le même profil, vu depuis '+n+' adresses différentes');add(m,h('b',null,'×'+n),h('i',null,'adresses'));add(d,m);}
@@ -495,66 +555,294 @@ function rendList(){
     add(b,h('span','nat',nat[0],nat[1]),document.createTextNode(' '+a.id));add(nm,b);
     if(n>1)add(tg,h('span','tag ips',n+' IP','Le même profil, vu depuis '+n+' adresses'));
     if(cont(a))add(tg,h('span','tag cont','↗ '+cont(a),'Continuité : '+cont(a)+'/100'));
-    if(a.targets&&a.targets.length>1)add(tg,h('span','tag',a.targets.length+' cibles'));
+    d.setAttribute('data-cle','act:'+a.id);
+    var nc=nbCibles(a);if(nc>1)add(tg,h('span','tag',nb(nc)+' cibles'));
     add(tg,defcon(a.bans));
     (a.tags||[]).forEach(function(t){add(tg,h('span','tag '+(t[1]||''),t[0]));});
-    add(nm,tg);
+    add(nm,tg,miniBarres(ACTIV[a.id],'Activité'));
     var lv=h('div','lvl');add(lv,h('b',null,String(a.priority)),document.createTextNode(a.level||''));
     add(d,s,nm,lv);
-    d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();montreProfil();});
+    d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();montreProfil();chargeDetail();});
     add(box,d);
   });
+  if(vus.length>LIM){var pl=h('button','fb plus','Afficher 60 acteurs de plus ('+nb(vus.length-LIM)+' restants)');pl.type='button';pl.setAttribute('data-cle','plus');
+    pl.addEventListener('click',function(){LIM+=60;rendList();activiteVisible();});add(box,pl);}
 }
 // Maître-détail en petit cadre : la CSS (container query) décide ; ces fonctions ne font que poser la classe.
-function montreProfil(){var c=$('cols');if(c)c.classList.add('voit-profil');try{window.scrollTo(0,0);}catch(e){}}
+function montreProfil(){var c=$('cols');if(!c)return;c.classList.add('voit-profil');if(!$('colListe').offsetParent)c.scrollIntoView({block:'start'});}
 function montreListe(){var c=$('cols');if(c)c.classList.remove('voit-profil');}
 
 // ── Profil ───────────────────────────────────────────────────────────────────────────────────────────
-function courbe(hr){
-  hr=(hr||[]).map(num);
-  var c=h('div');
-  if(hr.length!==24){add(c,h('div','vide','Pas d’activité sur 24 h.'));return c;}
-  var m=Math.max.apply(null,hr.concat([1])),pts=hr.map(function(v,i){return (i*100/23).toFixed(1)+','+(30-v*28/m).toFixed(1);}).join(' ');
-  var s=sv('svg',{'class':'actv',viewBox:'0 0 100 30',preserveAspectRatio:'none',role:'img','aria-label':'Activité sur 24 heures'});
-  sv('polygon',{points:'0,30 '+pts+' 100,30',fill:'rgba(255,77,94,.3)',stroke:'#ff4d5e','stroke-width':'.8','vector-effect':'non-scaling-stroke'},s);
-  var ax=h('div','axe');add(ax,h('span',null,'−24 h'),h('span',null,'−12 h'),h('span',null,'maintenant'));
-  return add(c,s,ax);
+// Séries d'actord : {debut, pas, valeurs (null = pas mesuré), partielles}. Jamais de valeur comblée.
+var CALME=false;try{CALME=window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){}
+function jourHeure(ts){return new Date(ts*1000).toLocaleString('fr-FR',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
+function heureDe(ts){return new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+function court(n){n=num(n);return n>=1e6?(n/1e6).toFixed(1).replace('.',',')+' M':n>=1e4?Math.round(n/1e3)+' k':nb(n);}
+function bilanSerie(s){   // {n, total, pic, rang} des tranches mesurées, null si aucune
+  var r=null;if(!s||!Array.isArray(s.valeurs))return null;
+  s.valeurs.forEach(function(v,i){if(v==null)return;v=num(v);if(!r)r={n:0,total:0,pic:-1,rang:0};r.n++;r.total+=v;if(v>r.pic){r.pic=v;r.rang=i;}});
+  return r;
+}
+function ditSerie(s,nom,r){
+  var t=nom+' sur 24 h : total '+nb(r.total)+(r.pic>0?', pic de '+nb(r.pic)+' à '+heureDe(num(s.debut)+r.rang*num(s.pas)):', rien');
+  if(r.n<s.valeurs.length)t+=' — '+(s.valeurs.length-r.n)+' h non mesurées';
+  return t;
+}
+// Une barre par tranche ; tranche non mesurée : rien ; zéro mesuré : trait de base ; tranche en partie mesurée : plus pâle.
+function barresSVG(s,cls,haut,parBarre){
+  var v=s.valeurs,n=v.length,m=Math.max.apply(null,v.map(num).concat([1])),part=s.partielles||[];
+  var g=sv('svg',{'class':cls,viewBox:'0 0 '+(n*4)+' '+haut,preserveAspectRatio:'none',role:'img'});
+  v.forEach(function(x,i){if(x==null)return;x=num(x);var ht=x>0?Math.max(1.6,x*haut/m):1;
+    var b=sv('rect',{'class':'b'+(x>0?'':' z')+(part.indexOf(i)>=0?' p':'')+(x>0&&x===m?' m':'')+(i===n-1&&x>0?' c':''),x:i*4+.35,y:(haut-ht).toFixed(2),width:3.3,height:ht.toFixed(2)},g);
+    if(parBarre)sv('title',{},b).textContent=parBarre(i,x,part.indexOf(i)>=0);});
+  return g;
+}
+function miniBarres(s,nom){
+  var r=bilanSerie(s);
+  if(!r)return h('span','mini0','—',nom+' sur 24 h : pas mesurée');
+  var g=barresSVG(s,'mini',18,null),t=ditSerie(s,nom,r);
+  g.setAttribute('aria-label',t);sv('title',{},g).textContent=t;
+  return g;
+}
+// Les barres poussent doucement quand une valeur change (une seule fois, rien en continu).
+function pousse(g,cle,s){
+  var avant=VUS['g:'+cle],v=s.valeurs;VUS['g:'+cle]=v.slice();
+  if(CALME||document.hidden)return;
+  var bs=g.querySelectorAll('.b'),k=0;
+  v.forEach(function(x,i){if(x==null)return;var b=bs[k++],a=avant?num(avant[i]):0;
+    if(b&&b.animate&&num(x)!==a&&num(x)>0)b.animate([{transform:'scaleY('+Math.min(3,a/num(x)).toFixed(3)+')'},{transform:'scaleY(1)'}],{duration:450,easing:'ease-out'});});
+}
+function miniBarres15(s){var g=barresSVG(s,'mini',18,null);g.setAttribute('aria-hidden','true');return g;}
+function graphe24(cle,s,tend){
+  var c=h('section','blo');add(c,h('h3',null,'\u{1F552} Activité sur 24 h'));
+  var r=bilanSerie(s);
+  if(!r){add(c,h('div','absent','— pas mesurée'));return c;}
+  var g=barresSVG(s,'actv',60,function(i,x,p){var t=num(s.debut)+i*num(s.pas);return heureDe(t)+' : '+nb(x)+(p?' (heure mesurée en partie)':'');});
+  g.setAttribute('aria-label',ditSerie(s,'Activité',r));
+  var ax=h('div','axe');add(ax,h('span',null,heureDe(num(s.debut))),h('span',null,heureDe(num(s.debut)+12*3600)),h('span',null,'maintenant'));
+  add(c,g,ax,h('p',null,r.total?'Total '+nb(r.total)+' · pic de '+nb(r.pic)+' à '+heureDe(num(s.debut)+r.rang*num(s.pas)):'Rien sur les heures mesurées.'));
+  if(tend)add(c,h('p',null,fleche(tend)+' '+nb(tend.dernieres_24h)+' sur 24 h pleines, '+nb(tend.precedentes_24h)+' les 24 h d’avant ('+ecart(tend)+')'));
+  pousse(g,cle,s);return c;
+}
+function fleche(t){return num(t.dernieres_24h)>num(t.precedentes_24h)?'▲':num(t.dernieres_24h)<num(t.precedentes_24h)?'▼':'=';}
+// Les quinze jours sont comptés en UTC : le nom du jour se lit à midi pour ne pas glisser avec le fuseau.
+function jourCourt(ts){return new Date((ts+43200)*1000).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',timeZone:'UTC'});}
+// Sept jours : une barre par jour, et dessous ses 24 heures (carte de chaleur, la teinte dit la quantité). Jours et heures
+// du navigateur, tirés des 168 heures comptées ; sans elles, les barres des jours UTC. Heure non mesurée : case vide.
+function joursLocaux(sem,now){
+  var out=[],pas=3600,deb=num(sem.debut),part=sem.partielles||[],k;
+  for(k=6;k>=0;k--){var d=new Date(now*1000);d.setHours(0,0,0,0);d.setDate(d.getDate()-k);out.push({t:Math.floor(d.getTime()/1000),h:[],v:null,p:false});}
+  sem.valeurs.forEach(function(x,i){if(x==null)return;var ts=deb+i*pas;
+    for(var q=6;q>=0;q--)if(ts>=out[q].t){var o=out[q];o.v=(o.v||0)+num(x);o.h.push([new Date(ts*1000).getHours(),num(x),ts,part.indexOf(i)>=0]);if(part.indexOf(i)>=0)o.p=true;break;}});
+  out.forEach(function(o,q){if(q<6&&o.h.length&&o.h.length<23)o.p=true;});
+  return out;
+}
+function graphe7(cle,sem,now){
+  var c=h('section','blo');add(c,h('h3',null,'\u{1F4C5} 7 jours, heure par heure'));
+  var r=bilanSerie(sem);
+  if(!r){add(c,h('div','absent','— pas mesurée'));return c;}
+  var js=joursLocaux(sem,now),m=1,mh=Math.max(1,r.pic),g=h('div','j7'),tot=0,best=null,part=false;
+  js.forEach(function(o){if(o.v!==null){m=Math.max(m,o.v);tot+=o.v;if(!best||o.v>best.v)best=o;}if(o.p)part=true;});
+  var dit=function(t){return new Date((t+43200)*1000).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});};
+  add(g,h('span'));
+  js.forEach(function(o,q){var ht=o.v===null?0:o.v>0?Math.max(2,o.v*40/m):1,col=h('div',null,null,dit(o.t)+' : '+(o.v===null?'pas mesuré':nb(o.v)+(o.p?' (jour mesuré en partie)':'')));
+    var g1=sv('svg',{viewBox:'0 0 10 44',preserveAspectRatio:'none','aria-hidden':'true'});
+    if(o.v!==null)sv('rect',{'class':'b'+(o.v>0?'':' z')+(o.v>0&&o.v===m?' m':'')+(o.p&&q<6?' p':'')+(q===6?' c':''),x:.5,y:(44-ht).toFixed(2),width:9,height:ht.toFixed(2)},g1);
+    add(g,add(col,h('b',null,o.v===null?'—':court(o.v)+(o.p&&q<6?'*':'')),g1));});
+  var hs=h('div','hs');['0 h','6 h','12 h','18 h','24 h'].forEach(function(x){add(hs,h('span',null,x));});add(g,hs);
+  js.forEach(function(o){var g2=sv('svg',{'class':'ch',viewBox:'0 0 10 96',preserveAspectRatio:'none','aria-hidden':'true'});
+    o.h.forEach(function(x){var rc=sv('rect',{'class':x[1]>0?'':'z',x:.5,y:x[0]*4+.3,width:9,height:3.4,opacity:x[1]>0?(.18+.82*Math.sqrt(x[1]/mh)).toFixed(2):1},g2);
+      sv('title',{},rc).textContent=jourHeure(x[2])+' : '+nb(x[1])+(x[3]?' (heure mesurée en partie)':'');});add(g,g2);});
+  add(g,h('span'));
+  js.forEach(function(o,q){add(g,h('span','jr',q===6?'auj.':dit(o.t).split(' ')[0]));});
+  g.setAttribute('role','img');g.setAttribute('aria-label','Activité sur 7 jours : total '+nb(tot)+(best?', pic de '+nb(best.v)+' '+dit(best.t):''));
+  add(c,g,h('p',null,'Total '+nb(tot)+(best&&best.v?' · pic '+dit(best.t):'')+(part?' · * jour mesuré en partie':'')));
+  return c;
 }
 function iconeTech(n){n=String(n).toLowerCase();
   if(/sql|inject|xss/.test(n))return '\u{1F6E1}️';if(/scan|probe|recon/.test(n))return '\u{1F50E}';if(/ssh|auth|brute|login/.test(n))return '\u{1F511}';
   if(/lfi|path|travers|file/.test(n))return '\u{1F4C1}';if(/honey/.test(n))return '\u{1F36F}';if(/outil|agent|ua/.test(n))return '\u{1F575}️';return '\u{1F539}';}
-function blocActivite(id){
-  var f=document.createDocumentFragment(),tl=(APERCU&&APERCU.techniques&&APERCU.techniques[id])||[];
-  add(f,h('div','sec','Activité · 24 h'),courbe(APERCU&&APERCU.activite_acteurs&&APERCU.activite_acteurs[id]),h('div','sec','Techniques observées'));
-  if(tl.length){var g=h('div','techs');tl.forEach(function(x){add(g,add(h('div','tech'),h('span',null,iconeTech(x.nom)),h('span',null,String(x.nom),String(x.nom)),h('b',null,nb(x.n))));});add(f,g);}
-  else add(f,h('div','vide',APERCU?'Aucune technique relevée dans les derniers événements.':'—'));
-  return f;
+// ── Résumé en clair : déduit des mesures, phrase par phrase ; une mesure absente retire son morceau ──
+var GESTES={messagerie:'Essaie des mots de passe sur la messagerie',acces_distant:'Balaie les leurres de service',balayage_web:'Balaie les sites web'};
+var CRANS={DELAY:'ralenti',CHALLENGE:'mis au défi',TARPIT:'retenu (tarpit)',DENY:'bloqué',QUARANTINE:'isolé'};
+function pl(n,sg,ps){return nb(n)+' '+(num(n)>1?ps:sg);}
+function duree(s){s=num(s);return s<90*60?Math.max(1,Math.round(s/60))+' min':s<48*3600?Math.round(s/3600)+' h':Math.round(s/86400)+' jours';}
+function cibleSeule(a,camp){
+  var l=Array.isArray(a.targets)&&a.targets.length?a.targets:(camp&&Array.isArray(camp.cibles_noms)?camp.cibles_noms:[]);
+  return l.length===1?String(l[0]).replace(/\.secubox\.in$/,''):'';
 }
+function phrase(a,d,camps,now){
+  var cs=d&&Array.isArray(d.campagnes)?d.campagnes:[],fam=cs.length?cs[0].famille:'',camp=null,src=a.src||{},t='',vieux=a.dernier?Math.max(0,now-num(a.dernier)):null;
+  if(cs.length)(camps||[]).forEach(function(c){if(c&&c.signature===cs[0].signature)camp=c;});
+  if(fam==='collecte'){var ci=cibleSeule(a,camp);t=ci?'Aspire '+ci:'Aspire des pages';}
+  else t=Object.prototype.hasOwnProperty.call(GESTES,fam)?GESTES[fam]:'Vu';
+  if(a.premier&&vieux!==null){
+    var borne=d&&d.premier_borne?'au moins ':'',dur=vieux<86400?now-num(a.premier):num(a.dernier)-num(a.premier);
+    if(dur>=60)t+=(vieux<86400?' depuis ':' pendant ')+borne+duree(dur);
+  }
+  if(src.ips)t+=(t==='Vu'?'':',')+' depuis '+pl(src.ips,'adresse','adresses')+(src.countries?(num(src.ips)>1?' de ':' · ')+pl(src.countries,'pays','pays'):'');
+  else if(src.countries)t+=', '+pl(src.countries,'pays','pays');
+  if(vieux!==null)t+=vieux<600?' ; actif maintenant (il y a '+duree(vieux)+')':vieux<86400?' ; actif il y a '+duree(vieux):' ; plus rien depuis '+duree(vieux);
+  if(a.bans!=null){t+=num(a.bans)?' ; '+pl(a.bans,'ban','bans'):' ; jamais banni';
+    if(num(a.bans)&&d&&d.dernier_ban)t+=', le dernier il y a '+duree(now-num(d.dernier_ban));}
+  if(d&&d.mesure&&d.mesure.niveau)t+=' ; en ce moment '+(CRANS[d.mesure.niveau]||String(d.mesure.niveau).toLowerCase());
+  return t+'.';
+}
+function force(v){return v===null?['','—']:v<=0?['fa','aucun signe']:v<34?['fa','faible']:v<67?['mo','moyen']:['fo','fort'];}
+function change(e,cle,v){var k='v:'+cle;if(VUS[k]!==undefined&&VUS[k]!==v&&!CALME)e.classList.add('chg');VUS[k]=v;return e;}
+// Grand chiffre ; tendance seulement si les deux périodes sont mesurées, sinon rien (la ligne garde sa place).
+function grand(cle,rep,lib,v,t,nouv,def,serie,nom){
+  var b=h('div','gr',null,def),txt='';
+  if(t)txt=fleche(t)+' '+nb(t.dernieres_24h)+(nouv?' '+(num(t.dernieres_24h)>1?nouv[1]:nouv[0]):'')+' en 24 h ('+ecart(t)+')';
+  var g=serie?miniBarres(serie,nom):null;if(t)b.title=def+' 24 h pleines : '+nb(t.dernieres_24h)+' ; les 24 h d’avant : '+nb(t.precedentes_24h)+'.';
+  return add(b,h('div','l',rep+' '+lib),change(h('div','v',mes(v)),cle,v),h('div','t',txt),g);
+}
+function ecart(t){var e=num(t.dernieres_24h)-num(t.precedentes_24h);return e>0?'+'+nb(e):e<0?'−'+nb(-e):'autant';}
+// parts : [[libellé, part en %, couleur, opacité]] — barre empilée, dans le résumé.
+function barreParts(parts){var b=h('div','cbarre');b.setAttribute('aria-hidden','true');parts.forEach(function(x){if(!(num(x[1])>0))return;var g=h('span');g.style.width=Math.min(100,num(x[1]))+'%';g.style.background=x[2];if(x[3])g.style.opacity=x[3];g.title=x[0]+' '+cPct(x[1]);add(b,g);});return b;}
+function degrade(l){var t=l.reduce(function(a,x){return a+num(x.n);},0)||1;return barreParts(l.map(function(x,i){return [String(x.nom),100*num(x.n)/t,'var(--cyan)',String(Math.max(.25,1-.18*i))];}));}
+function pli(cle,titre,court1,corps,barre){
+  var d=h('details','pli'),s=h('summary',null,titre),c=h('div');d.setAttribute('data-cle',cle);s.setAttribute('data-cle','s:'+cle);
+  if(court1)add(s,h('span',null,' — '+court1));
+  add(s,barre);corps.forEach(function(e){add(c,e);});
+  return add(d,s,c);
+}
+function ligneP(lib,n,tot,txt,titre){var pi=h('span','piste'),i=h('i');i.style.width=Math.max(0,Math.min(100,tot?100*num(n)/tot:0))+'%';add(pi,i);return add(h('div','lig',null,titre),h('span',null,lib),pi,h('b',null,txt));}
+function listeN(l,ico){var m=Math.max.apply(null,l.map(function(x){return num(x.n);}).concat([1]));return l.map(function(x){return ligneP((ico?ico(x.nom)+' ':'')+String(x.nom),x.n,m,nb(x.n));});}
+var NOMS_PAYS=null;try{NOMS_PAYS=new Intl.DisplayNames(['fr'],{type:'region'});}catch(e){}
+function nomPays(c){c=String(c).toUpperCase();try{return /^[A-Z]{2}$/.test(c)&&NOMS_PAYS?NOMS_PAYS.of(c):c;}catch(e){return c;}}
+var MODULES={waf:['\u{1F6E1}️','pare-feu applicatif (WAF)'],authwatch:['\u{1F511}','connexions et leurres'],dpi:['\u{1F50D}','analyse des flux (DPI)'],firewall:['\u{1F9F1}','pare-feu'],dns:['\u{1F4D6}','DNS'],sentinel:['\u{1F4E1}','Sentinel'],replay:['⏪','rejeu']};
+function iconeModule(m){return Object.prototype.hasOwnProperty.call(MODULES,m)?MODULES[m][0]:'\u{1F539}';}
+function versCampagne(sig){
+  FILTRE='campagnes';CAMP=sig;if(CAMPS.some(function(c){return c&&c.signature===sig&&cRepliee(c);}))OUVERTS.campautres=true;
+  rendBarre();rendList();montreListe();
+  var e=$('list').querySelector('.acteur.on');if(e)e.scrollIntoView({block:'center'});
+}
+function blocCampagnes(d){
+  var R=window.SbxReperes,l=d.campagnes,c=h('section','blo');add(c,h('h3',null,'\u{1F578}️ Campagnes'));
+  if(!Array.isArray(l)){add(c,h('p',null,'—'));return c;}
+  if(!l.length){add(c,h('p',null,'Dans aucune campagne : personne d’autre n’a le même mode opératoire.'));return c;}
+  l.forEach(function(x){
+    var camp=CAMPS.filter(function(y){return y&&y.signature===x.signature;})[0],fam=R?cCle(R.FAMILLES,x.famille,'autre'):'';
+    var noms=camp&&Array.isArray(camp.cibles_noms)?camp.cibles_noms.slice(0,3).map(String):[];
+    var b=h('button','campl',R?R.FAMILLES[fam][0]+' '+R.nomCarte(fam,noms):String(x.famille||x.signature),'Ouvrir dans l’onglet Campagnes');b.type='button';b.setAttribute('data-cle','campl:'+x.signature);
+    add(b,h('span',null,pl(x.nb_acteurs,'acteur','acteurs')+' · '+pl(x.sources,'adresse','adresses')+(x.rotation===true?' · \u{1F300} rotation':'')),cMini(x));
+    b.addEventListener('click',function(){versCampagne(x.signature);});add(c,b);
+    var pop=R&&cPopulation(x.signature);
+    if(pop)add(c,h('p',null,'↔ même population que « '+R.nomCarte(pop.famille,(Array.isArray(pop.cibles)?pop.cibles:[]).slice(0,3).map(String))+' » dans le Radar'));
+  });
+  return c;
+}
+function blocReseaux(d){
+  var R=window.SbxReperes,r=d.reseaux,corps=[],res='—';
+  if(!r)corps.push(h('p','note','— aucun réseau connu pour ces adresses.'));
+  else{
+    var cl=R?cClasses(R,r.classes):Object.keys(r.classes||{}).map(function(k){return [k,num(r.classes[k])];});
+    var nomC=function(k){return R?R.CLASSES[k][0]+' '+R.CLASSES[k][1]:k;};
+    cl.forEach(function(x){corps.push(ligneP(nomC(x[0]),x[1],100,cPct(x[1])));});
+    var ops=Array.isArray(r.operateurs)?r.operateurs:[];
+    if(ops.length){corps.push(h('p','sous','Opérateurs'));ops.forEach(function(o){corps.push(ligneP((R?R.CLASSES[cCle(R.CLASSES,o.classe,'inconnu')][0]+' ':'')+String(o.nom),o.part,100,cPct(o.part)));});}
+    corps.push(h('p','note','Part de '+pl(r.adresses_examinees,'adresse examinée','adresses examinées')+', d’après la base locale des réseaux. Affichage seulement : le réseau ne sert pas à reconnaître un acteur.'));
+    res=cl.slice(0,2).map(function(x){return nomC(x[0])+' '+cPct(x[1]);}).join(', ');
+  }
+  return pli('p:reseaux','\u{1F3E2} Réseaux',res,corps,r&&cl?barreParts(cl.map(function(x){return [nomC(x[0]),x[1],cCouleur(x[0])];})):null);
+}
+function blocPays(a,d){
+  var p=d.pays,n=(a.src||{}).countries,corps=[],res=n==null?'—':pl(n,'pays','pays');
+  if(p&&Array.isArray(p.top)&&p.top.length){
+    p.top.forEach(function(x){corps.push(ligneP(drapeau(x.code)+' '+nomPays(x.code),x.part,100,cPct(x.part)));});
+    corps.push(h('p','note','Part des '+pl(p.adresses,'adresse vue','adresses vues')+' depuis moins de 48 h. Pays déduit de l’adresse : un relais fausse l’origine.'));
+    res=(n==null?'':pl(n,'pays','pays')+' : ')+p.top.slice(0,3).map(function(x){return drapeau(x.code)+' '+cPct(x.part);}).join(', ');
+  }else corps.push(h('p','note','— aucune adresse de cet acteur vue depuis moins de 48 h : parts non mesurées.'));
+  return pli('p:pays','\u{1F30D} Pays',res,corps,p&&Array.isArray(p.top)?barreParts(p.top.map(function(x,i){return [nomPays(x.code),x.part,'var(--cyan)',String(Math.max(.25,1-.15*i))];})):null);
+}
+function detailDe(id){var e=DET[id];return e?e.d:null;}
 function rendProfile(){
-  var p=vide($('profile')),a=ACTS.filter(function(x){return x.id===CUR;})[0];
-  if(!a){add(p,h('div','vide','Sélectionne un acteur.'));return;}
-  var v=a.vec||{},nat=nature(a),src=a.src||{};
-  var av=h('div','avatar '+niveau(a),nat[0],nat[1]);
-  var id=h('div'),bd=h('div');
+  var box=$('profile'),f=focusCle(box),a=ACTS.filter(function(x){return x.id===CUR;})[0];
+  vide(box);
+  if(!a){add(box,h('div','vide','Sélectionne un acteur.'));return;}
+  var fiche=DET[a.id]&&DET[a.id].fiche;if(fiche)a=Object.assign({},a,fiche);   // la fiche relue avec le détail est plus fraîche que la liste
+  var d=detailDe(a.id),now=DEMO?num(a.genere_le)||Date.now()/1000:Date.now()/1000,p=h('div','prof'),v=a.vec||{},src=a.src||{},nat=nature(a),te=(d&&d.tendance)||{},se=(d&&d.series)||{},k=a.id+':';
+  // Identité et DEFCON
+  var id=h('div','qui'),bd=h('div','pbd');
   add(id,h('div','pid',a.id));
-  add(bd,h('span','badge hi','priorité '+a.priority+' · '+(a.level||'—')),h('span','badge sh','renseignement : propose, n’applique pas','Le moteur de renseignement observe et propose ; il n’applique rien. Le WAF, lui, bannit avec ses propres règles.'));
+  if(a.dernier&&now-num(a.dernier)<600){var vif=h('span','badge vif',null,'Dernier événement il y a moins de 10 minutes');add(vif,h('i'),document.createTextNode('actif maintenant'));add(bd,vif);}
+  add(bd,defcon(a.bans),h('span','badge',nat[0]+' '+nat[1]),h('span','badge hi','priorité '+a.priority+' · '+(a.level||'—')),
+    h('span','badge sh','\u{1F441}️ propose, n’applique pas','Le moteur de renseignement observe et propose ; il n’applique rien. Le WAF, lui, bannit avec ses propres règles.'));
   add(id,bd);
-  var gs=h('div','gscore');add(gs,h('b',null,String(a.priority)),h('span',null,'/100 priorité'));
-  add(p,add(h('div','phead'),av,id,gs));
-  var vec=h('div','vec');
-  ['knowledge','continuity','intent','automation','severity','persistence','confidence'].forEach(function(k){
-    var val=v[k]||0,hot=(k==='automation'||k==='intent'||k==='severity')&&val>=70,b=h('div','bar'+(hot?' hot':'')),pi=h('span','piste'),i=h('i');
-    i.style.width=Math.max(0,Math.min(100,val))+'%';add(pi,i);add(b,h('span','k',VECLBL[k]),pi,h('span','n',String(val)));add(vec,b);});
-  add(p,vec);
-  var fa=h('div','facts');
-  add(fa,add(h('div','fact'),h('div','l','Sources'),h('div','v',mes(src.ips)+' IP · '+mes(src.asns)+' ASN · '+mes(src.countries)+' pays')),
-         add(h('div','fact'),h('div','l','Vu'),h('div','v',(a.first||'—')+' → '+(a.last||'—'))));
-  add(p,fa);
-  if(a.targets&&a.targets.length){var sc=h('div','fact'),vv=h('div','v');a.targets.forEach(function(t){add(vv,h('span','chip',t));});add(p,add(sc,h('div','l','Services ciblés'),vv));}
-  add(p,blocActivite(a.id));
-  if((a.hyp||[]).length){add(p,h('div','sec','Hypothèses concurrentes'));
-    a.hyp.forEach(function(x){var pi=h('span','piste'),i=h('i');i.style.width=Math.round(x[1]*100)+'%';add(pi,i);add(p,add(h('div','hyp'),h('span','p',Math.round(x[1]*100)+'%'),pi,h('span',null,String(x[0]))));});}
+  var gs=h('div','gscore');add(gs,change(h('b',null,String(a.priority)),k+'prio',a.priority),h('span',null,'priorité /100'));
+  add(p,add(h('div','phead'),h('div','avatar '+niveau(a),nat[0],nat[1]),id,gs));
+  // Résumé, dates
+  add(p,h('p','resume',phrase(a,d,CAMPS,now)));
+  if(a.premier&&a.dernier)add(p,h('p','quand','\u{1F4C6} Du '+jourHeure(num(a.premier))+' au '+jourHeure(num(a.dernier))+(num(a.dernier)-num(a.premier)>=60?' · '+duree(num(a.dernier)-num(a.premier)):'')+(d&&d.premier_borne?' (peut-être plus ancien : le relevé commence là)':'')));
+  // Quatre grands chiffres
+  var gr=h('div','gros');
+  add(gr,grand(k+'ips','\u{1F500}','Adresses',src.ips,te.adresses,['nouvelle','nouvelles'],'Adresses différentes depuis lesquelles ce profil a été vu.',se.adresses,'Adresses nouvelles'),
+    grand(k+'pays','\u{1F30D}','Pays',src.countries,te.pays,['nouveau','nouveaux'],'Pays différents, déduits des adresses.',se.pays,'Pays nouveaux'),
+    grand(k+'cibles','\u{1F3AF}','Cibles',nbCibles(a),te.nb_cibles,['nouvelle','nouvelles'],'Services différents visés.',se.nb_cibles,'Cibles nouvelles'),
+    grand(k+'bans','\u{1F6D1}','Bans',a.bans,te.bans,null,'Nombre de fois où un capteur a sanctionné ce profil.',se.bans,'Bans'));
+  add(p,gr);
+  if(!d){add(p,h('div','absent',DET[a.id]?'— détail indisponible pour le moment, nouvel essai automatique.':'Lecture du détail…'));}
+  else{
+    var duo=h('div','duo');
+    add(duo,graphe24(k+'h',d.heures,te.evenements),graphe7(k+'j',d.semaine,now));add(p,duo);
+    if(d.couverture_depuis)add(p,h('p','note','Compté depuis le '+jourHeure(num(d.couverture_depuis))+' ; avant, pas mesuré (« — »). Barre pâle : tranche mesurée en partie.'));
+    add(p,blocCampagnes(d));
+  }
+  // Le vecteur, en mots
+  var ve=h('section','blo');add(ve,h('h3',null,'\u{1F9ED} Ce qu’on en sait'));var vec=h('div','vec');
+  AXES.forEach(function(x){var val=v[x[0]]==null?null:num(v[x[0]]),fo=force(val),b=h('div','bar '+fo[0]),pi=h('span','piste'),i=h('i'),n=h('span','n'),lib=h('span',null,x[1]+' '+x[2]);
+    i.style.width=Math.max(0,Math.min(100,val||0))+'%';add(pi,i);add(lib,h('small',null,' — '+x[3]));add(n,h('b',null,fo[1]));if(val!==null)add(n,h('span',null,' · '+val));add(vec,add(b,lib,n,pi));});
+  add(p,add(ve,vec));
+  // Le reste, replié ; le titre dit déjà l'essentiel
+  var pls=h('div','plis');add(p,pls);
+  if(d){
+    var tl=Array.isArray(d.techniques)?d.techniques:[],ml=Array.isArray(d.modules)?d.modules:[];
+    add(pls,pli('p:tech','\u{1F6E0}️ Techniques',tl.length?tl.slice(0,3).map(function(x){return String(x.nom);}).join(', '):'—',
+      tl.length?listeN(tl,iconeTech):[h('p','note','— aucune technique comptée pour cet acteur.')],tl.length?degrade(tl):null));
+    add(pls,pli('p:mod','\u{1F4E1} Vu par',ml.length?ml.map(function(x){return (Object.prototype.hasOwnProperty.call(MODULES,x.nom)?MODULES[x.nom][1]:String(x.nom));}).join(', '):'—',
+      ml.length?listeN(ml.map(function(x){return {nom:Object.prototype.hasOwnProperty.call(MODULES,x.nom)?MODULES[x.nom][1]:x.nom,n:x.n,brut:x.nom};}).map(function(x){x.nom=iconeModule(x.brut)+' '+x.nom;return x;}),null):[h('p','note','— aucun capteur compté pour cet acteur.')],ml.length?degrade(ml):null));
+    add(pls,blocPays(a,d),blocReseaux(d));
+    var b15=bilanSerie(d.jours);
+    if(b15){var g15=barresSVG(d.jours,'actv',60,function(i,x,q){return jourCourt(num(d.jours.debut)+i*86400)+' : '+nb(x)+(q?' (en partie)':'');});g15.setAttribute('aria-label','Activité sur 15 jours : total '+nb(b15.total));
+      var ax=h('div','axe');add(ax,h('span',null,jourCourt(num(d.jours.debut))),h('span',null,'aujourd’hui'));
+      add(pls,pli('p:15j','\u{1F4C8} 15 jours',b15.n+' jour'+(b15.n>1?'s':'')+' mesuré'+(b15.n>1?'s':'')+', total '+nb(b15.total),[g15,ax],miniBarres15(d.jours)));}
+  }
+  if(Array.isArray(a.targets)&&a.targets.length){var vv=h('div');a.targets.forEach(function(t){add(vv,h('span','chip',String(t)));});add(pls,pli('p:cibles','\u{1F3AF} Services visés',pl(a.targets.length,'service','services'),[vv]));}
+  var hy=(Array.isArray(a.hyp)?a.hyp:[]).filter(function(x){return num(x&&x[1])>0;});
+  add(pls,pli('p:hyp','\u{1F4AD} Hypothèses',hy.length?String(hy[0][0])+' '+Math.round(num(hy[0][1])*100)+' %':'pas encore d’hypothèse',
+    hy.length?hy.map(function(x){return ligneP(String(x[0]),num(x[1])*100,100,Math.round(num(x[1])*100)+' %');}):[h('p','note','Pas encore d’hypothèse : rien à départager.')]));
+  add(box,p);volets(box);rendFocus(box,f);
   $('pver').textContent='algo v1 · poids v1';
+}
+// Le détail d'UN acteur, celui qu'on regarde ; le serveur garde sa réponse 20 s.
+function chargeDetail(){
+  var id=CUR;if(!id)return Promise.resolve();
+  if(DEMO){DET[id]={d:demoDetail(id),fiche:null};rendProfile();annoncer();return Promise.resolve();}
+  return jget('/api/v1/actor/actors/'+encodeURIComponent(id),true).then(function(x){
+    var av=DET[id];
+    if(x&&x.id===id){var fiche=Object.assign({},x);delete fiche.detail;DET={};DET[id]={d:x.detail||(av&&av.d)||null,fiche:fiche};}
+    else if(!av)DET[id]={d:null,fiche:null};
+    if(CUR===id&&!lecture())rendProfile();
+    annoncer();
+  });
+}
+// Une sélection de texte en cours dans la liste ou le profil : on ne refait rien sous la main de l'utilisateur.
+function lecture(){try{var s=window.getSelection();if(!s||s.isCollapsed||!s.anchorNode)return false;return $('list').contains(s.anchorNode)||$('profile').contains(s.anchorNode);}catch(e){return false;}}
+
+// ── Activité des lignes affichées : lots de 60, une relecture par minute ──
+var ACTIV_LE=0;
+function activiteVisible(){
+  if(DEMO){ACTIV=demoActivite();return Promise.resolve();}
+  var ids=FILTRE==='campagnes'?[]:trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS).slice(0,LIM).map(function(a){return a.id;});
+  var camp=FILTRE==='campagnes',frais=Date.now()-ACTIV_LE<55000&&!(camp&&!(LOT&&LOT.campagnes));
+  if(!frais)ACTIV_LE=Date.now();else{if(camp)return Promise.resolve();ids=ids.filter(function(i){return !Object.prototype.hasOwnProperty.call(ACTIV,i);});if(!ids.length)return Promise.resolve();}
+  var lots=[];for(var i=0;i<ids.length;i+=60)lots.push(ids.slice(i,i+60));if(!lots.length)lots.push([]);
+  return lots.reduce(function(pr,l){return pr.then(function(){
+    return jget('/api/v1/actor/activite'+(l.length?'?ids='+l.map(encodeURIComponent).join(','):'?campagnes=1'),true).then(function(x){
+      if(!x||!x.acteurs)return;LOT=x;
+      l.forEach(function(id){ACTIV[id]=x.acteurs[id]?{debut:x.debut,pas:x.pas,valeurs:x.acteurs[id],partielles:x.partielles}:null;});
+    });});},Promise.resolve()).then(function(){if(STATS)rendKPIs(STATS);if(!lecture())rendList();});
 }
 
 // ── Aperçu (carte, événements, activité, techniques, robots) : coûteux côté serveur, une relecture par minute suffit ──
@@ -572,17 +860,45 @@ function populations(){
 
 // ── Données de démonstration (adresses de documentation, noms fictifs, rien n'est écrit) ──
 function demoActs(){
-  var base=[['ACT-0A41',9,3,14,6,['sql.injection'],88,64,2],['ACT-17C2',5,2,9,3,['scan-ports'],72,50,1],['ACT-2B90',2,1,3,0,['bruit'],40,20,0],['ACT-3D17',1,1,1,0,['bruit'],22,10,0]];
-  return base.map(function(b,i){return {id:b[0],priority:[62,48,31,18][i],level:'LOW',bans:b[8],src:{ips:b[1],asns:b[2],countries:[3,2,1,1][i]},first:'2026-10-0'+(2+i)+' 08:1'+i,last:'2026-10-13 1'+i+':40',
-    targets:['app.example.test','api.example.test'].slice(0,i<2?2:1),vec:{knowledge:30+i*5,continuity:b[6],intent:b[7],automation:[80,60,30,20][i],severity:[75,50,20,10][i],persistence:[70,40,10,5][i],confidence:[66,58,40,30][i]},
-    hyp:[['campagne '+(i<2?'ciblée':'opportuniste'),[.62,.5,.4,.3][i]],['outil automatisé',[.25,.3,.35,.3][i]]],tags:i===0?[['auto','auto'],['cible','target']]:[]};});
+  var t=Math.floor(Date.now()/1000);
+  // [id, priorité, bans, adresses, pays, cibles, premier (j), dernier (s), vecteur : gravité continuité automatisation persistance intention connaissance confiance]
+  var base=[['ACT-0A41',62,2640,2454,88,1,15,240,[75,88,84,70,52,12,66]],['ACT-17C2',48,41,57,9,3,6,5400,[60,64,72,40,38,0,58]],['ACT-2B90',31,1,2,1,2,2,26000,[40,20,30,10,0,0,40]],['ACT-3D17',18,0,1,1,1,4,3*86400,[20,0,0,0,0,0,8]]];
+  return base.map(function(b,i){var v=b[8];return {id:b[0],priority:b[1],level:'LOW',bans:b[2],src:{ips:b[3],asns:0,countries:b[4]},first:'08:1'+i,last:'1'+i+':40',premier:t-b[6]*86400,dernier:t-b[7],genere_le:t,nb_cibles:b[5],
+    vec:{severity:v[0],continuity:v[1],automation:v[2],persistence:v[3],intent:v[4],knowledge:v[5],confidence:v[6]},
+    hyp:i===3?[['campagne ciblée automatisée',0],['bot générique / scanner',0],['bruit non relié',0]]:[['campagne ciblée automatisée',[.46,.42,.3][i]],['bot générique / scanner',[.38,.4,.36][i]],['bruit non relié',[.16,.18,.34][i]]],
+    tags:i===0?[['automatisé','auto']]:[['observé','']]};});
+}
+var DEMO24=[14,9,22,31,18,12,40,62,95,71,55,38,27,44,83,120,97,61,36,28,19,47,58,33];
+function demoSerie(vals,pas,part){var f=Math.floor(Date.now()/1000/pas);return {debut:(f-vals.length+1)*pas,pas:pas,valeurs:vals,partielles:part||[]};}
+function demoActivite(){
+  LOT={debut:demoSerie(DEMO24,3600).debut,pas:3600,evenements:DEMO24.map(function(x){return x*13;}),bloques:DEMO24.map(function(x,i){return x*9+i;}),partielles:[],
+    campagnes:{'campagne-sqli-01':DEMO24.map(function(x,i){return i%3?Math.round(x/6):0;}),'collecte-git-02':DEMO24.map(function(x){return x*2;}),'enum-sous-domaines':DEMO24.map(function(){return 0;}),'mots-de-passe-03':DEMO24.map(function(x,i){return i>20?1:0;})}};
+  return {'ACT-0A41':demoSerie(DEMO24,3600),'ACT-17C2':demoSerie([null,null,null,null,null,null,null,null,2,0,1,5,3,0,0,6,9,4,0,0,2,1,0,0],3600,[8]),
+    'ACT-2B90':demoSerie([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0],3600),'ACT-3D17':demoSerie(DEMO24.map(function(){return 0;}),3600)};
+}
+function demoSemaine(f){var v=[];for(var i=0;i<168;i++)v.push(f(i));return demoSerie(v,3600);}
+function demoSeries(b,n){var nul=DEMO24.map(function(){return 0;});return {bans:demoSerie(b,3600),adresses:demoSerie(n,3600),pays:demoSerie(nul,3600),nb_cibles:demoSerie(nul,3600)};}
+// Détail fictif : opérateurs d'exemple, aucune adresse, aucun nom d'hôte réel.
+function demoDetail(id){
+  var t=Math.floor(Date.now()/1000),a=demoActivite(),couv=t-15*86400;
+  var d={genere_le:t,couverture_depuis:couv,premier_borne:false,evenements:0,heures:a[id]||null,semaine:null,jours:null,series:null,tendance:null,modules:[],techniques:[],pays:null,reseaux:null,dernier_ban:null,mesure:null,campagnes:[]};
+  if(id==='ACT-0A41')return Object.assign(d,{premier_borne:true,evenements:18420,semaine:demoSemaine(function(i){return i>=144?DEMO24[i-144]:Math.round(DEMO24[(i+3)%24]*[.7,.9,1.2,1.4,1.5,1.3][Math.floor(i/24)]);}),series:demoSeries(DEMO24.map(function(x){return Math.round(x/6);}),DEMO24.map(function(x){return Math.round(x/7);})),jours:demoSerie([310,420,515,640,900,1240,1510,1320,980,1105,1430,1610,1720,1490,1210],86400,[0]),
+    tendance:{evenements:{dernieres_24h:1120,precedentes_24h:1490},bans:{dernieres_24h:186,precedentes_24h:204},adresses:{dernieres_24h:163,precedentes_24h:141},pays:{dernieres_24h:0,precedentes_24h:2},nb_cibles:{dernieres_24h:0,precedentes_24h:0}},
+    modules:[{nom:'waf',n:17980},{nom:'firewall',n:440}],techniques:[{nom:'aspirateur_ua',n:15200},{nom:'scan.chemins',n:2410},{nom:'outil python-requests',n:810}],
+    pays:{adresses:812,top:[{code:'US',part:56},{code:'GB',part:12},{code:'CA',part:6},{code:'DE',part:5},{code:'BR',part:3}]},
+    reseaux:{adresses_examinees:2454,classes:{proxy_loue:87,hebergeur:10,inconnu:2,acces:1},operateurs:[{nom:'Opérateur exemple A',classe:'proxy_loue',part:61},{nom:'Opérateur exemple B',classe:'proxy_loue',part:22},{nom:'Hébergeur exemple',classe:'hebergeur',part:9}]},
+    dernier_ban:t-900,mesure:{niveau:'TARPIT',reste_s:900},campagnes:[{signature:'collecte-git-02',famille:'collecte',nb_acteurs:41,sources:2565,rotation:true}]});
+  if(id==='ACT-17C2')return Object.assign(d,{couverture_depuis:t-16*3600,premier_borne:false,evenements:412,semaine:demoSemaine(function(i){return i<152?null:[2,0,1,5,3,0,0,6,9,4,0,0,2,1,0,0][i-152];}),series:{bans:demoSerie(a[id].valeurs.map(function(x){return x===null?null:x>4?1:0;}),3600),adresses:null,pays:null,nb_cibles:null},jours:demoSerie([null,null,null,null,null,null,null,null,null,null,null,null,null,12,33],86400,[13]),
+    modules:[{nom:'authwatch',n:300},{nom:'waf',n:112}],techniques:[{nom:'scan-ports',n:300},{nom:'sql.injection',n:112}],pays:{adresses:31,top:[{code:'NL',part:52},{code:'FR',part:23},{code:'PL',part:13}]},
+    reseaux:{adresses_examinees:57,classes:{hebergeur:71,inconnu:29},operateurs:[{nom:'Hébergeur exemple',classe:'hebergeur',part:71}]},dernier_ban:t-6000,campagnes:[{signature:'campagne-sqli-01',famille:'balayage_web',nb_acteurs:3,sources:14,rotation:false}]});
+  if(id==='ACT-2B90')return Object.assign(d,{evenements:9,semaine:demoSemaine(function(i){return i===160?3:i===131?6:0;}),series:demoSeries(DEMO24.map(function(x,i){return i===16?1:0;}),DEMO24.map(function(){return 0;})),jours:demoSerie([0,0,0,0,0,0,0,0,0,0,0,0,0,6,3],86400),modules:[{nom:'waf',n:9}],techniques:[{nom:'bruit',n:9}],pays:{adresses:2,top:[{code:'NL',part:100}]},dernier_ban:t-26000,
+    campagnes:[{signature:'enum-sous-domaines',famille:'balayage_web',nb_acteurs:2,sources:5,rotation:false}]});
+  return Object.assign(d,{evenements:1,semaine:demoSemaine(function(i){return i===88?1:0;}),series:demoSeries(DEMO24.map(function(){return 0;}),DEMO24.map(function(){return 0;})),jours:demoSerie([0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],86400),modules:[{nom:'dns',n:1}],techniques:[{nom:'dns.anomalie',n:1}]});
 }
 function demoApercu(){
-  var a24=[1,0,2,3,1,0,4,6,9,7,5,3,2,4,8,12,9,6,3,2,1,4,5,3];
   return {top_pays:[{code:'US',n:2224},{code:'DE',n:532},{code:'GB',n:421},{code:'CN',n:398},{code:'NL',n:310},{code:'FR',n:287}],
-    recents:[{ts:Math.floor(Date.now()/1000)-60,acteur:'ACT-0A41',type:'sql.injection',module:'sbxwaf',score:88},{ts:Math.floor(Date.now()/1000)-180,acteur:'ACT-17C2',type:'scan-ports',module:'authwatch',score:72},{ts:Math.floor(Date.now()/1000)-420,acteur:'ACT-2B90',type:'bruit',module:'sbxwaf',score:31}],
-    activite_acteurs:{'ACT-0A41':a24,'ACT-17C2':a24.slice().reverse()},
-    techniques:{'ACT-0A41':[{nom:'sql.injection',n:41},{nom:'scan',n:12},{nom:'outil: sqlmap',n:9}],'ACT-17C2':[{nom:'scan-ports',n:30}]},
+    recents:[{ts:Math.floor(Date.now()/1000)-60,acteur:'ACT-0A41',type:'sql.injection',module:'sbxwaf',score:88},{ts:Math.floor(Date.now()/1000)-180,acteur:'ACT-17C2',type:'scan-ports',module:'authwatch',score:72},{ts:Math.floor(Date.now()/1000)-420,acteur:'ACT-2B90',type:'bruit',module:'sbxwaf',score:31},
+      {ts:Math.floor(Date.now()/1000)-600,acteur:'ACT-0A41',type:'aspirateur_ua',module:'sbxwaf',score:40},{ts:Math.floor(Date.now()/1000)-640,acteur:'ACT-0A41',type:'aspirateur_ua',module:'sbxwaf',score:40},{ts:Math.floor(Date.now()/1000)-900,acteur:'',type:'fw.scan.vertical',module:'firewall',score:55},{ts:Math.floor(Date.now()/1000)-1100,acteur:'ACT-17C2',type:'scan-ports',module:'authwatch',score:72},{ts:Math.floor(Date.now()/1000)-1500,acteur:'ACT-0A41',type:'scan.chemins',module:'sbxwaf',score:60}],
     robots:[{famille:'Googlebot',hits:1820,ips:14},{famille:'Bingbot',hits:610,ips:6}]};
 }
 
@@ -608,24 +924,38 @@ function rend(s,acts,camps){
   rendKPIs(s);
   if(CUR&&!ACTS.some(function(x){return x.id===CUR;}))CUR=null;
   if(!CUR&&ACTS.length)CUR=ACTS[0].id;
-  rendTuiles();carteMonde();rendEven();rendBarre();rendList();rendProfile();maj();annoncer();
+  rendTuiles();carteMonde();rendEven();rendBarre();
+  if(!lecture()){rendList();rendProfile();}
+  maj();annoncer();
 }
+// Les listes pèsent plus d'un mégaoctet : une relecture par minute (« Rafraîchir » force). Les compteurs et le détail de
+// l'acteur ouvert, légers, suivent à chaque passage ; l'activité des lignes affichées, une fois par minute.
+function relire(u,quand,garde,pose){
+  if(garde&&Date.now()-quand<55000)return Promise.resolve(garde);
+  return jget(u).then(function(x){if(x)pose(x);return x||garde;});
+}
+var EN_COURS=false;
 function tick(){
-  if(DEMO){APERCU=demoApercu();POPS=demoPopulations();rend({posture:'Protégée',mode:'observe',blocked_24h:136638,attempts_24h:5421,actors:4,campaigns:4,events_24h:18204},demoActs(),demoCampagnes());return;}
+  if(DEMO){APERCU=demoApercu();POPS=demoPopulations();ACTIV=demoActivite();
+    rend({posture:'Protégée',mode:'observe',blocked_24h:136638,attempts_24h:5421,actors:4,campaigns:4,events_24h:18204},demoActs(),demoCampagnes());chargeDetail();return;}
+  if(EN_COURS)return;EN_COURS=true;
   SESSION_REFUSEE=false;
-  Promise.all([jget('/api/v1/actor/stats'),jget('/api/v1/actor/actors'),jget('/api/v1/actor/campaigns'),aperçu(),populations()]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),relire('/api/v1/actor/actors',ACTS_LE,ACTS.length?ACTS:null,function(){ACTS_LE=Date.now();}),
+    relire('/api/v1/actor/campaigns',CAMPS_LE,CAMPS.length?CAMPS:null,function(){CAMPS_LE=Date.now();}),aperçu(),populations()]).then(function(r){
+    EN_COURS=false;
     CAMPS=r[2]||[];
     var ok=!!r[0];
     $('session').hidden=ok||!SESSION_REFUSEE;
     $('moteur').hidden=ok||SESSION_REFUSEE;
     if(!ok){
-      ACTS=[];STATS=null;vide($('kpis'));rendTuiles();carteMonde();rendEven();rendBarre();
+      ACTS=[];CAMPS=[];STATS=null;LOT=null;ACTIV={};DET={};ACTS_LE=CAMPS_LE=ACTIV_LE=0;vide($('kpis'));rendTuiles();carteMonde();rendEven();rendBarre();
       var e=$('etat');e.className=SESSION_REFUSEE?'actif neutre':'actif hors';e.textContent=SESSION_REFUSEE?'SESSION REQUISE':'MOTEUR INJOIGNABLE';
       vide($('list'));add($('list'),h('div','vide',SESSION_REFUSEE?'Aucune mesure : session requise.':'Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu’à quelques minutes) ; nouvel essai automatique.'));
       vide($('profile'));add($('profile'),h('div','vide','—'));maj();annoncer();return;
     }
     rend(r[0],r[1],r[2]);
-  });
+    chargeDetail().then(activiteVisible);
+  }).catch(function(x){EN_COURS=false;throw x;});
 }
 
 // ── Hauteur annoncée à l'hôte (SOC, Hall) : on mesure le CADRE, jamais le document ──
@@ -635,7 +965,7 @@ function annoncer(){
 }
 window.addEventListener('load',annoncer);window.addEventListener('resize',annoncer);
 if(window.ResizeObserver)new ResizeObserver(annoncer).observe(document.body);
-$('rafraichir').addEventListener('click',tick);
+$('rafraichir').addEventListener('click',function(){ACTS_LE=CAMPS_LE=APERCU_LE=ACTIV_LE=0;tick();});
 $('retour').addEventListener('click',montreListe);
 if(DEMO){$('demo').hidden=false;$('geoNote').textContent='';}
 rendFlow();tick();

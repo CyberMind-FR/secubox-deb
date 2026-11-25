@@ -1,3 +1,19 @@
+secubox-waf-ng (1.46.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-actord (ref #3936) : activité par acteur comptée à l'ingestion
+    (24 h, 168 h, 15 jours), reprise au redémarrage, jamais lue du magasin.
+    GET /actors : premier et dernier passage datés. GET /actors/{id} :
+    détail à la demande (séries, tendances, modules, techniques, pays,
+    réseaux, dernier ban, campagnes). GET /activite : 60 acteurs par lot.
+    Tranche non mesurée : null, jamais 0. Corrélation inchangée (test).
+  * Page Actor (ref #3936) : résumé en clair, quatre grands chiffres avec
+    tendance et mini-barres, barres 24 h et carte de chaleur 7 jours,
+    vecteur en mots, campagnes cliquables, le reste replié ; barres 24 h
+    sur chaque acteur et campagne. L'ASN n'est plus affiché comme mesure.
+    Listes relues une fois par minute (étaient 15 s), 60 lignes à la fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:00:00 +0100
+
 secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : détecteur de campagnes à rotation web (ref #3919), actif en

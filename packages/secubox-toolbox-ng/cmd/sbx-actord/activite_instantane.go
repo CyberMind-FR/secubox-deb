@@ -37,6 +37,7 @@ type entreeInstantane struct {
 	Ban     int64             `json:"ban,omitempty"`
 	Heures  [][6]int64        `json:"h,omitempty"` // heure absolue, événements, bans, adresses, pays, cibles
 	Jours   [][2]int64        `json:"j,omitempty"` // jour absolu, événements
+	Semaine [][2]int64        `json:"s,omitempty"` // heure absolue, événements
 	Modules map[string]uint32 `json:"m,omitempty"`
 	Tech    map[string]uint32 `json:"t,omitempty"`
 }
@@ -60,6 +61,11 @@ func (t *activite) exporter(x *activiteActeur) entreeInstantane {
 	for r := x.jour - joursGardes + 1; x.jour > 0 && r <= x.jour; r++ {
 		if n := lireRang(x.jours[:], x.jour, r); n > 0 {
 			o.Jours = append(o.Jours, [2]int64{r, int64(n)})
+		}
+	}
+	for r := x.rangS - semaineGardee + 1; x.rangS > 0 && r <= x.rangS; r++ {
+		if n := lireRang(x.semaine[:], x.rangS, r); n > 0 {
+			o.Semaine = append(o.Semaine, [2]int64{r, int64(n)})
 		}
 	}
 	for i, n := range x.modules {
@@ -103,6 +109,11 @@ func (t *activite) importer(o entreeInstantane, now int64) *activiteActeur {
 	for _, j := range o.Jours {
 		if j[0] > 0 && j[0] <= now/86400+1 {
 			x.ajouterJour(j[0], u32(j[1]))
+		}
+	}
+	for _, h := range o.Semaine {
+		if h[0] > 0 && h[0] <= now/3600+1 {
+			x.ajouterSemaine(h[0], int(u32(h[1])))
 		}
 	}
 	for m, n := range o.Modules {

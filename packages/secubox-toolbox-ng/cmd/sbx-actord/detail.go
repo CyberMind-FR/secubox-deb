@@ -8,6 +8,7 @@ package main
 import (
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -88,7 +89,9 @@ type detailActeur struct {
 	PremierBorne bool               `json:"premier_borne"`
 	Evenements   int                `json:"evenements"`
 	Heures       *serieVue          `json:"heures"`
-	Jours        *serieVue          `json:"jours"` // 15 jours UTC
+	Semaine      *serieVue          `json:"semaine"` // 168 heures
+	Jours        *serieVue          `json:"jours"`   // 15 jours UTC
+	Series       *seriesVue         `json:"series"`
 	Tendance     *tendanceVue       `json:"tendance"`
 	Modules      []Technique        `json:"modules"`
 	Techniques   []Technique        `json:"techniques"`
@@ -209,7 +212,8 @@ func (s *Server) calculerDetail(id string, reduite bool) *detailActeur {
 		h := t.serie(3600, 24, now, x.heureEvts)
 		j := t.serie(86400, joursGardes, now, x.jourEvts)
 		te := t.tendance(x, now)
-		d.Heures, d.Jours, d.Tendance = &h, &j, &te
+		sem := t.serie(3600, semaineGardee, now, x.semaineEvts)
+		d.Heures, d.Jours, d.Semaine, d.Tendance, d.Series = &h, &j, &sem, &te, t.series(x, now)
 		d.Modules, d.Techniques = x.parModule(), t.techniques(x)
 		if x.dernierBan > 0 {
 			b := x.dernierBan
@@ -331,7 +335,8 @@ func reseauxDe(an *reseau.Annuaire, adrs []adresseVue) *reseauxVue {
 // UNE ROUTE PAR LOT PLUTÔT QU'UN CHAMP DANS /actors. 24 entiers pour 3 658 acteurs ajouteraient
 // 180 à 300 Ko à un corps de 1,34 Mo relu toutes les 15 s, pour quelque dix lignes à l'écran. Ici
 // 60 lignes au plus, quelques Ko, des lectures de table seulement. Le Hall ne relaie pas cette route.
-// `ids` peut être absent : seules les séries d'ensemble sont alors rendues.
+// `ids` peut être absent : seules les séries d'ensemble sont alors rendues. `campagnes=1` ajoute la
+// somme des acteurs des 60 premières campagnes (même ordre que /campaigns, groupement gardé 60 s).
 
 var motifActeur = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 
@@ -344,6 +349,7 @@ type lotActivite struct {
 	Evenements       []*uint32            `json:"evenements"` // tous capteurs, robots connus compris (comme /stats)
 	Bloques          []*uint32            `json:"bloques"`
 	Acteurs          map[string][]*uint32 `json:"acteurs"`
+	Campagnes        map[string][]*uint32 `json:"campagnes,omitempty"`
 }
 
 func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
@@ -362,6 +368,14 @@ func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	now := maintenant()
+	var camps []*campagne
+	if r.URL.Query().Get("campagnes") == "1" {
+		// Groupement par acteur gardé : on en tire les campagnes distinctes, les plus grosses d'abord.
+		if par, err := s.campDetT.lire(campDetTTL, s.campagnesParActeur); err == nil {
+			camps = premieresCampagnes(par, activiteIDs)
+		}
+	}
+	reduite := vueReduite(r)
 	s.mu.Lock()
 	t := &s.act
 	g := t.serie(3600, 24, now, t.global.heureEvts)
@@ -372,6 +386,50 @@ func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
 			out.Acteurs[id] = t.serie(3600, 24, now, x.heureEvts).Valeurs
 		}
 	}
+	if len(camps) > 0 {
+		out.Campagnes = make(map[string][]*uint32, len(camps))
+	}
+	for _, c := range camps {
+		xs := make([]*activiteActeur, 0, len(c.Acteurs))
+		for _, id := range c.Acteurs {
+			if x := t.acteurs[id]; x != nil {
+				xs = append(xs, x)
+			}
+		}
+		if len(xs) == 0 {
+			continue
+		}
+		sig := c.Signature
+		if reduite {
+			sig = s.signatureOpaque(sig)
+		}
+		out.Campagnes[sig] = t.serie(3600, 24, now, func(r int64) (n uint32) {
+			for _, x := range xs {
+				n += x.heureEvts(r)
+			}
+			return n
+		}).Valeurs
+	}
 	s.mu.Unlock()
 	writeJSON(w, out)
+}
+
+// premieresCampagnes rend les n plus grosses campagnes, dans l'ordre de /campaigns.
+func premieresCampagnes(par map[string][]*campagne, n int) []*campagne {
+	vues, out := map[*campagne]bool{}, []*campagne{}
+	for _, l := range par {
+		for _, c := range l {
+			if !vues[c] {
+				vues[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].NbActeurs != out[j].NbActeurs {
+			return out[i].NbActeurs > out[j].NbActeurs
+		}
+		return out[i].Signature < out[j].Signature
+	})
+	return out[:min(n, len(out))]
 }
