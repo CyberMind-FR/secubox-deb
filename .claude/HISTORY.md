@@ -11,6 +11,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-25 (19:45) — bannir un acteur, SOC et WAF en dossiers, enregistreur en boucle
+
+- **#3960 (PR #3962, #3964, déployé gk2)** : fiche Actor, aperçu puis ban 24 h sur geste, levée du geste (waf-ng 1.48.0, 1.48.1). Essai au banc :
+  200 adresses en 0,5 s. Les numéros d'acteurs changent à chaque relance du moteur : gestes rattachés par adresses.
+- **#3963 (PR #3965, déployé gk2)** : waf-ng 1.49.0 (onglet Sites, agrégat horaire), soc 1.15.0 (Situations). Chiffres recomptés à l'identique.
+- **#3921 (PR #3961, déployé gk2)** : datascope 0.3.1, lecture en boucle.
+- Couture : 10 s de coupure à 17:34 (1.48.0), 35 s à 19:31 (1.49.0, installée sous une charge de 25). #3966 : deux tests intermittents.
+
 ## 2026-11-25 (16:00) — comptes admin, graphiques vivants, DataScope Carte et métapaquets sur gk2
 
 - **#3708 (PR #3953, déployé gk2)** : core 1.8.46, auth 1.8.22, premier-pas 0.9.19, health 1.4.3, hub 1.13.0, system 1.14.3. Comptes inchangés
