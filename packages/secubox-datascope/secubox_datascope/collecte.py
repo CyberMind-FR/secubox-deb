@@ -22,12 +22,16 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .config import Config, charger
-from .connecteurs import network, status
+from . import paysage_store
+from .connecteurs import network, paysage, status
+from .difference import difference
 from .store import (BASE_MAX_OCTETS, VOISINS_ARETES_MAX, VOISINS_NOEUDS_MAX, _taille, appliquer, etat_sources, ouvrir,
                     purger)
 
 DISQUE_MIN_OCTETS = 512 * 1024 * 1024
 COMPLET_VALIDE_S = 15 * 60
+PAYSAGE_FUTUR_TOLERE_S = 600       # un genere_le au-delà de maintenant + 10 min n'est pas écrit
+PAYSAGE_ANTERIEUR_MAX_S = 24 * 3600  # un relevé plus vieux que cela, et reculant, est signalé (inaccessible)
 
 
 def _iso(t: float) -> str:
@@ -152,6 +156,38 @@ def _espace_libre(base: Path) -> int:
     return shutil.disk_usage(str(p)).free
 
 
+def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: float) -> Dict[str, Any]:
+    """Un instantané du paysage par nouveau relevé. Ne lève jamais : toute erreur est rendue dans l'état.
+
+    Aucun espacement supposé (le relevé source est à ~30 min). Un `genere_le` futur (> maintenant + 10 min) n'est pas
+    écrit : l'écrire refuserait ensuite tout relevé correct (chronologie strictement croissante). Un `genere_le` égal
+    ou antérieur au dernier : rien d'écrit, état « inchange » (« inaccessible » s'il a plus de 24 h)."""
+    try:
+        p = paysage.lire(cfg.populations, hote)
+        if p is None:
+            return {"etat": "inaccessible", "motif": "relevé absent, illisible ou sans genere_le valide",
+                    "ecrit": False}
+        if p.epoch > maintenant + PAYSAGE_FUTUR_TOLERE_S:
+            return {"etat": "inaccessible", "ecrit": False,
+                    "motif": f"genere_le dans le futur (+{int(p.epoch - maintenant)} s) : relevé écarté"}
+        prec = paysage_store.dernier(db)
+        if prec is not None and p.epoch <= prec["epoch"]:
+            if p.epoch == prec["epoch"]:
+                return {"etat": "inchange", "ecrit": False}
+            if maintenant - p.epoch > PAYSAGE_ANTERIEUR_MAX_S:
+                return {"etat": "inaccessible", "ecrit": False,
+                        "motif": "genere_le antérieur au dernier instantané et vieux de plus de 24 h"}
+            return {"etat": "inchange", "ecrit": False, "motif": "genere_le antérieur au dernier instantané"}
+        diff = difference(prec["graphe"] if prec else None, p.graphe)
+        ecrit = paysage_store.ecrire(db, p.epoch, p.partiel, p.graphe, p.compteurs, diff)
+        if not ecrit:
+            return {"etat": "inchange", "ecrit": False}
+        paysage_store.eclaircir(db, maintenant)
+        return {"etat": "ok", "ecrit": True}
+    except Exception as e:  # noqa: BLE001 - le paysage ne fait jamais échouer la passe
+        return {"etat": "inaccessible", "ecrit": False, "motif": f"{type(e).__name__}: {str(e)[:120]}"}
+
+
 def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
     debut = time.monotonic()
 
@@ -182,6 +218,7 @@ def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
             "graph.json": _publier(Path(cfg.cache) / "graph.json", _vue_graphe(db, horodatage, complet),
                                    complet, maintenant),
         }
+        sources["paysage"] = _etape_paysage(db, cfg, hote, maintenant)  # après la topologie V0.1, hors de `complet`
         return fin({"etat": "complet" if complet else "degrade", "sources": sources, "caches": ecrit})
     finally:
         db.close()

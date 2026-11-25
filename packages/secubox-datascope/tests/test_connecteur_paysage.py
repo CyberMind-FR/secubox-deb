@@ -234,3 +234,35 @@ def test_config_populations(tmp_path, monkeypatch):
     assert config.charger(t).populations == Path("/tmp/x/p.json")
     monkeypatch.setenv("SECUBOX_DATASCOPE_POPULATIONS", "/tmp/y.json")
     assert config.charger(t).populations == Path("/tmp/y.json")
+
+
+def test_compteurs_exacts_avec_plafonds(tmp_path):
+    grosse = _pop("famille:grosse", reseaux=300, adresses=3000, bans=40,
+                  cibles=[f"c{i}.example.org" for i in range(100)],
+                  reseaux_top=[{"asn": 1000 + i, "org": f"Org{i}", "classe": "acces", "adresses": 300 - i}
+                               for i in range(300)])
+    autres = [_pop(f"famille:p{i}", cibles=[f"t{i}.example.org"], reseaux_top=[]) for i in range(14)]
+    c = paysage.lire(_ecrire(tmp_path, [grosse] + autres), "gk2").compteurs
+    assert c["populations"] == 15
+    assert c["reseaux"] == 300 + 14 * 2 and c["adresses"] == 3000 + 14 * 120 and c["bans"] == 40 + 14 * 5
+    assert c["cibles"] == 114  # compté avant plafonnement du graphe
+
+
+def test_ids_classe_et_cible_longs_tiennent_et_gardent_le_poids(tmp_path):
+    long_a, long_b = "a" * 150 + "1", "a" * 150 + "2"  # même début, fins différentes
+    pops = [_pop(f"{long_a}", cibles=["h" * 200 + ".example.org"],
+                 reseaux_top=[{"asn": 1000 + i, "org": "o", "classe": "hebergeur", "adresses": 10 + i}
+                              for i in range(10)]),
+            _pop(f"{long_b}", cibles=["h" * 200 + ".example.org"],
+                 reseaux_top=[{"asn": 2000 + i, "org": "o", "classe": "hebergeur", "adresses": 100 + i}
+                              for i in range(10)])]
+    g = paysage.lire(_ecrire(tmp_path, pops), "gk2").graphe
+    assert all(ID.match(n["id"]) for n in g["noeuds"])
+    classes = _ids(g, "classe_reseau")
+    assert len(classes) == 2  # deux populations, deux nœuds distincts malgré le raccourcissement
+    assert all(c.endswith(":hebergeur") for c in classes)
+    plies = sum(a["poids"] for a in _aretes(g, "SOURCE_DE") if a["de"].startswith("classe:"))
+    assert plies == (10 + 11) + (100 + 101)  # les deux plus petits de chaque population
+    cibles = _ids(g, "cible")
+    assert len(cibles) == 1 and all(len(c) <= 166 for c in cibles)
+    assert len(_aretes(g, "VISE")) == 2  # les deux populations visent la même cible raccourcie

@@ -11,6 +11,7 @@ contient une est écartée (nœud, étiquette ou valeur). Les identifiants de n�
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import math
@@ -21,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-MAX_OCTETS = 8 * 1024 * 1024
+MAX_OCTETS = 2 * 1024 * 1024  # MemoryMax 128M : le relevé réel fait quelques dizaines de Kio
 MAX_POPULATIONS = 12
 MAX_ASN_PAR_POP = 8
 MAX_CIBLES = 60
@@ -76,6 +77,15 @@ def _suffixe(v: Any) -> Optional[str]:
     if _contient_ip(s):
         return None
     return s or None
+
+
+def _id(prefixe: str, corps: str, queue: str = "") -> str:
+    """`prefixe:corps+queue` tenant toujours dans ID_NOEUD : si le corps est trop long, il est raccourci et suivi d'un
+    condensat de l'original (deux corps longs distincts restent distincts) ; la queue (ex. `:classe`) est gardée."""
+    if len(corps) + len(queue) > 160:
+        h = hashlib.sha1(corps.encode("utf-8")).hexdigest()[:8]
+        corps = f"{corps[:160 - len(queue) - 9]}.{h}"
+    return f"{prefixe}:{corps}{queue}"
 
 
 def _texte(v: Any, n: int = 80) -> str:
@@ -242,16 +252,14 @@ def lire(chemin: Path, hote: str) -> Optional[Paysage]:
         for _, _, cl, n in reseaux[MAX_ASN_PAR_POP:]:
             replies[cl] = replies.get(cl, 0) + n
         for cl, n in sorted(replies.items()):
-            g.arete(g.noeud(f"classe:{s}:{cl}"[:200], "classe_reseau", cl, classe=cl), pid, "SOURCE_DE", n)
+            g.arete(g.noeud(_id("classe", s, f":{cl}"), "classe_reseau", cl, classe=cl), pid, "SOURCE_DE", n)
         for h in map(_cible, _liste(p.get("cibles"))):
             if not h:
                 continue
             if h not in cibles_gardees and len(cibles_gardees) >= MAX_CIBLES:
                 continue
             cibles_gardees.add(h)
-            cid = g.noeud(f"cible:{h}"[:200], "cible", h)
-            if not ID_NOEUD.match(cid):
-                continue
+            cid = g.noeud(_id("cible", h), "cible", h)
             g.arete(pid, cid, "VISE")
             if hote_s:
                 g.arete(cid, g.noeud(f"infra:{hote_s}", "infra", hote_s), "HEBERGE")
