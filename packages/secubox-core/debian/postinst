@@ -35,38 +35,78 @@ case "$1" in
     # échoue à se lier et redémarre en boucle. On retire (a) les sockets sans
     # processus à l'écoute — morts — et (b) ceux dont le propriétaire n'est pas
     # le processus qui les écoute, en relançant son unité. Rien d'autre.
+    RT_SOCK=""
     if [ -d /run/secubox ] && command -v ss >/dev/null && command -v python3 >/dev/null; then
       RT_SOCK="$(python3 - <<'PY'
-import os, re, subprocess, stat
-out = subprocess.run(["ss", "-xlpn"], capture_output=True, text=True).stdout
-ecoute = {}
-for l in out.splitlines():
-    m = re.search(r"(/run/secubox/[^\s]+\.sock)\s.*?pid=(\d+)", l)
-    if m:
-        ecoute.setdefault(m.group(1), int(m.group(2)))
-unites = set()
+import os, re, socket, stat, subprocess, sys
+
+def abandon(motif):
+    print(f"secubox-core : sockets de /run/secubox non vérifiées ({motif}) : rien n'est retiré", file=sys.stderr)
+    raise SystemExit(0)
+
+presentes = {}
 for n in os.listdir("/run/secubox"):
     p = os.path.join("/run/secubox", n)
     try:
         st = os.lstat(p)
     except OSError:
         continue
-    if not stat.S_ISSOCK(st.st_mode) or st.st_uid == 0:
+    if stat.S_ISSOCK(st.st_mode):
+        presentes[p] = st
+if not any(st.st_uid for st in presentes.values()):
+    raise SystemExit(0)
+# #3938 : sans relevé SÛR, rien n'est retiré (un ss muet faisait passer toutes les sockets pour mortes : 502 partout).
+try:
+    res = subprocess.run(["ss", "-xlpn"], capture_output=True, text=True, timeout=20)
+except (OSError, subprocess.SubprocessError) as e:
+    abandon(f"ss : {e.__class__.__name__}")
+if res.returncode != 0:
+    abandon(f"ss : code {res.returncode}")
+listees, ecoute = set(), {}
+for l in res.stdout.splitlines():
+    m = re.search(r"(/run/secubox/[^\s]+\.sock)\s", l)
+    if m:
+        listees.add(m.group(1))
+        q = re.search(r"pid=(\d+)", l[m.end():])
+        if q:
+            ecoute.setdefault(m.group(1), int(q.group(1)))
+if not listees & set(presentes):
+    abandon("ss ne montre aucune socket connue à l'écoute")
+
+def refusee(p):
+    """Vrai si personne n'écoute : le noyau lui-même refuse la connexion."""
+    c = socket.socket(socket.AF_UNIX)
+    c.settimeout(2)
+    try:
+        c.connect(p)
+    except ConnectionRefusedError:
+        return True
+    except OSError:
+        return False
+    finally:
+        c.close()
+    return False
+
+unites = set()
+for p, st in presentes.items():
+    if st.st_uid == 0:
         continue
     pid = ecoute.get(p)
-    if pid is None:
-        os.unlink(p)                               # mort : personne n'écoute
-        continue
     try:
+        if pid is None:
+            if p not in listees and refusee(p):
+                os.unlink(p)                       # mort : personne n'écoute
+            continue
         uid = int(open(f"/proc/{pid}/status").read().split("Uid:")[1].split()[0])
         cg = open(f"/proc/{pid}/cgroup").read()
+        if uid != 0 and uid != st.st_uid:
+            m = re.search(r"/([^/\n]+\.service)", cg)
+            # l'agrégateur (4 à 8 min d'arrêt) : seulement pour SA socket
+            if m and (m.group(1) != "secubox-aggregator.service" or p == "/run/secubox/aggregator.sock"):
+                os.unlink(p)
+                unites.add(m.group(1))
     except (OSError, IndexError, ValueError):
         continue
-    if uid != 0 and uid != st.st_uid:
-        m = re.search(r"/([^/]+\.service)", cg)
-        if m:
-            os.unlink(p)
-            unites.add(m.group(1))
 print(" ".join(sorted(unites)))
 PY
 )" || RT_SOCK=""
@@ -75,9 +115,10 @@ PY
     if [ -n "${RT_UNITES// /}" ] || [ "$(stat -c %a /run/secubox 2>/dev/null)" != 1777 ]; then
       systemctl daemon-reload 2>/dev/null || true
       if [ -d /run/secubox ]; then chown root:root /run/secubox; chmod 1777 /run/secubox; fi
-      # --no-block : la relance ne doit pas suspendre dpkg.
+      # --no-block : la relance ne doit pas suspendre dpkg. SEULEMENT les unités dont une socket vient d'être retirée
+      # (#3938) : les autres, dont l'agrégateur, gardent la leur et continuent de servir.
       # shellcheck disable=SC2086
-      [ -n "${RT_UNITES// /}" ] && systemctl --no-block try-restart $RT_UNITES 2>/dev/null || true
+      [ -n "${RT_SOCK// /}" ] && systemctl --no-block try-restart $RT_SOCK 2>/dev/null || true
     fi
 
     # CADENCE (#1650) : des copies MANUELLES des surcharges de cadence, posées
@@ -159,8 +200,61 @@ PY
         install -m 644 /usr/share/secubox-core/nginx/secubox.conf \
           /etc/nginx/sites-available/secubox
       fi
-      install -m 644 /usr/share/secubox-core/nginx/secubox-proxy.conf \
-        /etc/nginx/snippets/secubox-proxy.conf
+      # SNIPPET COMMUN DES RELAIS (#3938) — CONTENU FINAL POSÉ D'UN COUP, directive du verdict LAN comprise (#1256).
+      #
+      # Il était réécrit SANS la directive, puis elle n'était remise que si `nginx -t` passait, motif caché : un refus
+      # sans rapport la perdait (plus de mode tableau de bord). Renommage atomique, `nginx -t`, et l'ancien fichier
+      # revient s'il est refusé.
+      #
+      # `$lan_client` vient de conf.d/secubox-lan-geo.conf, livre par secubox-hub. hub depend de core, donc core ne peut
+      # pas dependre de hub : sur une board sans ce fichier, la ligne ferait echouer `nginx -t` et casserait TOUTE la
+      # configuration nginx. Dans ce cas SEULEMENT (variable inconnue, dit par nginx) le modèle est posé sans elle ;
+      # require_lecture ne voit alors aucune marque LAN et exige un jeton : on perd un affichage, pas une barriere.
+      # La directive, pas la chaine (#1351) : le modele la nomme dans un commentaire.
+      _modele=/usr/share/secubox-core/nginx/secubox-proxy.conf
+      _snip=/etc/nginx/snippets/secubox-proxy.conf
+      _sbx_neuf="$(mktemp /etc/nginx/snippets/.secubox-proxy.XXXXXX)"
+      cat "$_modele" > "$_sbx_neuf"
+      if ! grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-SecuBox-LAN' "$_sbx_neuf"; then
+        printf 'proxy_set_header   X-SecuBox-LAN     $lan_client;\n' >> "$_sbx_neuf"
+      fi
+      chmod 644 "$_sbx_neuf"
+      if [ -f "$_snip" ] && cmp -s "$_sbx_neuf" "$_snip"; then
+        rm -f "$_sbx_neuf"
+      else
+        _sbx_avant=""
+        if [ -f "$_snip" ]; then
+          _sbx_avant="$(mktemp /etc/nginx/snippets/.secubox-proxy.XXXXXX)"
+          cp -p "$_snip" "$_sbx_avant"
+        fi
+        mv -f "$_sbx_neuf" "$_snip"
+        if ! _sbx_motif="$(nginx -t 2>&1)"; then
+          echo "secubox-core : nginx refuse le nouveau secubox-proxy.conf : $(printf '%s\n' "$_sbx_motif" | grep -m1 emerg || printf '%s\n' "$_sbx_motif" | tail -n 1)" >&2
+          _sbx_sans=0
+          if [ -z "$_sbx_avant" ]; then
+            _sbx_sans=1
+          elif printf '%s' "$_sbx_motif" | grep -q 'unknown "lan_client" variable'; then
+            _sbx_sans=1
+          fi
+          if [ "$_sbx_sans" = 1 ]; then
+            _sbx_neuf="$(mktemp /etc/nginx/snippets/.secubox-proxy.XXXXXX)"
+            cat "$_modele" > "$_sbx_neuf"
+            chmod 644 "$_sbx_neuf"
+            mv -f "$_sbx_neuf" "$_snip"
+            if [ -z "$_sbx_avant" ] || nginx -t >/dev/null 2>&1; then
+              echo "secubox-core : secubox-proxy.conf posé sans le verdict LAN (\$lan_client) : mode tableau de bord inactif," \
+                   "les lectures exigeront un jeton (secubox-hub le remet)" >&2
+              if [ -n "$_sbx_avant" ]; then rm -f "$_sbx_avant"; _sbx_avant=""; fi
+            fi
+          fi
+          if [ -n "$_sbx_avant" ]; then
+            mv -f "$_sbx_avant" "$_snip"
+            _sbx_avant=""
+            echo "secubox-core : ancien secubox-proxy.conf gardé tel quel" >&2
+          fi
+        fi
+        if [ -n "$_sbx_avant" ]; then rm -f "$_sbx_avant"; fi
+      fi
       install -m 644 /usr/share/secubox-core/nginx/secubox-api-aggregator.conf \
         /etc/nginx/snippets/secubox-api-aggregator.conf
 
@@ -180,38 +274,6 @@ PY
         else
           mv -f "$_site.sbxbak" "$_site"
           echo "secubox-core : route /api/ non ajoutée (nginx -t refuse) — site inchangé" >&2
-        fi
-      fi
-
-      # VERDICT LAN POUR LA LECTURE GARDEE (#1256) — ajoute SI nginx l'accepte.
-      #
-      # `$lan_client` vient de conf.d/secubox-lan-geo.conf, livre par
-      # secubox-hub. hub depend de core, donc core ne peut pas dependre de hub :
-      # sur une board sans ce fichier, la ligne ferait echouer `nginx -t` et
-      # casserait TOUTE la configuration, pas seulement la lecture gardee.
-      #
-      # On l'ajoute, on teste, on la retire si le test echoue. Sans elle,
-      # require_lecture ne voit aucune marque LAN et exige un jeton : on perd
-      # un affichage, pas une barriere.
-      _snip=/etc/nginx/snippets/secubox-proxy.conf
-      # LE GARDE RECONNAIT LA DIRECTIVE, PAS LA CHAINE (#1351).
-      #
-      # Il valait `grep -q 'X-SecuBox-LAN'`, et le snippet contient ce nom DANS
-      # LE COMMENTAIRE qui explique la ligne. grep le trouvait, le postinst
-      # concluait « deja posee », et la directive n'etait jamais ajoutee : le
-      # commentaire qui documente la ligne etait precisement ce qui l'empechait
-      # d'exister. Resultat sur gk2 : le verdict LAN n'arrivait a aucun module,
-      # le mode tableau de bord ne s'appliquait jamais, et toute lecture du
-      # Hall rendait 401 — 6586 refus en une heure.
-      if ! grep -qE '^[[:space:]]*proxy_set_header[[:space:]]+X-SecuBox-LAN' "$_snip"; then
-        cp -a "$_snip" "$_snip.sbxbak"
-        printf 'proxy_set_header   X-SecuBox-LAN     $lan_client;\n' >> "$_snip"
-        if nginx -t 2>/dev/null; then
-          rm -f "$_snip.sbxbak"
-        else
-          mv -f "$_snip.sbxbak" "$_snip"
-          echo "secubox-core: \$lan_client indisponible (secubox-hub absent ?) —" \
-               "mode tableau de bord inactif, les lectures exigeront un jeton" >&2
         fi
       fi
 
@@ -277,7 +339,13 @@ PY
 
     # JETONS DÉJÀ ÉCRITS DANS LES JOURNAUX (#3691) : le format masque les jetons à partir du rechargement ci-dessus ;
     # ce qui a été journalisé avant est masqué ici, à longueur égale (idempotent, sans effet sur un journal propre).
-    /usr/sbin/secubox-masquer-jetons-journaux || echo "secubox-core : masquage des jetons des journaux nginx incomplet (voir ci-dessus)" >&2
+    # Hors de dpkg (#3938) : toutes les archives .gz sont relues ; l'unité (Nice, E/S au repos) s'en charge, résultat au journal.
+    if [ -d /run/systemd/system ]; then
+      systemctl start --no-block secubox-masquer-jetons-journaux.service \
+        || echo "secubox-core : masquage des jetons des journaux nginx non lancé (repris par la minuterie horaire)" >&2
+    else
+      /usr/sbin/secubox-masquer-jetons-journaux || echo "secubox-core : masquage des jetons des journaux nginx incomplet (voir ci-dessus)" >&2
+    fi
     # puis toutes les heures : journaux d'erreurs et sites au format « combined », hors de portée du format masqué
     systemctl enable --now secubox-masquer-jetons-journaux.timer 2>/dev/null || true
 
@@ -478,11 +546,30 @@ REPRISE
         -exec chmod o-w {} + 2>/dev/null || true
     done
 
-    # ── Python dependencies (ensure compatible versions) ──
-    # Debian bookworm ships old pydantic v1 and fastapi, upgrade via pip
-    if command -v pip3 >/dev/null 2>&1; then
-      pip3 install --break-system-packages --quiet --upgrade \
-        'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25' 2>/dev/null || true
+    # ── Python dependencies (minima) ──
+    # #3938 : pip ne complète QUE ce qui manque ou est trop ancien, jamais de --upgrade. Le relever à chaque configure
+    # posait dans /usr/local une version qui masquait celle d'apt sous un agrégateur en marche (voir debian/control).
+    if ! python3 -I - <<'MINIMA' 2>/dev/null
+import importlib
+import re
+import sys
+from importlib.metadata import version
+
+for nom, mini in (("pydantic", (2, 0)), ("fastapi", (0, 100)), ("uvicorn", (0, 25))):
+    importlib.import_module(nom)
+    vue = tuple(int(x) for x in re.findall(r"\d+", version(nom))[:2])
+    if vue < mini:
+        sys.exit(1)
+MINIMA
+    then
+      if command -v pip3 >/dev/null 2>&1; then
+        echo "secubox-core : pydantic, fastapi ou uvicorn absent ou trop ancien : complété par pip"
+        pip3 install --break-system-packages --quiet --timeout 20 --retries 2 \
+          'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25' \
+          || echo "secubox-core : pip n'a pas complété les dépendances Python (voir ci-dessus)" >&2
+      else
+        echo "secubox-core : pydantic, fastapi ou uvicorn absent ou trop ancien, et pip3 absent" >&2
+      fi
     fi
     ;;
 esac

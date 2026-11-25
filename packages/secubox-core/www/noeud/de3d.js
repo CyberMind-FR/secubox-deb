@@ -276,7 +276,7 @@ function demarrer(cv,urls,opt){
     if(++pertes>3) return repli('contexte perdu');
     clearTimeout(tPerte); tPerte=setTimeout(function t(){ if(document.hidden) tPerte=setTimeout(t,4000); else repli('contexte perdu'); },4000);
   }
-  function retour(){ clearTimeout(tPerte); perdu=false; cv.width=cv.height=64; construit(function(){ var dej=pret; if(dej){ dessine(); relance(); } else prepare(); }); }
+  function retour(){ clearTimeout(tPerte); construit(function(){ perdu=false; if(pret){ dessine(); relance(); } else prepare(); }); }   // rien n'est dessiné avant la fin de la reconstruction
 
   function prepare(){
     mesure(function(){
@@ -284,8 +284,9 @@ function demarrer(cv,urls,opt){
       if(opt.pret) opt.pret(aise); relance();
     });
   }
-  return Promise.all(urls.map(image)).then(function(im){
-    I=im; mesureCote();
+  var tImages, tard=new Promise(function(ok,ko){ tImages=setTimeout(function(){ ko(new Error('images trop lentes')); },15000); });
+  return Promise.race([Promise.all(urls.map(image)),tard]).then(function(im){
+    clearTimeout(tImages); I=im; mesureCote();
     g=cv.getContext('webgl2',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
     if(!g) throw new Error('WebGL 2 absent');
     cv.addEventListener('webglcontextlost',perte); cv.addEventListener('webglcontextrestored',retour);
@@ -295,7 +296,7 @@ function demarrer(cv,urls,opt){
     if(w.IntersectionObserver){ io=new IntersectionObserver(function(e){ visible=e[e.length-1].isIntersecting; relance(); }); io.observe(cv); }
     construit(prepare);
     return {echelle:function(){ return NIVEAUX[niv]; },etat:function(){ return {angles:[ax,ay,az],T:T,rebond:kr,marche:!!raf,fini:fini}; },avance:avance,pose:pose};
-  }).catch(function(e){ repli(e); return null; });
+  }).catch(function(e){ clearTimeout(tImages); repli(e); return null; });
 
   /* Essais : des jours d'animation en un pas, par les mêmes replis de période ; une pose arrêtée, à pleine résolution. */
   function pose(a,b,c){ arrete(); pret=false; ax=a; ay=b; az=c; T=kr=ke=q=vx=vy=0; niv=0; dessine(); }

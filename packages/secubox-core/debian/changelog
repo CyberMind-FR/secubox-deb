@@ -10,6 +10,11 @@ secubox-core (1.8.44-1~trixie1) trixie; urgency=medium
     font-src 'self' seul ajout) ; nginx -t, retour arrière ; route et HAProxy
     inchangés, aucune nouvelle exposition.
   * Dé de repli : faces verte et rouge redressées (source secubox-webos).
+  * postinst prudent (ref #3938) : sockets de /run/secubox retirées seulement
+    sur preuve (ss sûr, connexion refusée), seules leurs unités relancées ;
+    secubox-proxy.conf posé d'un coup, l'ancien gardé si nginx refuse, directive
+    du verdict LAN jamais perdue ; pip ne complète que ce qui manque, sans
+    --upgrade ; masquage des journaux lancé hors de dpkg.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:45:00 +0100
 

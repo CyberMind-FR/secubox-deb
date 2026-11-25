@@ -102,6 +102,9 @@ Image = pytest.importorskip("PIL.Image")
 
 SANS_GL = ("HTMLCanvasElement.prototype.getContext=(o=>function(t,...a){return t==='webgl2'?null:o.call(this,t,...a)})"
            "(HTMLCanvasElement.prototype.getContext);")
+# La page ne garde aucune poignée sur le moteur : les essais la prennent au passage.
+POIGNEE = ("let x_;Object.defineProperty(window,'SbxDe3d',{configurable:true,get(){return x_},set(v){const d=v.demarrer;"
+           "v.demarrer=(...a)=>{const r=d(...a);r.then(m=>{window.sbxDe3d=m});return r};x_=v}});")
 FIGE = "try{localStorage.setItem('sbx_de','fige')}catch(e){}"
 
 
@@ -140,6 +143,7 @@ class Ouverte:
             route.fulfill(status=200, body=f.read_bytes(), headers={"Content-Type": t, "Content-Security-Policy": csp})
         self.p.on("pageerror", lambda e: self.erreurs.append(str(e)))
         self.p.on("console", lambda m: "Content Security Policy" in m.text and self.erreurs.append(m.text))
+        self.p.add_init_script(POIGNEE)
         if init:
             self.p.add_init_script(init)
         self.p.route("**/*", servir)
@@ -421,6 +425,59 @@ def test_contexte_perdu_rendu_puis_perdu_pour_de_bon(nav):
         assert o.erreurs == []
 
 
+def test_contexte_rendu_aucun_dessin_avant_la_reconstruction(nav):
+    """Entre le retour du contexte et la fin de la reconstruction, une visibilité ou un redimensionnement ne dessine pas (erreur GL
+    → repli 2D définitif à tort)."""
+    retarde = ("const L=WebGL2RenderingContext.prototype.getProgramParameter;window.__retard=false;window.__dess=0;"
+               "WebGL2RenderingContext.prototype.getProgramParameter=function(p,k){return k===0x91B1?!window.__retard:L.call(this,p,k)};"
+               "const E=WebGL2RenderingContext.prototype.getExtension;WebGL2RenderingContext.prototype.getExtension=function(n){"
+               "return n==='KHR_parallel_shader_compile'?{COMPLETION_STATUS_KHR:0x91B1}:E.call(this,n)};"
+               "const D=WebGL2RenderingContext.prototype.drawArrays;WebGL2RenderingContext.prototype.drawArrays=function(...a){"
+               "window.__dess++;return D.apply(this,a)};")
+    with Ouverte(nav, 500, 500, init=retarde) as o:
+        o.p.evaluate("window.x=document.getElementById('de3d').getContext('webgl2').getExtension('WEBGL_lose_context');x.loseContext()")
+        attend(o.p, "sbxDe3d.etat().marche===false", 5)
+        o.p.wait_for_timeout(200)
+        o.p.evaluate("__retard=true;__dess=0;x.restoreContext()")
+        o.p.wait_for_timeout(300)
+        o.p.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        o.p.set_viewport_size({"width": 520, "height": 480})
+        o.p.wait_for_timeout(500)
+        assert o.p.evaluate("[__dess,sbxDe3d.etat().marche,sbxDe3d.etat().fini]") == [0, False, False]
+        o.p.evaluate("__retard=false")
+        attend(o.p, "sbxDe3d.etat().marche===true", 30)
+        assert o.p.evaluate("document.querySelector('sbx-dice')") is None and o.erreurs == []
+
+
+def test_images_qui_n_arrivent_jamais_repli(nav):
+    assert "},15000); });" in JS.split("tard=new Promise", 1)[1][:150]
+    jamais = ("const st=window.setTimeout;window.setTimeout=(f,t,...a)=>st(f,t===15000?300:t,...a);"
+              "Object.defineProperty(HTMLImageElement.prototype,'src',{set(v){},get(){return ''}});")
+    with Ouverte(nav, 600, 400, init=jamais, pret=False) as o:
+        attend(o.p, "!!document.querySelector('#scene.repli sbx-dice')", 20)
+        assert "image" in o.p.get_attribute("#scene", "data-repli") and o.erreurs == []
+
+
+def test_placement_une_fois_par_image_et_rien_si_rien_ne_change(nav):
+    compte = ("window.__n=0;const s=CSSStyleDeclaration.prototype.setProperty;CSSStyleDeclaration.prototype.setProperty="
+              "function(k,...a){if(k==='--d')window.__n++;return s.call(this,k,...a)};")
+    for init in (compte, compte + SANS_GL):
+        with Ouverte(nav, 600, 400, init=init + FIGE, pret=False) as o:
+            attend(o.p, "!!document.querySelector('#de3d.pret,#scene.repli sbx-dice canvas')", 60)
+            o.p.wait_for_timeout(200)
+            o.p.evaluate("window.__n=0;for(let i=0;i<50;i++)dispatchEvent(new Event('resize'))")
+            o.p.wait_for_timeout(300)
+            assert o.p.evaluate("__n") == 0                        # rien n'a changé : rien n'est écrit, même en repli
+            o.p.set_viewport_size({"width": 640, "height": 420})
+            attend(o.p, "__n>=1", 5)
+            assert o.p.evaluate("__n") <= 4
+
+
+def test_aucune_poignee_d_essai_en_production():
+    page = PAGE.read_text(encoding="utf-8")
+    assert "sbxDe3d" not in page and "window.sbx" not in page and "w.sbxDe3d" not in JS
+
+
 def test_resolution_adaptative_descend_puis_remonte_sans_osciller(nav):
     """La boucle jouée sur une horloge fausse : lente à pleine résolution, fluide un cran dessous. Elle descend, remonte après une
     longue période fluide, puis de plus en plus rarement."""
@@ -449,3 +506,6 @@ def test_paquet_et_readme():
     rules = (PKG / "debian/rules").read_text()
     assert "www/noeud/de3d.js debian/secubox-core/usr/share/secubox/www/noeud/de3d.js" in rules
     assert "de3d.js" in (PKG / "README.md").read_text()
+    droits = (PKG / "debian/copyright").read_text(encoding="utf-8")
+    assert "License: OFL-1.1" in droits and "Unbounded Project Authors" in droits and "JetBrains Mono Project Authors" in droits
+    assert "usr/share/secubox/www/noeud/polices/" in droits and "LicenseRef-CMSD-1.0" in droits

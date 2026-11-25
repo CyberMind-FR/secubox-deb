@@ -20,7 +20,7 @@ ETAT = {"domaine": "gk2.secubox.in", "relais_api": False, "relais_actif": False,
         "chemins_cible": ["/api/v1/metrics", "/api/v1/metablogizer/", "/api/v1/admin/", "/api/v1/system/metrics",
                           "/api/v1/health", "/"],
         "source_chemins": "/etc/nginx/sites-enabled/eye-remote-api",
-        "servis": ["/", "/_noeud/de3d.js", "/_noeud/polices/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"], "mot_de_passe_defaut": False}
+        "servis": ["/", "/_noeud/de3d.js", "/_noeud/polices/unbounded-latin.woff2", "/_noeud/polices/jetbrains-mono-latin.woff2", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"], "mot_de_passe_defaut": False}
 
 
 def test_panneau_statique():

@@ -850,7 +850,8 @@ def etat_relais() -> dict:
         "cible": f"{repli[0]}:{repli[1]}" if repli else None,
         "chemins_cible": vu["chemins"],
         "source_chemins": vu["source"],
-        "servis": ["/", "/_noeud/de3d.js", "/_noeud/polices/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"],
+        "servis": ["/", "/_noeud/de3d.js", "/_noeud/polices/unbounded-latin.woff2",
+                   "/_noeud/polices/jetbrains-mono-latin.woff2", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"],
         "mot_de_passe_defaut": not mot_de_passe_change(),
     }
 

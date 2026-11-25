@@ -4,6 +4,11 @@ export DH_VERBOSE = 1
 %:
 	dh $@ --with python3
 
+# Le masquage des journaux (oneshot, relit toutes les archives) est lancé par le postinst sans attendre (#3938) :
+# dh_installsystemd le relancerait en bloquant dpkg. Sa minuterie reste gérée normalement.
+override_dh_installsystemd:
+	dh_installsystemd -Xsecubox-masquer-jetons-journaux.service
+
 override_dh_auto_install:
 	install -D -m 0644 logrotate.d/secubox \
 		debian/secubox-core/etc/logrotate.d/secubox

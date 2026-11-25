@@ -133,9 +133,13 @@ h1{font-family:"Unbounded","Arial Black",system-ui,sans-serif;font-weight:900;le
   }
   // Le dé remplit exactement le cercle r=350 de la mire : échelle et centre lus du SVG lui-même. Écran étroit en hauteur : le
   // cercle de la mire est petit, le dé l'agrandit (92 % de la largeur) et le cercle dessiné s'efface.
-  var racine=document.documentElement, mire=document.querySelector('.mire'), scene=$('scene'), cv=$('de3d'), de=null;
+  var racine=document.documentElement, mire=document.querySelector('.mire'), scene=$('scene'), cv=$('de3d'), de=null, attente=0, vu='';
   function place(){
-    var r=mire.getBoundingClientRect(), e=Math.min(r.width/1200,r.height/800), d=700*e, x=r.left+r.width/2, y=r.top+r.height/2;
+    attente=0;
+    var r=mire.getBoundingClientRect(), cle=[r.left,r.top,r.width,r.height,!!de].join();
+    if(cle===vu) return;
+    vu=cle;
+    var e=Math.min(r.width/1200,r.height/800), d=700*e, x=r.left+r.width/2, y=r.top+r.height/2;
     var etroit=r.width<=700 && r.height>r.width*1.15;
     if(etroit){ d=Math.min(r.width*.92,r.height-210); y=r.top+Math.max(d/2+8,Math.min(r.height*.44,r.height-d/2-150)); }
     racine.classList.toggle('etroit',etroit);
@@ -143,8 +147,9 @@ h1{font-family:"Unbounded","Arial Black",system-ui,sans-serif;font-weight:900;le
     racine.style.setProperty('--d',d+'px'); racine.style.setProperty('--x',x+'px'); racine.style.setProperty('--y',y+'px');
     if(de) de.setAttribute('size',String(Math.round(Math.max(96,Math.min(720,d*(etroit?.82:.6))))));
   }
-  addEventListener('resize',place);
-  if(window.ResizeObserver) new ResizeObserver(place).observe(mire);
+  function bientot(){ if(!attente) attente=requestAnimationFrame(place); }
+  addEventListener('resize',bientot);
+  if(window.ResizeObserver) new ResizeObserver(bientot).observe(mire);
   place();
   // Repli : le dé du Hall, chargé seulement ici.
   function repli(raison){
@@ -159,7 +164,7 @@ h1{font-family:"Unbounded","Arial Black",system-ui,sans-serif;font-weight:900;le
   var faces=[0,1,2,3,4,5].map(function(k){ return '/_noeud/dice/face-'+k+'.jpg'; });
   window.SbxDe3d.demarrer(cv,faces,{repli:repli,
     pret:function(aise){ cv.classList.add('pret'); racine.classList.toggle('vif',aise); },
-    charge:function(){ racine.classList.remove('vif'); }}).then(function(m){ window.sbxDe3d=m; });
+    charge:function(){ racine.classList.remove('vif'); }});
 })();
 </script>
 </body>
