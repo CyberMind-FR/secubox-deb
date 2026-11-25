@@ -77,6 +77,10 @@ try:
 except ImportError:  # standalone
     import populations as _populations
 try:
+    from api import dossiers as _dossiers
+except ImportError:  # standalone
+    import dossiers as _dossiers
+try:
     from api.application import application as _application, lire_etat as _lire_etat_nft
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
@@ -1082,14 +1086,24 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = 0.0
-    _leurres_panne = ""
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = dernier_dossiers = 0.0
+    _leurres_panne = _dossiers_panne = ""
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
         except Exception:
             # Swallow — next tick will retry. Logging would spam.
             pass
+        if time.time() - dernier_dossiers >= _dossiers.PERIODE_S:   # #3963 : agrégat par site, seuls les octets neufs sont lus
+            try:
+                await asyncio.to_thread(_dossiers.rafraichir)
+            except Exception as e:  # noqa: BLE001 — le relevé précédent reste servi avec son âge, repris au tour suivant
+                if str(e) != _dossiers_panne:
+                    log.warning("dossiers : calcul en échec : %s", e)
+                    _dossiers_panne = str(e)
+            else:
+                _dossiers_panne = ""
+            dernier_dossiers = time.time()
         if time.time() - dernier_leurres >= LEURRES_PERIODE:
             try:
                 await asyncio.to_thread(_leurres.ingerer)       # la mémoire se remplit même sans visiteur
@@ -2563,3 +2577,8 @@ def _leurres_par_adresse() -> Dict[str, List[str]]:
 _filtres_ia_vue.configurer(audit=_audit, journal=THREATS_LOG, bans=_bans_chauds, leurres=_leurres_par_adresse,
                            liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
 app.include_router(_filtres_ia_vue.router)
+
+
+# ── Dossiers par site (#3963) : l'agrégat est tenu par `_warm_loop`, les routes ne lisent que son résultat ──
+_dossiers.configurer(journal=THREATS_LOG, populations=POPULATIONS_CACHE, vie=NFT_ETAT, **ETATS_BAN)
+app.include_router(_dossiers.router)

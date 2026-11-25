@@ -50,6 +50,10 @@ from . import defense  # noqa: E402  (façade SADE lecture seule, #3839)
 
 app.include_router(defense.router, prefix="/defense")
 
+from . import situations  # noqa: E402  (première vue de la Vigie, lecture seule, #3963)
+
+app.include_router(situations.router)
+
 from . import defense_etat  # noqa: E402  (publication du mode pour gk2, #3723)
 
 #: Battement de la publication du mode SADE (`/run/secubox/sade-mode.json`) : gk2 tient pour `observe` un fichier

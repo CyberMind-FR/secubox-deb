@@ -11,7 +11,7 @@ VUES = {"trafic": "/dpi/vue.html", "renseignement": "/actor-intelligence/"}   # 
 
 def test_chaque_vue_est_un_onglet_de_meme_origine():
     urls = re.findall(r'data-vue="([^"]+)"', SOC)
-    assert len(urls) == len(VUES) + 2          # + « Réseau en direct » (#2364) et « Cyber Defense Live » (#3839), pages du SOC lui-même
+    assert len(urls) == len(VUES) + 3          # + « Situations » (#3963), « Réseau en direct » (#2364), « Cyber Defense Live » (#3839), pages du SOC
     for u in VUES.values():
         assert any(x.startswith(u) for x in urls), u
     assert all(not x.startswith("//") and "://" not in x for x in urls)   # jamais une autre origine

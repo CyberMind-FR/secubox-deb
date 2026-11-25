@@ -156,7 +156,10 @@ def test_bans_non_appliques_sont_signales(navigateur):
 
 def test_onglets_gardent_les_ecrans_et_encadrent_les_vues(navigateur):
     ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/soc/", OK)
-    assert p.is_visible("#e0") and not p.is_visible("#e1")
+    assert p.is_visible("#e4") and not p.is_visible("#e0") and not p.is_visible("#e1")      # #3963 : Situations par défaut
+    assert p.get_attribute("#vueFrame", "src") == "situations.html?embed=1" and p.get_attribute("#tsit", "aria-selected") == "true"
+    p.click("#t0")
+    assert p.is_visible("#e0") and not p.is_visible("#e4")
     p.click("#t2")
     assert p.is_visible("#e2") and p.get_attribute("#t2", "aria-selected") == "true" and not p.is_visible("#e0")
     p.click("#td")

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Vigie SOC, « Situations » (#3963, maquette approuvée le 2026-11-25) : première vue de la Vigie. Liste triée par urgence,
+  dossier à droite. Lecture seule : GET /api/v1/soc/situations. Mesure absente = « — », jamais 0 ; une source injoignable est dite.
+  Le détail reste à sa place (WAF, Actor, Santé) : le geste est un lien (#3922). Tout texte venu de l'API est posé en textContent.
+  ?embed=1 : sans marges ; ?demo=1 : données fictives annoncées, aucun appel.
+  CSS et tronc commun identiques à /waf/sites.html (test_dossiers_page_3963.py).
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vigie SOC — situations</title>
+<style>
+  /* ── style commun (dossiers) ── */
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(255,77,94,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:.92rem;line-height:1.45;font-variant-numeric:tabular-nums}
+  [hidden]{display:none!important}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));padding:14px;display:grid;gap:12px;max-width:1500px;margin:auto}
+  .app>*{min-width:0}
+  body.emb .cadre{padding:2px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .tete h1{margin:0;font-size:1.3rem;font-weight:800;text-wrap:balance} .tete h1 small{display:block;font-size:.85rem;font-weight:400;color:var(--cyan)}
+  .droite{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;color:var(--doux);font-size:.85rem}
+  button,.bouton{font:inherit;color:var(--texte);background:rgba(18,40,78,.7);border:1px solid var(--trait2);border-radius:10px;min-height:40px;padding:8px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+  button:hover,.bouton:hover{border-color:var(--cyan)}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bandeau{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px} .bandeau a{color:var(--cyan)}
+  .bandeau.demo{border-color:var(--orange);background:var(--orange);color:#1a1000;font-weight:700;text-align:center}
+  .bandeau.att{border-color:var(--orange);background:rgba(255,159,28,.1)}
+  .chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--trait);border-radius:12px;background:rgba(10,22,46,.6)}
+  .chiffres>div{padding:10px 14px;min-width:0;display:grid;align-content:start;gap:2px} .chiffres>div:nth-child(even){border-left:1px solid var(--trait)} .chiffres>div:nth-child(n+3){border-top:1px solid var(--trait)}
+  .chiffres span{color:var(--doux);font-size:.88rem} .chiffres b{font-size:1.5rem;line-height:1.15;overflow-wrap:anywhere} .chiffres i{font-style:normal;color:var(--doux);font-size:.85rem}
+  .chiffres svg{height:20px;width:100%}
+  .cols{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start} .cols>*{min-width:0}
+  .liste{display:grid;gap:7px;align-content:start}
+  .item{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:2px 12px;text-align:left;width:100%;padding:9px 12px;align-items:center}
+  .item b{font-weight:600;overflow-wrap:anywhere} .item small{font-size:.85rem;color:var(--doux);grid-column:1;overflow-wrap:anywhere}
+  .item .mini{grid-column:2;grid-row:1/3;width:92px;height:32px} .item .sans{grid-column:2;grid-row:1/3;text-align:right;color:var(--doux)}
+  .item[aria-current=true]{background:rgba(41,182,246,.16);border-color:var(--cyan)}
+  .item.r{border-left:3px solid var(--rouge)} .item.o{border-left:3px solid var(--orange)} .item.v{border-left:3px solid var(--vert)}
+  .dossier{border:1px solid var(--trait);border-radius:12px;background:rgba(10,22,46,.6);padding:14px;display:grid;gap:16px} .dossier>*{min-width:0}
+  .dossier h2{margin:8px 0 0;font-size:1.4rem;line-height:1.2;overflow-wrap:anywhere;text-wrap:balance} .dossier h3{margin:0 0 8px;font-size:.95rem;font-weight:600}
+  .phrase{margin:8px 0 0;font-size:1.05rem;line-height:1.5;max-width:75ch;overflow-wrap:anywhere}
+  .etiq{display:flex;flex-wrap:wrap;gap:6px} .etiq i{font-style:normal;border:1px solid var(--trait2);border-radius:999px;padding:2px 11px;font-size:.85rem}
+  .etiq .r{border-color:var(--rouge);background:rgba(255,77,94,.12)} .etiq .o{border-color:var(--orange);background:rgba(255,159,28,.12)} .etiq .v{border-color:var(--vert);background:rgba(46,204,113,.12)}
+  .duo{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)} .duo>*{min-width:0} .pile{display:grid;gap:16px;align-content:start}
+  svg{display:block} svg text{font:13.6px "IBM Plex Sans","Inter",system-ui,sans-serif;fill:var(--doux)}
+  .graphe{width:100%;touch-action:pan-y} .graphe .col{fill:transparent} .graphe .col.on{fill:rgba(159,179,214,.14)}
+  .lecture{margin:6px 0 0;color:var(--doux);font-size:.88rem;min-height:1.45em} .legende{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.85rem;color:var(--doux);margin-top:4px}
+  .legende i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+  .lig{display:grid;grid-template-columns:minmax(0,11em) minmax(30px,1fr) minmax(3.2em,auto);gap:10px;align-items:center;min-height:30px;font-size:.88rem} .lig span{overflow-wrap:anywhere} .lig b{text-align:right;font-weight:600}
+  .lig em{height:11px;background:rgba(159,179,214,.14);border-radius:0 4px 4px 0;overflow:hidden} .lig em i{display:block;height:100%}
+  .faits{list-style:none;margin:0;padding:0} .faits li{display:grid;grid-template-columns:5.6em minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-top:1px solid var(--trait);font-size:.9rem}
+  .faits time,.faits em{color:var(--doux);font-style:normal} .faits span{overflow-wrap:anywhere}
+  .geste{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-top:1px solid var(--trait);padding-top:12px} .geste p{margin:0;color:var(--doux);flex:1 1 240px}
+  .geste .r{border-color:var(--rouge);background:rgba(255,77,94,.16)}
+  .note,.vide{color:var(--doux);font-size:.88rem;margin:0} .vide{padding:14px 4px}
+  #alertes{display:grid;gap:8px} #alertes:empty{display:none}
+  .calmes{font-size:.88rem;color:var(--doux)} .calmes summary{cursor:pointer;min-height:40px;padding:9px 4px} .calmes ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .calmes button{width:100%;text-align:left;overflow-wrap:anywhere}
+  #retour{justify-self:start}
+  .pousse{animation:pousse .45s ease-out;transform-box:fill-box;transform-origin:bottom} .vif{animation:vif 2.4s ease-in-out infinite}
+  @keyframes pousse{from{transform:scaleY(.2)}} @keyframes vif{50%{opacity:.45}}
+  @media (prefers-reduced-motion:reduce){.pousse,.vif{animation:none}}
+  @container a (min-width:700px){.chiffres{grid-template-columns:repeat(4,minmax(0,1fr))} .chiffres>div:nth-child(n+3){border-top:0} .chiffres>div+div{border-left:1px solid var(--trait)}}
+  @container a (min-width:820px){.cols{grid-template-columns:minmax(260px,350px) minmax(0,1fr)} #retour{display:none} .liste{max-height:1150px;overflow-y:auto;overscroll-behavior:contain;padding:3px}}
+  @container a (min-width:1080px){.duo{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}}
+  @container a (max-width:480px){.faits li{grid-template-columns:5.6em minmax(0,1fr)} .faits em{grid-column:2} .app{padding:10px} .lig{grid-template-columns:minmax(0,8.5em) minmax(24px,1fr) minmax(3.2em,auto)}}
+  /* ── fin du style commun ── */
+</style>
+</head>
+<body>
+<div class="cadre" id="cadre"><main class="app">
+  <header class="tete"><h1><span id="titre"></span><small id="sousTitre"></small></h1>
+    <div class="droite"><span id="maj">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div></header>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune mesure réelle, aucun appel</div>
+  <div class="bandeau" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div id="alertes" aria-live="polite"></div>
+  <section class="chiffres" id="chiffres" aria-label="Chiffres clés"></section>
+  <div class="cols"><nav class="liste" id="liste" aria-label="Dossiers, du plus urgent au plus calme"></nav>
+    <div><button type="button" id="retour" hidden>← Liste</button><article class="dossier" id="dossier" tabindex="-1" aria-live="off"></article></div></div>
+  <p class="note" id="bas"></p>
+</main></div>
+<script>
+"use strict";
+// ── tronc commun (dossiers) ──
+var Q=new URLSearchParams(location.search),DEMO=!!Q.get('demo'),EMB=!!Q.get('embed');
+if(EMB)document.body.classList.add('emb');
+var NS='http://www.w3.org/2000/svg',$=function(i){return document.getElementById(i);};
+function h(tag,cls,txt,title){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;if(title)e.title=title;return e;}
+function add(p){for(var i=1;i<arguments.length;i++)if(arguments[i]!=null)p.appendChild(arguments[i]);return p;}
+function vide(e){e.textContent='';return e;}
+function sv(tag,at,parent){var e=document.createElementNS(NS,tag);for(var k in at)e.setAttribute(k,at[k]);if(parent)parent.appendChild(e);return e;}
+function nombre(v){return typeof v==='number'&&isFinite(v);}
+function nb(v){return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
+function mes(v){return nombre(v)?nb(v):'—';}                         // mesure absente = « — » ; 0 est une mesure
+function pc(v){return nombre(v)?String(v).replace('.',',')+' %':'—';}
+function pl(n,s,p){return nb(n)+' '+(Math.abs(n)<2?s:p);}
+function court(n){return n>=1e6?String(Math.round(n/1e5)/10).replace('.',',')+'M':n>=1e4?Math.round(n/1e3)+'k':nb(n);}
+function tab(v){return Array.isArray(v)?v:[];}
+// Heures de Paris, comme les phrases du serveur, quel que soit le fuseau du poste ; les deux « 2 h » du retour à l'heure d'hiver se distinguent.
+var TZ='Europe/Paris',FH=new Intl.DateTimeFormat('fr-FR',{timeZone:TZ,hour:'numeric',hourCycle:'h23'}),FJ=new Intl.DateTimeFormat('fr-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+function heure(ts){return parseInt(FH.format(new Date(ts*1000)),10);}
+function jour(ts){return FJ.format(new Date(ts*1000));}
+function hh(ts){var h=heure(ts);return h+'\u00a0h'+(heure(ts+3600)===h?' (été)':heure(ts-3600)===h?' (hiver)':'');}
+function quand(ts){var d=new Date(ts*1000),m=d.toLocaleTimeString('fr-FR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
+  return jour(ts)===jour(Date.now()/1000)?m:d.toLocaleDateString('fr-FR',{timeZone:TZ,weekday:'short'})+' '+m;}
+function age(s){return s<90?'à l’instant':s<5400?'il y a '+Math.round(s/60)+' min':'il y a '+Math.round(s/3600)+' h';}
+function genre(c){return c==='r'||c==='o'||c==='v'?c:'';}
+function lienSur(u){return typeof u==='string'&&/^\/(?!\/)[A-Za-z0-9\/._\-#:?=&]*$/.test(u)?u:null;}
+var TEINTES={arrete:'--rouge',refuse:'--bleu',detourne:'--violet',passe:'--orange',hostiles:'--cyan',recues:'--doux'};
+function teinte(k){return 'var('+(Object.prototype.hasOwnProperty.call(TEINTES,k)?TEINTES[k]:'--cyan')+')';}
+var REFUS=false,ETAT={liste:null,choisi:null,dossier:null,vu:''},LIM=40;
+// {statut, corps} ; jamais d'exception : une source muette se lit, elle ne se devine pas.
+function lire(u){
+  var hd={Accept:'application/json'};
+  try{var t=localStorage.getItem('sbx_token');if(t)hd.Authorization='Bearer '+t;}catch(e){/* stockage interdit */}
+  return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){
+    if(r.status===401||r.status===403)REFUS=true;
+    return r.ok?r.json().then(function(c){return {statut:200,corps:c};}):{statut:r.status,corps:null};
+  }).catch(function(){return {statut:0,corps:null};});
+}
+function mesurees(s){return tab(s).filter(nombre);}
+function mini(s,cls,couleur){
+  var g=sv('svg',{'class':cls,viewBox:'0 0 '+s.length*4+' 32',preserveAspectRatio:'none','aria-hidden':'true'}),m=Math.max.apply(null,mesurees(s).concat([1]));
+  s.forEach(function(v,i){if(!nombre(v))return;var b=v>0?Math.max(2,v/m*31):1;
+    sv('rect',{x:i*4+.4,y:32-b,width:3.2,height:b,rx:.8,fill:v>0?couleur:'var(--doux)','fill-opacity':v>0?(v===m||i===s.length-1?1:.62):.5},g);});
+  return g;
+}
+function couleurItem(x){var e=tab(x.etiquettes)[0];return e&&e[1]==='r'?'var(--rouge)':e&&e[1]==='o'?'var(--orange)':'var(--cyan)';}
+function rendListe(){
+  var L=ETAT.liste?tab(ETAT.liste.items):[],box=$('liste'),foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-id'):null,y=box.scrollTop;
+  vide(box);
+  if(!L.length)add(box,h('p','vide',ETAT.liste?ETAT.liste.videTexte:REFUS?'Aucune mesure : session requise.':'Chargement…'));
+  L.slice(0,LIM).forEach(function(x){
+    var s=mesurees(x.serie).length?x.serie:mesurees(x.serie_jours).length?x.serie_jours:null,b=h('button','item '+genre((tab(x.etiquettes)[0]||[])[1]));
+    b.type='button';b.setAttribute('data-id',x.id);b.setAttribute('aria-current',String(x.id===ETAT.choisi));
+    add(b,h('b',null,x.titre),h('small',null,x.sous_titre),s?mini(s,'mini',couleurItem(x)):h('span','sans','—','Pas de série mesurée'));
+    b.addEventListener('click',function(){choisir(x.id,true);});add(box,b);
+  });
+  if(L.length>LIM){var p=h('button','plus','Voir '+pl(Math.min(40,L.length-LIM),'dossier','dossiers')+' de plus');p.type='button';p.addEventListener('click',function(){LIM+=40;rendListe();annoncer();});add(box,p);}
+  if(ETAT.liste&&ETAT.liste.pied)add(box,ETAT.liste.pied());
+  box.scrollTop=y;
+  if(foc)[].slice.call(box.querySelectorAll('[data-id]')).some(function(b){if(b.getAttribute('data-id')!==foc)return false;b.focus({preventScroll:true});return true;});
+}
+$('liste').addEventListener('keydown',function(e){
+  var pas={ArrowDown:1,ArrowUp:-1,Home:-1e6,End:1e6}[e.key];if(!pas)return;
+  var l=[].slice.call(this.querySelectorAll('button')),i=l.indexOf(document.activeElement);if(i<0)return;
+  e.preventDefault();l[Math.max(0,Math.min(l.length-1,i+pas))].focus();
+});
+function choisir(id,geste){
+  ETAT.choisi=id;ETAT.dossier=null;ETAT.vu='';
+  rendListe();rendDossier();
+  return CHARGER(id).then(function(d){
+    if(ETAT.choisi!==id)return;
+    ETAT.dossier=d;rendDossier();annoncer();
+    if(geste&&!$('retour').hidden&&$('retour').offsetParent){$('dossier').focus({preventScroll:true});$('retour').scrollIntoView({block:'start'});}
+  });
+}
+$('retour').addEventListener('click',function(){var b=$('liste').querySelector('[aria-current=true]')||$('liste').querySelector('button');if(b){b.focus();b.scrollIntoView({block:'center'});}});
+function barres(lignes,unite){
+  var m=Math.max.apply(null,lignes.map(function(x){return nombre(x.n)?x.n:0;}).concat([1])),box=h('div');
+  lignes.forEach(function(x){var l=h('div','lig',null,x.def||x.nom+' : '+mes(x.n)+(unite==='%'?' %':'')),e=h('em'),i=h('i');
+    i.style.width=(nombre(x.n)?Math.max(x.n>0?1.5:0,100*x.n/m):0)+'%';i.style.background=x.cle?teinte(x.cle):'var(--bleu)';
+    add(box,add(l,h('span',null,x.nom),add(e,i),h('b',null,nombre(x.n)?nb(x.n)+(unite==='%'?' %':''):'—')));});
+  return box;
+}
+// Histogramme empilé. Heure non mesurée : rien (et c'est dit) ; zéro mesuré : trait de base. Une échelle, graduations réelles.
+function graphe(x){
+  var jours=!x.couches&&mesurees(x.serie_jours).length>0,C=jours?[{cle:'hostiles',nom:'Tentatives',serie:x.serie_jours}]:tab(x.couches).filter(function(c){return tab(c.serie).length;});
+  var box=h('div'),n=C.length?C[0].serie.length:0,T=[],i;
+  add(box,h('h3',null,jours?'Sept derniers jours, jour par jour':'Les 24 dernières heures'));
+  for(i=0;i<n;i++)T.push(C.some(function(c){return !nombre(c.serie[i]);})?null:C.reduce(function(a,c){return a+c.serie[i];},0));
+  if(!mesurees(T).length){add(box,h('p','vide','— pas mesuré'+(x.serie_note?' : '+x.serie_note:'')));return box;}
+  var W=Math.max(240,Math.floor($('dossier').clientWidth*(($('cadre').clientWidth>=1080)?.56:1)-32)),H=230,G=44,B=24,m=Math.max.apply(null,mesurees(T).concat([4])),p=Math.pow(10,Math.floor(Math.log10(m))),pas=[p/2,p,2*p,5*p].filter(function(q){return q>=1&&m/q<=4;})[0]||p,haut=Math.ceil(m/pas)*pas,larg=(W-G)/n;
+  function Y(v){return H-B-v/haut*(H-B-10);}
+  function debut(k){return x.debut?x.debut+k*(x.pas||3600):null;}
+  // Jours du RELEVÉ (celui d'avant minuit finit hier) ; midi UTC évite tout glissement de fuseau ou de changement d'heure.
+  var finJ=nombre(x.jours_fin)?x.jours_fin:Date.now()/1000,finN=Date.parse(jour(finJ)+'T12:00:00Z'),ceJour=jour(finJ)===jour(Date.now()/1000);
+  function nomCol(k){if(jours){if(k===n-1&&ceJour)return 'aujourd’hui (en cours)';return new Date(finN-(n-1-k)*864e5).toLocaleDateString('fr-FR',{timeZone:'UTC',weekday:'long',day:'numeric'})+(k===n-1?' (relevé partiel)':'');}
+    return debut(k)?hh(debut(k))+(k===n-1?' (en cours)':''):'heure '+(k+1);}
+  function dit(k){return nomCol(k)+' : '+(T[k]===null?'pas mesuré':C.length===1?mes(T[k]):'total '+mes(T[k])+' — '+C.map(function(c){return c.nom.toLowerCase()+' '+mes(c.serie[k]);}).join(', '))+(tab(x.partielles).indexOf(k)>=0&&!jours&&k!==n-1?' (heure mesurée en partie)':'');}
+  var pic=0;T.forEach(function(v,k){if(nombre(v)&&(T[pic]===null||v>T[pic]))pic=k;});
+  var manque=T.filter(function(v){return v===null;}).length,resume='Pic : '+mes(T[pic])+' ('+nomCol(pic)+')'+(manque?' · '+pl(manque,jours?'jour non mesuré':'heure non mesurée',jours?'jours non mesurés':'heures non mesurées'):'');
+  var g=sv('svg',{'class':'graphe',viewBox:'0 0 '+W+' '+H,width:W,height:H,role:'img',tabindex:'0','aria-label':(jours?'Par jour. ':'Par heure. ')+resume});
+  g.style.maxWidth='100%';
+  for(var v=0;v<=haut+1e-9;v+=pas){sv('line',{x1:G,x2:W,y1:Y(v),y2:Y(v),stroke:'var(--trait)'},g);sv('text',{x:G-7,y:Y(v)+4,'text-anchor':'end'},g).textContent=court(v);}
+  var lec=h('p','lecture',resume);lec.setAttribute('aria-live','polite');
+  var cols=[],frais=ETAT.vu!==x.id;
+  T.forEach(function(t,k){
+    var bas=0,bx=G+k*larg+larg*.12,bw=larg*.76;
+    if(t!==null){
+      if(!t)sv('rect',{x:bx,y:H-B-1.5,width:bw,height:1.5,fill:'var(--doux)','fill-opacity':.6},g);
+      C.forEach(function(c){var q=c.serie[k];if(!q)return;var y0=Y(bas),y1=Y(bas+q);
+        sv('rect',{'class':(k===n-1&&x.attaque?'vif':frais?'pousse':''),x:bx,y:y1,width:bw,height:Math.max(1,y0-y1-1),rx:1.5,fill:teinte(c.cle)},g);bas+=q;});
+    }
+    var z=sv('rect',{'class':'col',x:G+k*larg,y:0,width:larg,height:H-B},g);cols.push(z);sv('title',{},z).textContent=dit(k);
+    z.addEventListener('pointerenter',function(){montre(k);});z.addEventListener('click',function(){montre(k);});
+  });
+  var pasT=jours?1:W<420?12:6;
+  for(i=0;i<n;i+=pasT){var lab=jours?nomCol(i).slice(0,3):debut(i)?hh(debut(i)):'';if(jours&&i===n-1&&ceJour)lab='auj.';sv('text',{x:G+(i+.5)*larg,y:H-5,'text-anchor':'middle'},g).textContent=lab;}
+  if(!jours)sv('text',{x:W,y:H-5,'text-anchor':'end'},g).textContent='en cours';
+  var ici=-1;
+  function montre(k){ici=k;cols.forEach(function(c,j){c.setAttribute('class','col'+(j===k?' on':''));});lec.textContent=k<0?resume:dit(k);}
+  g.addEventListener('pointerleave',function(){if(document.activeElement!==g)montre(-1);});
+  g.addEventListener('blur',function(){montre(-1);});
+  g.addEventListener('keydown',function(e){var d={ArrowLeft:-1,ArrowRight:1}[e.key];if(!d)return;e.preventDefault();montre(Math.max(0,Math.min(n-1,(ici<0?(d>0?-1:n):ici)+d)));});
+  add(box,g);
+  if(C.length>1){var l=h('div','legende');C.forEach(function(c){var s=h('span',null,null,c.def),q=h('i');q.style.background=teinte(c.cle);add(s,q,document.createTextNode(c.nom+' '+mes(mesurees(c.serie).length?mesurees(c.serie).reduce(function(a,b){return a+b;},0):null)));add(l,s);});add(box,l);}
+  add(box,lec);
+  if(x.serie_note&&jours)add(box,h('p','note',x.serie_note));
+  return box;
+}
+function rendDossier(){
+  var x=ETAT.dossier,box=$('dossier');
+  $('retour').hidden=!ETAT.choisi;
+  if(!x){vide(box);add(box,h('p','vide',ETAT.choisi?'Chargement…':'—'));return;}
+  if(x.erreur){vide(box);add(box,h('p','vide',x.erreur));return;}
+  var cle=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-cle'):null;
+  vide(box);
+  var et=h('div','etiq');tab(x.etiquettes).forEach(function(t){add(et,h('i',genre(t[1]),t[0]));});
+  add(box,add(h('div'),et,h('h2',null,x.titre),h('p','phrase',x.phrase)));
+  var pile=h('div','pile');
+  if(tab(x.chaine).length)add(pile,add(h('div'),h('h3',null,x.chaineTitre||TEXTES.chaine),barres(x.chaine)));
+  if(tab(x.categories).length)add(pile,add(h('div'),h('h3',null,'Ce qui a été vu, par motif'),barres(x.categories.map(function(c){return {nom:c.nom,n:c.n,def:c.nom+' : '+mes(c.n)+', dont '+mes(c.arrete)+' non servies'};}))));
+  var o=x.origine||{},ol=tab(o.lignes).filter(function(l){return l.n>0;}).slice(0,6);
+  add(pile,add(h('div'),h('h3',null,'D’où ça vient'+(o.unite?' ('+(o.unite==='%'?'part des adresses':o.unite)+')':'')),ol.length?barres(ol.map(function(l){return {nom:l.nom,n:l.n};}),o.unite):h('p','note','— pas mesuré')));
+  var f=h('div');add(f,h('h3',null,'Ce qui s’est passé, avec sa preuve'));
+  var ul=h('ol','faits');tab(x.faits).forEach(function(k){var t=h('time',null,nombre(k.ts)?quand(k.ts):'—');if(nombre(k.ts))t.dateTime=new Date(k.ts*1000).toISOString();add(ul,add(h('li'),t,h('span',null,k.texte),h('em',null,k.preuve)));});
+  add(f,tab(x.faits).length?ul:h('p','note','Aucun fait daté sur la fenêtre.'));
+  add(box,add(h('div','duo'),add(h('div','pile'),graphe(x),f),pile));
+  var ge=x.geste||{},u=lienSur(ge.href);
+  if(u){var a=h('a','bouton '+genre(ge.genre),ge.libelle);a.href=u;a.target='_top';a.id='geste';a.setAttribute('data-cle','geste');add(box,add(h('div','geste'),h('p',null,ge.note),a));}
+  ETAT.vu=x.id;
+  if(cle){var r=box.querySelector('[data-cle="geste"]');if(r)r.focus({preventScroll:true});}
+}
+function rendChiffres(l){
+  var box=vide($('chiffres'));
+  l.forEach(function(c){var d=h('div',null,null,c.def);add(d,h('span',null,c.nom),h('b',null,c.v),c.sous?h('i',null,c.sous):null,mesurees(c.serie).length?mini(c.serie,'mini',c.couleur||'var(--cyan)'):null);add(box,d);});
+}
+function alerte(texte,cls){add($('alertes'),h('div','bandeau '+(cls||'att'),texte));}
+function pose(liste){                                                // {items, chiffres, alertes, videTexte, genere_le, age_s, pied}
+  ETAT.liste=liste;vide($('alertes'));tab(liste.alertes).forEach(function(t){alerte(t);});
+  $('maj').textContent=nombre(liste.genere_le)?'relevé de '+quand(liste.genere_le)+(nombre(liste.age_s)?' ('+age(liste.age_s)+')':''):'—';
+  rendChiffres(liste.chiffres);
+  var ids=liste.items.map(function(x){return x.id;}),gardes=tab(liste.autres);
+  if(ETAT.choisi===null||(ids.indexOf(ETAT.choisi)<0&&gardes.indexOf(ETAT.choisi)<0)){ETAT.choisi=ids.length?ids[0]:null;ETAT.dossier=null;}
+  rendListe();
+  if(!ETAT.choisi){ETAT.dossier=null;rendDossier();annoncer();return Promise.resolve();}
+  var id=ETAT.choisi;
+  return CHARGER(id).then(function(d){if(ETAT.choisi!==id)return;if(JSON.stringify(d)!==JSON.stringify(ETAT.dossier)){ETAT.dossier=d;rendDossier();}annoncer();});
+}
+function refuse(texte){
+  ETAT.liste={items:[],chiffres:TEXTES.chiffres,videTexte:texte};ETAT.choisi=null;ETAT.dossier=null;
+  vide($('alertes'));$('session').hidden=!REFUS;$('maj').textContent='—';
+  rendChiffres(TEXTES.chiffres.map(function(n){return {nom:n,v:'—'};}));rendListe();rendDossier();annoncer();
+}
+var OCCUPE=false;
+function tour(){
+  if(OCCUPE)return;OCCUPE=true;REFUS=false;
+  (DEMO?Promise.resolve({statut:200,corps:DEMO_LISTE()}):lire(TEXTES.url)).then(function(r){
+    if(r.statut!==200||!r.corps||typeof r.corps!=='object')return refuse(REFUS?'Aucune mesure : session requise.':r.statut===404?TEXTES.absente:TEXTES.muette);
+    $('session').hidden=true;
+    return pose(LISTE(r.corps));
+  }).catch(function(e){console.error(e);refuse('Relevé illisible.');}).then(function(){OCCUPE=false;});
+}
+function annoncer(){
+  if(window.parent===window)return;
+  try{parent.postMessage({sbxVue:Math.ceil($('cadre').getBoundingClientRect().bottom+scrollY),onglet:TEXTES.onglet},location.origin);}catch(e){/* hôte inaccessible */}
+}
+function demarrer(){
+  $('titre').textContent=TEXTES.titre;$('sousTitre').textContent=TEXTES.sousTitre;$('bas').textContent=TEXTES.bas;$('demo').hidden=!DEMO;
+  $('rafraichir').addEventListener('click',tour);
+  var large=0;
+  function taille(){var w=$('cadre').clientWidth;if(w!==large){large=w;if(ETAT.dossier)rendDossier();}annoncer();}
+  addEventListener('resize',taille);if(window.ResizeObserver)new ResizeObserver(taille).observe(document.body);
+  rendListe();rendDossier();tour();
+  setInterval(function(){if(!document.hidden&&!DEMO)tour();},60000);
+}
+// ── fin du tronc commun ──
+
+var TEXTES={titre:'Les situations',sousTitre:'Vigie SOC · de la plus urgente à la plus calme',onglet:'situations',url:'/api/v1/soc/situations',chaine:'De la vue au blocage',
+  chiffres:['À décider','Situations en cours','Écarté en 24 h','Vu, laissé passer en 24 h'],absente:'Cette version du SOC ne sert pas encore les situations.',muette:'SOC injoignable : aucune mesure.',
+  bas:'Lecture seule. Rien n’est calculé ici : le pare-feu, SADE et la Santé tiennent les mesures ; une source qui ne répond pas est dite, elle ne vaut jamais « rien à signaler ».'};
+var PAR_ID={};
+function CHARGER(id){return Promise.resolve(PAR_ID[id]||{id:id,erreur:'Cette situation est terminée.'});}
+function LISTE(c){
+  var k=c.chiffres||{},s=k.series||{},src=tab(c.sources),ko=src.filter(function(x){return x.ok!==true;}),items=tab(c.situations);
+  PAR_ID={};items.forEach(function(x){PAR_ID[x.id]=x;});
+  var al=ko.map(function(x){return 'Source « '+x.nom+' » : '+x.erreur+'.';});
+  var au=c.autres||{};
+  if(au.populations>0)al.push('Au moins '+pl(au.populations+12,'campagne active','campagnes actives')+' : '+pl(au.populations,'autre à lire','autres à lire')+' dans le WAF.');
+  if(au.sites>0)al.push('Au moins '+pl(au.sites+6,'site sous attaque','sites sous attaque')+' : '+pl(au.sites,'autre à lire','autres à lire')+' dans le WAF.');
+  if(au.vitaux>0)al.push('Au moins '+pl(au.vitaux+8,'contrôle vital en échec','contrôles vitaux en échec')+' : '+pl(au.vitaux,'autre à lire','autres à lire')+' dans la Santé.');
+  return {items:items,alertes:al,genere_le:c.genere_le,age_s:c.age_s,
+    videTexte:ko.length?'Aucune situation visible, mais '+(ko.length<2?'une source ne répond pas.':pl(ko.length,'source','sources')+' ne répondent pas.'):'Aucune situation en cours.',
+    chiffres:[{nom:TEXTES.chiffres[0],v:mes(k.a_decider),sous:k.a_decider_partiel?(nombre(k.a_decider)?'au moins : ':'')+'une source de décision ne répond pas':null,def:'Situations qui attendent une décision : bans proposés, gestes de SADE.'},
+      {nom:TEXTES.chiffres[1],v:mes(k.en_cours),sous:src.length?(k.en_cours_partiel&&nombre(k.en_cours)?'au moins : ':'')+pl(src.length-ko.length,'source lue','sources lues')+' sur '+src.length:null,def:'Campagnes actives depuis 24 h, sites sous attaque, décisions en attente, services en échec ou lents.'},
+      {nom:TEXTES.chiffres[2],v:mes(k.ecartees_24h),sous:nombre(k.heures_mesurees)&&k.heures_mesurees<24?pl(k.heures_mesurees,'heure mesurée','heures mesurées'):null,serie:s.ecartees,couleur:'var(--vert)',def:'Requêtes hostiles arrêtées, refusées ou détournées sur les sites servis (relevé du WAF).'},
+      {nom:TEXTES.chiffres[3],v:mes(k.passees_24h),serie:s.passees,couleur:'var(--orange)',def:'Requêtes reconnues par une règle en détection seule, puis servies (relevé du WAF).'}]};
+}
+function DEMO_LISTE(){
+  var t=Math.floor(Date.now()/1000),deb=(Math.floor(t/3600)-23)*3600,g=11;
+  function al(){return (g=(g*16807)%2147483647)/2147483647;}
+  function serie(b,pic){var r=[];for(var i=0;i<24;i++)r.push(Math.round(b*(.5+al())*(1+3.2*Math.exp(-((i-pic)*(i-pic))/9))));return r;}
+  function part(s,p){return s.map(function(v){return Math.round(v*p);});}
+  function som(s){return s.reduce(function(a,b){return a+b;},0);}
+  var a=serie(120,21),L=[part(a,.7),part(a,.18),part(a,.03),part(a,.09)],NF=['Arrêté','Refusé','Détourné','Laissé passer'],NM=['arrete','refuse','detourne','passe'],T=L.map(som),n=som(T);
+  function f(d,x,p){return {ts:t-d,texte:x,preuve:p};}
+  var l=[
+    {id:'p1',titre:'Collecte : depot.exemple.test',sous_titre:'212 adresses actives en 24 h',etiquettes:[['à décider','r'],['adresses tournantes','o']],phrase:'Recopie du contenu sur depot.exemple.test depuis 640 adresses de 58 réseaux en sept jours. 71 % des adresses n’ont été vues qu’une fois. 212 sont actives depuis 24 h, 40 sont bannies. 19 adresses sont proposées au bannissement et attendent ta décision.',
+      serie:null,serie_jours:[40,60,210,480,820,1260,430],serie_note:'Cette campagne est mesurée par jour, pas par heure ; la journée en cours est partielle.',couches:null,chaineTitre:'Les adresses, de la vue au blocage',
+      chaine:[{nom:'Vues en sept jours',n:640,cle:'recues'},{nom:'Actives depuis 24 h',n:212,cle:'hostiles'},{nom:'Bannies depuis 24 h',n:40,cle:'arrete'}],origine:{unite:'%',lignes:[{nom:'Relais loués',n:84},{nom:'Hébergeurs',n:12},{nom:'Accès grand public',n:4}]},
+      faits:[f(259200,'Première tentative de la période','relevé des populations'),f(7200,'Campagne à adresses tournantes reconnue : 640 adresses','détecteur de rotation'),f(600,'19 adresses proposées au bannissement','attend ta décision')],geste:{libelle:'Voir ce qui serait banni',href:'/actor/',note:'Ouvre Actor. Rien n’est posé avant ta confirmation.',genre:'r'}},
+    {id:'s1',titre:'depot.exemple.test',sous_titre:pl(n,'requête hostile','requêtes hostiles')+' · outil d’aspiration',etiquettes:[['sous attaque','r'],['laissées passer','o']],phrase:'La vague de ce soir est cinq fois au-dessus du rythme habituel. Ce qui passe vient de règles en détection seule.',attaque:true,debut:deb,pas:3600,partielles:[],
+      serie:a.map(function(_,i){return L[0][i]+L[1][i]+L[2][i]+L[3][i];}),couches:NM.map(function(c,i){return {cle:c,nom:NF[i],serie:L[i]};}),chaineTitre:'Le mur, en 24 h',
+      chaine:[{nom:'Requêtes reçues',n:null,cle:'recues'},{nom:'Jugées hostiles',n:n,cle:'hostiles'}].concat(NM.map(function(c,i){return {nom:NF[i],n:T[i],cle:c};})),origine:{unite:'requêtes',lignes:[{nom:'Relais loués',n:4100},{nom:'Hébergeurs',n:520}]},
+      faits:[f(3600,'Pic de la journée','journal des menaces'),f(240,'Dernier bannissement : outil d’aspiration','pare-feu')],geste:{libelle:'Ouvrir le dossier du site',href:'/waf/#sites',note:'Le détail par site vit dans le WAF.',genre:''}},
+    {id:'m1',titre:'Mots de passe sur la messagerie',sous_titre:'38 adresses actives en 24 h',etiquettes:[['bannie','v']],phrase:'Essais de mots de passe sur la messagerie depuis 38 adresses de 9 réseaux en sept jours. Les 38 actives depuis 24 h sont toutes bannies.',serie:null,serie_jours:[0,0,12,30,44,51,9],serie_note:'Cette campagne est mesurée par jour, pas par heure ; la journée en cours est partielle.',couches:null,
+      chaineTitre:'Les adresses, de la vue au blocage',chaine:[{nom:'Vues en sept jours',n:38,cle:'recues'},{nom:'Actives depuis 24 h',n:38,cle:'hostiles'},{nom:'Bannies depuis 24 h',n:38,cle:'arrete'}],origine:{unite:'%',lignes:[{nom:'Accès grand public',n:66},{nom:'Hébergeurs',n:34}]},faits:[f(5400,'Dernière tentative vue','relevé des populations')],geste:{libelle:'Ouvrir la campagne dans le WAF',href:'/waf/#campaigns',note:'Le détail de la population vit dans le WAF.',genre:''}},
+    {id:'l1',titre:'Sites lents',sous_titre:'1 site',etiquettes:[['service lent','o']],phrase:'1 site dépasse le seuil de réponse au dernier contrôle. Le plus lent est depot.exemple.test, à 1 840 ms.',serie:null,serie_jours:null,couches:null,chaineTitre:'Temps de réponse (ms)',chaine:[{nom:'depot.exemple.test',n:1840,cle:'passe'}],origine:{unite:'',lignes:[]},
+      faits:[f(60,'depot.exemple.test : 1 840 ms','contrôle de santé')],geste:{libelle:'Ouvrir la Santé',href:'/health/',note:'Le détail par site vit dans la page Santé.',genre:''}}];
+  return {genere_le:t,age_s:4,situations:l,autres:{},sources:[{nom:'WAF, relevé par site',ok:true},{nom:'WAF, campagnes',ok:true},{nom:'Propositions de SADE',ok:false,erreur:'ne répond pas à temps'}],
+    chiffres:{a_decider:1,a_decider_partiel:true,en_cours:l.length,en_cours_partiel:true,ecartees_24h:n-T[3],passees_24h:T[3],heures_mesurees:24,series:{ecartees:a.map(function(_,i){return L[0][i]+L[1][i]+L[2][i];}),passees:L[3]}}};
+}
+demarrer();
+</script>
+</body>
+</html>

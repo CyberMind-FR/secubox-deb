@@ -57,6 +57,29 @@ Une place par panneau : le WAF garde le détail, le SOC en donne la synthèse.
   la page du WAF et la bande porte un lien « Détail dans le WAF → ».
 - Bloc « Campagnes en cours » (1.13.0, #3919) : 4 populations d'attaquants au plus, lues dans `waf/populations` (nom, adresses, état, 7 jours) ; tout le bloc mène à l'onglet Campagnes du WAF (`/waf/#campaigns`), rendu par `cartes-campagnes.js` et `reperes.js`, copies identiques de celles de secubox-waf-ng.
 
+## Situations (1.15.0, #3963)
+
+Première vue de `/soc/` (page `situations.html`, encadrée) : liste triée par urgence, dossier à droite, lecture seule. Le geste est un lien
+(WAF, Actor, Santé, Cyber Defense Live). `/soc/#<id d'onglet>` ouvre l'onglet (ex. `#tdef`).
+
+`GET /api/v1/soc/situations` (`require_lecture`, cache 30 s par appelant, aucune adresse, aucun journal relu) rend `situations` (`id`, `titre`,
+`sous_titre`, `etiquettes`, `urgence`, `phrase`, `serie` ou `serie_jours` ou null, `couches`, `chaine`, `origine`, `faits`, `geste`), `sources`
+(`ok`, `erreur`), `chiffres`, `complet`, `genere_le`, `age_s`.
+
+| Source | Situations | Muette |
+|---|---|---|
+| WAF `/dossiers/sites` (secubox-waf-ng ≥ 1.49.0) | sites sous attaque (6), bans proposés (rotation, campagnes, acteurs) | « mesure absente de cette version » si 404 |
+| WAF `/populations` | campagnes actives depuis 24 h (12), série par jour | « aucun relevé », « relevé figé » (> 2 h) |
+| actord `/proposals` et base SADE | gestes en attente ; « à décider » en REACTIVE ou ACTIVE seulement | dite |
+| `health-doctor.json`, `health/status.json` | contrôle vital en échec ; site en délai dépassé, 5xx ou lent | « mesure périmée » (> 10 min) |
+
+Relevé figé ou journal illisible : ni site ni chiffre ; lecture du journal en retard : source dite dégradée, chiffres null, décisions gardées. La cible d'une
+population n'est nommée que si le WAF la sert (`cibles_servies`), sinon « un nom non servi ». Noms de services et de sites de la Santé : administrateur réel
+seulement (`_est_admin`), des comptes pour les autres. Transmis au WAF et mis en clé : porteur, cookie de session, verdict LAN ; rien d'autre. Deux fils dédiés,
+un calcul par clé, six clés en cours au plus (503 au-delà), échéance de 12 s par calcul.
+
+Un compte connu malgré une source muette est annoncé « au moins » ; sans rien de connu il vaut null (« — »).
+
 ## Carte vivante de la Vigie (1.14.0, #3945)
 
 « D'où l'on frappe » recule sur les relevés successifs de l'onglet (`waf/alerts?aggregate`, `sessionStorage`, 12 au plus, 3 h), date

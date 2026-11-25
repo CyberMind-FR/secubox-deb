@@ -1,3 +1,21 @@
+secubox-soc (1.15.0-1~trixie1) trixie; urgency=medium
+
+  * « Situations » (ref #3963), première vue de la Vigie (Guardian avant, il
+    garde son onglet et ne se charge qu'à l'ouverture) : campagnes actives,
+    décisions en attente, sites sous attaque, services en échec ou lents.
+    Lecture seule, le geste est un lien vers le WAF, Actor, la Santé ou
+    Cyber Defense Live.
+  * API : GET /situations (require_lecture, cache de 30 s, aucune adresse,
+    aucun journal relu). Sources : WAF (/dossiers/sites de secubox-waf-ng
+    1.49.0, /populations), propositions de SADE, contrôles de santé. Une source
+    injoignable, périmée ou trop ancienne est dite ; un compte partiel est un
+    minimum annoncé ; un relevé figé ou en retard ne donne aucun chiffre. Noms
+    de services et de sites de la Santé : administrateur réel seulement. Fils
+    dédiés, file bornée (503), échéance par calcul.
+  * /soc/#<onglet> ouvre l'onglet ; hauteur des vues encadrées bornée à 9000 px.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 20:00:00 +0100
+
 secubox-soc (1.14.0-1~trixie1) trixie; urgency=medium
 
   * Vigie : la carte « D'où l'on frappe » est vivante (ref #3945) ; elle recule
