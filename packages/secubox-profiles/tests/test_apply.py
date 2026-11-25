@@ -199,6 +199,56 @@ def test_start_of_condition_gated_native_module_is_not_a_failure(tmp_path):
     assert rep.changed == ["hexo"] and rep.failed == []
 
 
+def _run_type(type_, reste="no", condition="yes"):
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"]:
+            if "ConditionResult" in argv:
+                return 0, condition + "\n"
+            if "Type" in argv:
+                return 0, type_ + "\n"
+            if "RemainAfterExit" in argv:
+                return 0, reste + "\n"
+        return 0, ""
+    return run
+
+
+def _apply_jamais_actif(tmp_path, run):
+    return apply_plan([Change("ad-guard-auto", START, "", 50)], {"ad-guard-auto": _m("ad-guard-auto")},
+                      {"ad-guard-auto": Actual(enabled=False, active=False)}, run=run,
+                      observe=lambda m: Actual(enabled=True, active=False), now="t", routes={}, snap_root=tmp_path,
+                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
+
+
+def test_un_oneshot_sans_etat_ne_fait_pas_annuler_l_apply(tmp_path):
+    """#3939 : un oneshot sans RemainAfterExit n'est jamais « actif » ; l'attendre annulait 50 modules."""
+    rep = _apply_jamais_actif(tmp_path, _run_type("oneshot"))
+    assert rep.status == "applied" and rep.failed == []
+
+
+def test_un_service_durable_ou_un_oneshot_qui_reste_est_toujours_attendu(tmp_path):
+    for run in (_run_type("simple"), _run_type("notify"), _run_type("oneshot", reste="yes")):
+        rep = _apply_jamais_actif(tmp_path, run)
+        assert rep.status == "rolled_back" and rep.failed == ["ad-guard-auto"]
+
+
+def test_retour_arriere_d_un_oneshot_compte_comme_atteint(tmp_path):
+    manifests = {"a": _m("a"), "b": _m("b")}
+    run0 = _run_type("oneshot")
+
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "Type" in argv:
+            return 0, ("oneshot\n" if "a.service" in argv else "simple\n")
+        return run0(argv)
+
+    audit = tmp_path / "audit.log"
+    rep = apply_plan([Change("a", STOP, "", 10), Change("b", START, "", 50)], manifests,
+                     {"a": Actual(enabled=True, active=True), "b": Actual(enabled=False, active=False)}, run=run,
+                     observe=lambda m: Actual(enabled=False, active=False), now="t", routes={}, snap_root=tmp_path,
+                     audit_path=audit, apply=True, wait_timeout=0)
+    assert rep.status == "rolled_back" and rep.failed == ["b"]
+    assert "rollback-timeout" not in audit.read_text()
+
+
 def test_slow_stop_that_reaches_state_within_derived_timeout_is_success(tmp_path):
     # metrics-like: its stop command "times out" (systemd TimeoutStopSec long),
     # but the observed state reaches OFF within the derived timeout -> success,
@@ -248,3 +298,57 @@ def test_apply_uses_derived_timeout_not_flat_30(tmp_path):
                      snap_root=tmp_path, audit_path=tmp_path / "audit.log",
                      apply=True, sleep=lambda s: None, clock=lambda: next(ticks))
     assert rep.status == "applied"          # converged at t=30<105; flat-30 would have rolled_back
+
+
+def _run_fichier(type_, fichier, calls, reste="no"):
+    base = _run_type(type_, reste=reste)
+
+    def run(argv):
+        calls.append(argv)
+        if argv[:2] == ["systemctl", "show"] and "UnitFileState" in argv:
+            return 0, fichier + "\n"
+        return base(argv)
+    return run
+
+
+def _actionnes(calls):
+    return [a for a in calls if a[:1] == ["systemctl"] and a[1] in ("start", "enable", "restart")]
+
+
+def _apply_un(tmp_path, mid, run):
+    return apply_plan([Change(mid, START, "", 50)], {mid: _m(mid)}, {mid: Actual(enabled=False, active=False)}, run=run,
+                      observe=lambda m: Actual(enabled=False, active=False), now="t", routes={}, snap_root=tmp_path,
+                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
+
+
+def test_un_oneshot_statique_n_est_jamais_demarre_par_un_profil(tmp_path):
+    """#3939 : secubox-systeme-eteindre est un oneshot statique ; l'instantané le listait, l'apply aurait éteint la box."""
+    for fichier in ("static", "indirect", "generated", "masked", "masked-runtime", ""):
+        calls = []
+        rep = _apply_un(tmp_path, "action", _run_fichier("oneshot", fichier, calls))
+        assert rep.status == "applied" and _actionnes(calls) == [], fichier
+
+
+def test_un_oneshot_de_demarrage_est_active_et_lance(tmp_path):
+    for fichier in ("enabled", "disabled"):
+        calls = []
+        rep = _apply_un(tmp_path, "p2p-mesh", _run_fichier("oneshot", fichier, calls))
+        assert rep.status == "applied"
+        assert ["systemctl", "start", "--no-block", "p2p-mesh.service"] in calls, fichier
+
+
+def test_une_action_systeme_n_est_jamais_lancee_quel_que_soit_son_fichier(tmp_path):
+    from api.actuate import ACTIONS_JAMAIS
+    for unite in sorted(ACTIONS_JAMAIS):
+        mid = unite[: -len(".service")]
+        calls = []
+        _apply_un(tmp_path, mid, _run_fichier("simple", "enabled", calls))
+        assert _actionnes(calls) == [], unite
+    assert {"secubox-systeme-eteindre.service", "secubox-systeme-redemarrer.service", "secubox-majauto.service",
+            "secubox-firstboot.service"} <= ACTIONS_JAMAIS
+
+
+def test_un_module_sans_service_statique_demarre_comme_avant(tmp_path):
+    calls = []
+    _apply_un(tmp_path, "hub", _run_fichier("simple", "static", calls))
+    assert ["systemctl", "start", "--no-block", "hub.service"] in calls
