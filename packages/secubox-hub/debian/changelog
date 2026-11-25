@@ -1,3 +1,10 @@
+secubox-hub (1.12.63-1~trixie1) trixie; urgency=medium
+
+  * Dé du menu (copie de secubox-webos, ref #3938) : face verte redressée, fusée
+    rouge tournée de 180°.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:45:00 +0100
+
 secubox-hub (1.12.62-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni

@@ -177,11 +177,21 @@ each webfilter view carries the same zones (line order aside); a file without co
 and the unfolded file left in `unbound.conf.d` is not re-adopted when going back to `compile`. Compiled output is
 byte-identical (gk2's real sources: 92 unchanged; compilation 30 s → 12 s on a workstation, 152 → 62 MB of sources).
 
-## Accueil du nom de nœud (`secubox-noeud`, 1.8.40, #3821, #3824, #3883)
+## Accueil du nom de nœud (`secubox-noeud`, 1.8.44, #3821, #3824, #3883, #3938)
 
 Le nom nu de la box, `<nœud>.<zone>` (`secubox-domaine`, ex. `gk2.secubox.in`), montre **par défaut** le dé
 SecuBox en plein écran, qui tourne sans fin (`/usr/share/secubox/www/noeud/index.html`, profil Aurora : aucune donnée, aucun appel
 réseau, aucune ressource extérieure ; quart de vitesse sous `prefers-reduced-motion`, comme le composant).
+
+Depuis 1.8.44 (#3938) c'est le **dé holographique en 3D réelle** (`www/noeud/de3d.js`, WebGL 2 sans bibliothèque) posé sur un
+échiquier, exactement dans le cercle central de la mire : rotation sans fin ni dérive (angles et temps repliés sur leur
+période), rebond élastique, résolution adaptative (1 → 0,45 et retour), ~60 images/s au plus, en pause onglet caché.
+Sans WebGL 2, shader refusé, image absente, contexte perdu non rendu ou rendu trop lent (GL logiciel d'un kiosque, plus de
+120 ms par image à la plus petite échelle), le dé 2D du Hall (`<sbx-dice>`) prend sa place, et seulement alors. Le titre ne
+s'anime que sur un GPU matériel à l'aise. Polices Unbounded et JetBrains Mono (OFL, copiées à la construction depuis
+`packages/secubox-live/www/live/polices/`, sans dépendance vers ce paquet) sous `/_noeud/polices/`.
+Un vhost déjà posé gagne ces emplacements (et `font-src 'self'`) à la mise à jour : `appliquer` le régénère, `nginx -t`
+avant rechargement, l'ancien fichier revient sinon (la page se replie alors sur le dé 2D). Ni la route ni HAProxy ne bougent.
 
 Il vivait dans secubox-webos (le Hall, optionnel) jusqu'à 1.21.2 ; il est du cœur depuis 1.8.40 (#3883) : une box
 **sans** le Hall sert son accueil, et la carte « Nom du nœud » de `/system/` s'affiche. Le moteur et les six faces du dé
@@ -190,7 +200,8 @@ Il vivait dans secubox-webos (le Hall, optionnel) jusqu'à 1.21.2 ; il est du c�
 `secubox-noeud appliquer` (lancé par le `postinst`) pose :
 
 - le vhost **généré** `/etc/nginx/conf.d/secubox-noeud.conf` sur `:9080` : `location = /` (la page),
-  `/_noeud/sbx-dice.js`, `/_noeud/dice/` (moteur et faces du dé, sous `www/noeud/`) et `location = /api/v1/health`
+  `/_noeud/de3d.js`, les deux polices de `/_noeud/polices/` (noms exacts), `/_noeud/sbx-dice.js`, `/_noeud/dice/` (moteur de
+  repli et faces du dé, sous `www/noeud/`) et `location = /api/v1/health`
   (relayée à l'ancienne cible s'il y en a une, sinon `{"status": "ok"}` rendu sur place) ; **tout le reste rend 404**
   (#3824) ; `nginx -t` avant tout rechargement, l'ancien fichier revient sinon ;
 - la route sbxwaf `<nœud>.<zone> → :9080` (`secubox-waf-route`) : le WAF reste sur le chemin, jamais de contournement ;

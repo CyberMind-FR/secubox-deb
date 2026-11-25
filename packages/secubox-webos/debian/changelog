@@ -1,3 +1,10 @@
+secubox-webos (1.21.5-1~trixie1) trixie; urgency=medium
+
+  * <sbx-dice> (ref #3938) : face verte (terminal) redressée, elle était en
+    miroir ; fusée rouge tournée de 180°. Mêmes sens que le dé 3D de l'accueil.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:45:00 +0100
+
 secubox-webos (1.21.4-1~trixie1) trixie; urgency=medium
 
   * Cadence (ref #3891) : aucune requête périodique onglet caché ; LED du menu

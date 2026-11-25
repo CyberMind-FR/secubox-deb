@@ -111,7 +111,7 @@ def client(box, monkeypatch):
 def test_api_bout_a_bout_jusqu_a_l_audit(client, box, monkeypatch):
     e = client.get("/noeud/relais").json()
     assert e["relais_api"] is False and e["cible"] == "192.168.1.200:8000" and e["domaine"] == DOM
-    assert e["servis"] == ["/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"]
+    assert e["servis"] == ["/", "/_noeud/de3d.js", "/_noeud/polices/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"]
     r = client.post("/noeud/relais", json={"actif": True})
     assert r.status_code == 200 and r.json()["success"] and r.json()["relais_actif"] is True
     assert "proxy_pass http://192.168.1.200:8000;\n" in conf(box).split("location / {", 1)[1]

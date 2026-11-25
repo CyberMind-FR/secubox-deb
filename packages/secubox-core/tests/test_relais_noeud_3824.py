@@ -495,12 +495,18 @@ def test_de_livre_par_le_coeur_identique_a_sa_source(tmp_path):
     rules = (PKG / "debian/rules").read_text()
     lignes = [x.strip() for x in rules.splitlines()
               if x.strip().startswith("install ") and "usr/share/secubox/www/noeud" in x]
-    assert len(lignes) == 5                                   # page, 404 (#3885), moteur, dossier et faces du dé
+    # page, 404 (#3885), moteur 2D, dossier et faces du dé ; dé 3D, dossier et polices (#3938)
+    assert len(lignes) == 8
     script = "\n".join(x.replace("debian/secubox-core/", f"{tmp_path}/") for x in lignes)
     subprocess.run(["bash", "-euc", script], cwd=PKG, check=True, timeout=30)
     livre = tmp_path / "usr/share/secubox/www/noeud"
     assert (livre / "index.html").read_bytes() == PAGE.read_bytes()
     assert (livre / "404.html").read_bytes() == (PKG / "www" / "noeud" / "404.html").read_bytes()
+    assert (livre / "de3d.js").read_bytes() == (PKG / "www" / "noeud" / "de3d.js").read_bytes()
+    polices = RACINE / "packages" / "secubox-live" / "www" / "live" / "polices"
+    for f in ("unbounded-latin.woff2", "jetbrains-mono-latin.woff2", "OFL-unbounded.txt", "OFL-jetbrains-mono.txt"):
+        assert (livre / "polices" / f).read_bytes() == (polices / f).read_bytes(), f
+    assert "secubox-live" not in (PKG / "debian/control").read_text()         # copiées à la construction, sans dépendance
     assert (livre / "sbx-dice.js").read_bytes() == (HALL / "sbx-dice.js").read_bytes()
     faces = sorted(p.name for p in (HALL / "dice").glob("*.jpg"))
     assert faces == [f"face-{i}.jpg" for i in range(6)]
@@ -509,6 +515,9 @@ def test_de_livre_par_le_coeur_identique_a_sa_source(tmp_path):
         assert (livre / "dice" / f).read_bytes() == (HALL / "dice" / f).read_bytes(), f
     m = charger()
     vhost = m.rendre(DOM, None, False)
+    for f in ("de3d.js", "polices/unbounded-latin.woff2", "polices/jetbrains-mono-latin.woff2"):
+        assert f"location = /_noeud/{f} {{" in vhost and f"alias {m.WWW}/noeud/{f};" in vhost
+    assert "autoindex" not in vhost and "location /_noeud" not in vhost
     assert f"alias {m.WWW}/noeud/sbx-dice.js;" in vhost and f"alias {m.WWW}/noeud/dice/;" in vhost
 
 

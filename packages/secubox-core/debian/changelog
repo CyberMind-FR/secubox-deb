@@ -1,3 +1,18 @@
+secubox-core (1.8.44-1~trixie1) trixie; urgency=medium
+
+  * Accueil du nom de nœud (ref #3938) : dé holographique en 3D réelle (WebGL 2,
+    sans bibliothèque) sur un échiquier, dans le cercle de la mire. Rotation sans
+    fin ni dérive, résolution adaptative, pause hors écran ; repli sur le dé 2D
+    (<sbx-dice>) sans WebGL 2, sur erreur, contexte perdu ou rendu trop lent.
+  * Nom en lettres holographiques (Unbounded, JetBrains Mono ; polices OFL
+    hébergées ici), contraste 4,5:1, noms longs, couleurs forcées.
+  * Vhost régénéré à la mise à jour (/_noeud/de3d.js, /_noeud/polices/, CSP :
+    font-src 'self' seul ajout) ; nginx -t, retour arrière ; route et HAProxy
+    inchangés, aucune nouvelle exposition.
+  * Dé de repli : faces verte et rouge redressées (source secubox-webos).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:45:00 +0100
+
 secubox-core (1.8.43-1~trixie1) trixie; urgency=medium
 
   * Listes DNS (ref #3893) : forme COMPACTE des sources lue par secubox-dns-listes.

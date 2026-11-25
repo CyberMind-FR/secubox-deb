@@ -391,7 +391,7 @@ def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool, relais:
         reste = ("    # Rien d'autre n'est servi sur ce nom (#3824) : aucune API d'administration publique.\n"
                  "    location / {\n        return 404;\n    }\n")
     journal = "    access_log /var/log/nginx/secubox-hosts.log sbx_host;\n" if journal_hotes else ""
-    csp = ("default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; "
+    csp = ("default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; "
            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
     return f"""{ENTETE} — ne pas éditer : réécrit à chaque configuration du paquet.
 # Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, sa santé, rien d'autre (#3824).
@@ -419,7 +419,25 @@ server {{
         add_header Referrer-Policy "no-referrer" always;
         add_header Cache-Control "no-cache" always;
     }}
-    # Le moteur et les six faces du dé (source : le Hall), livrés avec la page par secubox-core (#3883).
+    # Le dé holographique 3D (#3938) et les deux polices de la page (OFL) : noms exacts, jamais le dossier.
+    location = /_noeud/de3d.js {{
+        alias {WWW}/noeud/de3d.js;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "no-cache" always;
+    }}
+    location = /_noeud/polices/unbounded-latin.woff2 {{
+        alias {WWW}/noeud/polices/unbounded-latin.woff2;
+        types {{ font/woff2 woff2; }}
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "max-age=604800" always;
+    }}
+    location = /_noeud/polices/jetbrains-mono-latin.woff2 {{
+        alias {WWW}/noeud/polices/jetbrains-mono-latin.woff2;
+        types {{ font/woff2 woff2; }}
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "max-age=604800" always;
+    }}
+    # Le moteur 2D du repli et les six faces du dé (source : le Hall), livrés avec la page par secubox-core (#3883).
     location = /_noeud/sbx-dice.js {{
         alias {WWW}/noeud/sbx-dice.js;
         add_header X-Content-Type-Options "nosniff" always;
@@ -832,7 +850,7 @@ def etat_relais() -> dict:
         "cible": f"{repli[0]}:{repli[1]}" if repli else None,
         "chemins_cible": vu["chemins"],
         "source_chemins": vu["source"],
-        "servis": ["/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"],
+        "servis": ["/", "/_noeud/de3d.js", "/_noeud/polices/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"],
         "mot_de_passe_defaut": not mot_de_passe_change(),
     }
 
