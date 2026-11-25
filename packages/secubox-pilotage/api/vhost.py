@@ -12,6 +12,7 @@ Servies sur /run/secubox/pilotage.sock. Les routes /vhost/ et /relais/ ne sont j
   GET  /boxes/{box}/connexion-vhost?retour=/<module>/      (administration DU MAÎTRE, require_jwt)
         les identifiants du maître ne sont saisis QUE sur l'origine du maître (R-L5-25 C1c) : un code à usage unique (≤ 60 s, lié à la
         box, à l'administrateur et à sa session) est émis puis 303 vers https://admin.<box>.secubox.in/pilotage-connexion/#code=…
+        navigation venue d'un autre nom du domaine (same-site) : page de confirmation sans code ; tout autre appel hors origine : 403.
   POST /vhost/auth/echanger {code}                          (vhost de la box)
         code consommé à la première présentation → jeton à portée du vhost (clé dérivée, aud admin.<box>, iss propre). Aucune
         saisie d'identifiants, aucun cookie sur l'origine de la box. Débit propre par adresse (I3).
@@ -26,16 +27,20 @@ Servies sur /run/secubox/pilotage.sock. Les routes /vhost/ et /relais/ ne sont j
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import os
 import stat
 import time
+from html import escape
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from secubox_core import auth
 
@@ -61,6 +66,28 @@ def entetes_surs(entetes_box: dict) -> tuple:
         return "application/json", h
     h["Content-Disposition"] = "attachment"
     return "application/octet-stream", h
+
+
+STYLE_CONFIRMATION = """body{margin:0;min-height:100vh;display:grid;place-items:center;background:#060d1b;color:#eaf1ff;
+font:17px/1.5 system-ui,sans-serif}main{max-width:26rem;margin:16px;padding:28px;border:1px solid rgba(86,150,255,.38);
+border-radius:16px;background:#0b1730;text-align:center}h1{font-size:1.3rem;margin:0 0 8px}p{color:#9fb3d6;margin:0 0 20px}
+a{display:inline-block;padding:12px 26px;border-radius:999px;background:#29b6f6;color:#04121f;font-weight:700;
+text-decoration:none}a:focus-visible{outline:3px solid #eaf1ff;outline-offset:3px}"""
+_EMPREINTE_STYLE = base64.b64encode(hashlib.sha256(STYLE_CONFIRMATION.encode()).digest()).decode()
+
+
+def page_confirmation(box: str, retour: Optional[str]) -> HTMLResponse:
+    """#3934 : page du maître, sans code ni script, jamais encadrable (pas de détournement de clic). `box` et `retour` sont déjà
+    validés (RE_BOX, RE_RETOUR) ; échappés quand même. Lien relatif : même adresse, demandée cette fois depuis le maître."""
+    lien = "connexion-vhost" + (f"?retour={quote(retour, safe='')}" if retour else "")
+    corps = (f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, '
+             f'initial-scale=1"><title>Ouvrir {escape(box)}</title><style>{STYLE_CONFIRMATION}</style></head><body><main>'
+             f'<h1>Ouvrir {escape(box)} ?</h1><p>La session de cette box est fermée. Le maître la rouvre après votre accord.</p>'
+             f'<a href="{escape(lien)}">Ouvrir {escape(box)}</a></main></body></html>')
+    return HTMLResponse(corps, headers={
+        "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY",
+        "Content-Security-Policy": f"default-src 'none'; style-src 'sha256-{_EMPREINTE_STYLE}'; base-uri 'none'; form-action 'none'; "
+                                   "frame-ancestors 'none'"})
 
 
 def modules_servis(racine: Path, paquet: str, version: str) -> set:
@@ -130,12 +157,19 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
                               jwt: dict = Depends(auth.require_jwt)):
         # Final I1 : la route accepte le cookie du maître ; un navigateur envoie toujours Sec-Fetch-Site, un lien posé par un site
         # tiers (cross-site, ou un sous-domaine en same-site) n'émet aucun code. Absent : client non navigateur, require_jwt seul.
+        # #3934 : une page de la box (session expirée, /login.html) renvoie ici en same-site ; une navigation de premier niveau reçoit
+        # une page de confirmation du maître, sans code : seul le clic (same-origin) en émet un.
         site = request.headers.get("sec-fetch-site")
-        if site is not None and site not in ("same-origin", "none"):
+        hors_origine = site is not None and site not in ("same-origin", "none")
+        confirmer = (site == "same-site" and request.headers.get("sec-fetch-mode") == "navigate"
+                     and request.headers.get("sec-fetch-dest") == "document")
+        if hors_origine and not confirmer:
             raise HTTPException(403, "demande de connexion hors de l'origine du maître")
         if retour is not None and not V.RE_RETOUR.fullmatch(retour):
             raise HTTPException(422, "retour : /<module>/ seulement")
         await box_distante(box)
+        if confirmer:
+            return page_confirmation(box, retour)
         if not all(isinstance(jwt.get(k), t) for k, t in (("sub", str), ("jti", str))) or isinstance(jwt.get("exp"), bool) \
                 or not isinstance(jwt.get("exp"), (int, float)):
             raise HTTPException(401, "session du maître sans identifiant")

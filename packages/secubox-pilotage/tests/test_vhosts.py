@@ -348,6 +348,53 @@ def test_emission_du_code_refusee_hors_meme_origine(w, site, attendu):
     asyncio.run(cas())
 
 
+NAVIGATION = {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+
+
+def test_navigation_meme_domaine_page_de_confirmation_sans_code(w):
+    """#3934 : la page d'une box (session expirée) renvoie ici en same-site ; confirmation du maître, aucun code avant le clic."""
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/boxes/gk5/connexion-vhost?retour=/waf/", headers=NAVIGATION)
+            assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+            assert 'href="connexion-vhost?retour=%2Fwaf%2F"' in r.text and "code=" not in r.text and "<script" not in r.text
+            csp = r.headers["content-security-policy"]
+            assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp and "unsafe-inline" not in csp
+            assert r.headers["x-frame-options"] == "DENY" and r.headers["cache-control"] == "no-store"
+            assert [e for e, _ in w.lignes] == []
+            # le clic : même origine → code
+            r = await c.get("/boxes/gk5/connexion-vhost?retour=%2Fwaf%2F", headers=dict(NAVIGATION, **{"Sec-Fetch-Site": "same-origin"}))
+            assert r.status_code == 303 and r.headers["location"].endswith("&retour=/waf/")
+    asyncio.run(cas())
+
+
+def test_style_de_confirmation_couvert_par_l_empreinte():
+    import base64
+    import hashlib
+    from api import vhost as AV
+    r = AV.page_confirmation("gk5", None)
+    style = r.body.decode().split("<style>")[1].split("</style>")[0]
+    assert "sha256-" + base64.b64encode(hashlib.sha256(style.encode()).digest()).decode() in r.headers["content-security-policy"]
+
+
+@pytest.mark.parametrize("change", [{"Sec-Fetch-Site": "cross-site"}, {"Sec-Fetch-Dest": "iframe"}, {"Sec-Fetch-Mode": "cors"},
+                                    {"Sec-Fetch-Dest": "image", "Sec-Fetch-Mode": "no-cors"}])
+def test_confirmation_reservee_aux_navigations_du_domaine(w, change):
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/boxes/gk5/connexion-vhost", headers=dict(NAVIGATION, **change))
+        assert r.status_code == 403 and [e for e, _ in w.lignes] == []
+    asyncio.run(cas())
+
+
+def test_confirmation_box_inconnue_ou_retour_invalide(w):
+    async def cas():
+        async with w.client() as c:
+            assert (await c.get("/boxes/inconnue/connexion-vhost", headers=NAVIGATION)).status_code == 404
+            assert (await c.get("/boxes/gk5/connexion-vhost?retour=//mal", headers=NAVIGATION)).status_code == 422
+    asyncio.run(cas())
+
+
 def test_code_a_usage_unique_lie_a_la_box_et_borne(w):
     ranger(w.s, GK6, valeurs())
 
