@@ -96,7 +96,8 @@ un `nft -f` direct. IPv4 seulement.
 
 **Gardes de `waf-blocs`** (pour tout ban, adresse ou bloc) : jamais le privé, une plage de
 `/etc/secubox/waf/protegees.env` (`SECUBOX_WAF_PROTEGEES=…`, une ligne, virgules), une adresse d'une interface de la
-box, ni un point de terminaison WireGuard. Une source illisible refuse (`garde_illisible`). **Un bloc est refusé tant
+box, ni un point de terminaison WireGuard, ni le CGNAT `100.64.0.0/10`. sbxwaf applique ces plages et le CGNAT à **tous** ses
+bans et lève au démarrage ceux qui y sont (#3932). Une source illisible refuse (`garde_illisible`). **Un bloc est refusé tant
 que `protegees.env` n'a aucune ligne `SECUBOX_WAF_PROTEGEES`** : derrière un NAT l'adresse publique n'est sur aucune
 interface, et le paquet ne la devine pas. Le postinst sème un fichier **commenté** s'il est absent (jamais écrasé) ;
 l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (ou la ligne vide
@@ -143,7 +144,7 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "mode": "auto"\|"clic", "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "mode": "auto"\|"clic", "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/partager` | `{"geste": "partager", "cible": "<IPv4 ou IPv6 publique BANNIE>", "duree_s": 3600…604800, "mode": "auto"\|"clic", "conseil": "<id>", "famille": "<[a-z0-9_-], 64 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
-| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse ; 30/h, 100/j) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` ; 409 `couvert` (allongé par SADE depuis), `plafond_heure`, `plafond_jour` |
+| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse ; 30/h, 100/j) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; avec `annule`, `ban_waf_restant: {fin}` si un ban plus court de sbxwaf reste ou revient (#3932 ; `fin` null : inconnue) ; 404 `inconnu` ; 409 `couvert` (allongé par SADE depuis), `plafond_heure`, `plafond_jour` |
 | `POST /ai/lever` | `{"geste": "lever", "cible_geste": "limiter"\|"leurre", "id": "<32 hex>"}` (#3724 : seulement une entrée ai-ban du type annoncé ; 30/h, 100/j ; audit `ai-lever-demande` puis `ai-lever`) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule` ; 404 `inconnu` ; 409 `geste`, `couvert`, `plafond_heure`, `plafond_jour` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
 

@@ -1,3 +1,31 @@
+secubox-waf-ng (1.46.0-1~trixie1) trixie; urgency=medium
+
+  * Suites de la relecture de 1.45.0 (ref #3932).
+  * sbxwaf ouvre son port avant de charger quoi que ce soit (une connexion
+    attend dans la file du noyau, rien n'est servi avant) ; au redémarrage il
+    n'attend plus la repose des bans, que le noyau applique déjà.
+  * Chaîne, règles et ensembles posés en UNE transaction nft ; pose en échec :
+    l'état le dit (actif=false), la veille réessaie toutes les 30 s et les
+    automatismes partent à la première pose réussie.
+  * Prolongation d'un ban : jamais avalée par un ban de la même adresse en
+    file, échéance la plus longue, aucun instant où l'adresse est libre.
+  * Levées pendant une repose : écartées avant le lot, retrait refusé refait à
+    la passe suivante, ban à la main postérieur à la levée laissé ; journal
+    suivi (octets ajoutés), hors du verrou des requêtes.
+  * Réévaluation : l'attente du verrou n'est plus comptée dans le délai.
+  * Plages SECUBOX_WAF_PROTEGEES et CGNAT (100.64.0.0/10) : jamais bannies par
+    sbxwaf, quel que soit l'appelant ; bans existants levés au démarrage
+    (journal et audit). wafctl et waf-blocs refusent le CGNAT ; les levées
+    restent possibles.
+  * /ai/unban : « ban_waf_restant » quand un ban de sbxwaf reste ou revient.
+  * Une seule relance du WAF par mise à jour (l'extrait debhelper en faisait
+    une seconde, les règles une troisième), après vérification du nouveau
+    binaire (sbxwaf --verifier) ; en échec l'ancien continue de servir.
+  * postinst : signale les drapeaux de l'unité absents de la surcharge locale.
+  * secubox-actord-ingest : passée quand actord n'est pas actif (ref #3939).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:00:00 +0100
+
 secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : détecteur de campagnes à rotation web (ref #3919), actif en
