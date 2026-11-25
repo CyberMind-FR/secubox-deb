@@ -303,10 +303,14 @@ def etat(acteur: str, _user: dict = Depends(require_jwt)) -> Dict[str, Any]:
     maintenant = int(time.time())
     vues, partiel = _adresses(acteur, maintenant)
     bannies = _bannies()
-    actifs = [g for g in _gestes_actifs(_lire_journal(), maintenant) if g["acteur"] == acteur]
+    # actord renumérote ses acteurs à chaque relance : le numéro noté dans un geste ne désigne plus le même profil. Un
+    # geste appartient à la fiche dont il a banni des adresses ; les autres restent levables, à part.
+    ips = {ip for ip, _ in vues}
+    gestes = _gestes_actifs(_lire_journal(), maintenant)
     return {"acteur": acteur, "vues_48h": len(vues), "bannies": sum(ip in bannies for ip, _ in vues), "partiel": partiel,
             "gestes": [{"id": g["id"], "at": g["at"], "fin": g["fin"], "nombre": len(g["cibles"]),
-                        "par": str(g.get("par") or ""), "incertain": g["incertain"]} for g in actifs]}
+                        "par": str(g.get("par") or ""), "incertain": g["incertain"],
+                        "ici": not ips.isdisjoint(ip for ip in g["cibles"] if isinstance(ip, str))} for g in gestes]}
 
 
 @router.get("/{acteur}/apercu")

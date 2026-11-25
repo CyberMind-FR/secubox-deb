@@ -368,7 +368,7 @@ Garde `require_jwt` sur les quatre routes ; détail dans `composants/waf/api/act
 
 | Route | Effet | Réponse |
 |---|---|---|
-| `GET /acteurs/{id}/etat` | rien | `{vues_48h, bannies, partiel, gestes: [{id, at, fin, nombre, par, incertain}]}` |
+| `GET /acteurs/{id}/etat` | rien | `{vues_48h, bannies, partiel, gestes: [{id, at, fin, nombre, par, incertain, ici}]}` |
 | `GET /acteurs/{id}/apercu` | rien | `{apercu, expire, a_bannir (200 au plus), deja_bannies, epargnees: [{ip, motif}], reste, partiel}` |
 | `POST /acteurs/{id}/bannir` `{"apercu"}` | ban 24 h de la liste montrée (5 min, usage unique, 10 par heure) | `{id, posees, presentes, refusees, fin}` ; 409 `apercu_perime`, `plafond`, `vide` ; 503 `protegee_inconnue`, `etat`, `wafctl`, `audit` ; 500 `incoherent` |
 | `POST /acteurs/gestes/{id}/lever` | retire les adresses de ce geste | `{levees, gardees}` |

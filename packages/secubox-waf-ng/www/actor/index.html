@@ -898,9 +898,12 @@ function blocBan(a){
     add(s,add(g,bouton('non','','Annuler',function(){b.apercu=null;rendProfile();})));
   }else add(s,add(h('div','bang'),bouton('voir','',b.occupe?'Vérification…':'Voir ce qui serait banni',function(){
     banGeste(id,u+'/apercu',undefined,function(b,r){b.apercu=r;setTimeout(function(){if(CUR===id)rendProfile();},Math.max(0,r.expire*1000-Date.now())+500);});})));
-  (e&&e.gestes||[]).forEach(function(z){var c=h('div','bang');
-    add(s,add(c,h('span',null,pl(z.nombre,'adresse bannie','adresses bannies')+(z.par?' par '+z.par:'')+' jusqu’au '+jourHeure(z.fin)+(z.incertain?' (pose interrompue, à lever)':'')),
-      bouton('lever:'+z.id,'','Lever ce ban',function(){banGeste(id,'gestes/'+z.id+'/lever',{},function(b,r){b.msg=pl(r.levees,'adresse levée','adresses levées')+(r.gardees?' ; '+nb(r.gardees)+' gardées (ban d’un autre, ou fin différente)':'')+'.';banEtat(id,true);});})));});
+  function geste(z){var c=h('div','bang');return add(c,h('span',null,pl(z.nombre,'adresse bannie','adresses bannies')+(z.par?' par '+z.par:'')+' jusqu’au '+jourHeure(z.fin)+(z.incertain?' (pose interrompue, à lever)':'')),
+      bouton('lever:'+z.id,'','Lever ce ban',function(){banGeste(id,'gestes/'+z.id+'/lever',{},function(b,r){b.msg=pl(r.levees,'adresse levée','adresses levées')+(r.gardees?' ; '+nb(r.gardees)+' gardées (ban d’un autre, ou fin différente)':'')+'.';banEtat(id,true);});}));}
+  // Le moteur renumérote ses acteurs à chaque relance : un geste est rattaché à la fiche par ses adresses, les autres restent levables à part.
+  var gs=e&&e.gestes||[],autres=gs.filter(function(z){return !z.ici;});
+  gs.forEach(function(z){if(z.ici)add(s,geste(z));});
+  if(autres.length)add(s,pli('ban:autres','Autres gestes en cours',pl(autres.length,'geste','gestes'),autres.map(geste)));
   var m=h('p',b.err?'err':'ok',b.err||b.msg||'');m.setAttribute('role','status');add(s,m);
   banEtat(id);
   return s;

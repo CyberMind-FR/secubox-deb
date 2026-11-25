@@ -20,7 +20,7 @@ ID = "a" * 32
 
 class BancBan(Banc):
     def __init__(self, nav, **k):  # noqa: F811
-        self.posts, self.gestes, self.code, self.expire, self.etat_ko = [], [], 200, 300, False
+        self.posts, self.gestes, self.code, self.expire, self.etat_ko, self.ici = [], [], 200, 300, False, True
         super().__init__(nav, **k)
 
     def _sert(self, r, *_):
@@ -41,7 +41,7 @@ class BancBan(Banc):
                  "deja_bannies": 4, "reste": 30, "partiel": False,
                  "epargnees": [{"ip": "x", "motif": "robot"}, {"ip": "y", "motif": "robot"}, {"ip": "z", "motif": "<img src=x>"}]}
         elif u.endswith("/bannir"):
-            self.gestes = [{"id": ID, "at": now, "fin": now + 86400, "nombre": 2, "par": "gk2"}]
+            self.gestes = [{"id": ID, "at": now, "fin": now + 86400, "nombre": 2, "par": "gk2", "ici": self.ici}]
             d = {"id": ID, "posees": 2, "presentes": 0, "refusees": [], "fin": now + 86400}
         else:
             self.gestes = []
@@ -100,3 +100,16 @@ def test_demonstration_sans_geste(nav):  # noqa: F811
     if b.p.locator("#demo:not([hidden])").count():
         assert b.p.locator(".ban button").count() == 0 and not [u for u in b.appels if "waf/acteurs" in u]
     b.ctx.close()
+
+
+def test_geste_d_une_autre_fiche_a_part_et_levable(nav):  # noqa: F811
+    b = BancBan(nav)
+    b.ici = False
+    b.p.click(".ban button:has-text('Voir ce qui serait banni')")
+    b.p.click(".ban button.rouge")
+    b.p.wait_for_selector(".ban details:has-text('Autres gestes en cours')")
+    assert b.p.locator(".ban > .bang button:has-text('Lever')").count() == 0
+    b.p.click(".ban summary:has-text('Autres gestes en cours')")
+    b.p.click(".ban button:has-text('Lever ce ban')")
+    b.p.wait_for_function("document.querySelector('.ban').textContent.includes('1 adresse levée')")
+    b.fin()
