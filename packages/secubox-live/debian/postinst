@@ -23,8 +23,14 @@ case "$1" in
     systemctl enable --now secubox-live-collecte.timer >/dev/null 2>&1 || true
     systemctl start secubox-live-collecte.service >/dev/null 2>&1 || true
 
-    # --- Exposition publique : seulement si /etc/secubox/live.toml nomme un domaine ---
-    /usr/sbin/secubox-live-exposer || echo "secubox-live : exposition non faite" >&2
+    # --- Exposition publique ---
+    # Mise à jour ($2 = version précédente) : un vhost DÉJÀ exposé est rendu de nouveau (CSP, locations), rien d'autre ;
+    # une box non exposée le reste. Première installation : seulement si /etc/secubox/live.toml nomme un domaine.
+    if [ -n "$2" ]; then
+      /usr/sbin/secubox-live-exposer --mise-a-jour || echo "secubox-live : vhost non rafraîchi, le précédent reste en place" >&2
+    else
+      /usr/sbin/secubox-live-exposer || echo "secubox-live : exposition non faite" >&2
+    fi
     ;;
 esac
 

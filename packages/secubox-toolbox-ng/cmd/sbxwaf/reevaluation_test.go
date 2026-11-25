@@ -67,6 +67,12 @@ func (f *fauxNftElems) run(_ context.Context, args ...string) ([]byte, error) {
 	if len(args) >= 5 && args[0] == "-j" && args[1] == "-s" {
 		args = append([]string{"-j"}, args[2:]...) // sans compteurs : même liste
 	}
+	if v, ok := f.elems[strings.Trim(args[len(args)-1], "{ }")]; ok && args[0] == "get" {
+		return []byte(fmt.Sprintf("elements = { %s expires %ds }", strings.Trim(args[len(args)-1], "{ }"), v[1])), nil
+	}
+	if ip := strings.Fields(args[len(args)-1] + " -"); args[0] == "create" && len(ip) > 1 && f.elems[ip[1]] != [2]int64{} {
+		return []byte("Error: Could not process rule: File exists"), fmt.Errorf("exit status 1")
+	}
 	if len(args) >= 4 && args[0] == "-j" && args[1] == "list" && args[2] == "set" {
 		var el []string
 		if args[5] == "waf_ban" {
@@ -77,6 +83,10 @@ func (f *fauxNftElems) run(_ context.Context, args ...string) ([]byte, error) {
 		return []byte(fmt.Sprintf(`{"nftables":[{"set":{"name":"%s","stmt":[{"counter":null}],"elem":[%s]}}]}`, args[5], strings.Join(el, ","))), nil
 	}
 	return nil, nil
+}
+
+func (f *fauxNftElems) script(ctx context.Context, script []byte) ([]byte, error) {
+	return f.run(ctx, "-f", "-", string(script))
 }
 
 func (f *fauxNftElems) vu(motif string) bool {
@@ -96,7 +106,7 @@ func bancReeval(t *testing.T, mode string, elems map[string][2]int64) (*Reeval, 
 	fx := &fauxNftElems{elems: elems}
 	store := NewBanStore(filepath.Join(dir, "bans.jsonl"))
 	nb := NewNftBanner("nft", "secubox", time.Hour, store)
-	nb.runner = fx.run
+	nb.runner, nb.scripts = fx.run, fx.script
 	nb.cooldown = time.Hour
 	nb.ready = true
 	r := NewReeval(nb, store, mode, filepath.Join(dir, "reeval.jsonl"))
@@ -131,8 +141,13 @@ func TestTick_ProlongeUnBanQuiInsisteEtEnLaisseLaPreuve(t *testing.T) {
 	r, fx, store, dir := bancReeval(t, "auto", map[string][2]int64{"198.51.100.5": {40, 45}})
 	poseBan(store, "198.51.100.5", "leurre:unrouted", now-3555, now+45)
 	r.Tick()
-	if !fx.vu("delete element inet secubox waf_ban { 198.51.100.5 }") || !fx.vu("198.51.100.5 timeout 86400s") {
-		t.Fatalf("EXTEND : l'élément est retiré puis reposé 24 h : %v", fx.cmds)
+	if !fx.vu("-f - " + string(scriptRemplacer("secubox", "waf_ban", "198.51.100.5", 86400))) {
+		t.Fatalf("EXTEND : l'élément est refait pour 24 h, en une transaction : %v", fx.cmds)
+	}
+	for _, c := range fx.cmds {
+		if c[0] == "delete" {
+			t.Fatalf("jamais un retrait seul : l'adresse serait libre : %v", c)
+		}
 	}
 	ev := lignesJSON(t, filepath.Join(dir, "reeval.jsonl"))
 	if len(ev) != 1 || ev[0]["decision"] != "EXTEND" || ev[0]["applique"] != true || ev[0]["ip"] != "198.51.100.5" || ev[0]["paquets"].(float64) != 40 {
@@ -217,11 +232,11 @@ func TestTick_LesBansManuelsHorsJournalNeSontPasTouches(t *testing.T) {
 func TestEnsure_MigreUnEnsembleSansCompteurSansPerdreLaChaine(t *testing.T) {
 	fx := &fauxNftMigration{}
 	b := NewNftBanner("nft", "secubox", time.Hour, nil)
-	b.runner = fx.run
+	b.runner, b.scripts = fx.run, fx.script
 	if err := b.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	cmds := strings.Join(fx.journal, "\n")
+	cmds := fx.journal[len(fx.journal)-1] // une seule transaction, la dernière
 	iFlush, iDel, iAdd := strings.Index(cmds, "flush chain"), strings.Index(cmds, "delete set inet secubox waf_ban"), strings.Index(cmds, "add set inet secubox waf_ban { type ipv4_addr; flags timeout; counter; }")
 	if iDel < 0 || iAdd < 0 || iFlush < 0 || !(iFlush < iDel && iDel < iAdd) {
 		t.Fatalf("migration : vider la chaîne, supprimer l'ensemble, le recréer avec compteur :\n%s", cmds)
@@ -232,6 +247,11 @@ func TestEnsure_MigreUnEnsembleSansCompteurSansPerdreLaChaine(t *testing.T) {
 }
 
 type fauxNftMigration struct{ journal []string }
+
+func (f *fauxNftMigration) script(_ context.Context, script []byte) ([]byte, error) {
+	f.journal = append(f.journal, string(script))
+	return nil, nil
+}
 
 func (f *fauxNftMigration) run(_ context.Context, args ...string) ([]byte, error) {
 	f.journal = append(f.journal, strings.Join(args, " "))

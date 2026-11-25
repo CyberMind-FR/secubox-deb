@@ -4,13 +4,22 @@
 # Expose live.<domaine> (#3351) SEULEMENT si /etc/secubox/live.toml nomme un domaine (vide par défaut : rien n'est exposé).
 # Ordre : profil AppArmor du collecteur chargé, vhost nginx au nom EXACT validé par `nginx -t`, route sbxwaf, puis
 # HAProxy. Une étape en échec arrête tout et retire ce qui a été posé (jamais un vhost sans WAF, cf. #3150).
+# --mise-a-jour (postinst, #3933) : rend de nouveau le vhost d'une box DÉJÀ exposée (lien actif vers notre vhost et domaine
+# retenu identique), et rien d'autre ; `nginx -t` avant le rechargement, vhost précédent remis en place en cas d'échec.
 set -euo pipefail
+MAJ=0
+case "${1:-}" in
+  "") ;;
+  --mise-a-jour) MAJ=1 ;;
+  *) echo "usage : secubox-live-exposer [--mise-a-jour]" >&2; exit 2 ;;
+esac
 CONF=/etc/secubox/live.toml
 MODELE=/usr/share/secubox/live/live.vhost.conf.in
 SITE=/etc/nginx/sites-available/live.conf
 LIEN=/etc/nginx/sites-enabled/live.conf
 # Domaine exposé, retenu en root pour que la purge retire SA route et SON vhost (jamais lu depuis le cache du collecteur).
 EXPOSE=/var/lib/secubox-live/domaine
+VERROU=/run/secubox-live-exposer.lock      # /run : root seul
 DOMAINE=$(sed -n 's/^domaine[[:space:]]*=[[:space:]]*"\([a-z0-9.-]*\)"[[:space:]]*$/\1/p' "$CONF" 2>/dev/null | head -1)
 if [ -z "$DOMAINE" ]; then
   echo "secubox-live : aucun domaine dans $CONF, rien d'exposé"
@@ -20,44 +29,94 @@ if ! printf '%s' "$DOMAINE" | grep -Eqx 'live(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9]
   echo "secubox-live : domaine refusé (attendu live.<domaine>) : $DOMAINE" >&2
   exit 2
 fi
+exec 9>"$VERROU"
+if ! flock -w 60 9; then
+  echo "secubox-live : une autre exposition est déjà en cours" >&2
+  exit 1
+fi
+# À nous : un vhost fichier ordinaire, atteint par un lien qui mène à lui. Tout autre lien ou fichier en place n'est ni
+# suivi ni remplacé (site posé par l'administrateur, exposition d'une autre main).
+notre_lien() { [ -L "$LIEN" ] && [ -f "$SITE" ] && [ ! -L "$SITE" ] && [ "$(readlink -f "$LIEN")" = "$(readlink -f "$SITE")" ]; }
+if [ "$MAJ" = 1 ] && { ! notre_lien || [ "$(sed -n '1p' "$EXPOSE" 2>/dev/null || true)" != "$DOMAINE" ]; }; then
+  echo "secubox-live : $DOMAINE non exposé sur cette box, rien à rafraîchir (sudo secubox-live-exposer pour l'exposer)"
+  exit 0
+fi
 # Pas d'AppArmor, ou profil absent ou en complain : pas d'exposition.
 if ! grep -q '^/usr/sbin/secubox-live-collecte (enforce)' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
   echo "secubox-live : AppArmor absent ou profil du collecteur non chargé en enforce : exposition refusée" >&2
   exit 1
 fi
-retirer() { rm -f "$LIEN"; nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true; }
-TMP=$(mktemp /etc/nginx/sites-available/.live.XXXXXX)
-trap 'rm -f "$TMP"' EXIT
-sed "s/@DOMAINE@/$DOMAINE/g" "$MODELE" > "$TMP"
-chmod 0644 "$TMP"
-mv "$TMP" "$SITE"
-ln -sf ../sites-available/live.conf "$LIEN"
-if ! NT=$(nginx -t 2>&1); then
-  retirer
-  echo "secubox-live : nginx -t a échoué, vhost NON activé : $NT" >&2
+if [ -L "$SITE" ] || { [ -e "$LIEN" ] || [ -L "$LIEN" ]; } && ! notre_lien; then
+  echo "secubox-live : $LIEN ou $SITE n'est pas de ce paquet, rien n'est remplacé" >&2
   exit 1
 fi
-systemctl reload nginx >/dev/null 2>&1 || true
-if ! command -v secubox-waf-route >/dev/null 2>&1 || ! secubox-waf-route "$DOMAINE" 9080; then
+retirer() { rm -f "$LIEN"; nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true; }
+TMP=$(mktemp /etc/nginx/sites-available/.live.XXXXXX)
+AVANT=""
+ETAT=""            # « pose » : vhost écrit, pas encore pris par nginx ; toute sortie d'ici là remet l'état précédent
+LIEN_ICI=0
+defaire() {
+  ETAT=""
+  [ "$LIEN_ICI" = 0 ] || rm -f "$LIEN"
+  if [ -n "$AVANT" ]; then mv -f "$AVANT" "$SITE"; else rm -f "$SITE"; fi
+}
+sortie() { [ "$ETAT" != pose ] || defaire; rm -f "$TMP" "$AVANT"; }
+trap sortie EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+sed "s/@DOMAINE@/$DOMAINE/g" "$MODELE" > "$TMP"
+chmod 0644 "$TMP"
+if [ "$MAJ" = 1 ] && cmp -s "$TMP" "$SITE"; then
+  echo "secubox-live : vhost de $DOMAINE déjà à jour"
+  exit 0
+fi
+# Vhost en place : gardé jusqu'à ce que nginx ait pris le nouveau, remis sinon (la page reste servie).
+if [ -f "$SITE" ]; then
+  AVANT=$(mktemp /etc/nginx/sites-available/.live.XXXXXX)
+  cp -p "$SITE" "$AVANT"
+fi
+[ -L "$LIEN" ] || LIEN_ICI=1
+ETAT=pose
+mv "$TMP" "$SITE"
+[ "$LIEN_ICI" = 0 ] || ln -s ../sites-available/live.conf "$LIEN"
+if [ "$LIEN_ICI" = 0 ]; then SUITE="vhost précédent remis en place"; else SUITE="vhost NON activé"; fi
+if ! NT=$(nginx -t 2>&1); then
+  defaire
+  echo "secubox-live : nginx -t a échoué, $SUITE : $NT" >&2
+  exit 1
+fi
+if ! RL=$(systemctl reload nginx 2>&1); then
+  defaire
+  echo "secubox-live : rechargement de nginx en échec, $SUITE : $RL" >&2
+  exit 1
+fi
+ETAT=""
+if [ "$MAJ" = 1 ]; then
+  logger -t secubox-live "vhost public $DOMAINE rendu de nouveau (mise à jour du paquet)"
+  echo "secubox-live : vhost de $DOMAINE rendu de nouveau"
+  exit 0
+fi
+if ! command -v secubox-waf-route >/dev/null 2>&1 || ! secubox-waf-route "$DOMAINE" 9080 9>&-; then
   retirer
   echo "secubox-live : route sbxwaf non posée : exposition annulée" >&2
   exit 1
 fi
 if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
    && ! grep -Eq "^\[vhosts\.\"?${DOMAINE//./\\.}\"?\]" /etc/secubox/haproxy.toml; then
-  if ! HA=$(haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true 2>&1); then
+  if ! HA=$(haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true 2>&1 9>&-); then
     echo "secubox-live : haproxyctl vhost add $DOMAINE a échoué (nginx et route sbxwaf posés, page NON exposée) : $HA" >&2
     exit 1
   fi
-  haproxyctl generate >/dev/null 2>&1 || true
+  haproxyctl generate >/dev/null 2>&1 9>&- || true
   systemctl reload haproxy >/dev/null 2>&1 || true
 fi
 # Certificat (#3351) : même circuit que le pilotage (certbot webroot puis haproxyctl cert sync) ; `haproxyctl cert add`
 # dépend d'acme.sh, absent des box. Échec : page servie avec le certificat par défaut, signalé.
 if [ ! -s "/data/haproxy/certs/$DOMAINE.pem" ] && command -v certbot >/dev/null 2>&1; then
   if certbot certonly --webroot -w /usr/share/secubox/www -d "$DOMAINE" --non-interactive --agree-tos \
-       --keep-until-expiring --register-unsafely-without-email >/dev/null 2>&1; then
-    haproxyctl cert sync >/dev/null 2>&1 || echo "secubox-live : certificat émis mais haproxyctl cert sync a échoué" >&2
+       --keep-until-expiring --register-unsafely-without-email >/dev/null 2>&1 9>&-; then
+    haproxyctl cert sync >/dev/null 2>&1 9>&- || echo "secubox-live : certificat émis mais haproxyctl cert sync a échoué" >&2
   else
     echo "secubox-live : certificat de $DOMAINE non émis (DNS public vers ce maître ?) : certificat par défaut servi" >&2
   fi

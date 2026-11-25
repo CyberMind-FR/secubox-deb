@@ -1,3 +1,59 @@
+secubox-waf-ng (1.46.1-1~trixie1) trixie; urgency=medium
+
+  * Borne des plages protégées portée à /12 (IPv4) et /28 (IPv6) : celle de
+    1.46.0 refusait des plages d'opérateur légitimes déclarées sur une box
+    (/14, /29, /31) et aurait empêché la relance du WAF (ref #3932). Le plafond
+    de 200 levées au démarrage reste la garde.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:42:46 +0100
+
+secubox-waf-ng (1.46.0-1~trixie1) trixie; urgency=medium
+
+  * Suites de la relecture de 1.45.0 (ref #3932).
+  * sbxwaf ouvre son port avant de charger quoi que ce soit (une connexion
+    attend dans la file du noyau, rien n'est servi avant) ; au redémarrage il
+    n'attend plus la repose des bans, que le noyau applique déjà.
+  * Chaîne, règles et ensembles posés en UNE transaction nft ; pose en échec :
+    l'état le dit (actif=false), la veille réessaie toutes les 30 s et les
+    automatismes partent à la première pose réussie.
+  * Prolongation d'un ban : jamais avalée par un ban de la même adresse en
+    file, échéance la plus longue, aucun instant où l'adresse est libre.
+  * Levées pendant une repose : écartées avant le lot, retrait refusé refait à
+    la passe suivante, ban à la main postérieur à la levée laissé ; journal
+    suivi (octets ajoutés), hors du verrou des requêtes.
+  * Réévaluation : l'attente du verrou n'est plus comptée dans le délai.
+  * Plages SECUBOX_WAF_PROTEGEES et CGNAT (100.64.0.0/10) : jamais bannies par
+    sbxwaf, quel que soit l'appelant ; bans existants levés au démarrage
+    (journal et audit). wafctl et waf-blocs refusent le CGNAT ; les levées
+    restent possibles.
+  * /ai/unban : « ban_waf_restant » quand un ban de sbxwaf reste ou revient.
+  * Une seule relance du WAF par mise à jour (l'extrait debhelper en faisait
+    une seconde, les règles une troisième), après vérification du nouveau
+    binaire (sbxwaf --verifier) ; en échec l'ancien continue de servir.
+  * postinst : signale les drapeaux de l'unité absents de la surcharge locale.
+  * Après la relance, une vraie réponse HTTP est exigée (le port s'ouvre avant
+    le chargement) et le service ne doit pas avoir redémarré ; --verifier
+    refuse aussi un registre de cookies ou un journal des menaces impossible à
+    ouvrir.
+  * Plage protégée plus large que /16 (IPv4) ou /32 (IPv6) : refusée par
+    --verifier, ignorée et dite par le service ; plus de 200 levées visées au
+    démarrage : aucune.
+  * nft-etat.json : comptes de bans gardés (ou null) pendant une repose.
+  * secubox-actord-ingest : passée quand actord n'est pas actif (ref #3939).
+  * sbx-actord (ref #3936) : activité par acteur comptée à l'ingestion
+    (24 h, 168 h, 15 jours), reprise au redémarrage, jamais lue du magasin.
+    GET /actors : premier et dernier passage datés. GET /actors/{id} :
+    détail à la demande (séries, tendances, modules, techniques, pays,
+    réseaux, dernier ban, campagnes). GET /activite : 60 acteurs par lot.
+    Tranche non mesurée : null, jamais 0. Corrélation inchangée (test).
+  * Page Actor (ref #3936) : résumé en clair, quatre grands chiffres avec
+    tendance et mini-barres, barres 24 h et carte de chaleur 7 jours,
+    vecteur en mots, campagnes cliquables, le reste replié ; barres 24 h
+    sur chaque acteur et campagne. L'ASN n'est plus affiché comme mesure.
+    Listes relues une fois par minute (étaient 15 s), 60 lignes à la fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:00:00 +0100
+
 secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : détecteur de campagnes à rotation web (ref #3919), actif en

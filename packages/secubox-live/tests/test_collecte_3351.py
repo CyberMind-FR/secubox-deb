@@ -327,3 +327,26 @@ def test_visites_bornees_et_nulles_avant_la_premiere_mesure(tmp_path):
     s2.menaces[0].write_text(_ligne(MAINTENANT - 5 * 86400))   # attaque avant la première visite mesurée
     h = {x["jour"]: x for x in C.collecter(s2, maintenant=MAINTENANT, reseau=False)["histo"]}
     assert h["2026-10-26"]["visites"] is None
+
+
+def test_noeud_hors_ligne_sans_mesure_perimee(tmp_path):
+    # #3933 : le dernier relevé d'un nœud muet n'est pas une mesure actuelle
+    src = _sources(tmp_path)
+    cx = sqlite3.connect(src.pilotage_db)
+    for chemin, v in (("Device.DeviceInfo.ProcessStatus.CPUUsage", 96), ("Device.DeviceInfo.MemoryStatus.Total", 1000),
+                      ("Device.DeviceInfo.MemoryStatus.Free", 40), ("Device.DeviceInfo.UpTime", 93600)):
+        cx.execute("INSERT INTO inventaire VALUES('maillage:gk5',?,?,?,0)", (chemin, json.dumps(v), MAINTENANT - 3600))
+    cx.commit()
+    cx.close()
+    n = {x["nom"]: x for x in C.noeuds(src, MAINTENANT, {}, {})}
+    assert n["gk5"]["etat"] == "hors ligne" and n["gk5"]["cpu"] is None and n["gk5"]["memoire"] is None and n["gk5"]["marche"] is None
+    assert n["gk4"]["cpu"] == 7 and n["gk4"]["memoire"] == 50
+
+
+def test_sites_publies_sans_les_vhosts_hors_waf(tmp_path):
+    # #3933 : la page dit « derrière le pare-feu » : un vhost waf_bypass ou désactivé n'en est pas
+    src = _sources(tmp_path)
+    src.haproxy_toml = tmp_path / "h.toml"
+    src.haproxy_toml.write_text('[vhosts.a]\ndomain="a"\n[vhosts.b]\nwaf_bypass = true\n[vhosts.c]\nwaf_bypass = false\n'
+                                '[vhosts.d]\nenabled = false\n[vhosts.e]\nwaf_bypass = "true"\n')
+    assert C.sites_publies(src) == 2

@@ -868,6 +868,53 @@ def test_unban_adresse_non_couverte_est_levee(c, records):
     assert r.json()["etat"] == "annule" and c.faux.appels[-1][-3:-1] == ["unban", "198.51.100.7"]
 
 
+def _pendant_la_levee(c, monkeypatch, geste):
+    """`geste` s'exécute pendant `wafctl unban` (un ban de sbxwaf qui tombe après la lecture de la couverture)."""
+    vrai = c.g._lancer
+
+    def lancer(argv):
+        if "unban" in argv:
+            geste()
+        return vrai(argv)
+    monkeypatch.setattr(c.g, "_lancer", lancer)
+
+
+@pytest.mark.parametrize("exp,attendu", [(7200, 7200), (0, None), (-10, "rien"), ("demain", None)])
+def test_unban_annule_dit_le_ban_du_waf_qui_reste(c, monkeypatch, exp, attendu):
+    """#3932 : la réponse ne laisse pas croire l'adresse libre."""
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    fin = now + exp if isinstance(exp, int) and exp else exp
+    _pendant_la_levee(c, monkeypatch, lambda: _bans_waf_journal(c, _rec("198.51.100.7", now, fin)))
+    r = _unban(c, ident).json()
+    assert r["etat"] == "annule"
+    if attendu == "rien":
+        assert "ban_waf_restant" not in r
+    else:
+        assert r["ban_waf_restant"] == {"fin": now + attendu if attendu else None}
+
+
+def test_unban_annule_journal_au_dela_de_la_borne_dit_peut_etre(c, monkeypatch):
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    _bans_waf_journal(c, _rec("198.51.100.7", now, now + 7200), *[_rec("198.51.100.9", now, now + 9000)] * 50)
+    monkeypatch.setattr(c.g, "_TAILLE_LECTURE_BANS_WAF", 500)
+    assert _unban(c, ident).json() == {"id": ident, "etat": "annule", "ban_waf_restant": {"fin": None}}
+
+
+def test_unban_annule_journal_illisible_apres_la_levee(c, monkeypatch, tmp_path):
+    ident = c.ban("198.51.100.7").json()["id"]
+    _pendant_la_levee(c, monkeypatch, lambda: monkeypatch.setattr(c.g, "BANS_WAF", tmp_path))
+    assert _unban(c, ident).json() == {"id": ident, "etat": "annule", "ban_waf_restant": {"fin": None}}
+
+
+def test_unban_d_un_bloc_ne_parle_pas_des_bans_d_adresse(c, monkeypatch):
+    now = int(time.time())
+    ident = c.ban("203.0.113.0/24").json()["id"]
+    _bans_waf_journal(c, _rec("203.0.113.0/24", now, now + 7200))
+    assert "ban_waf_restant" not in c.c.post("/ai/unban", json={"geste": "unban", "id": ident}).json()
+
+
 def test_unban_bans_waf_illisible_503_rien_n_est_leve(c, monkeypatch, tmp_path):
     ident = c.ban("198.51.100.7").json()["id"]
     dossier = tmp_path / "bans-dossier"

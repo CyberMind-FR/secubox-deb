@@ -78,7 +78,7 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 			return []byte("elements = { " + ip + " counter packets 0 bytes 0 }"), nil
 		}
 		return []byte(fmt.Sprintf("elements = { %s counter packets 0 bytes 0 timeout 9d expires %dh%dm%ds500ms }", ip, d/3600, d/60%60, d%60)), nil
-	case strings.HasPrefix(j, "-j -s list set"):
+	case strings.HasPrefix(j, "-j list set"), strings.HasPrefix(j, "-j -s list set"):
 		k.execs++
 		k.listes++
 		if k.listeKO > 0 {
@@ -107,6 +107,11 @@ func (k *noyauLots) run(_ context.Context, args ...string) ([]byte, error) {
 
 func (k *noyauLots) script(ctx context.Context, script []byte) ([]byte, error) {
 	k.mu.Lock()
+	if scriptChaineTest(script) {
+		k.table = true
+		k.mu.Unlock()
+		return nil, nil
+	}
 	n := len(k.scripts)
 	k.scripts = append(k.scripts, string(script))
 	k.execs++
@@ -125,6 +130,9 @@ func (k *noyauLots) script(ctx context.Context, script []byte) ([]byte, error) {
 	}
 	if k.toutRefus {
 		return []byte("Error: Operation not permitted"), errors.New("exit status 1")
+	}
+	if strings.HasPrefix(string(script), "delete element") || strings.Contains(string(script), "\nadd element") && strings.Contains(string(script), "delete element") {
+		return k.remplacer(string(script))
 	}
 	neufs := map[string]int64{}
 	var retires []string
@@ -153,6 +161,29 @@ func (k *noyauLots) script(ctx context.Context, script []byte) ([]byte, error) {
 	for _, ip := range retires {
 		delete(k.elems, ip)
 	}
+	return nil, nil
+}
+
+// remplacer joue dans l'ordre un script qui ajoute et retire (retrait de levées, prolongation) ; k.mu tenu. Transaction :
+// tout ou rien.
+func (k *noyauLots) remplacer(script string) ([]byte, error) {
+	neuf := map[string]int64{}
+	for ip, d := range k.elems {
+		neuf[ip] = d
+	}
+	for _, l := range strings.Split(strings.TrimSpace(script), "\n") {
+		champs := strings.SplitN(l, "{", 2)
+		f := strings.Fields(strings.Trim(champs[1], " }"))
+		if strings.HasPrefix(champs[0], "delete") {
+			if _, ok := neuf[f[0]]; !ok {
+				return []byte("Error: Could not process rule: No such file or directory"), errors.New("exit status 1")
+			}
+			delete(neuf, f[0])
+			continue
+		}
+		neuf[f[0]], _ = strconv.ParseInt(strings.TrimSuffix(f[2], "s"), 10, 64)
+	}
+	k.elems = neuf
 	return nil, nil
 }
 
@@ -317,10 +348,10 @@ func TestRetirerLeves_EcheanceNEstPasUneLevee(t *testing.T) {
 		{IP: "203.0.113.3", At: now, Action: "unban"},
 		{IP: "203.0.113.3", At: now, Expires: now - 1, Action: "ban"}, // levé, rebanni, échu
 	})
-	var envoyes []netip.Addr
+	var envoyes []poseLot
 	for _, ip := range []string{"203.0.113.1", "203.0.113.2", "203.0.113.3", "203.0.113.4"} { // .4 : rien au journal
 		k.elems[ip] = 60
-		envoyes = append(envoyes, netip.MustParseAddr(ip))
+		envoyes = append(envoyes, poseLot{adr: netip.MustParseAddr(ip), fin: now + 60, finMax: now + 60})
 	}
 	b.retirerLeves(envoyes)
 	if _, p := k.elems["203.0.113.2"]; p || k.nb() != 3 {
@@ -625,10 +656,11 @@ func TestVeiller_EtatEtReparationPendantUneReposeBloquee(t *testing.T) {
 		_ = json.Unmarshal(raw, &e)
 		return e
 	}
+	brut := func() string { raw, _ := os.ReadFile(b.etatFichier); return string(raw) }
 	_ = os.Remove(b.etatFichier)
 	attendre(t, "état publié pendant la repose", func() bool {
 		e := lire()
-		return e.Verifie != 0 && e.ReposeEnCours && e.BansAttendus == 3000
+		return e.Verifie != 0 && e.ReposeEnCours && strings.Contains(brut(), `"bans_attendus":null,"bans_poses":null`) // jamais 0
 	})
 	k.flushRuleset()
 	attendre(t, "table recréée pendant la repose", func() bool { k.mu.Lock(); defer k.mu.Unlock(); return k.table })
@@ -1040,7 +1072,7 @@ func TestRepose_NftReel(t *testing.T) {
 			}
 		})
 		chrono("ré-affirmation sans manquant", func() {
-			if got := b.Reload(); got != 0 || b.Etat().BansPoses != n {
+			if got := b.Reload(); got != 0 || b.Etat().BansPoses != compteBans(n) {
 				t.Fatalf("%d reposés, %+v", got, b.Etat())
 			}
 		})
@@ -1064,7 +1096,7 @@ func TestRepose_NftReel(t *testing.T) {
 		})
 		_ = exec.Command("nft", "flush", "ruleset").Run()
 		chrono("réparation après flush ruleset", func() {
-			if !b.Reparer("test") || b.Etat().BansPoses != n {
+			if !b.Reparer("test") || b.Etat().BansPoses != compteBans(n) {
 				t.Fatalf("%+v", b.Etat())
 			}
 		})
@@ -1077,7 +1109,14 @@ func TestRepose_NftReel(t *testing.T) {
 				t.Fatalf("%s : ban manuel de 7 j raccourci à %d s (%v)", ip, r, ok)
 			}
 			store.Append(BanRecord{IP: ip, At: now, Action: "unban"})
-			b.retirerLeves([]netip.Addr{netip.MustParseAddr(ip)})
+			fin := time.Now().Unix() + 3600 // l'échéance d'un autre : laissé
+			b.retirerLeves([]poseLot{{adr: netip.MustParseAddr(ip), fin: fin, finMax: fin}})
+			if _, ok := b.resteElement(context.Background(), set, ip); !ok {
+				t.Fatalf("%s : ban d'un autre retiré", ip)
+			}
+			r, _ := b.resteElement(context.Background(), set, ip)
+			fin = time.Now().Unix() + r
+			b.retirerLeves([]poseLot{{adr: netip.MustParseAddr(ip), fin: fin, finMax: fin}})
 			if _, ok := b.resteElement(context.Background(), set, ip); ok {
 				t.Fatalf("%s : levé, encore là", ip)
 			}

@@ -83,24 +83,80 @@ func NewActorBan(chemin, mode string, store *BanStore, b banneur) *ActorBan {
 		maxParHeure: 20, fraicheur: 10 * time.Minute, now: time.Now}
 }
 
-func parseCIDRs(liste string) []*net.IPNet {
-	var out []*net.IPNet
+// Plages protégées : au plus /12 en IPv4 et /28 en IPv6 (#3932) : assez pour un opérateur entier (Meta : 57.144.0.0/14, 2803:6080::/29). Une faute de frappe (`82.67.100.75/3`, `0.0.0.0/0`) protégerait
+// une part d'Internet, et ferait lever au démarrage autant de bans du journal. Le privé (jamais banni) n'a pas de borne.
+const (
+	prefixeMinProtege4 = 12
+	prefixeMinProtege6 = 28
+)
+
+var jamaisBannissables = func() (out []*net.IPNet) {
+	for _, c := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10", "fc00::/7", "fe80::/10"} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()
+
+func tropLarge(n *net.IPNet) bool {
+	uns, bits := n.Mask.Size()
+	mini := prefixeMinProtege6
+	if n.IP.To4() != nil { // ::ffff:a.b.c.d/96 et plus : Contains les traite en IPv4
+		mini = prefixeMinProtege4
+		uns -= bits - 32
+	}
+	if uns >= mini {
+		return false
+	}
+	for _, p := range jamaisBannissables {
+		pu, pb := p.Mask.Size()
+		if p.Contains(n.IP) && (n.IP.To4() != nil) == (pb == 32) && uns >= pu {
+			return false
+		}
+	}
+	return true
+}
+
+// analyserCIDRs rend les plages de la liste et les morceaux écartés (trop larges ; illisibles).
+func analyserCIDRs(liste string) (plages []*net.IPNet, larges, illisibles []string) {
 	for _, c := range strings.Split(liste, ",") {
 		c = strings.TrimSpace(c)
 		if c == "" {
 			continue
 		}
-		if _, n, err := net.ParseCIDR(c); err == nil {
-			out = append(out, n)
-		} else if ip := net.ParseIP(c); ip != nil {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			ip := net.ParseIP(c)
+			if ip == nil {
+				illisibles = append(illisibles, c)
+				continue
+			}
 			bits := 32
 			if ip.To4() == nil {
 				bits = 128
 			}
-			out = append(out, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			n = &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)}
 		}
+		if tropLarge(n) {
+			larges = append(larges, c)
+			continue
+		}
+		plages = append(plages, n)
 	}
-	return out
+	return plages, larges, illisibles
+}
+
+// parseCIDRs rend les plages de la liste ; ce qui est écarté est dit au journal.
+func parseCIDRs(liste string) []*net.IPNet {
+	plages, larges, illisibles := analyserCIDRs(liste)
+	for _, c := range larges {
+		log.Printf("sbxwaf: ATTENTION — plage protégée IGNORÉE, plus large que /%d (IPv4) ou /%d (IPv6) : %s — corriger SECUBOX_WAF_PROTEGEES (/etc/secubox/waf/protegees.env)",
+			prefixeMinProtege4, prefixeMinProtege6, c)
+	}
+	for _, c := range illisibles {
+		log.Printf("sbxwaf: ATTENTION — plage protégée IGNORÉE, illisible : %q — corriger SECUBOX_WAF_PROTEGEES (/etc/secubox/waf/protegees.env)", c)
+	}
+	return plages
 }
 
 func (a *ActorBan) protegee(ip string) bool { return adresseProtegee(ip, a.protegees) }

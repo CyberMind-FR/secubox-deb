@@ -217,8 +217,10 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 	if !os.SameFile(st, actuel) {
 		return bilan, fmt.Errorf("%s remplacé pendant le compactage : abandon", s.path)
 	}
+	s.idxMu.Lock() // aucun lecteur entre le suivi et le rename : l'index garde la position de l'ancien fichier
+	defer s.idxMu.Unlock()
 	if s.idx != nil {
-		s.suivre(f, s.idx.horizon) // index à jour jusqu'ici : il survit au rename (deplacer)
+		_ = s.suivre(f, s.idx.horizon) // index à jour jusqu'ici : il survit au rename (deplacer)
 	}
 	if _, err := f.Seek(n, io.SeekStart); err != nil {
 		return bilan, err

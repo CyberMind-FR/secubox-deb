@@ -1517,7 +1517,22 @@ func main() {
 	rotationRejeu := flag.Bool("rotation-rejeu", false, "rejeu HORS LIGNE du détecteur de rotation sur les journaux d'accès nginx donnés en arguments (.gz admis) : rapport JSON sur la sortie standard, puis fin. Rien n'est banni ni écrit (#3919)")
 	rotationRejeuSansGrace := flag.Bool("rotation-rejeu-sans-grace", true, "rejeu : juger dès la première ligne ; false : comme en auto avec une mémoire vide, rien n'est jugé les 24 premières heures")
 	rotationRejeuAdresses := flag.Bool("rotation-rejeu-adresses", false, "rejeu : donner au plus 20 adresses en exemple par campagne (défaut : des comptes seulement)")
+	verifier := flag.Bool("verifier", false, "vérifie les drapeaux, les règles, les routes, les profils, les plages protégées et les journaux à ouvrir, puis quitte (0 : le WAF peut démarrer) ; n'écoute pas, n'écrit rien, ne touche pas à nft (#3932)")
 	flag.Parse()
+
+	if *verifier {
+		log.SetOutput(io.Discard) // le bilan tient en une ligne
+		bilan, err := VerifierConfiguration(ConfigVerifiee{Regles: *rules, Routes: *routesFile, Profils: *vhostProfiles,
+			Cookies: *cookieAuditLog, Menaces: *threatLog, Protegees: *actorBanProtegees, Restants: flag.Args()})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "sbxwaf: vérification : %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("sbxwaf: vérification : " + bilan)
+		return
+	}
+
+	protegees := parseCIDRs(*actorBanProtegees) // une fois : ce qui est écarté n'est dit qu'une fois
 
 	// #3919 — rejeu hors ligne du détecteur de rotation : ni écoute, ni proxy, ni nft, ni écriture.
 	if *rotationRejeu {
@@ -1531,7 +1546,7 @@ func main() {
 			grace = -1
 		}
 		err := Rejouer(flag.Args(), RotationConfig{Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure, Grace: grace,
-			Protegees: parseCIDRs(*actorBanProtegees), SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
+			Protegees: protegees, SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "sbxwaf: rejeu : %v\n", err)
 			os.Exit(1)
@@ -1564,6 +1579,13 @@ func main() {
 		b, _ := json.MarshalIndent(sum, "", "  ")
 		os.Stdout.Write(append(b, '\n'))
 		return
+	}
+
+	// L'ÉCOUTE D'ABORD (#3932). Le port fermé, HAProxy rend 503 ; ouvert, une connexion attend dans la file du noyau que tout
+	// ce qui suit soit chargé, règles et chaîne de bans comprises : RIEN n'est servi avant httpSrv.Serve, tout en bas.
+	ecoute, err := net.Listen("tcp", *listen)
+	if err != nil {
+		log.Fatalf("sbxwaf: écoute %s : %v", *listen, err)
 	}
 
 	// rules is consumed below when --rules is provided.
@@ -1703,7 +1725,7 @@ func main() {
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:   splitCSV(*widgetHosts),
 		leurreBan:     *leurreBan,
-		protegees:     parseCIDRs(*actorBanProtegees),
+		protegees:     protegees,
 		widgetExclude: splitCSV(*widgetExclude),
 		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
@@ -1738,143 +1760,150 @@ func main() {
 
 	// Ban nft natif (#1070 phase B). Autonome : le
 	// drop nft est effectif de façon autonome, persiste au restart (journal) et
-	// se retire à l'échéance (timeout nft). Ensure échoue sans CAP_NET_ADMIN → on
-	// désactive proprement le backend nft (plus de ban natif).
+	// se retire à l'échéance (timeout nft). Ensure en échec (CAP_NET_ADMIN, nft figé) : rien
+	// n'est banni, l'état le dit (actif=false) et la veille retente toutes les 30 s (#3932).
 	if *nftBanEnabled {
 		store := NewBanStore(*banStore)
 		nb := NewNftBanner(*nftPath, *nftTable, *nftBanDuration, store)
 		nb.etatFichier = *nftEtat
-		if err := nb.Ensure(); err != nil {
-			log.Printf("sbxwaf: ban nft natif désactivé (nft indisponible : %v) — plus de ban natif", err)
+		nb.protegees = protegees
+		nb.audit = "/var/log/secubox/waf/audit.log"
+		// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. La repose ne consulte que leur mémoire, sans DNS (#3930).
+		nb.robots = NewCrawlers()
+		if annuaire != nil {
+			nb.robotPlausible = func(ip string) bool { return asnMoteurs[annuaire.Classer(ip).ASN] }
+		}
+		srv.nftBan = nb
+		if dejaLa, err := nb.EnsureDemarrage(); err != nil {
+			log.Printf("sbxwaf: ban nft natif PAS EN PLACE (%v) — aucun ban n'est appliqué ; nouvel essai toutes les 30 s", err)
 			nb.noterEchec(err.Error())
 			nb.EcrireEtat() // actif=false : le tableau de bord le dit, au lieu d'afficher « 0 ban »
 		} else {
-			srv.nftBan = nb
-			// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. La repose ne consulte que leur mémoire, sans DNS (#3930).
-			nb.robots = NewCrawlers()
-			if annuaire != nil {
-				nb.robotPlausible = func(ip string) bool { return asnMoteurs[annuaire.Classer(ip).ASN] }
+			// Les bans du journal. Ensembles déjà dans le noyau (redémarrage) : il les applique, le service ne les attend pas.
+			// Table neuve (démarrage de la box, pare-feu rechargé) : 3 s au plus, la repose finit en arrière-plan.
+			attente := 3 * time.Second
+			if dejaLa {
+				attente = 0
 			}
-			// Les bans du journal, sans retarder l'écoute : au-delà de 3 s la repose finit en arrière-plan.
-			if n, fini := nb.PremiereRepose(3 * time.Second); fini {
+			if n, fini := nb.PremiereRepose(attente); fini {
 				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
 					*nftTable, *nftBanDuration, n)
 			} else {
-				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, rechargement des bans en cours)",
+				log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, rechargement des bans en arrière-plan)",
 					*nftTable, *nftBanDuration)
 			}
-			// Veille (#1693) : la table ne vit que dans le noyau, et tout
-			// rechargement du pare-feu (`flush ruleset`) l'efface. Toutes les 30 s
-			// on vérifie qu'elle bloque encore — sinon recréée et bans du journal
-			// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
-			// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
-			// à l'échéance reste assuré par le timeout nft du noyau.
-			// Bans déjà posés sur des robots vérifiés : levés en arrière-plan, à débit DNS borné (nftban_robots.go).
-			go nb.VeillerRobots(time.Hour)
-			go nb.Veiller(30*time.Second, 2*time.Minute)
-			// #3816 : journal compacté après le premier Reload (ne retarde pas le démarrage), puis chaque heure.
-			go store.VeillerCompactage(CompactageBans{Fenetre: *banStoreFenetre, ArchivesMois: *banStoreArchives, Seuil: *banStoreSeuil},
-				*banStoreCompactage)
-			// Ban automatique piloté par Actor Intelligence : garde-fous dans actorban.go. « off » par défaut ; « propose » n'applique rien.
-			if *actorBanMode == "propose" || *actorBanMode == "auto" {
-				ab := NewActorBan(*actorProps, *actorBanMode, store, nb)
-				ab.etat = *actorBanEtat
-				ab.minBans = *actorBanMin
-				ab.maxParHeure = *actorBanMaxHeure
-				ab.protegees = parseCIDRs(*actorBanProtegees)
-				go ab.Veiller(time.Minute)
-				log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
-			}
-			// Capteur pare-feu (#2240) : lit l'ensemble nft des paquets rejetés, émet vers actord ; sans --actor-socket il n'a nulle part où écrire.
-			if *scanSensor {
-				if emitter == nil {
-					log.Printf("sbxwaf: capteur pare-feu demandé mais --actor-socket est vide : désactivé")
-				} else {
-					ss := NewScanSensor(nb.runner, emitter)
-					ss.seuil = *scanSeuil
-					ss.protegees = parseCIDRs(*actorBanProtegees)
-					ss.geo = geo
-					go ss.Veiller(30 * time.Second)
-					log.Printf("sbxwaf: capteur pare-feu actif (balayage = %d ports distincts en 10 min, relecture 30 s)", *scanSeuil)
-				}
-			}
-			// Ban des campagnes (#2238) : garde-fous dans campagneban.go ; mêmes plages protégées que le ban d'acteurs.
-			if *campagneBanMode == "propose" || *campagneBanMode == "auto" {
-				cb := NewCampagneBan(*threatLog, *campagneBanMode, store, nb)
-				cb.etat = *campagneBanEtat
-				cb.maxParHeure = *campagneBanMaxHeure
-				cb.protegees = parseCIDRs(*actorBanProtegees)
-				go cb.Veiller(5 * time.Minute)
-				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
-			}
-			// Campagnes à rotation (#3919) : garde-fous dans rotation.go ; mêmes plages protégées ; sans annuaire, aucune campagne ne s'établit.
-			if *rotationMode == "propose" || *rotationMode == "auto" {
-				// Un SEUL processus porte le détecteur : ailleurs, la page et ses ressources seraient vues séparément, et un vrai visiteur passerait pour muet.
-				if err := verrouillerRotation(*rotationEtat); err != nil {
-					log.Printf("sbxwaf: rotation DÉSACTIVÉE — %v", err)
-					*rotationMode = "off"
-				}
-			}
-			if *rotationMode == "propose" || *rotationMode == "auto" {
-				var cl classeur
-				if annuaire != nil {
-					cl = annuaire
-				}
-				rot := NewRotation(RotationConfig{Mode: *rotationMode, Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure,
-					Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: parseCIDRs(*actorBanProtegees),
-					SortiesTor: *rotationSortiesTor}, nb, cl)
-				if nb.robots != nil {
-					rot.SetRobots(nb.robots.VerifieSur)
-				}
-				if srv.threatLog != nil {
-					rot.SetJournal(srv.threatLog.Record)
-				}
-				// Arrêt du service (RuntimeMaxSec, mise à jour) : la mémoire des navigateurs est écrite, puis le signal reprend son effet ordinaire.
-				arret := make(chan os.Signal, 1)
-				signal.Notify(arret, syscall.SIGTERM)
-				go func() {
-					<-arret
-					rot.EcrireMemoire(time.Now())
-					signal.Reset(syscall.SIGTERM)
-					_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
-				}()
-				srv.rotation = rot
-				go rot.Veiller(2 * time.Second)
-				log.Printf("sbxwaf: rotation mode=%s verdict=%s (plafond=%d/h, annuaire=%t, sorties Tor=%s)", *rotationMode, rot.cfg.Verdict,
-					*rotationMaxHeure, annuaire != nil, *rotationSortiesTor)
-			}
-			// Échelle de réponse (#2274) : mesures d'actord appliquées aux requêtes ; le ban passe par le même banneur nft. La quarantaine du LAN est celle du NAC.
-			if *mesuresMode == "propose" || *mesuresMode == "auto" {
-				mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
-				mw.etat = "/var/lib/secubox/waf/mesures-etat.json"
-				mw.preuves = *mesuresPreuves
-				mw.protegees = parseCIDRs(*actorBanProtegees)
-				mw.robots = nb.robots
-				mw.maxBansHeure = *mesuresMaxBans
-				srv.mesures = mw
-				go mw.Veiller(15 * time.Second)
-				log.Printf("sbxwaf: échelle de réponse mode=%s (fichier=%s, plafond bans=%d/h)", *mesuresMode, *mesuresFichier, *mesuresMaxBans)
-			}
-			// Kill switch logique (#2240, phase 4) : réévaluation des bans à l'échéance (reevaluation.go).
-			if *reevaluation == "propose" || *reevaluation == "auto" {
-				rv := NewReeval(nb, store, *reevaluation, *reevalPreuves)
-				rv.seuil = *reevalSeuil
-				go rv.Veiller(30 * time.Second)
-				log.Printf("sbxwaf: réévaluation des bans mode=%s (seuil=%d paquets, preuves=%s)", *reevaluation, *reevalSeuil, *reevalPreuves)
-			}
-			// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
-			// nftables.service (ReloadPropagatedFrom) — réparation immédiate au
-			// lieu d'attendre la veille. Revérifié 3 s plus tard : l'ordre entre
-			// le rechargement du pare-feu et celui-ci n'est pas garanti.
-			hup := make(chan os.Signal, 1)
-			signal.Notify(hup, syscall.SIGHUP)
-			go func() {
-				for range hup {
-					go nb.Reparer("rechargement signalé") // la repose ne retarde pas la seconde vérification
-					time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
-				}
-			}()
 		}
+		// Veille (#1693) : la table ne vit que dans le noyau, et tout
+		// rechargement du pare-feu (`flush ruleset`) l'efface. Toutes les 30 s
+		// on vérifie qu'elle bloque encore — sinon recréée et bans du journal
+		// ré-appliqués ; toutes les 2 min les bans actifs sont ré-affirmés
+		// (un `flush set` vide l'ensemble sans toucher la chaîne). Le retrait
+		// à l'échéance reste assuré par le timeout nft du noyau.
+		// Bans déjà posés sur des robots vérifiés : levés en arrière-plan, à débit DNS borné (nftban_robots.go).
+		nb.QuandPret(func() { go nb.VeillerRobots(time.Hour) })
+		go nb.Veiller(30*time.Second, 2*time.Minute)
+		// #3816 : journal compacté après le premier Reload (ne retarde pas le démarrage), puis chaque heure.
+		go store.VeillerCompactage(CompactageBans{Fenetre: *banStoreFenetre, ArchivesMois: *banStoreArchives, Seuil: *banStoreSeuil},
+			*banStoreCompactage)
+		// Ban automatique piloté par Actor Intelligence : garde-fous dans actorban.go. « off » par défaut ; « propose » n'applique rien.
+		if *actorBanMode == "propose" || *actorBanMode == "auto" {
+			ab := NewActorBan(*actorProps, *actorBanMode, store, nb)
+			ab.etat = *actorBanEtat
+			ab.minBans = *actorBanMin
+			ab.maxParHeure = *actorBanMaxHeure
+			ab.protegees = protegees
+			nb.QuandPret(func() { go ab.Veiller(time.Minute) })
+			log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
+		}
+		// Capteur pare-feu (#2240) : lit l'ensemble nft des paquets rejetés, émet vers actord ; sans --actor-socket il n'a nulle part où écrire.
+		if *scanSensor {
+			if emitter == nil {
+				log.Printf("sbxwaf: capteur pare-feu demandé mais --actor-socket est vide : désactivé")
+			} else {
+				ss := NewScanSensor(nb.runner, emitter)
+				ss.seuil = *scanSeuil
+				ss.protegees = protegees
+				ss.geo = geo
+				nb.QuandPret(func() { go ss.Veiller(30 * time.Second) })
+				log.Printf("sbxwaf: capteur pare-feu actif (balayage = %d ports distincts en 10 min, relecture 30 s)", *scanSeuil)
+			}
+		}
+		// Ban des campagnes (#2238) : garde-fous dans campagneban.go ; mêmes plages protégées que le ban d'acteurs.
+		if *campagneBanMode == "propose" || *campagneBanMode == "auto" {
+			cb := NewCampagneBan(*threatLog, *campagneBanMode, store, nb)
+			cb.etat = *campagneBanEtat
+			cb.maxParHeure = *campagneBanMaxHeure
+			cb.protegees = protegees
+			nb.QuandPret(func() { go cb.Veiller(5 * time.Minute) })
+			log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
+		}
+		// Campagnes à rotation (#3919) : garde-fous dans rotation.go ; mêmes plages protégées ; sans annuaire, aucune campagne ne s'établit.
+		if *rotationMode == "propose" || *rotationMode == "auto" {
+			// Un SEUL processus porte le détecteur : ailleurs, la page et ses ressources seraient vues séparément, et un vrai visiteur passerait pour muet.
+			if err := verrouillerRotation(*rotationEtat); err != nil {
+				log.Printf("sbxwaf: rotation DÉSACTIVÉE — %v", err)
+				*rotationMode = "off"
+			}
+		}
+		if *rotationMode == "propose" || *rotationMode == "auto" {
+			var cl classeur
+			if annuaire != nil {
+				cl = annuaire
+			}
+			rot := NewRotation(RotationConfig{Mode: *rotationMode, Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure,
+				Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: protegees,
+				SortiesTor: *rotationSortiesTor}, nb, cl)
+			if nb.robots != nil {
+				rot.SetRobots(nb.robots.VerifieSur)
+			}
+			if srv.threatLog != nil {
+				rot.SetJournal(srv.threatLog.Record)
+			}
+			// Arrêt du service (RuntimeMaxSec, mise à jour) : la mémoire des navigateurs est écrite, puis le signal reprend son effet ordinaire.
+			arret := make(chan os.Signal, 1)
+			signal.Notify(arret, syscall.SIGTERM)
+			go func() {
+				<-arret
+				rot.EcrireMemoire(time.Now())
+				signal.Reset(syscall.SIGTERM)
+				_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+			}()
+			srv.rotation = rot
+			nb.QuandPret(func() { go rot.Veiller(2 * time.Second) }) // avant : verdicts en attente bornés, puis abandonnés
+			log.Printf("sbxwaf: rotation mode=%s verdict=%s (plafond=%d/h, annuaire=%t, sorties Tor=%s)", *rotationMode, rot.cfg.Verdict,
+				*rotationMaxHeure, annuaire != nil, *rotationSortiesTor)
+		}
+		// Échelle de réponse (#2274) : mesures d'actord appliquées aux requêtes ; le ban passe par le même banneur nft. La quarantaine du LAN est celle du NAC.
+		if *mesuresMode == "propose" || *mesuresMode == "auto" {
+			mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
+			mw.etat = "/var/lib/secubox/waf/mesures-etat.json"
+			mw.preuves = *mesuresPreuves
+			mw.protegees = protegees
+			mw.robots = nb.robots
+			mw.maxBansHeure = *mesuresMaxBans
+			srv.mesures = mw
+			nb.QuandPret(func() { go mw.Veiller(15 * time.Second) })
+			log.Printf("sbxwaf: échelle de réponse mode=%s (fichier=%s, plafond bans=%d/h)", *mesuresMode, *mesuresFichier, *mesuresMaxBans)
+		}
+		// Kill switch logique (#2240, phase 4) : réévaluation des bans à l'échéance (reevaluation.go).
+		if *reevaluation == "propose" || *reevaluation == "auto" {
+			rv := NewReeval(nb, store, *reevaluation, *reevalPreuves)
+			rv.seuil = *reevalSeuil
+			nb.QuandPret(func() { go rv.Veiller(30 * time.Second) })
+			log.Printf("sbxwaf: réévaluation des bans mode=%s (seuil=%d paquets, preuves=%s)", *reevaluation, *reevalSeuil, *reevalPreuves)
+		}
+		// SIGHUP : `systemctl reload secubox-waf-ng`, propagé depuis
+		// nftables.service (ReloadPropagatedFrom) — réparation immédiate au
+		// lieu d'attendre la veille. Revérifié 3 s plus tard : l'ordre entre
+		// le rechargement du pare-feu et celui-ci n'est pas garanti.
+		hup := make(chan os.Signal, 1)
+		signal.Notify(hup, syscall.SIGHUP)
+		go func() {
+			for range hup {
+				go nb.Reparer("rechargement signalé") // la repose ne retarde pas la seconde vérification
+				time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
+			}
+		}()
 	}
 	// #3820 : journaux de preuves bornés, quel que soit le mode (un journal d'un mode repassé à off est compacté aussi).
 	// Bornes de lecture de l'API du WAF : fin de 8 Mio (/mesures), 5 000 dernières lignes (/reevaluations).
@@ -1939,7 +1968,6 @@ func main() {
 	}
 
 	httpSrv := &http.Server{
-		Addr:              *listen,
 		Handler:           srv.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -1964,7 +1992,7 @@ func main() {
 	}
 
 	log.Printf("sbxwaf: listening on %s", *listen)
-	if err := httpSrv.ListenAndServe(); err != nil {
+	if err := httpSrv.Serve(ecoute); err != nil {
 		log.Fatalf("sbxwaf: %v", err)
 	}
 }

@@ -82,7 +82,9 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
 
 Réponses pour le relais (Tâches 6-7) : `/ai/ban` 200 `{id, cible, fin, duree_s, audit}`, 409/5xx
 `{"detail": {"motif"}}` ; `/ai/prolonger` 200 `{id, cible, fin, audit}` ;
-`/ai/unban` 200 `{id, etat}` avec `etat ∈ {annule, echu, deja_annule, couvert}`, 404 `{"detail": {"motif": "inconnu"}}`.
+`/ai/unban` 200 `{id, etat}` avec `etat ∈ {annule, echu, deja_annule, couvert}`, 404 `{"detail": {"motif": "inconnu"}}` ;
+`annule` d'une adresse porte `ban_waf_restant: {fin}` (epoch, ou null : inconnue) si un ban de sbxwaf reste ou revient
+(#3932) : annulé, l'adresse n'est pas forcément libre.
 
 CONTRAINTE P9 : le jeton lie le corps, pas la route. Chaque corps porte un `geste` obligatoire propre à sa route
 (`ban`, `unban`, `prolonger`) ; `GET /ai/etat` n'accepte aucun corps. CONTRAINTE P11 : aucune route ne déclare de
@@ -907,6 +909,34 @@ def adresse_couverte_par_le_waf(ip: str, maintenant: int) -> bool:
     return exp == 0 or exp > maintenant
 
 
+def ban_waf_restant(cible: Cible, maintenant: int) -> Optional[Dict[str, Any]]:
+    """Le ban de sbxwaf qui reste, ou revient à sa prochaine passe, une fois celui d'ai-ban levé (#3932) : levée avec
+    `fin_max`, `wafctl unban` n'écrit rien au journal de sbxwaf, qui remet ses propres bans. `{"fin": epoch}` ;
+    `{"fin": None}` : sans échéance, ou peut-être — le journal n'a pas pu être lu, ou pas jusqu'au bout (borne de
+    lecture) ; None : aucun. Ne lève jamais : la levée est déjà faite."""
+    if not isinstance(cible, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+        return None  # un bloc /24 n'est pas dans l'ensemble de sbxwaf
+    try:
+        objets = _lire_fin_jsonl(BANS_WAF, _TAILLE_LECTURE_BANS_WAF)
+        if objets is None:
+            return None
+        dernier = None
+        for r in objets:
+            if isinstance(r, dict) and r.get("ip") == str(cible):
+                dernier = r
+        if dernier is None:
+            return {"fin": None} if os.stat(BANS_WAF).st_size > _TAILLE_LECTURE_BANS_WAF else None
+    except OSError as e:
+        log.warning("ai-unban : ban du WAF restant inconnu : %s", type(e).__name__)
+        return {"fin": None}
+    if dernier.get("action") != "ban":
+        return None
+    exp = dernier.get("exp") or 0
+    if not _entier(exp) or exp == 0:
+        return {"fin": None}
+    return {"fin": exp} if exp > maintenant else None
+
+
 # ── wafctl, nft ────────────────────────────────────────────────────────
 def _executer(argv: List[str]) -> subprocess.CompletedProcess:
     return subprocess.run(argv, check=False, timeout=_DELAI_WAFCTL_S, capture_output=True, text=True)
@@ -1575,7 +1605,12 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             raise HTTPException(statut, detail={"motif": motif})
         # le ban est levé et audité ; si la ligne manque, un nouvel essai refera un retrait idempotent puis la ligne
         _clore(geste.id, ban, maintenant, "unban")
-    return {"id": geste.id, "etat": "annule"}
+        # « annulé » ne veut pas dire « libre » : un ban plus court de sbxwaf peut rester (#3932)
+        restant = None if limite else ban_waf_restant(cible, maintenant)
+    reponse: Dict[str, Any] = {"id": geste.id, "etat": "annule"}
+    if restant is not None:
+        reponse["ban_waf_restant"] = restant
+    return reponse
 
 
 @router.post("/lever")

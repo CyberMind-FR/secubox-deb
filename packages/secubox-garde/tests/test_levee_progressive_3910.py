@@ -31,6 +31,9 @@ class EffetsTues:
             raise Tue(ip)
         return {"ok": True, "motif": ""}
 
+    def lever_mac(self, menace, mac, motif=""):
+        return {"ok": False, "motif": "x"}                    # repli adresse par adresse (#3914)
+
     def alerte(self, texte):
         pass
 

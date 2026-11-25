@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from . import audit as _audit
 from . import snapshot as _snapshot
-from .actuate import ActuationError, actuate, condition_failed, derived_timeout, wait_state
+from .actuate import ActuationError, actuate, derived_timeout, jamais_actif, wait_state
 from .diff import START, STOP, Change
 from .manifest import Manifest
 
@@ -45,7 +45,8 @@ def _do_change(c: Change, m: Manifest, *, run, observe, routes_value, sleep, now
     # JAMAIS active (enable --now a réussi, systemd la laisse inactive par
     # design). On ne l'attend pas (ça timeout) et on ne la traite PAS comme un
     # échec : le module est délibérément off ici.
-    if c.action == START and condition_failed(m, run):
+    # #3939 : de même un oneshot sans RemainAfterExit (travaille puis redevient inactif).
+    if c.action == START and jamais_actif(m, run):
         return
     want = _want_on(c.action)
     # L'ÉTAT OBSERVÉ tranche, pas le code retour de la commande. Le délai est
@@ -123,7 +124,7 @@ def _rollback_applied(applied, manifests, snap, *, run, observe, sleep, clock,
             # ne la rend jamais active — succès, pas timeout. Sinon l'état
             # observé tranche, avec le même délai dérivé (cap = wait_timeout).
             timeout = derived_timeout(m, want_on, run, cap=wait_timeout)
-            reached = (rev.action == START and condition_failed(m, run)) or \
+            reached = (rev.action == START and jamais_actif(m, run)) or \
                 wait_state(m, want_on, observe=observe, sleep=sleep, now=clock,
                            timeout=timeout)
             if reached:

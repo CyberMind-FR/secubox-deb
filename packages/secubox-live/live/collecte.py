@@ -192,6 +192,8 @@ def noeuds(src: Sources, maintenant: float, roles: dict, materiels: dict) -> Opt
                             "memoire": round(100 * (1 - libre / tot)) if isinstance(tot, (int, float)) and tot
                             and isinstance(libre, (int, float)) else None,
                             "uptime_s": inv.get("Device.DeviceInfo.UpTime")})
+                if not en_ligne:          # #3933 : dernier relevé périmé, jamais publié comme une mesure actuelle
+                    res[-1].update(cpu=None, memoire=None, uptime_s=None)
         except (sqlite3.Error, ValueError):
             pass
         finally:
@@ -477,7 +479,9 @@ def sites_publies(src: Sources) -> Optional[int]:
             vh = tomllib.load(f).get("vhosts") or {}
     except (OSError, tomllib.TOMLDecodeError):
         return None
-    return sum(1 for v in vh.values() if isinstance(v, dict) and v.get("enabled", True))
+    # #3933 : publié comme « derrière le pare-feu » ; un vhost waf_bypass (honoré par haproxyctl) n'y est pas.
+    return sum(1 for v in vh.values() if isinstance(v, dict) and v.get("enabled", True)
+               and "true" not in str(v.get("waf_bypass", False)).lower())
 
 
 def date_production(conf: dict) -> Optional[str]:

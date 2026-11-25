@@ -42,6 +42,9 @@ func (f *fauxNft) script(ctx context.Context, script []byte) ([]byte, error) {
 	return f.run(ctx, "-f", "-", string(script))
 }
 
+// scriptChaineTest : le script pose la chaîne (Ensure), il ne touche pas aux éléments.
+func scriptChaineTest(script []byte) bool { return strings.HasPrefix(string(script), "add table ") }
+
 func (f *fauxNft) dernier() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -173,16 +176,11 @@ func TestNftBanner_FlushAvantLesRegles(t *testing.T) {
 	if err := b.Ensure(); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}
-	iFlush, iRegle := -1, -1
-	for i, c := range fx.cmds {
-		j := joint(c)
-		if strings.HasPrefix(j, "flush chain") {
-			iFlush = i
-		}
-		if strings.HasPrefix(j, "add rule") && iRegle == -1 {
-			iRegle = i
-		}
+	script := string(b.scriptChaine(nil))
+	if joint(fx.dernier()) != "-f - "+script {
+		t.Fatalf("une seule transaction attendue : %v", fx.cmds)
 	}
+	iFlush, iRegle := strings.Index(script, "flush chain"), strings.Index(script, "add rule")
 	if iFlush == -1 || iRegle == -1 || iFlush > iRegle {
 		t.Fatalf("flush (%d) doit précéder la première règle (%d)", iFlush, iRegle)
 	}
@@ -271,6 +269,11 @@ func (k *noyauNft) run(_ context.Context, args ...string) ([]byte, error) {
 func (k *noyauNft) script(_ context.Context, script []byte) ([]byte, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
+	if scriptChaineTest(script) {
+		k.table, k.regles = true, true
+		k.creees++
+		return nil, nil
+	}
 	if !k.table {
 		return k.absente, errors.New("exit status 1")
 	}

@@ -105,6 +105,8 @@ type webActorReduit struct {
 	Src      srcCounts    `json:"src"`
 	First    string       `json:"first"`
 	Last     string       `json:"last"`
+	Premier  int64        `json:"premier"` // #3936 : epoch
+	Dernier  int64        `json:"dernier"`
 	// NbCibles dit l'ampleur de ce qui est visé sans dire quoi.
 	NbCibles int      `json:"nb_cibles"`
 	Bans     int      `json:"bans"`
@@ -116,7 +118,7 @@ func toWebReduit(a *graph.Actor) webActorReduit {
 		ID: a.ID, Priority: a.Priority, Level: niveau(a.Priority),
 		Tags: tags(a.Vector), Vec: a.Vector,
 		Src:   srcCounts{IPs: len(a.IPs), ASNs: len(a.ASNs), Countries: len(a.Countries)},
-		First: hhmm(a.FirstSeen), Last: hhmm(a.LastSeen),
+		First: hhmm(a.FirstSeen), Last: hhmm(a.LastSeen), Premier: a.FirstSeen, Dernier: a.LastSeen,
 		NbCibles: len(a.Targets), Bans: a.Bans, Hyp: hypotheses(a.Vector),
 	}
 }

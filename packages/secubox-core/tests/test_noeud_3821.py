@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from banc_noeud import DOM, HALL, PAGE, PKG, SCRIPT, audits, box_noeud, charger, conf, get, port_libre, table  # noqa: F401
+from banc_noeud import DE3D, DOM, HALL, PAGE, PKG, POLICES, SCRIPT, audits, box_noeud, charger, conf, get, port_libre, table  # noqa: F401
 
 
 # ── Décisions ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -144,6 +144,8 @@ def test_vrai_nginx_ne_sert_que_la_racine_exacte(tmp_path, avec_repli):
     # ce que livre secubox-core (#3883) : le dé à côté de la page, AUCUN www/hall (box sans secubox-webos)
     shutil.copy(HALL / "sbx-dice.js", www / "noeud" / "sbx-dice.js")
     shutil.copytree(HALL / "dice", www / "noeud" / "dice")
+    shutil.copy(DE3D, www / "noeud" / "de3d.js")
+    shutil.copytree(POLICES, www / "noeud" / "polices")
     m.WWW, m.PORT = str(www), port_libre()
     serveur = None
     repli = None
@@ -170,9 +172,17 @@ def test_vrai_nginx_ne_sert_que_la_racine_exacte(tmp_path, avec_repli):
             except OSError:
                 time.sleep(0.05)
         code, h, corps = get(url + "/", DOM)
-        assert code == 200 and h["Content-Type"].startswith("text/html") and b"<sbx-dice" in corps
+        assert code == 200 and h["Content-Type"].startswith("text/html") and b'id="de3d"' in corps
         csp = h["Content-Security-Policy"]
         assert "default-src 'none'" in csp and "frame-ancestors 'none'" in csp and "connect-src" not in csp
+        # #3938 : seule ouverture, les polices de la box ; ni worker, ni blob:, ni unsafe-eval
+        assert csp == ("default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; "
+                       "font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+        code, h, corps = get(url + "/_noeud/de3d.js", DOM)
+        assert code == 200 and "javascript" in h["Content-Type"] and corps == DE3D.read_bytes()
+        for p in ("unbounded", "jetbrains-mono"):
+            code, h, corps = get(url + f"/_noeud/polices/{p}-latin.woff2", DOM)
+            assert code == 200 and h["Content-Type"] == "font/woff2" and corps[:4] == b"wOF2"
         assert get(url + "/?x=1", DOM)[0] == 200
         code, h, corps = get(url + "/_noeud/sbx-dice.js", DOM)
         assert code == 200 and b"customElements.define('sbx-dice'" in corps
@@ -184,9 +194,10 @@ def test_vrai_nginx_ne_sert_que_la_racine_exacte(tmp_path, avec_repli):
         assert code == 200 and json.loads(corps) == {"status": "ok"}
         assert (h.get("X-Hote-Recu") == DOM) if avec_repli else ("X-Hote-Recu" not in h)
         # rien d'autre n'est servi par l'accueil : ni /index.html, ni une API, ni le dossier du Hall
-        for chemin in ("/index.html", "/api/v1/admin/", "/_noeud/", "/_noeud/../hall/index.html", "/sbx-dice.js"):
+        for chemin in ("/index.html", "/api/v1/admin/", "/_noeud/", "/_noeud/../hall/index.html", "/sbx-dice.js",
+                       "/de3d.js", "/_noeud/polices/", "/_noeud/polices/OFL-unbounded.txt", "/_noeud/index.html"):
             code, h, corps = get(url + chemin, DOM)
-            assert b"<sbx-dice" not in corps, chemin
+            assert b'id="de3d"' not in corps, chemin
             assert code == 404, (chemin, code)
     finally:
         subprocess.run(base + ["-s", "stop"], check=False, timeout=30, capture_output=True)
@@ -202,16 +213,21 @@ SRC = PAGE.read_text(encoding="utf-8")
 def test_page_aurora_sans_ressource_exterieure_ni_donnee():
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in SRC
     assert "--fond:#060d1b" in SRC and '"IBM Plex Sans"' in SRC
-    for interdit in ("http://", "https://", "fetch(", "XMLHttpRequest", "innerHTML", "@import", "url(", "eval(",
+    for interdit in ("http://", "https://", "fetch(", "XMLHttpRequest", "innerHTML", "@import", "eval(",
                      "localStorage.setItem", "gk2"):
         assert interdit not in SRC, interdit
-    assert re.findall(r'<script src="([^"]+)"', SRC) == ["/_noeud/sbx-dice.js"]
+    assert re.findall(r'<script src="([^"]+)"', SRC) == ["/_noeud/de3d.js"]
+    assert re.findall(r"url\(([^)]+)\)", SRC) == [f"/_noeud/polices/{p}-latin.woff2" for p in ("unbounded", "jetbrains-mono")]
+    assert SRC.count("font-display:swap") == 2
+    # le dé du Hall n'est chargé qu'en repli, par script
+    assert "<sbx-dice" not in SRC.split("-->", 1)[1] and "s.src='/_noeud/sbx-dice.js'" in SRC
     assert "textContent" in SRC and 'role="img"' in SRC
 
 
 def test_paquet_livre_page_script_et_de_sans_le_hall():
     """#3883 : secubox-core livre le script, la page ET le dé (source : le Hall) ; le vhost ne lit plus www/hall."""
     rules = (PKG / "debian/rules").read_text()
+    assert "www/noeud/de3d.js debian/secubox-core/usr/share/secubox/www/noeud/de3d.js" in rules
     assert "sbin/secubox-noeud debian/secubox-core/usr/sbin/secubox-noeud" in rules
     assert "www/noeud/index.html debian/secubox-core/usr/share/secubox/www/noeud/index.html" in rules
     assert "../secubox-webos/www/hall/sbx-dice.js debian/secubox-core/usr/share/secubox/www/noeud/sbx-dice.js" in rules
@@ -235,7 +251,11 @@ playwright = pytest.importorskip("playwright.sync_api")
 
 @pytest.mark.parametrize("largeur,hauteur", [(1400, 900), (420, 860)])
 def test_rendu_plein_ecran_sans_debordement(largeur, hauteur):
-    fichiers = {"/": (PAGE, "text/html"), "/_noeud/sbx-dice.js": (HALL / "sbx-dice.js", "application/javascript")}
+    """Le repli (pas de WebGL 2) : le dé du Hall, en plein cercle. Le dé 3D : test_de3d_3938.py."""
+    fichiers = {"/": (PAGE, "text/html"), "/_noeud/sbx-dice.js": (HALL / "sbx-dice.js", "application/javascript"),
+                "/_noeud/de3d.js": (DE3D, "application/javascript")}
+    for p in ("unbounded", "jetbrains-mono"):
+        fichiers[f"/_noeud/polices/{p}-latin.woff2"] = (POLICES / f"{p}-latin.woff2", "font/woff2")
     for i in range(6):
         fichiers[f"/_noeud/dice/face-{i}.jpg"] = (HALL / f"dice/face-{i}.jpg", "image/jpeg")
     externes = []
@@ -252,6 +272,8 @@ def test_rendu_plein_ecran_sans_debordement(largeur, hauteur):
         b = pw.chromium.launch()
         try:
             p = b.new_page(viewport={"width": largeur, "height": hauteur})
+            p.add_init_script("HTMLCanvasElement.prototype.getContext=(o=>function(t,...a){return t==='webgl2'?null:o.call(this,t,...a)})"
+                              "(HTMLCanvasElement.prototype.getContext)")
             p.route("**/*", servir)
             p.goto("http://gk2.secubox.in/")
             p.wait_for_function("document.querySelector('sbx-dice canvas') && "
