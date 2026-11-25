@@ -298,3 +298,57 @@ def test_apply_uses_derived_timeout_not_flat_30(tmp_path):
                      snap_root=tmp_path, audit_path=tmp_path / "audit.log",
                      apply=True, sleep=lambda s: None, clock=lambda: next(ticks))
     assert rep.status == "applied"          # converged at t=30<105; flat-30 would have rolled_back
+
+
+def _run_fichier(type_, fichier, calls, reste="no"):
+    base = _run_type(type_, reste=reste)
+
+    def run(argv):
+        calls.append(argv)
+        if argv[:2] == ["systemctl", "show"] and "UnitFileState" in argv:
+            return 0, fichier + "\n"
+        return base(argv)
+    return run
+
+
+def _actionnes(calls):
+    return [a for a in calls if a[:1] == ["systemctl"] and a[1] in ("start", "enable", "restart")]
+
+
+def _apply_un(tmp_path, mid, run):
+    return apply_plan([Change(mid, START, "", 50)], {mid: _m(mid)}, {mid: Actual(enabled=False, active=False)}, run=run,
+                      observe=lambda m: Actual(enabled=False, active=False), now="t", routes={}, snap_root=tmp_path,
+                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
+
+
+def test_un_oneshot_statique_n_est_jamais_demarre_par_un_profil(tmp_path):
+    """#3939 : secubox-systeme-eteindre est un oneshot statique ; l'instantané le listait, l'apply aurait éteint la box."""
+    for fichier in ("static", "indirect", "generated", "masked", "masked-runtime", ""):
+        calls = []
+        rep = _apply_un(tmp_path, "action", _run_fichier("oneshot", fichier, calls))
+        assert rep.status == "applied" and _actionnes(calls) == [], fichier
+
+
+def test_un_oneshot_de_demarrage_est_active_et_lance(tmp_path):
+    for fichier in ("enabled", "disabled"):
+        calls = []
+        rep = _apply_un(tmp_path, "p2p-mesh", _run_fichier("oneshot", fichier, calls))
+        assert rep.status == "applied"
+        assert ["systemctl", "start", "--no-block", "p2p-mesh.service"] in calls, fichier
+
+
+def test_une_action_systeme_n_est_jamais_lancee_quel_que_soit_son_fichier(tmp_path):
+    from api.actuate import ACTIONS_JAMAIS
+    for unite in sorted(ACTIONS_JAMAIS):
+        mid = unite[: -len(".service")]
+        calls = []
+        _apply_un(tmp_path, mid, _run_fichier("simple", "enabled", calls))
+        assert _actionnes(calls) == [], unite
+    assert {"secubox-systeme-eteindre.service", "secubox-systeme-redemarrer.service", "secubox-majauto.service",
+            "secubox-firstboot.service"} <= ACTIONS_JAMAIS
+
+
+def test_un_module_sans_service_statique_demarre_comme_avant(tmp_path):
+    calls = []
+    _apply_un(tmp_path, "hub", _run_fichier("simple", "static", calls))
+    assert ["systemctl", "start", "--no-block", "hub.service"] in calls

@@ -1,3 +1,11 @@
+secubox-profiles (0.29.3-1~trixie1) trixie; urgency=high
+
+  * Apply : une action (éteindre, redémarrer, mise à jour automatique…) et un
+    oneshot statique ne sont plus jamais lancés ni activés par un profil ; un
+    instantané qui les listait aurait éteint la box (ref #3939).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:57:45 +0100
+
 secubox-profiles (0.29.2-1~trixie1) trixie; urgency=medium
 
   * Apply : un module fait seulement de oneshots sans RemainAfterExit n'est plus

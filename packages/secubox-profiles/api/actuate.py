@@ -181,6 +181,9 @@ def actuate(change: Change, m: Manifest, *, run, route_value=None,
             done.append("systemd:enable")
         else:
             for u in m.units:
+                if not demarrable(u, run):
+                    done.append(f"ignore:{u}")
+                    continue
                 _must(run, ["systemctl", "enable", u])
                 _must(run, ["systemctl", "start", "--no-block", u])
             done.append("systemd:enable")
@@ -266,6 +269,25 @@ def _propriete(run, unite: str, nom: str) -> str:
     return out.strip() if rc == 0 else ""
 
 
+# #3939 : des ACTIONS, pas des services. Jamais lancées ni activées par un profil, quel que soit leur fichier d'unité.
+ACTIONS_JAMAIS = frozenset({
+    "secubox-systeme-eteindre.service", "secubox-systeme-redemarrer.service", "secubox-majauto.service",
+    "secubox-firstboot.service", "secubox-premier-pas-appliquer.service", "secubox-systeme-heure.service",
+    "secubox-systeme-caches.service", "secubox-systeme-pare-feu-verif.service",
+})
+
+
+def demarrable(unite: str, run) -> bool:
+    """False pour une action, et pour un oneshot sans RemainAfterExit que rien n'active au démarrage (statique : lancé par une
+    minuterie, un chemin ou un geste). Le démarrer reviendrait à exécuter l'action : `systeme-eteindre`, listé dans l'instantané
+    d'une box, l'aurait éteinte."""
+    if unite in ACTIONS_JAMAIS:
+        return False
+    if _propriete(run, unite, "Type") != "oneshot" or _propriete(run, unite, "RemainAfterExit") != "no":
+        return True
+    return _propriete(run, unite, "UnitFileState") in ("enabled", "enabled-runtime", "disabled")
+
+
 def jamais_actif(m: Manifest, run) -> bool:
     """#3939 : True si attendre « actif » après un START n'a pas de sens : condition de démarrage non remplie, ou module natif
     fait seulement de oneshots sans RemainAfterExit (il travaille puis redevient inactif : c'est son état normal). Un service
@@ -274,6 +296,8 @@ def jamais_actif(m: Manifest, run) -> bool:
         return True
     if m.runtime != "native" or not m.units:
         return False
+    if all(u in ACTIONS_JAMAIS for u in m.units):
+        return True
     return all(_propriete(run, u, "Type") == "oneshot" and _propriete(run, u, "RemainAfterExit") == "no" for u in m.units)
 
 
