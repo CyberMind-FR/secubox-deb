@@ -224,7 +224,7 @@ def test_hidden_services_endpoint_empty_when_no_tor_data(monkeypatch, tmp_path):
 def test_onion_dns_reports_down_when_nothing_listening(monkeypatch):
     m = _load(monkeypatch)
     monkeypatch.setattr(m, "_port_listening", lambda port: False)
-    monkeypatch.setattr(m, "ONION_FORWARD_ZONE", Path("/nonexistent/48-secubox-onion.conf"))
+    monkeypatch.setattr(m, "ONION_FORWARD_ZONES", (Path("/nonexistent/48-secubox-onion.conf"),))
 
     result = asyncio.run(m.get_onion_dns())
 
@@ -236,7 +236,7 @@ def test_onion_dns_skips_canary_when_prereqs_not_met(monkeypatch):
     unless BOTH dnsport_up and forward_zone_installed are True."""
     m = _load(monkeypatch)
     monkeypatch.setattr(m, "_port_listening", lambda port: True)
-    monkeypatch.setattr(m, "ONION_FORWARD_ZONE", Path("/nonexistent/48-secubox-onion.conf"))
+    monkeypatch.setattr(m, "ONION_FORWARD_ZONES", (Path("/nonexistent/48-secubox-onion.conf"),))
     called = []
     monkeypatch.setattr(m, "_onion_dns_canary", lambda *a, **k: called.append(1) or True)
 
@@ -253,7 +253,7 @@ def test_onion_dns_attempts_canary_when_prereqs_met(monkeypatch, tmp_path):
     zone = tmp_path / "48-secubox-onion.conf"
     zone.write_text("forward-zone:\n")
     monkeypatch.setattr(m, "_port_listening", lambda port: True)
-    monkeypatch.setattr(m, "ONION_FORWARD_ZONE", zone)
+    monkeypatch.setattr(m, "ONION_FORWARD_ZONES", (zone,))
     monkeypatch.setattr(m, "_onion_dns_canary", lambda *a, **k: True)
 
     result = asyncio.run(m.get_onion_dns())
@@ -269,7 +269,7 @@ def test_onion_dns_never_raises_when_port_check_explodes(monkeypatch):
     def _boom(port):
         raise OSError("no /proc/net/tcp on this box")
     monkeypatch.setattr(m, "_port_listening", _boom)
-    monkeypatch.setattr(m, "ONION_FORWARD_ZONE", Path("/nonexistent"))
+    monkeypatch.setattr(m, "ONION_FORWARD_ZONES", (Path("/nonexistent"),))
 
     result = asyncio.run(m.get_onion_dns())
 

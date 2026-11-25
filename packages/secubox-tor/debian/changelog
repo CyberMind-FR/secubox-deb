@@ -1,3 +1,13 @@
+secubox-tor (1.7.9-1~trixie1) trixie; urgency=medium
+
+  * La mise à jour ne coupe plus le DNS (ref #3958) : torctl et proxypac-wpad
+    ne rechargent Unbound que si leur dropin a changé, par la bibliothèque
+    commune (checkconf puis fast_reload), jamais par un redémarrage.
+  * proxypac-wpad : dnsmasq n'est rechargé que si son dropin a changé.
+  * postinst : la boucle des composants n'est plus exécutée deux fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 16:10:00 +0100
+
 secubox-tor (1.7.8-1~trixie1) trixie; urgency=medium
 
   * AppArmor secubox-macroctl : audit.log en « w » ; « a » refusait chaque
