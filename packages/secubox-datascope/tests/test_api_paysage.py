@@ -157,6 +157,38 @@ def test_chronologie_parametres_invalides(client, params):
     assert client.get(P + "/chronologie", params=params).status_code == 400
 
 
+def test_chronologie_differences_du_fil(env, client):
+    """Fil des changements : les différences déjà stockées des N derniers relevés, du plus récent au plus ancien, sans graphe."""
+    for i in range(5):
+        assert ps.ecrire(env, NOW + i * 1800, i == 3, _g(), {"n": i},
+                         {"apparus": [f"pop:p{i}"], "sans_precedent": "premier"} if i == 0 else {"apparus": [f"pop:p{i}"]})
+    d = client.get(P + "/chronologie", params={"de": NOW, "a": NOW + 7200, "differences": 3}).json()
+    assert len(d["instantanes"]) == 5 and "difference" not in d["instantanes"][0]
+    f = d["differences"]
+    assert [x["epoch"] for x in f] == [NOW + 7200, NOW + 5400, NOW + 3600] and f[1]["partiel"] is True
+    assert f[0]["ts"] == ts(NOW + 7200) and f[0]["difference"]["apparus"] == ["pop:p4"] and f[0]["difference"]["tronque"] is False
+    assert "graphe" not in f[0]
+    d = client.get(P + "/chronologie", params={"de": NOW, "a": NOW + 1800, "differences": 12}).json()
+    assert [x["epoch"] for x in d["differences"]] == [NOW + 1800, NOW] and d["differences"][1]["difference"]["sans_precedent"] == "premier"
+    assert "differences" not in client.get(P + "/chronologie", params={"de": NOW, "a": NOW + 1}).json()
+
+
+def test_chronologie_differences_bornees_ou_illisibles(env, client, monkeypatch):
+    monkeypatch.setattr(main, "DIFF_MAX", 2)
+    assert ps.ecrire(env, NOW, False, _g(), {}, {"apparus": ["pop:a", "pop:b", "pop:c"]})
+    assert ps.ecrire(env, NOW + 1800, False, _g(), {}, {})
+    env.execute("UPDATE paysage_instantanes SET difference_json = '{' WHERE epoch = ?", (NOW + 1800,))
+    env.commit()
+    f = client.get(P + "/chronologie", params={"de": NOW, "a": NOW + 1800, "differences": 2}).json()["differences"]
+    assert f[0]["difference"] is None  # jamais « rien n'a changé »
+    assert f[1]["difference"]["apparus"] == ["pop:a", "pop:b"] and f[1]["difference"]["tronque"] is True
+
+
+@pytest.mark.parametrize("n", ["0", "25", "-1", "x", "1.5", "²", "1" * 50, ""])
+def test_chronologie_differences_parametre_invalide(client, n):
+    assert client.get(P + "/chronologie", params={"differences": n}).status_code == 400
+
+
 def test_chronologie_31_jours_accepte(client):
     assert client.get(P + "/chronologie", params={"de": 100, "a": 100 + 31 * 86400}).status_code == 200
 

@@ -161,7 +161,9 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
 
     Aucun espacement supposé (le relevé source est à ~30 min). Un `genere_le` futur (> maintenant + 10 min) n'est pas
     écrit : l'écrire refuserait ensuite tout relevé correct (chronologie strictement croissante). Un `genere_le` égal
-    ou antérieur au dernier : rien d'écrit, état « inchange » (« inaccessible » s'il a plus de 24 h)."""
+    ou antérieur au dernier : rien d'écrit, état « inchange » (« inaccessible » s'il a plus de 24 h). Un dernier
+    instantané illisible compte comme « pas de précédent » : écrit sans comparaison (listes vides, `sans_precedent`),
+    avec un motif ; il ne bloque jamais les suivants."""
     try:
         p = paysage.lire(cfg.populations, hote)
         if p is None:
@@ -170,7 +172,7 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
         if p.epoch > maintenant + PAYSAGE_FUTUR_TOLERE_S:
             return {"etat": "inaccessible", "ecrit": False,
                     "motif": f"genere_le dans le futur (+{int(p.epoch - maintenant)} s) : relevé écarté"}
-        prec = paysage_store.dernier(db)
+        prec = paysage_store.dernier_entete(db)
         if prec is not None and p.epoch <= prec["epoch"]:
             if p.epoch == prec["epoch"]:
                 return {"etat": "inchange", "ecrit": False}
@@ -178,15 +180,27 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
                 return {"etat": "inaccessible", "ecrit": False,
                         "motif": "genere_le antérieur au dernier instantané et vieux de plus de 24 h"}
             return {"etat": "inchange", "ecrit": False, "motif": "genere_le antérieur au dernier instantané"}
-        diff = difference(prec["graphe"] if prec else None, p.graphe)
+        motifs = []
+        if prec is None:
+            diff = {**difference(None, p.graphe), "sans_precedent": "premier"}
+        else:
+            try:
+                avant = paysage_store.lire(db, prec["ts"])
+            except paysage_store.InstantaneIllisible:
+                avant = None
+            if avant is not None:
+                diff = difference(avant["graphe"], p.graphe)
+            else:  # comparer à rien ferait tout « apparaître » : listes vides, et on le dit
+                diff = {**difference(p.graphe, p.graphe), "sans_precedent": "illisible"}
+                motifs.append("instantané précédent illisible : écrit sans comparaison")
         ecrit = paysage_store.ecrire(db, p.epoch, p.partiel, p.graphe, p.compteurs, diff)
         if not ecrit:
             return {"etat": "inchange", "ecrit": False}
         try:
             paysage_store.eclaircir(db, maintenant)
         except Exception as e:  # noqa: BLE001 - l'instantané est écrit : l'éclaircissement reprendra à la passe suivante
-            return {"etat": "ok", "ecrit": True, "motif": f"éclaircissement échoué : {type(e).__name__}: {str(e)[:120]}"}
-        return {"etat": "ok", "ecrit": True}
+            motifs.append(f"éclaircissement échoué : {type(e).__name__}: {str(e)[:120]}")
+        return {"etat": "ok", "ecrit": True, **({"motif": " ; ".join(motifs)} if motifs else {})}
     except Exception as e:  # noqa: BLE001 - le paysage ne fait jamais échouer la passe
         return {"etat": "inaccessible", "ecrit": False, "motif": f"{type(e).__name__}: {str(e)[:120]}"}
 

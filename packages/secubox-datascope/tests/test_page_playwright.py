@@ -20,16 +20,18 @@ PAGE = pathlib.Path(__file__).resolve().parents[1] / "www" / "datascope" / "inde
 CAPTURES = os.environ.get("SECUBOX_DATASCOPE_CAPTURES")
 
 
-def _servir(pg, api, crochet=None, reperes_lents=None):
+def _servir(pg, api, crochet=None, reperes_lents=None, vus=None):
     """Sert la page et reperes.js sur http://datascope.test/, l'API depuis `api` ({route: (code, corps)}) ; rien d'autre.
 
     `crochet` : expression exposée en window.__t depuis la fermeture de la page ; `reperes_lents` : liste où la requête de
-    reperes.js est retenue (à libérer par le scénario)."""
+    reperes.js est retenue (à libérer par le scénario) ; `vus` : liste où chaque appel de l'API est noté, requête comprise."""
     def repondre(route):
         if reperes_lents is not None and route.request.url.endswith("/reperes.js"):
             return reperes_lents.append(route)
         chemin = route.request.url.split("datascope.test", 1)[1].split("?")[0]
         if chemin.startswith("/api/v1/datascope/"):
+            if vus is not None:
+                vus.append(route.request.url.split("/api/v1/datascope/", 1)[1])
             code, corps = api.get(chemin[len("/api/v1/datascope/"):], (404, {}))
             return route.fulfill(status=code, content_type="application/json", body=json.dumps(corps))
         f = PAGE.parent / (chemin.removeprefix("/datascope/") or "index.html")
@@ -44,7 +46,7 @@ def _servir(pg, api, crochet=None, reperes_lents=None):
 
 
 def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, barres=False, crochet=None,
-                reperes_lents=None, **contexte):
+                reperes_lents=None, vus=None, **contexte):
     """Exécute `scenario(page)` dans un thread propre (Playwright refuse de tourner sous une boucle asyncio)."""
     def tache():
         with sync_api.sync_playwright() as p:
@@ -56,7 +58,7 @@ def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, 
             erreurs, natifs = [], []
             pg.on("pageerror", lambda e: erreurs.append(str(e)))
             pg.on("dialog", lambda d: (natifs.append(d.type), d.dismiss()))
-            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api, crochet, reperes_lents)) + query,
+            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api, crochet, reperes_lents, vus)) + query,
                     wait_until="load" if reperes_lents is None else "domcontentloaded")
             pg.wait_for_timeout(400)
             r = scenario(pg)
@@ -329,10 +331,11 @@ def test_paysage_demo(largeur):
         r["petit"] = pg.eval_on_selector_all("#insp *, #pEtat *, #pLegende *, #pBarre *, #pAide summary",
             "l => l.filter(e => e.offsetParent && [...e.childNodes].some(n => n.nodeType === 3 && n.data.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.5).map(e => e.className + ':' + e.textContent.slice(0, 30))")
         r["deborde2"] = _debordement(pg)
+        r["sans_nom"] = pg.eval_on_selector_all("svg.histo", "l => l.filter(s => !s.getAttribute('aria-label') || !s.querySelector('g > title')).length")
         _capture(pg, f"paysage-demo-{largeur}-fiche.png")
         return r
     r = _navigateur(sc, largeur=largeur)
-    assert r["chevauche"] == [] and r["police"] >= 13.5
+    assert r["chevauche"] == [] and r["police"] >= 13.5 and r["sans_nom"] == 0
     assert not r["deborde"] and not r["deborde2"] and r["cadre"]
     assert r["etat"].startswith("relevé de ") and "cumul par population" in r["barre"]
     assert r["legende_h"] <= 60 and r["part"] >= .6 and "repères" in r["replie"]
@@ -576,3 +579,270 @@ def test_paysage_lien_de_la_fiche_donne_le_focus_au_nouveau_titre():
         pg.wait_for_timeout(200)
         return pg.evaluate("[document.activeElement.className, document.activeElement.textContent]")
     assert _navigateur(sc) == ["fTitre", "blog.demo.test"]
+
+
+# --- tâche 6 : compteurs, tendance, synthèse et fil -------------------------------------------------------------
+
+def _iso(e):
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(e)) + ".000000Z"
+
+
+def _paysage_et_chronologie(nb=60, pas=1800, trou=(8, 13), partiels=(2,)):
+    """Le paysage maximal et une chronologie irrégulière ; `trou` : relevés manquants (indices, du plus récent)."""
+    d = _paysage_max(age_s=120.0)
+    e0 = d["epoch"]
+    d["instantane"]["ts"] = _iso(e0)
+    c = d["instantane"]["compteurs"]
+    ent = [{"ts": _iso(e0 - i * pas), "epoch": e0 - i * pas, "partiel": i in partiels,
+            "compteurs": {**c, "adresses": c["adresses"] - 10 * i, "bans": None if i == 3 else c["bans"]}}
+           for i in range(nb) if not trou[0] <= i < trou[1]]
+    v = {"apparus": [], "disparus": [], "hausses": [], "baisses": [], "rotation_levee": [], "rotation_tombee": [], "tronque": False}
+    fil = [{"ts": x["ts"], "epoch": x["epoch"], "partiel": x["partiel"], "difference": dict(v)} for x in ent[:12]]
+    fil[0]["difference"] = {**v, "apparus": ["pop:famille:p00", "asn:64510", "asn:64511"], "rotation_levee": ["pop:famille:p04"],
+                            "hausses": [{"id": "pop:famille:p01", "metrique": "adresses", "de": 1000, "a": 1910}]}
+    fil[4]["difference"] = None
+    fil[7]["difference"] = {"sans_precedent": "illisible"}
+    fil[9]["difference"] = {**v, "disparus": ["pop:<b>parti"]}  # identifiant hors format : écarté
+    tend = {"id": "pop:famille:p01", "illisibles": 0, "points": [
+        {"ts": x["ts"], "epoch": x["epoch"], "adresses": 1900 - 5 * i, "bans": None, "reseaux": 40}
+        for i, x in enumerate(ent[:54]) if i % 2 == 0][::-1]}
+    api = _api(d)
+    api["paysage/chronologie"] = (200, {"instantanes": ent[::-1], "tronque": False, "differences": fil})
+    api["paysage/tendance/pop%3Afamille%3Ap01"] = (200, tend)
+    return d, api
+
+
+BARRES = """(cle) => [...document.querySelectorAll(`svg[data-k='h-${cle}'] > g`)].map(g => [g.getAttribute('class'), g.querySelector('title').textContent, !!g.querySelector('.b')])"""
+
+
+def test_compteurs_histogrammes_et_bascule():
+    _, api = _paysage_et_chronologie()
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = {"texte": pg.inner_text("#pBarre"), "cases": pg.locator("#pBarre .pbCase").count(), "h24": pg.evaluate(BARRES, "c-adresses"),
+             "bans": pg.evaluate(BARRES, "c-bans"), "ecarts": pg.eval_on_selector_all("#pBarre .ecart", "l => l.map(e => [e.textContent, e.title])"),
+             "bas": pg.eval_on_selector("#pBarre", "e => Math.round(e.getBoundingClientRect().bottom - innerHeight)")}
+        pg.evaluate("document.querySelector('#pBarre .pbCases').dataset.t = '1'")
+        for _ in range(3):  # rafraîchissements : ni redessin, ni requête de plus
+            pg.click("#rafraichir")
+            pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(150)
+        r["garde"] = pg.locator("#pBarre .pbCases[data-t]").count()
+        pg.focus("[data-k='per-7j']")
+        pg.keyboard.press("Enter")
+        r["foc"] = pg.evaluate("[document.activeElement.dataset.k, document.activeElement.getAttribute('aria-pressed')]")
+        r["h7"] = pg.evaluate(BARRES, "c-adresses")
+        r["ecarts7"] = pg.eval_on_selector_all("#pBarre .ecart", "l => l.map(e => e.textContent)")
+        pg.focus("svg[data-k='h-c-adresses']")
+        pg.keyboard.press("ArrowLeft")
+        r["lu"] = pg.inner_text("#pBarre .pLecture")
+        pg.reload()
+        pg.wait_for_timeout(500)
+        r["retenue"] = pg.get_attribute("[data-k='per-7j']", "aria-pressed")
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus)
+    assert r["cases"] == 7 and r["bas"] <= 0 and "Σ : cumul par population" in r["texte"]
+    assert "non mesuré : " in r["texte"] and "partiel : 1 h" in r["texte"] and "historique depuis" in r["texte"]
+    assert len(r["h24"]) == 24 and r["h24"][-1][0].startswith("cour")
+    trous = [b for b in r["h24"] if "e-non_mesure" in b[0]]
+    assert trous and all("non mesuré" in b[1] and not b[2] for b in trous) and not any(" : 0 " in b[1] for b in r["h24"])
+    assert sum("part " in b[0] for b in r["h24"]) == 1
+    assert r["ecarts"][3][0] == "▲ +480" and "24 h plus tôt" in r["ecarts"][3][1] and r["ecarts"][0][0] == "= 0"
+    assert r["garde"] == 1 and r["foc"] == ["per-7j", "true"] and len(r["h7"]) == 7
+    assert set(r["ecarts7"]) == {"—"}  # historique trop court : aucun écart inventé
+    assert "adresses" in r["lu"] and r["retenue"] == "true"
+    chrono = [v for v in vus if v.startswith("paysage/chronologie")]
+    assert len(chrono) == 2 and "differences=12" in chrono[0], chrono  # une au chargement, une après rechargement de la page
+
+
+@pytest.mark.parametrize("corps,code,attendu", [({"detail": "x"}, 503, "historique indisponible"),
+                                                ({"instantanes": [], "tronque": False, "differences": []}, 200, "historique depuis")])
+def test_compteurs_sans_historique(corps, code, attendu):
+    _, api = _paysage_et_chronologie()
+    api["paysage/chronologie"] = (code, corps)
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        for _ in range(3):
+            pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            pg.wait_for_timeout(100)
+        return pg.inner_text("#pBarre"), pg.eval_on_selector_all("#pBarre .ecart", "l => l.map(e => e.textContent)"), \
+            pg.eval_on_selector_all("#pBarre b", "l => l.map(e => e.textContent)"), pg.inner_text("#insp")
+    t, e, b, insp = _navigateur(sc, query="", api=api, vus=vus)
+    assert attendu in t and set(e) == {"—"} and b[0] == "16" and b[3] == "12 000"
+    assert "comparaison indisponible" in insp and ("fil indisponible" in insp) == (code != 200)
+    assert len([v for v in vus if v.startswith("paysage/chronologie")]) == 1  # un échec n'est pas retenté toutes les 30 s
+
+
+def test_synthese_et_fil():
+    d, api = _paysage_et_chronologie()
+    d["difference_24h"] = {"apparus": ["pop:famille:p00", "cve:CVE-2099-10003", "asn:64510"], "disparus": ["pop:famille:partie"],
+                           "hausses": [{"id": "pop:famille:p01", "metrique": "adresses", "de": 1000, "a": 1910}], "baisses": [],
+                           "rotation_levee": ["pop:famille:p04"], "rotation_tombee": [], "tronque": False, "reference_ts": "x",
+                           "reference_epoch": d["epoch"] - 86400, "reference_partiel": False, "ecart_s": 86400,
+                           "motif": "<b>texte libre</b>"}
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = {"insp": pg.inner_text("#insp"), "img": pg.locator("#insp img, #insp .filL b b").count(),
+             "fil": pg.eval_on_selector_all("#insp .filL", "l => l.map(e => e.innerText)"),
+             "petit": pg.eval_on_selector_all("#insp *, #pBarre *", "l => l.filter(e => e.offsetParent && [...e.childNodes].some(n => n.nodeType === 3 && n.data.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.5).length"),
+             "hauteurs": pg.evaluate("[document.querySelector('.topoPan').getBoundingClientRect().height, document.getElementById('panInsp').getBoundingClientRect().height]")}
+        pg.focus("#insp .lien")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(150)
+        r["fiche"] = pg.evaluate("document.activeElement.textContent")
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(150)
+        r["retour"] = pg.inner_text("#inspType")
+        pg.click("#vueBulles")
+        r["bulles"] = pg.inner_text("#insp")
+        pg.click("#vuePaysage")
+        # relecture (tâche 7) d'un premier instantané : sans précédent, rien n'est présenté comme « apparu »
+        pg.evaluate("__t({...__p.rep.instantane, ts: 'x', epoch: __p.rep.epoch - 7200}, {apparus: ['pop:famille:p00'], sans_precedent: 'premier'})")
+        pg.wait_for_timeout(150)
+        r["rejeu"] = (pg.inner_text("#insp"), pg.locator("#insp .filL").count(), pg.evaluate(BARRES, "c-adresses")[-1][0])
+        return r
+    r = _navigateur(sc, query="", api=api, crochet="rejouerPaysage;window.__p=paysage")
+    assert "comparaison indisponible" in r["rejeu"][0] and "✚ apparues" not in r["rejeu"][0]
+    assert 0 < r["rejeu"][1] < len(r["fil"]) and r["rejeu"][2].startswith("cour")  # fil et compteurs suivent le temps affiché
+    i = r["insp"]
+    assert "16 populations, dont 3 en rotation" in i and "changements depuis 24 h" in i and "texte libre" not in i
+    for t in ("✚ apparues", "famille:partie", "rotation apparue", "1 000 → 1 910", "CVE-2099-10003", "✚ 1 · ✖ 0"):
+        assert t in i, t
+    assert "onerror" in i and r["img"] == 0  # libellé hostile : du texte
+    assert "réseau source ✚ 2" in r["fil"][0] and "rotation" in r["fil"][0]
+    assert any("comparaison illisible" in f for f in r["fil"]) and any("pas de comparaison" in f for f in r["fil"])
+    assert any("relevés sans changement" in f for f in r["fil"]) and any("partiel" in f for f in r["fil"]) and "parti\n" not in i
+    assert r["petit"] == 0 and abs(r["hauteurs"][0] - r["hauteurs"][1]) < 2
+    assert "onerror" in r["fiche"] and r["retour"] == "synthèse" and "synthèse" not in r["bulles"] and "Fil des" not in r["bulles"]
+
+
+def test_tendance_de_la_fiche_en_cache():
+    _, api = _paysage_et_chronologie()
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = {"avant": len([v for v in vus if "tendance" in v])}
+        pg.focus("#topo .nd[data-id='pop:famille:p01']")
+        for _ in range(3):
+            pg.keyboard.press("Enter")
+            pg.wait_for_timeout(250)
+        r["b"] = pg.evaluate(BARRES, "t-adresses")
+        r["bans"] = pg.evaluate(BARRES, "t-bans")
+        r["ecarts"] = pg.eval_on_selector_all("#pTendance .ecart", "l => l.map(e => e.textContent)")
+        pg.evaluate("document.querySelector('#pTendance .fChiffres').dataset.t = '1'")
+        pg.click("#rafraichir")
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        pg.wait_for_timeout(250)
+        r["garde"] = pg.locator("#pTendance [data-t]").count()
+        pg.focus("#topo .nd[data-id='asn:64510']")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(200)
+        r["asn"] = pg.locator("#pTendance").count()
+        pg.focus("#topo .nd[data-id='pop:famille:p02']")  # tendance absente : 404, dit en clair
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(200)
+        r["echec"] = pg.inner_text("#pTendance")
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus)
+    assert r["avant"] == 0 and r["garde"] == 1 and r["asn"] == 0
+    assert len(r["b"]) == 24 and "1 910 adresses" in [b for b in r["b"] if b[2]][-1][1]  # le chiffre affiché est le dernier point
+    assert any("non mesuré" in b[1] for b in r["b"]) and any("mesure absente" in b[1] for b in r["bans"])
+    assert r["ecarts"][2] == "—" and r["ecarts"][1] == "= 0"
+    assert "tendance indisponible" in r["echec"]
+    assert [v for v in vus if "p01" in v] == ["paysage/tendance/pop%3Afamille%3Ap01?jours=7"]
+
+
+def test_tendance_lue_seulement_si_la_fiche_se_voit():
+    _, api = _paysage_et_chronologie()
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("document.querySelector(\"#topo .nd[data-id='pop:famille:p01']\").dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+        pg.wait_for_timeout(200)
+        pg.click("#panInsp .fermer")
+        pg.reload()  # sélection retenue, tiroir fermé
+        pg.wait_for_timeout(500)
+        n = len([v for v in vus if "tendance" in v])
+        pg.click("#btInsp")
+        pg.wait_for_timeout(300)
+        return n, len([v for v in vus if "tendance" in v]), pg.locator("#pTendance svg.histo").count(), _debordement(pg)
+    assert _navigateur(sc, query="?embed=1", largeur=400, api=api, vus=vus) == (1, 2, 3, False)
+
+
+def test_vue_cachee_aucune_requete_d_historique():
+    _, api = _paysage_et_chronologie()
+    vus = []
+
+    def sc(pg):
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(200)
+        a = len([v for v in vus if v.startswith("paysage")])
+        pg.evaluate("Object.defineProperty(document, 'hidden', {get: () => true})")
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        return a, [v for v in vus if "chronologie" in v or "tendance" in v]
+    assert _navigateur(sc, query="", api=api, vus=vus) == (0, [])
+
+
+def test_echap_hors_du_graphe_ne_touche_pas_la_selection():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(250)
+        pg.focus(NOEUD)
+        pg.keyboard.press("Enter")
+        pg.evaluate("window.__pris = []; document.addEventListener('keydown', e => { if (e.key === 'Escape') __pris.push(e.defaultPrevented); })")
+        r = []
+        for cible in ("svg[data-k='h-c-adresses']", "#pt-pays", "#rafraichir"):
+            pg.focus(cible)
+            pg.keyboard.press("Escape")
+            r.append(pg.get_attribute(NOEUD, "aria-pressed"))
+        pg.focus(NOEUD)
+        pg.keyboard.press("Escape")
+        return r, pg.evaluate("__pris"), pg.get_attribute(NOEUD, "aria-pressed")
+    assert _navigateur(sc) == (["true"] * 3, [False] * 3 + [True], "false")
+
+
+@pytest.mark.parametrize("fiche", [True, False])
+def test_reperes_tardifs_gardent_parties_depliees_et_focus(fiche):
+    lents = []
+    _, api = _paysage_et_chronologie()
+    api["paysage/chronologie"][1]["differences"][0]["difference"]["apparus"] += [f"cve:CVE-2099-{10000 + i}" for i in range(8)]
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        if fiche:
+            pg.focus("#topo .nd[data-id='pop:famille:p01']")
+            pg.keyboard.press("Enter")
+            pg.wait_for_timeout(250)
+        pg.click("#insp details summary")
+        pg.focus("#insp .lien[data-k^='l-pop']" if not fiche else "#insp .lien[data-k^='l-pays']")
+        k = pg.evaluate("document.activeElement.dataset.k")
+        avant = pg.inner_text("#insp")
+        lents[0].fulfill(path=str(PAGE.parent / "reperes.js"))
+        pg.wait_for_timeout(400)
+        return avant != pg.inner_text("#insp"), pg.locator("#insp details[open]").count(), pg.evaluate("document.activeElement.dataset.k") == k
+    assert _navigateur(sc, query="", api=api, reperes_lents=lents) == (True, 1, True)
+
+
+def test_anneau_et_contraste_des_compteurs():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(250)
+        return pg.eval_on_selector_all("#topo .p-population", "l => l.map(g => [g.dataset.id, g.querySelectorAll('.pisteBan').length, (g.querySelector('.anneauBan') || {getAttribute: () => ''}).getAttribute('stroke-dasharray')])"), \
+            pg.evaluate(CONTRASTE.replace("#topo .lbl, #topo .sous, #topo .col, #pLegende label span", "#pBarre .pbTete span, #pBarre .l, #pBarre .ecart, #pBarre b, #insp .fPuces, #insp .filL span, #insp .t"))
+    a, k = _navigateur(sc)
+    a = {x[0]: x[1:] for x in a}
+    assert a["pop:famille:balayage_web"] == [1, "81 100"] and a["pop:profileur:demo2"] == [1, ""] and k >= 4.5

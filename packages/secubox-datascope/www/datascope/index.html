@@ -9,6 +9,7 @@
   relevés du collecteur DataScope (API /api/v1/datascope/ : overview, sources, graph, entities/{id}/context). Lecture seule.
     · gauche : sources et leur état ; centre : topologie SVG déterministe ; droite : inspecteur de la sélection ;
     · vue « Paysage » (#3921) : populations d'attaquants, réseaux sources, cibles et CVE (API paysage, relevé du WAF), même page ;
+      compteurs et tendances à histogrammes (une heure sans relevé est « non mesuré », jamais 0), synthèse et fil des changements ;
     · sous 900 px de cadre ou avec ?embed=1, les panneaux latéraux deviennent des tiroirs.
   DONNÉES RÉELLES UNIQUEMENT : une mesure absente s'affiche « — » ; une source qui n'est pas « ok » rend l'état « inconnu ».
   ?demo=1 : données de DÉMONSTRATION (adresses RFC 5737), annoncées par un bandeau orange, aucun appel réseau.
@@ -115,13 +116,23 @@
   .corps.vuePaysage #panSources{display:none !important} .topoPan.vuePaysage .topoCorps{display:block}
   /* place de la barre verticale toujours réservée : la largeur mesurée avant le dessin reste vraie après */
   .topoPan.vuePaysage .topo{scrollbar-gutter:stable}
-  body:not(.emb) .topoPan.vuePaysage .topo{max-height:max(460px,78vh)}
-  @container a (min-width:900px){body:not(.emb) .corps.vuePaysage{grid-template-columns:minmax(0,1fr) 340px}}
+  body:not(.emb) .topoPan.vuePaysage .topo{max-height:max(420px,calc(100vh - 435px))}
+  /* l'inspecteur prend la hauteur du graphe et défile : pas de vide sous une colonne, les compteurs restent à l'écran */
+  @container a (min-width:900px){body:not(.emb) .corps.vuePaysage{grid-template-columns:minmax(0,1fr) 340px;align-items:stretch}
+    body:not(.emb) .corps.vuePaysage #panInsp{height:0;min-height:100%;overflow:auto}}
   .pas.att{color:var(--orange);background:rgba(255,159,28,.12)}
   .vuePaysage .pas,.vuePaysage .bt,.vuePaysage .pan h3 i{font-size:.85rem} .vuePaysage .note,.vuePaysage .vide{font-size:.85rem;color:var(--doux)}
-  .topoPan.vuePaysage h3{gap:4px 10px;margin-bottom:6px} .topoPan.vuePaysage #topoNote{display:none}
+  .topoPan.vuePaysage h3{gap:4px 10px;margin-bottom:6px} .topoPan.vuePaysage #topoNote,.topoPan.vuePaysage #topoBas:empty{display:none}
   .pEtat{display:inline-flex;flex-wrap:wrap;gap:2px 10px;align-items:center;font-size:.85rem;font-weight:500;color:var(--doux);min-width:0} .pEtat b{color:var(--texte)}
-  .pBarre{font-size:.85rem;color:var(--doux);margin-top:6px;display:flex;flex-wrap:wrap;gap:2px 12px} .pBarre b{color:var(--texte);font-variant-numeric:tabular-nums}
+  .pBarre{grid-column:1/-1;min-width:0;border:1px solid var(--trait);border-radius:12px;padding:8px 10px;background:rgba(10,22,46,.6);font-size:.85rem;color:var(--doux)}
+  .pbTete{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin-bottom:6px} .pbTete .vues{margin:0} .pbTete b{color:var(--texte)} .pLecture{color:var(--texte);flex:1 1 320px;text-align:right;min-width:0;min-height:1.3em;overflow-wrap:anywhere}
+  .pCle{display:inline-flex;align-items:center;gap:5px} .pCle i{display:inline-block;width:12px;height:12px;border:1px solid rgba(159,179,214,.5);background:repeating-linear-gradient(45deg,rgba(159,179,214,.45) 0 1.5px,transparent 1.5px 4px)} .pCle.cpart i{border:1px dashed var(--cyan);background:rgba(41,182,246,.18)}
+  .pbCases{display:flex;flex-wrap:wrap;gap:6px} .pbCase{flex:1 1 23%;min-width:0;border:1px solid var(--trait);border-radius:8px;padding:5px 8px 6px;background:rgba(18,40,78,.35);display:grid;grid-template:"t t" 1fr "v h" auto/minmax(48px,auto) minmax(0,1fr);gap:2px 8px;align-items:end}
+  .pbCase .tl{grid-area:t;align-self:start;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:0 8px;min-width:0} .pbCase b{grid-area:v;font-size:1.15rem;line-height:1.2;color:var(--texte);font-variant-numeric:tabular-nums} .pbCase svg{grid-area:h} .ecart{font-variant-numeric:tabular-nums;white-space:nowrap} .ecart.mont{color:var(--orange)} .ecart.desc{color:var(--cyan)} .nb{white-space:nowrap}
+  @container a (min-width:1000px){.pbCase{flex-basis:124px}}
+  @container a (max-width:559px){.pbCase{flex-basis:100%;grid-template:"v t" auto "h h" auto/auto minmax(0,1fr);align-items:baseline} .pbCase .tl{align-self:baseline}}
+  svg.histo{display:block;width:100%;height:30px;border-bottom:1px solid rgba(159,179,214,.35);cursor:crosshair;touch-action:pan-y} svg.histo:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .histo .zone{fill:transparent} .histo .b{fill:var(--cyan);opacity:.6} .histo .pic .b{opacity:1} .histo .cour .b{fill:#c9efff;opacity:1} .histo .part .b{fill:rgba(41,182,246,.18);stroke:var(--cyan);stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke;opacity:1} .histo .cur .zone{fill:rgba(234,241,255,.16)} .histo .hl{stroke:rgba(159,179,214,.5);stroke-width:1.2} .histo .trou{fill-opacity:.8}
   svg.paysage:not(.ico){display:block;height:auto;margin:0 auto}
   svg.paysage text{font-size:13.6px;fill:var(--texte);paint-order:stroke;stroke:#060d1b;stroke-width:3.5px;stroke-linejoin:round;pointer-events:none}
   .paysage text.col{fill:var(--doux);font-weight:700} .paysage text.sous{fill:var(--doux)} .paysage text.emo{stroke:none} .paysage .p-population .lbl{font-weight:700}
@@ -130,10 +141,11 @@
   .paysage .p-reseau_source .f{fill:rgba(41,182,246,.24);stroke:var(--cyan)} .paysage .p-classe_reseau .f{fill:none;stroke:var(--cyan);stroke-dasharray:3 2}
   .paysage .p-cible .f{fill:rgba(59,130,246,.32);stroke:var(--bleu)} .paysage .p-cve .f{fill:rgba(255,159,28,.28);stroke:var(--orange)}
   .paysage .p-pays .f{fill:rgba(159,179,214,.10);stroke:rgba(159,179,214,.45)} .paysage .p-infra .f{fill:rgba(18,40,78,.9);stroke:var(--doux)} .paysage .p-autres .f{fill:rgba(159,179,214,.12);stroke:var(--doux);stroke-dasharray:2 2}
+  .paysage .pisteBan{fill:none;stroke:rgba(159,179,214,.22);stroke-width:3} .paysage .anneauBan{fill:none;stroke:var(--vert);stroke-width:3}
   .paysage .halo{fill:none;stroke:var(--orange);stroke-width:1.6;stroke-dasharray:7 4} .paysage .halo2{fill:rgba(255,159,28,.10);stroke:none}
   .paysage .nd.sel .f{stroke:#fff;stroke-width:3} .paysage .nd:focus-visible{outline:none} .paysage .nd:focus-visible .prise{stroke:var(--cyan);stroke-width:2}
   .paysage .ar{cursor:default} .paysage .ar .v{fill:none;stroke:rgba(159,179,214,.26)} .paysage .l-SOURCE_DE .v{stroke:rgba(41,182,246,.28)} .paysage .l-EXPLOITE .v{stroke:rgba(255,159,28,.34)} .paysage .l-VISE .v{stroke:rgba(255,77,94,.30)} .paysage .l-HEBERGE .v{stroke:rgba(159,179,214,.14)} .paysage .l-MEMBRE_DE .v{stroke:rgba(167,139,250,.5)}
-  .paysage .nd :is(.f,.f2,.emo,.halo,.halo2),.paysage .ar{transition:opacity .15s} .paysage.foc .nd:not(.voisin):not(.sel) :is(.f,.f2,.emo,.halo,.halo2){opacity:.3} .paysage.foc .ar:not(.lie){opacity:.22} .paysage .ar.lie .v{stroke:var(--cyan)}
+  .paysage .nd :is(.f,.f2,.emo,.halo,.halo2,.pisteBan,.anneauBan),.paysage .ar{transition:opacity .15s} .paysage.foc .nd:not(.voisin):not(.sel) :is(.f,.f2,.emo,.halo,.halo2,.pisteBan,.anneauBan){opacity:.3} .paysage.foc .ar:not(.lie){opacity:.22} .paysage .ar.lie .v{stroke:var(--cyan)}
   .paysage .infob{pointer-events:none} .paysage .ifond{fill:#0b1830;stroke:var(--trait2)} .paysage .infob text.itxt{stroke:none}
   .pLegende{font-size:.85rem;color:var(--doux);margin-top:6px} .pLegende fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:nowrap;gap:0 12px;overflow-x:auto;min-width:0}
   .pLegende legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
@@ -143,6 +155,9 @@
   .pAide{font-size:.85rem;color:var(--doux)} .pAide summary,.insp details summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:8px} .pAide summary::before,.insp details summary::before{content:'▸';color:var(--cyan)} .pAide[open] summary::before,.insp details[open] summary::before{content:'▾'}
   .pAide .puces{display:flex;flex-wrap:wrap;gap:3px 14px;margin:2px 0 6px}
   .vuePaysage .insp{font-size:.85rem} .vuePaysage .insp h4,.vuePaysage dl.props{font-size:.85rem} .vuePaysage .insp h4{margin:8px 0 4px} .vuePaysage dl.props dt{color:var(--doux)} .insp details{font-size:.85rem;color:var(--doux);border-top:1px solid var(--trait)}
+  .tendance .fChiffres{margin-bottom:4px} .tendance .fChiffres>div{display:flex;flex-direction:column} .tendance .fChiffres svg{margin-top:auto} .tNote{color:var(--doux);min-height:1.3em;margin-bottom:6px}
+  .sPhrase{font-weight:700;font-size:1rem;margin-bottom:2px} .sLigne{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:5px 0;border-top:1px solid rgba(86,150,255,.12);align-items:start} .sLigne .t{color:var(--doux);white-space:nowrap} .sLigne .c{display:flex;flex-wrap:wrap;gap:2px 10px;min-width:0} .sLigne .c>*{min-width:0;overflow-wrap:anywhere}
+  .filL{border-top:1px solid rgba(86,150,255,.12);padding:4px 0} .filL .h{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline} .filL .h b{font-variant-numeric:tabular-nums} .filL .e{display:inline-flex;gap:0 5px;max-width:100%;overflow-wrap:anywhere} .filL .e>*{min-width:0} .filL .e .nb{flex:none} .filL.calme{color:var(--doux)}
   .fTitre{font-weight:700;font-size:1rem;overflow-wrap:anywhere;margin-bottom:4px} .fPuces{display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--doux)}
   .fChiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0} .fChiffres>div{border:1px solid var(--trait);border-radius:8px;padding:5px 8px;min-width:0} .fChiffres b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums} .fChiffres span{color:var(--doux);display:block}
   .jauge,.empile{display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(159,179,214,.16);margin:4px 0} .jauge i,.empile i{display:block;height:100%} .jauge i{background:var(--cyan)}
@@ -150,7 +165,7 @@
   .fJetons{display:flex;flex-wrap:wrap;gap:4px 6px} .fJetons button,.part button.lien{font:inherit} .fJetons button.lien{border:1px solid var(--trait);border-radius:8px;padding:3px 8px;background:rgba(59,130,246,.10);text-decoration:none;color:var(--texte);min-width:0}
   .fParts{display:flex;flex-wrap:wrap;gap:2px 12px} .fParts i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
   .vuePaysage .actions{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin-top:8px} .vuePaysage .actions a{margin:0;font-size:.85rem;min-height:40px;display:inline-flex;align-items:center}
-  @media (pointer:coarse){.pLegende label,.vuePaysage .bt,.fJetons button.lien,.part button.lien{min-height:40px}}
+  @media (pointer:coarse){svg.histo{height:40px} .pLegende label,.vuePaysage .bt,.fJetons button.lien,.part button.lien{min-height:40px}}
   @media (prefers-reduced-motion:reduce){.paysage .nd *,.paysage .ar{transition:none}}
   dl.props{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:.76rem} dl.props dt{color:var(--faible)} dl.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
   .insp h4{margin:12px 0 5px;font-size:.78rem;color:var(--doux);font-weight:700}
@@ -178,8 +193,9 @@
   <div class="tuiles" id="tuiles"></div>
   <div class="corps">
     <div class="pan tiroir" id="panSources"><h3>Sources <i>relevé du collecteur</i><button type="button" class="bt fermer" data-ferme="panSources">✕ Fermer</button></h3><div id="sources"></div><div class="note">Décocher une source masque ses entités dans la topologie (affichage seulement).</div></div>
-    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button><button type="button" class="bt" id="vuePaysage" aria-pressed="false">Paysage</button></span><span class="pEtat" id="pEtat" role="status" hidden></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="pLegende" id="pLegende" hidden></div><div class="pBarre" id="pBarre" hidden></div><details class="pAide" id="pAide" hidden><summary id="pAideT"></summary><div id="pAideC"></div></details><div class="note" id="topoBas"></div></div>
+    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button><button type="button" class="bt" id="vuePaysage" aria-pressed="false">Paysage</button></span><span class="pEtat" id="pEtat" role="status" hidden></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="pLegende" id="pLegende" hidden></div><details class="pAide" id="pAide" hidden><summary id="pAideT"></summary><div id="pAideC"></div></details><div class="note" id="topoBas"></div></div>
     <div class="pan tiroir insp" id="panInsp"><h3>Inspecteur <i id="inspType"></i><button type="button" class="bt fermer" data-ferme="panInsp">✕ Fermer</button></h3><div id="insp"><div class="vide">Choisir un élément de la topologie.</div></div></div>
+    <div class="pBarre" id="pBarre" role="group" aria-label="Compteurs du paysage" hidden></div>
   </div>
   <div class="note">Lecture seule · chaque relation porte sa preuve (observée ou rapportée), sa source et sa date · aucune relation déduite.</div>
 </div></div></div>
@@ -194,8 +210,8 @@
   // menu latéral commun : hors ?embed=1 et hors démonstration (règle Aurora), chargé sans balise <script src>
   if(!EMB&&!DEMO){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
   // repères partagés avec la page Actor (fichier du paquet, même origine), chargés de la même façon
-  try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(vue==='paysage')rendreTopo();if(selection.id&&RE_PID.test(selection.id)){el('insp').removeAttribute('data-cle');inspecter();}};document.head.appendChild(rp);}catch(e){}
-  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques';
+  try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(vue==='paysage')rendreTopo();if(selection.id&&RE_PID.test(selection.id))inspecter();};document.head.appendChild(rp);}catch(e){}
+  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques', CLE_PPER='datascope.paysage.periode';
   var RE_ID=/^(node|network|interface|device|ip|service):[A-Za-z0-9:._-]{1,128}$/;
   var RE_PID=/^(pop|camp|asn|classe|cible|cve|pays|infra|autres):[A-Za-z0-9:._-]{1,160}$/;
   var TYPE_PREFIXE={pop:'population',camp:'campagne',asn:'reseau_source',classe:'classe_reseau',cible:'cible',cve:'cve',pays:'pays',infra:'infra',autres:'autres'};
@@ -531,6 +547,7 @@
     el('legende').hidden=true;
     if(pg){rendreVuePaysage(box);marquerSelection();rendreListe();return;}
     horsPaysage();vider(box);bas.textContent='';
+    if(!selection.id&&el('insp').getAttribute('data-cle'))inspecter();   // la synthèse du paysage ne reste pas sous une autre vue
     var g=etat.graphe;
     if(!g){box.appendChild(h('div',{'class':'vide',text:etat.refus?'— (session requise : la topologie demande une session d\u2019administration)':'— (API DataScope injoignable)'}));return;}
     if(g.disponible===false){box.appendChild(h('div',{'class':'vide',text:'Aucun graphe : '+(g.motif||'relevé indisponible')+'.'}));return;}
@@ -600,12 +617,14 @@
   function inspecter(){
     var box=el('insp'),ty=el('inspType'),id=selection.id,mon=++jetonInsp;
     // fiche du paysage : inchangée, elle n'est pas refaite (focus et défilement gardés au rafraîchissement)
-    var pid=!!id&&RE_PID.test(id),cle=pid?[id,paysage.ts,paysage.ref,id.indexOf('infra:')===0&&etat.noeuds['node:'+id.slice(6)]?1:0].join('|'):'',vieille=box.getAttribute('data-cle')||'';
+    var pid=!!id&&RE_PID.test(id),rp=window.SbxReperes?1:0,syn=!id&&vue==='paysage'?affichePaysage():null,
+      cle=pid?[id,paysage.ts,paysage.ref,id.indexOf('infra:')===0&&etat.noeuds['node:'+id.slice(6)]?1:0,rp].join('|'):syn?['synthese',paysage.ts,paysage.ref,paysage.chrono.version,rp].join('|'):'',vieille=box.getAttribute('data-cle')||'';
     if(cle&&vieille===cle)return;
-    // même nœud, nouveau relevé : parties dépliées et focus retrouvés après la réécriture
-    var garde=pid&&vieille.split('|')[0]===id?etatFiche(box):null;
+    // même nœud (ou même synthèse), nouveau relevé ou repères arrivés : parties dépliées et focus retrouvés après la réécriture
+    var garde=(pid||syn)&&vieille.split('|')[0]===(id||'synthese')?etatFiche(box):null;
     box.setAttribute('data-cle',cle);vider(box);
-    ty.textContent=selection.type?TYPE_FR[selection.type]||selection.type:'';
+    ty.textContent=syn?'synthèse':selection.type?TYPE_FR[selection.type]||selection.type:'';
+    if(syn){rendreSynthese(syn.instantane,syn.difference);if(garde)retrouverFiche(box,garde);return;}
     if(!id){box.appendChild(h('div',{'class':'vide',text:'Choisir un élément de la topologie.'}));return;}
     if(pid){inspecterPaysage(box,id);if(garde)retrouverFiche(box,garde);return;}
     if(selection.type==='arete'){inspecterArete(box,id,mon);return;}
@@ -720,7 +739,12 @@
   var P_LIENS={'/actor/':['Actor','campagnes et acteurs'],'/waf/':['WAF','pare-feu applicatif'],'/garde/':['Garde','décisions de blocage'],'/nac/':['NAC','appareils du réseau']};
   var P_LIENS_TYPE={population:['/actor/','/waf/','/garde/'],campagne:['/actor/','/waf/'],reseau_source:['/actor/','/waf/','/garde/'],classe_reseau:['/actor/','/waf/'],cible:['/waf/','/nac/'],cve:['/waf/'],pays:['/actor/','/waf/'],infra:['/nac/','/garde/'],autres:['/actor/']};
   var pMasques=(function(){var m=lireStock(CLE_PTYPES);return Array.isArray(m)?m.filter(function(t){return P_TYPES.indexOf(t)>=0;}):P_MASQUES_DEFAUT.slice();})();
-  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',ts:'',ref:'',rejoue:null,geste:false,silence:false,noeuds:Object.create(null),aretes:[],diff:null},jetonPaysage=0;
+  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',ts:'',ref:'',rejoue:null,geste:false,silence:false,noeuds:Object.create(null),aretes:[],diff:null,
+    // chronologie : relue seulement quand un nouveau relevé est arrivé ; tendances : une par population consultée, gardées en mémoire
+    chrono:{rep:null,ts:'',enVol:'',echec:false,lu:0,version:0},tendances:Object.create(null)},jetonPaysage=0;
+  var P_FENETRE_S=8*86400,P_TENDANCES_MAX=24,pPeriode=lireStock(CLE_PPER)==='7j'?'7j':'24h';
+  // clé du compteur, libellé, vrai si c'est une somme sur les populations (une adresse vue dans deux populations compte deux fois)
+  var P_COMPTEURS=[['populations','populations'],['rotation','en rotation'],['reseaux','réseaux',true],['adresses','adresses',true],['cibles','cibles'],['bans','bannies',true],['cves','CVE']];
 
   // Texte du réseau : sans caractère de contrôle, d'espace nul ni de sens d'écriture (un nom ne doit pas se déguiser).
   function texteSur(t){return String(t==null?'':t).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u00ad\u061c]/g,'');}
@@ -738,6 +762,8 @@
   function repereRotation(){return window.SbxReperes?SbxReperes.ETATS.rotation:['','rotation'];}
   function texteRepere(r){return (r[0]?r[0]+' ':'')+r[1];}
   function metr(n){return n&&n.metriques&&typeof n.metriques==='object'?n.metriques:{};}
+  // part bannie d'une population (0 à 100, jamais arrondie à 0 ou à 100 à tort) ; null si elle n'est pas mesurée
+  function partBannie(n){var m=metr(n),a=m.adresses,b=m.bans;return typeof a!=='number'||typeof b!=='number'||!(a>0)||!(b>=0)?null:b>=a?100:b>0?Math.min(99,Math.max(1,Math.round(100*b/a))):0;}
   // nom complet d'un nœud, sans emoji
   function nomPaysage(n){
     var l=texteSur(n.libelle)||n.id;
@@ -762,7 +788,7 @@
     var m=metr(n),l=[TYPE_FR[n.type]+' · '+nomPaysage(n)];
     if(n.type==='population'){l.push('famille '+texteRepere(repereFamille(n.famille)));
       if(m.rotation===true)l.push(texteRepere(repereRotation())+' : adresses pressées, vues une à trois fois');
-      l.push(nombre(m.adresses)+' adresses · '+nombre(m.reseaux)+' réseaux · '+nombre(m.bans)+' bannies');}
+      l.push(nombre(m.adresses)+' adresses · '+nombre(m.reseaux)+' réseaux · '+nombre(m.bans)+' bannies'+(partBannie(n)!==null?' (part bannie '+pct(partBannie(n))+')':''));}
     else if(n.type==='reseau_source')l.push(n.id.slice(4)?'AS'+n.id.slice(4)+' · '+texteRepere(repereClasse(n.classe)):texteRepere(repereClasse(n.classe)));
     else if(n.type==='pays')l.push((window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+'pays d’origine (code '+texteSur(n.libelle)+')');
     else if(n.type==='autres'||n.type==='classe_reseau')l.push(n.type==='autres'?'éléments repliés au-delà des plafonds d’affichage':'réseaux d’une population au-delà des huit plus gros');
@@ -804,13 +830,59 @@
     jget('paysage').then(function(r){
       if(mon!==jetonPaysage)return;
       if(r.ok)prendrePaysage(r.j);
-      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus){paysage.rep=null;paysage.rejoue=null;indexerAffiche();}}
+      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus){paysage.rep=null;paysage.rejoue=null;indexerAffiche();
+        paysage.chrono.rep=null;paysage.chrono.ts='';paysage.chrono.version++;paysage.tendances=Object.create(null);}}
+      if(force){paysage.chrono.lu=0;Object.keys(paysage.tendances).forEach(function(k){paysage.tendances[k].lu=0;});}   // « Rafraîchir » : les lectures échouées sont retentées
       apresPaysage();
     });
   }
   function apresPaysage(){
     if(vue==='paysage')rendreTopo();
     if(selection.id&&RE_PID.test(selection.id))selectionner(selection.id);
+    chargeChronologie();tendanceFiche();
+  }
+  function tsDirect(){var r=paysage.rep,i=r&&r.disponible!==false&&r.instantane;return i&&typeof i.ts==='string'?i.ts:'';}
+  // temps affiché : celui de l'instantané rejoué, sinon maintenant (jamais avant le relevé : horloge du poste en retard)
+  function maintenantPaysage(){
+    if(paysage.rejoue)return pNombre(paysage.rejoue.instantane.epoch);
+    var r=paysage.rep||{},e=pNombre(r.epoch);
+    return DEMO?e+pNombre(r.age_s):Math.max(Date.now()/1000,e);
+  }
+  // en-têtes des 8 derniers jours et différences des 12 derniers relevés : une requête par nouveau relevé, si la vue se voit
+  function chargeChronologie(){
+    var c=paysage.chrono,ts=tsDirect();
+    if(!ts||vue!=='paysage'||document.hidden)return;
+    if(c.enVol===ts||(c.ts===ts&&!c.echec))return;
+    if(c.echec&&Date.now()-c.lu<P_RELECTURE_MS)return;
+    var de=Math.max(0,Math.floor(pNombre(paysage.rep.epoch)-P_FENETRE_S));
+    function fini(r){
+      if(c.enVol!==ts)return;
+      c.enVol='';c.lu=Date.now();c.version++;c.echec=!(r.ok&&r.j&&Array.isArray(r.j.instantanes));
+      if(!c.echec){c.ts=ts;c.rep={instantanes:r.j.instantanes.filter(function(i){return i&&typeof i.epoch==='number';}),differences:Array.isArray(r.j.differences)?r.j.differences:[],
+        de:r.j.tronque&&r.j.instantanes[0]?r.j.instantanes[0].epoch:de};}
+      if(vue==='paysage'){rendreBarre();if(!selection.id)inspecter();}
+      tendanceFiche();
+    }
+    c.enVol=ts;
+    if(DEMO){fini({ok:true,j:DEMO_DONNEES.chronologie});return;}
+    jget('paysage/chronologie?de='+de+'&differences=12').then(fini);
+  }
+  function ficheVisible(){return !document.hidden&&el('panInsp').getClientRects().length>0;}
+  // tendance d'une population : lue à l'ouverture de sa fiche, une fois par nouveau relevé
+  function chargeTendance(id){
+    var T=paysage.tendances,ts=tsDirect(),t=T[id];
+    if(!ts||!ficheVisible())return;
+    if(t&&(t.enVol||(t.ts===ts&&!t.echec)||(t.echec&&Date.now()-t.lu<P_RELECTURE_MS)))return;
+    t=T[id]=t||{ts:'',points:null,illisibles:0,echec:false,lu:0,enVol:false};
+    Object.keys(T).slice(0,Math.max(0,Object.keys(T).length-P_TENDANCES_MAX)).forEach(function(k){if(k!==id)delete T[k];});
+    function fini(r){
+      t.enVol=false;t.lu=Date.now();t.echec=!(r.ok&&r.j&&Array.isArray(r.j.points));
+      if(!t.echec){t.ts=ts;t.points=r.j.points.filter(function(p){return p&&typeof p.epoch==='number';});t.illisibles=pNombre(r.j.illisibles);t.de=pNombre(paysage.rep&&paysage.rep.epoch)-7*86400;}
+      if(selection.id===id&&paysage.tendances[id]===t)tendanceFiche();
+    }
+    t.enVol=true;
+    if(DEMO){fini({ok:true,j:DEMO_DONNEES.tendances[id]||{points:[]}});return;}
+    jget('paysage/tendance/'+encodeURIComponent(id)+'?jours=7').then(fini);
   }
 
   // --- rendu ---
@@ -826,23 +898,20 @@
     pastilles.push(h('span',{text:nombre(c.populations)+' populations, dont '+nombre(c.rotation)+' en rotation · '+nombre(c.cibles)+' cibles · '+nombre(c.cves)+' CVE'}));
     var cle=pastilles.map(function(n){return n.textContent;}).join('|');
     if(box.getAttribute('data-cle')!==cle){vider(box);pastilles.forEach(function(n){box.appendChild(n);});box.setAttribute('data-cle',cle);}
-    // barre basse : la tâche 6 y pose les compteurs et leurs mini-histogrammes
-    var ba=el('pBarre');vider(ba);ba.hidden=false;ba.title='Somme des chiffres de chaque population : une adresse vue dans deux populations est comptée deux fois.';
-    ba.appendChild(h('span',{text:'cumul par population :'}));
-    [[c.adresses,'adresses'],[c.reseaux,'réseaux'],[c.bans,'bannies']].forEach(function(x){ba.appendChild(h('span',{},[h('b',{text:nombre(x[0])}),' '+x[1]]));});
     box.hidden=false;
   }
   function horsPaysage(){['pEtat','pLegende','pBarre','pAide'].forEach(function(i){el(i).hidden=true;});}
   function rendreVuePaysage(box){
     var a=affichePaysage();
     if(!a){
-      vider(box);paysage.cle='';horsPaysage();el('topoBas').textContent='';
+      vider(box);paysage.cle='';horsPaysage();el('topoBas').textContent='';if(!selection.id&&el('insp').getAttribute('data-cle'))inspecter();
       box.appendChild(h('div',{'class':'vide',text:paysage.refus?'— (session requise : le paysage demande une session d’administration)'
         :!paysage.rep&&!paysage.echec?'Lecture du relevé des populations…'
         :'relevé des populations indisponible'+(paysage.echec?' (API DataScope injoignable ou instantané illisible)':' : aucun instantané enregistré pour le moment')}));
       return;
     }
     rendreEtatPaysage(a.instantane,a.direct?ageReleve():null);
+    rendreBarre();if(!selection.id)inspecter();
     // mêmes données : on ne redessine pas (défilement et focus gardés) — le rafraîchissement des 30 s ne coûte rien
     if(paysage.cle===clePaysage(box,a.instantane,a.difference)&&box.querySelector('svg.paysage'))return;
     rendreAidePaysage(rendrePaysage(box,a.instantane,a.difference));
@@ -874,6 +943,7 @@
     else if(box.clientWidth<L.W)box.scrollLeft=Math.max(0,L.colonnes[1].x-box.clientWidth/2);  // étroit : les populations d'abord
     if(foc){var nf=Array.prototype.filter.call(sv.querySelectorAll('.nd'),function(n){return n.getAttribute('data-id')===foc;})[0];if(nf)try{nf.focus({preventScroll:true});}catch(e){}}
     var notes=['Épaisseur d’un trait = volume (adresses pour un réseau). Survol ou focus : nom complet ; clic : fiche ; second clic, Entrée ou Échap : désélectionner. Le graphe défile dans son cadre.'];
+    notes.push('Anneau vert d’une population = part bannie de ses adresses ; pas d’anneau : part non mesurée.');
     if(pMasques.indexOf('pays')>=0)notes.push('Pays repliés : à cocher dans la légende.');
     marquerSelection();
     return notes;
@@ -887,10 +957,12 @@
   // forme d'un type : population = hexagone, campagne = losange, réseau = rond, classe repliée = rond creux, cible et
   // infrastructure = rectangle, CVE = triangle, pays = drapeau. Rend la demi-hauteur occupée.
   function formePaysage(g,n,x,y){
-    var t=n.type,m=metr(n);
+    var t=n.type,m=metr(n),pb;
     function emoji(txt,taille){if(!txt)return;var e=s('text',{'class':'emo',x:x,y:y,'text-anchor':'middle','dominant-baseline':'central','aria-hidden':'true'},g);e.style.fontSize=taille+'px';e.textContent=txt;}
     if(t==='population'){if(m.rotation===true){s('circle',{'class':'halo',cx:x,cy:y,r:23},g);s('circle',{'class':'halo2',cx:x,cy:y,r:20.5},g);}
-      s('polygon',{'class':'f',points:polygone([[-18,0],[-9,-15.6],[9,-15.6],[18,0],[9,15.6],[-9,15.6]],x,y)},g);emoji(repereFamille(n.famille)[0],15);return m.rotation===true?22:16;}
+      // anneau : part bannie des adresses, depuis le haut, dans le sens des aiguilles ; non mesurée : pas d'anneau
+      pb=partBannie(n);if(pb!==null){s('circle',{'class':'pisteBan',cx:x,cy:y,r:19.5},g);if(pb)s('circle',{'class':'anneauBan',cx:x,cy:y,r:19.5,pathLength:100,'stroke-dasharray':pb+' 100',transform:'rotate(-90 '+x+' '+y+')'},g);}
+      s('polygon',{'class':'f',points:polygone([[-17,0],[-8.5,-14.7],[8.5,-14.7],[17,0],[8.5,14.7],[-8.5,14.7]],x,y)},g);emoji(repereFamille(n.famille)[0],15);return m.rotation===true?22:pb!==null?20:16;}
     if(t==='campagne'){s('polygon',{'class':'f',points:polygone([[0,-12],[12,0],[0,12],[-12,0]],x,y)},g);return 12;}
     if(t==='reseau_source'||t==='classe_reseau'){s('circle',{'class':'f',cx:x,cy:y,r:11},g);emoji(repereClasse(n.classe)[0],11);return 11;}
     if(t==='cible'){s('rect',{'class':'f',x:x-14,y:y-9,width:28,height:18,rx:3},g);return 9;}
@@ -933,7 +1005,12 @@
     if(dedans){var n=Array.prototype.filter.call(document.querySelectorAll('#topo .nd'),function(x){return x.getAttribute('data-id')===id;})[0];
       if(n){paysage.silence=true;try{n.focus();}catch(e){}paysage.silence=false;}}
   }
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&vue==='paysage'&&selection.id&&RE_PID.test(selection.id)){e.preventDefault();deselectionnerPaysage();}});
+  // Échap : seulement depuis le graphe ou la fiche ; ailleurs (compteurs, légende, menu commun, hôte), la touche reste à son destinataire
+  function sortieEchap(e){
+    if(e.key!=='Escape'||e.defaultPrevented||vue!=='paysage'||!selection.id||!RE_PID.test(selection.id))return;
+    e.preventDefault();deselectionnerPaysage();
+  }
+  ['topo','panInsp'].forEach(function(i){el(i).addEventListener('keydown',sortieEchap);});
   // met en avant un nœud et ses voisins : formes et traits sans rapport atténués, libellés intacts
   function eclairer(sv,id){
     var vois={},ok=!!(id&&paysage.noeuds[id]);
@@ -971,12 +1048,12 @@
   }
 
   // --- fiche (inspecteur) : formes compactes, le secondaire replié ---
-  function lienPaysage(n){var b=h('button',{type:'button','class':'lien',text:(n.type==='pays'&&window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+nomPaysage(n),title:nomPaysage(n)});
+  function lienPaysage(n){var b=h('button',{type:'button','class':'lien','data-k':'l-'+n.id,text:(n.type==='pays'&&window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+nomPaysage(n),title:nomPaysage(n)});
     // la fiche est remplacée : le focus passe à son nouveau titre, il ne retombe pas en haut de la page
     b.addEventListener('click',function(){paysage.geste=true;selectionner(n.id);var t=el('insp').querySelector('.fTitre');if(t)t.focus();});return b;}
   function etatFiche(box){
     var act=document.activeElement,f=act&&box.contains(act)?act:null,foc=null;
-    if(f){var t=f.tagName.toLowerCase(),memes=Array.prototype.filter.call(box.querySelectorAll(t),function(x){return x.textContent===f.textContent;});foc={tag:t,texte:f.textContent,cle:f.getAttribute('data-k'),rang:memes.indexOf(f)};}
+    if(f){var t=f.tagName.toLowerCase(),cle=f.getAttribute('data-k'),memes=Array.prototype.filter.call(box.querySelectorAll(t),function(x){return cle?x.getAttribute('data-k')===cle:x.textContent===f.textContent;});foc={tag:t,texte:f.textContent,cle:cle,rang:memes.indexOf(f)};}
     return {ouverts:Array.from(box.querySelectorAll('details[open]')).map(function(d){return d.getAttribute('data-k');}),foc:foc};
   }
   function retrouverFiche(box,g){
@@ -1016,6 +1093,220 @@
       parts.appendChild(h('span',{},[k,texteRepere(repereClasse(x[0]))+' '+pct(x[1])]));});
     box.appendChild(barre);box.appendChild(parts);
   }
+  // <series-paysage> — séries des compteurs et des tendances : fonctions pures (tests/test_page_paysage.py, node). Rangement par
+  // époque (aucun pas supposé) ; une case sans relevé est « non mesuré », jamais 0 ; un écart n'existe que si ses deux points existent.
+  var P_PERIODES={'24h':{s:86400,tol:7200,avant:'24 h plus tôt',tolT:'± 2 h'},'7j':{s:7*86400,tol:21600,avant:'7 j plus tôt',tolT:'± 6 h'}};
+  function dateCourte(e,jour){var d=new Date(e*1000);return isNaN(d.getTime())?'—':d.toLocaleDateString('fr-FR',jour?{weekday:'short',day:'2-digit',month:'2-digit'}:{day:'2-digit',month:'2-digit'});}
+  function heureCourte(e){var d=new Date(e*1000);return isNaN(d.getTime())?'—':d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  // 24 heures d'horloge ou 7 jours locaux (changement d'heure compris) ; la dernière case est en cours
+  function casesPaysage(periode,m){
+    var r=[],i,de,a;
+    if(periode==='7j'){var d=new Date(m*1000);for(i=6;i>=0;i--){de=new Date(d.getFullYear(),d.getMonth(),d.getDate()-i).getTime()/1000;a=new Date(d.getFullYear(),d.getMonth(),d.getDate()-i+1).getTime()/1000;r.push({de:de,a:a,courant:i===0});}}
+    else{var h0=Math.floor(m/3600);for(i=23;i>=0;i--)r.push({de:(h0-i)*3600,a:(h0-i+1)*3600,courant:i===0});}
+    return r;
+  }
+  function valeurPoint(p,cle){var v=p&&p.v&&typeof p.v==='object'?p.v[cle]:null;return typeof v==='number'&&isFinite(v)?v:null;}
+  // valeur d'une case = celle de son dernier relevé chiffré. `borne` : début de l'historique lu ; `releves` : époques de tous les relevés
+  // (distingue un nœud absent du relevé d'une heure sans relevé).
+  function seriePaysage(points,cle,cases,borne,m,releves){
+    return cases.map(function(c){
+      var dans=points.filter(function(p){return p.epoch>=c.de&&p.epoch<c.a&&p.epoch<=m;}),bon=null;
+      dans.forEach(function(p){if(valeurPoint(p,cle)!==null&&(!bon||p.epoch>=bon.epoch))bon=p;});
+      var x={de:c.de,a:c.a,courant:c.courant,v:null,epoch:null,partiel:false,etat:'non_mesure'};
+      if(bon){x.etat='ok';x.v=valeurPoint(bon,cle);x.epoch=bon.epoch;x.partiel=bon.partiel===true;}
+      else if(dans.length)x.etat='vide';
+      else if((releves||[]).some(function(e){return e>=c.de&&e<c.a&&e<=m;}))x.etat='absent';
+      else if(c.de<borne)x.etat='non_charge';
+      else if(c.courant)x.etat='attente';   // heure ou jour à peine commencé : rien ne manque encore
+      return x;
+    });
+  }
+  function texteCase(c,periode,unite){
+    var t=periode==='7j'?dateCourte(c.de,true):dateCourte(c.de)+' '+heureCourte(c.de)+'–'+heureCourte(c.a);
+    if(c.etat==='ok')t+=' : '+nombre(c.v)+' '+unite+' (relevé de '+heureCourte(c.epoch)+')'+(c.partiel?' · relevé partiel':'');
+    else t+={attente:' : pas encore de relevé',non_mesure:' : non mesuré (aucun relevé)',vide:' : mesure absente du relevé',absent:' : absent du relevé (ou relevé illisible)',non_charge:' : historique non chargé'}[c.etat];
+    return t+(c.courant?' · en cours':'');
+  }
+  // écart entre le dernier point chiffré et le point le plus proche de la même heure, une période plus tôt
+  function ecartPaysage(points,cle,periode,m){
+    var P=P_PERIODES[periode],ref=null,av=null,rel=null;
+    points.forEach(function(p){if(p.epoch<=m&&(!rel||p.epoch>=rel.epoch))rel=p;});
+    if(!rel)return {periode:periode,manque:'a',cible:null};
+    if(valeurPoint(rel,cle)===null)return {periode:periode,manque:'a',cible:rel.epoch};
+    ref=rel;var cible=ref.epoch-P.s;
+    points.forEach(function(p){var d=Math.abs(p.epoch-cible);if(p.epoch<ref.epoch&&d<=P.tol&&valeurPoint(p,cle)!==null&&(!av||d<Math.abs(av.epoch-cible)))av=p;});
+    if(!av)return {periode:periode,manque:'de',cible:cible};
+    return {periode:periode,manque:'',cible:cible,de:valeurPoint(av,cle),a:valeurPoint(ref,cle),epoch:av.epoch,partiel:av.partiel===true||ref.partiel===true};
+  }
+  function texteEcart(x){
+    var P=P_PERIODES[x.periode];
+    if(x.manque==='a')return {t:'—',c:'',titre:'Pas d’écart : mesure absente du dernier relevé.'};
+    if(x.manque)return {t:'—',c:'',titre:'Pas d’écart : aucun relevé chiffré à '+P.tolT+' du '+dateCourte(x.cible)+' à '+heureCourte(x.cible)+' ('+P.avant+').'};
+    var d=x.a-x.de,t=(x.partiel?'≈ ':'')+(d>0?'+':'−')+nombre(Math.abs(d));
+    return {t:d?(d>0?'▲ ':'▼ ')+t:(x.partiel?'≈ ':'')+'= 0',c:d>0?'mont':d<0?'desc':'',titre:'Par rapport au relevé de '+heureCourte(x.epoch)+' le '+dateCourte(x.epoch)+', le plus proche de la même heure '+P.avant+' : '+nombre(x.de)+' → '+nombre(x.a)+(x.partiel?' ; un des deux relevés est partiel : l’écart peut se tromper':'')+'.'};
+  }
+  // </series-paysage>
+
+  // histogramme d'une série : une teinte, la case en cours et le pic accentués, un <title> par barre ; flèches du clavier, survol et
+  // toucher donnent la valeur d'une case dans la ligne de lecture `out`
+  function histoPaysage(cle,nom,serie,periode,out){
+    var n=serie.length,max=0,pic=-1,trous=0,part=0,H=30;
+    serie.forEach(function(c,i){if(c.etat==='ok'){if(c.v>max){max=c.v;pic=i;}if(c.partiel)part++;}else if(c.etat!=='attente')trous++;});
+    if(pic>=0&&serie.every(function(c){return c.etat!=='ok'||c.v===max;}))pic=-1;   // série plate : pas de pic
+    var sv=s('svg',{'class':'histo',viewBox:'0 0 '+n*10+' '+H,preserveAspectRatio:'none',role:'img',tabindex:'0','data-k':'h-'+cle,
+      'aria-label':nom+', '+(periode==='7j'?'7 jours':'24 heures')+' : '+serie.filter(function(c){return c.etat==='ok';}).length+' cases mesurées sur '+n+(trous?', '+trous+' non mesurées ou absentes':'')+(part?', '+part+' partielles':'')+(pic>=0?' ; pic '+texteCase(serie[pic],periode,nom):'')+'. Flèches gauche et droite : valeur d’une case.'});
+    var df=s('defs',{},sv),pt=s('pattern',{id:'hach-'+cle,width:4,height:4,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},df);s('line',{'class':'hl',x1:0,y1:0,x2:0,y2:4},pt);
+    serie.forEach(function(c,i){
+      var g=s('g',{'class':(c.courant?'cour ':'')+(i===pic?'pic ':'')+(c.etat==='ok'&&c.partiel?'part ':'')+'e-'+c.etat},sv),ti=s('title',{},g);
+      ti.textContent=texteCase(c,periode,nom)+(i===pic?' · pic':'');
+      s('rect',{'class':'zone',x:i*10,y:0,width:10,height:H},g);
+      if(c.etat==='ok'){var ht=Math.max(1.6,max?c.v*(H-2)/max:0);s('rect',{'class':'b',x:i*10+1,y:H-ht,width:8,height:ht},g);}
+      else if(c.etat!=='attente')s('rect',{'class':'trou',x:i*10+.5,y:c.etat==='absent'?H-4:0,width:9,height:c.etat==='absent'?4:H,fill:'url(#hach-'+cle+')'},g);
+    });
+    lectureHisto(sv,nom,serie,periode,out,pic);
+    return sv;
+  }
+  function lectureHisto(sv,nom,serie,periode,out,pic){
+    var cur=-1;
+    function lire(i){cur=i<0?-1:Math.min(serie.length-1,i);Array.prototype.forEach.call(sv.querySelectorAll('g'),function(g,k){g.classList.toggle('cur',k===cur);});
+      out.textContent=cur<0?out.getAttribute('data-repos')||'':texteCase(serie[cur],periode,nom)+(cur===pic?' · pic':'');}
+    function sous(e){var r=sv.getBoundingClientRect();lire(Math.max(0,Math.floor((e.clientX-r.left)/(r.width||1)*serie.length)));}
+    sv.addEventListener('pointermove',sous);sv.addEventListener('pointerdown',sous);
+    sv.addEventListener('pointerleave',function(){if(document.activeElement!==sv)lire(-1);});
+    sv.addEventListener('focus',function(){if(cur<0)lire(serie.length-1);});sv.addEventListener('blur',function(){lire(-1);});
+    sv.addEventListener('keydown',function(e){
+      var i=e.key==='ArrowLeft'?Math.max(0,cur-1):e.key==='ArrowRight'?cur+1:e.key==='Home'?0:e.key==='End'?serie.length-1:-1;
+      if(i<0)return;e.preventDefault();lire(i);});
+  }
+  // points de la chronologie, l'instantané affiché compris (il peut être plus récent que la dernière chronologie lue)
+  function pointsCompteurs(chronologie,instantane){
+    var l=((chronologie&&chronologie.instantanes)||[]).map(function(i){return {ts:i.ts,epoch:i.epoch,partiel:i.partiel===true,v:i.compteurs};});
+    if(instantane&&typeof instantane.epoch==='number'&&!l.some(function(p){return p.ts===instantane.ts;}))l.push({ts:instantane.ts,epoch:instantane.epoch,partiel:instantane.partiel===true,v:instantane.compteurs});
+    return l;
+  }
+  function choisirPeriode(p){pPeriode=p==='7j'?'7j':'24h';ecrireStock(CLE_PPER,pPeriode);rendreBarre();tendanceFiche();}
+  function rendreBarre(){if(affichePaysage())rendreCompteurs(paysage.chrono.rep,maintenantPaysage());}
+  // barre basse : 7 compteurs, chacun avec sa valeur, son écart et son histogramme. Même clé : rien n'est refait (focus gardé).
+  function rendreCompteurs(chronologie,maintenantTs){
+    var box=el('pBarre'),a=affichePaysage(),i=a?a.instantane:{},c=paysage.chrono,m=maintenantTs,
+      cle=[pPeriode,c.version,Math.floor(m/(pPeriode==='7j'?86400:3600)),i.ts,c.echec?1:0,chronologie?chronologie.instantanes.length+':'+chronologie.de:'',new Date(m*1000).getDate()].join('|');
+    box.hidden=false;
+    if(box.getAttribute('data-cle')===cle)return;
+    var foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-k'):null;
+    vider(box);box.setAttribute('data-cle',cle);
+    var pts=pointsCompteurs(chronologie,i),cases=casesPaysage(pPeriode,m),borne=chronologie?chronologie.de:Infinity,repos='survol, toucher ou ← → : valeur d’une barre',out=h('span',{'class':'pLecture','aria-live':'polite','data-repos':repos,text:repos}),
+      gen=seriePaysage(pts.map(function(p){return {epoch:p.epoch,partiel:p.partiel,v:{n:1}};}),'n',cases,borne,m),nm=gen.filter(function(x){return x.etat==='non_mesure';}).length,np=gen.filter(function(x){return x.partiel;}).length,
+      unite=pPeriode==='7j'?' j':' h',groupe=h('span',{'class':'vues',role:'group','aria-label':'Période des histogrammes'});
+    [['24h','24 h'],['7j','7 j']].forEach(function(x){var b=h('button',{type:'button','class':'bt','data-k':'per-'+x[0],'aria-pressed':pPeriode===x[0]?'true':'false',text:x[1]});b.addEventListener('click',function(){choisirPeriode(x[0]);});groupe.appendChild(b);});
+    var tete=h('div',{'class':'pbTete'},[groupe,h('span',{title:'Réseaux, adresses et bannies : somme des chiffres de chaque population ; une adresse vue dans deux populations est comptée deux fois.',text:'Σ : cumul par population'}),
+      h('span',{title:'Chaque barre est le dernier relevé de son heure (ou de son jour) ; hauteur de 0 au pic de sa propre série ; barre claire : en cours, barre vive : pic.',text:'échelle par série'})]);
+    if(chronologie){
+      var prem=pts.reduce(function(t,p){return Math.min(t,p.epoch);},Infinity);
+      if(isFinite(prem)&&prem>borne+7200)tete.appendChild(h('span',{title:'Premier relevé enregistré dans la fenêtre de 8 jours.',text:'historique depuis '+dateCourte(prem)+' '+heureCourte(prem)}));
+      if(nm)tete.appendChild(h('span',{'class':'pCle',title:'Aucun relevé dans ces cases : elles restent vides, jamais comptées 0.'},[h('i'),'non mesuré : '+nm+unite]));
+      if(np)tete.appendChild(h('span',{'class':'pCle cpart',title:'La source a signalé un relevé incomplet : des chiffres peuvent manquer.'},[h('i'),'partiel : '+np+unite]));
+    }else tete.appendChild(h('span',{text:c.echec?'historique indisponible':'historique en lecture…'}));
+    if(chronologie&&c.echec)tete.appendChild(h('span',{'class':'pas ko',text:'historique non relu'}));
+    tete.appendChild(out);box.appendChild(tete);
+    box.appendChild(h('div',{'class':'pbCases'},P_COMPTEURS.map(function(x){
+      var ec=texteEcart(ecartPaysage(pts,x[0],pPeriode,m)),v=valeurPoint({v:i.compteurs},x[0]);
+      return h('div',{'class':'pbCase'},[h('div',{'class':'tl'},[h('span',{'class':'l',text:(x[2]?'Σ ':'')+x[1]}),h('span',{'class':'ecart '+ec.c,title:ec.titre,text:ec.t})]),h('b',{'class':'nb',text:nombre(v)}),
+        histoPaysage('c-'+x[0],x[1],seriePaysage(pts,x[0],cases,borne,m),pPeriode,out)]);})));
+    if(foc){var f=Array.prototype.filter.call(box.querySelectorAll('[data-k]'),function(e){return e.getAttribute('data-k')===foc;})[0];if(f)try{f.focus({preventScroll:true});}catch(e){}}
+  }
+  function tendanceFiche(){
+    var id=selection.id,n=id?paysage.noeuds[id]:null;if(!n||n.type!=='population'||!el('pTendance'))return;
+    chargeTendance(id);var t=paysage.tendances[id];rendreTendance(n,t?t.points:null);
+  }
+  // fiche d'une population : adresses, réseaux et bannies, chaque chiffre avec son écart et son histogramme
+  function rendreTendance(noeud,points){
+    var box=el('pTendance');if(!box)return;
+    var t=paysage.tendances[noeud.id]||{},m=metr(noeud),now=maintenantPaysage(),a=affichePaysage(),inst=a?a.instantane:{},rep=paysage.chrono.rep,
+      cle=[noeud.id,inst.ts,t.ts,points?points.length:-1,t.echec?1:0,paysage.chrono.version,pPeriode,Math.floor(now/3600)].join('|');
+    if(box.getAttribute('data-cle')===cle)return;
+    var foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-k'):null;
+    vider(box);box.setAttribute('data-cle',cle);
+    var part=Object.create(null);((rep&&rep.instantanes)||[]).forEach(function(i){if(i.partiel===true)part[i.ts]=true;});
+    var pts=(points||[]).filter(function(p){return p.ts!==inst.ts;}).map(function(p){return {epoch:p.epoch,partiel:part[p.ts]===true,v:p};});
+    if(typeof inst.epoch==='number')pts.push({epoch:inst.epoch,partiel:inst.partiel===true,v:m});   // le chiffre affiché est le dernier point
+    var cases=casesPaysage(pPeriode,now),rel=((rep&&rep.instantanes)||[]).map(function(i){return i.epoch;}),repos=points?(pPeriode==='7j'?'7 jours':'24 heures')+' · échelle par série'+(pts[0]&&pts[0].epoch>pNombre(t.de)+7200?' · première mesure '+dateCourte(pts[0].epoch)+' '+heureCourte(pts[0].epoch):'')+(t.illisibles?' · '+t.illisibles+' relevés illisibles':''):t.echec?'tendance indisponible':'tendance en lecture…',
+      out=h('div',{'class':'tNote','aria-live':'polite','data-repos':repos,text:repos});
+    box.appendChild(h('div',{'class':'fChiffres'},[['adresses','adresses',nombre(m.actives_24h)+' sur 24 h'],['reseaux','réseaux',''],['bans','bannies',nombre(m.bannies_24h)+' sur 24 h']].map(function(x){
+      var d=chiffre(nombre(m[x[0]]),x[1],x[2]);if(!points)return d;
+      var ec=texteEcart(ecartPaysage(pts,x[0],pPeriode,now));
+      d.appendChild(h('span',{'class':'ecart '+ec.c,title:ec.titre,text:ec.t}));
+      d.appendChild(histoPaysage('t-'+x[0],x[1],seriePaysage(pts,x[0],cases,t.de||0,now,rel),pPeriode,out));return d;})));
+    box.appendChild(out);
+    if(foc){var f=Array.prototype.filter.call(box.querySelectorAll('[data-k]'),function(e){return e.getAttribute('data-k')===foc;})[0];if(f)try{f.focus({preventScroll:true});}catch(e){}}
+  }
+
+  // --- panneau de droite sans sélection : synthèse déterministe (gabarits, nombres et identifiants seulement) et fil des changements ---
+  function listeDiff(d,k){return d&&Array.isArray(d[k])?d[k]:[];}
+  function nomId(id){var n=paysage.noeuds[id];return n?nomPaysage(n):texteSur(String(id).slice(String(id).indexOf(':')+1));}
+  function lienId(id){var n=paysage.noeuds[id];return n?lienPaysage(n):h('span',{title:'absent du relevé affiché',text:nomId(id)});}
+  function typeId(id){return propre(TYPE_PREFIXE,String(id).split(':')[0],'');}
+  function idsDe(l,type){return l.filter(function(i){return typeof i==='string'&&RE_PID.test(i)&&typeId(i)===type;});}
+  function variations(l){return l.filter(function(x){return x&&typeof x.id==='string'&&RE_PID.test(x.id);});}
+  function texteVariation(x){var u={adresses:'adresses',bans:'bannies',reseaux:'réseaux'};return propre(u,x.metrique,'')+' '+nombre(x.de)+' → '+nombre(x.a);}
+  function depuisTexte(d){return typeof d.ecart_s==='number'&&isFinite(d.ecart_s)?'depuis '+Math.round(d.ecart_s/3600)+' h':'depuis le relevé précédent';}
+  function ligneSynthese(titre,kids){
+    var c=h('div',{'class':'c'},kids.slice(0,6));
+    return h('div',{'class':'sLigne'},[h('span',{'class':'t',text:titre}),kids.length>6?h('div',{},[c,replie('syn-'+titre,'+ '+(kids.length-6)+' autres',[h('div',{'class':'c'},kids.slice(6))])]):c]);
+  }
+  function rendreSynthese(instantane,difference){
+    var box=el('insp'),c=instantane.compteurs&&typeof instantane.compteurs==='object'?instantane.compteurs:{},d=difference,lignes=[];
+    box.appendChild(h('div',{'class':'sPhrase fTitre',tabindex:'-1',text:nombre(c.populations)+' populations, dont '+nombre(c.rotation)+' en rotation'}));
+    if(!d||d.sans_precedent)box.appendChild(h('div',{'class':'fPuces',text:'— comparaison indisponible : elle demande un relevé lisible d’au moins 12 h plus ancien.'}));
+    else{
+      var dep=depuisTexte(d),app=listeDiff(d,'apparus'),dis=listeDiff(d,'disparus');
+      [['✚ apparues',idsDe(app,'population')],['✖ disparues',idsDe(dis,'population')],[repereRotation()[0]+' rotation apparue',idsDe(listeDiff(d,'rotation_levee'),'population')],[repereRotation()[0]+' rotation terminée',idsDe(listeDiff(d,'rotation_tombee'),'population')]].forEach(function(x){
+        if(x[1].length)lignes.push(ligneSynthese(x[0].trim(),x[1].map(lienId)));});
+      [['▲ en hausse','hausses'],['▼ en baisse','baisses']].forEach(function(x){var l=variations(listeDiff(d,x[1]));
+        if(l.length)lignes.push(ligneSynthese(x[0],l.map(function(v){return h('span',{},[lienId(v.id),' ',h('span',{'class':'nb',text:texteVariation(v)})]);})));});
+      [['✚ cibles visées','cible',app],['✖ cibles délaissées','cible',dis],['✚ CVE sondées','cve',app],['✖ CVE plus sondées','cve',dis],['✚ campagnes','campagne',app],['✖ campagnes','campagne',dis]].forEach(function(x){var l=idsDe(x[2],x[1]);if(l.length)lignes.push(ligneSynthese(x[0],l.map(lienId)));});
+      var rs=idsDe(app,'reseau_source').length,rd=idsDe(dis,'reseau_source').length;if(rs||rd)lignes.push(ligneSynthese('réseaux montrés',[h('span',{text:'✚ '+rs+' · ✖ '+rd})]));
+      box.appendChild(h('div',{'class':'fPuces',text:(lignes.length?'changements ':'rien de notable ')+dep+(typeof d.reference_epoch==='number'?' (relevé de '+heureReleve(d.reference_epoch)+(d.reference_partiel?', partiel : la comparaison peut se tromper':'')+')':'')+(d.tronque?' · listes tronquées':'')}));
+      lignes.forEach(function(n){box.appendChild(n);});
+    }
+    rendreFil(box,instantane);
+    box.appendChild(h('div',{'class':'note',text:'Choisir un élément du graphe pour sa fiche.'}));
+  }
+  // changements d'un relevé, du plus important au moins important ; réseaux, classes et pays seulement comptés
+  function evenementsFil(d){
+    var l=[],ro=repereRotation()[0],app=listeDiff(d,'apparus'),dis=listeDiff(d,'disparus');
+    function signe(t){return h('span',{'class':'nb',text:t});}
+    function E(t,ids){ids.forEach(function(i){l.push(h('span',{'class':'e'},[signe(t),lienId(i)]));});}
+    E((ro+' en rotation :').trim(),idsDe(listeDiff(d,'rotation_levee'),'population'));E((ro+' fin de rotation :').trim(),idsDe(listeDiff(d,'rotation_tombee'),'population'));
+    E('✚',idsDe(app,'population'));E('✖',idsDe(dis,'population'));
+    [['▲','hausses'],['▼','baisses']].forEach(function(x){variations(listeDiff(d,x[1])).forEach(function(v){l.push(h('span',{'class':'e'},[signe(x[0]),lienId(v.id),signe(texteVariation(v))]));});});
+    ['campagne','cve','cible'].forEach(function(t){E('✚ '+TYPE_FR[t],idsDe(app,t));E('✖ '+TYPE_FR[t],idsDe(dis,t));});
+    ['reseau_source','classe_reseau','pays','infra'].forEach(function(t){var p=idsDe(app,t).length,q=idsDe(dis,t).length;if(p||q)l.push(h('span',{'class':'e',text:TYPE_FR[t]+(p?' ✚ '+p:'')+(q?' ✖ '+q:'')}));});
+    return l;
+  }
+  function rendreFil(box,instantane){
+    var c=paysage.chrono,rep=c.rep,fin=pNombre(instantane.epoch);
+    box.appendChild(h('h4',{title:'Différences enregistrées à l’arrivée de chaque relevé, du plus récent au plus ancien.',text:'Fil des changements · 12 derniers relevés'}));
+    if(!rep){box.appendChild(h('div',{'class':'vide',text:c.echec?'— fil indisponible':'fil en lecture…'}));return;}
+    var l=rep.differences.filter(function(x){return x&&typeof x.epoch==='number'&&x.epoch<=fin;}),calmes=[];
+    function vidange(){if(!calmes.length)return;var n=calmes.length;
+      box.appendChild(h('div',{'class':'filL calme',text:(n>1?heureReleve(calmes[n-1])+' à ':'')+heureReleve(calmes[0])+' : '+(n>1?n+' relevés sans changement':'sans changement')}));calmes=[];}
+    if(!l.length)box.appendChild(h('div',{'class':'vide',text:'— aucun des 12 derniers relevés n’est antérieur à l’instant affiché.'}));
+    l.forEach(function(x){
+      var d=x.difference,ev=d&&!d.sans_precedent?evenementsFil(d):[];
+      if(d&&!d.sans_precedent&&!ev.length&&x.partiel!==true){calmes.push(x.epoch);return;}
+      vidange();
+      var tete=[h('b',{text:heureReleve(x.epoch)})];
+      if(x.partiel===true)tete.push(h('span',{'class':'pas att',text:'partiel'}));
+      if(!d)tete.push(h('span',{text:'— comparaison illisible'}));
+      else if(d.sans_precedent)tete.push(h('span',{text:d.sans_precedent==='premier'?'premier relevé enregistré : rien à comparer':'relevé précédent illisible : pas de comparaison'}));
+      else if(!ev.length)tete.push(h('span',{text:'sans changement'}));
+      if(d&&d.tronque===true)tete.push(h('span',{text:'liste tronquée'}));
+      var r=h('div',{'class':'filL'},[h('div',{'class':'h'},tete.concat(ev.slice(0,4)))]);
+      if(ev.length>4)r.appendChild(replie('fil-'+x.epoch,'+ '+(ev.length-4)+' autres',[h('div',{'class':'h'},ev.slice(4))]));
+      box.appendChild(r);
+    });
+    vidange();
+  }
   function chiffre(v,t,sous){return h('div',{},[h('b',{text:v}),h('span',{text:t}),sous?h('span',{text:sous}):null]);}
   function inspecterPaysage(box,id){
     var n=paysage.noeuds[id];
@@ -1033,8 +1324,8 @@
     else if(n.type==='autres')puces.push(nombre(m.repliees)+' repliés');
     box.appendChild(h('div',{'class':'fPuces'},puces.map(function(t){return h('span',{text:t});})));
     if(n.type==='population'){
-      box.appendChild(h('div',{'class':'fChiffres'},[chiffre(nombre(m.adresses),'adresses',nombre(m.actives_24h)+' sur 24 h'),chiffre(nombre(m.reseaux),'réseaux'),chiffre(nombre(m.bans),'bannies',nombre(m.bannies_24h)+' sur 24 h')]));
-      box.appendChild(h('div',{'class':'tendance',id:'pTendance',hidden:''}));   // place de l'histogramme de tendance (tâche 6)
+      box.appendChild(h('div',{'class':'tendance',id:'pTendance'}));tendanceFiche();   // chiffres et leur histogramme dans la même case
+      if(partBannie(n)!==null)box.appendChild(partPaysage('part bannie',pct(partBannie(n)),partBannie(n)));
       box.appendChild(partPaysage('adresses vues 1 à 3 fois',pct(m.le3),m.le3));
       box.appendChild(partPaysage('dont une seule fois',pct(m.une),m.une));
       classesEmpilees(box,m.classes&&typeof m.classes==='object'?m.classes:{});
@@ -1057,7 +1348,7 @@
   function evolutionPaysage(box,n){
     var d=paysage.diff,a=affichePaysage()||{};
     box.appendChild(h('h4',{text:'Évolution sur 24 h'}));
-    if(!d){box.appendChild(h('div',{'class':'note',text:'— '+(a.motif?texteSur(a.motif):'comparaison indisponible')}));return;}
+    if(!d||d.sans_precedent){box.appendChild(h('div',{'class':'note',text:'— '+(a.motif?texteSur(a.motif):'comparaison indisponible')}));return;}
     var dans=function(k){return Array.isArray(d[k])&&d[k].indexOf(n.id)>=0;},l=[];
     if(dans('apparus'))l.push('✚ apparu depuis la référence');
     if(dans('rotation_levee'))l.push(texteRepere(repereRotation())+' : apparue depuis la référence');
@@ -1072,7 +1363,7 @@
   // --- tiroirs ---
   function modeTiroir(){return getComputedStyle(el('btInsp')).display!=='none';}
   function ouvrir(id,on){var p=el(id);p.classList.toggle('ouvert',on);el(id==='panInsp'?'btInsp':'btSources').setAttribute('aria-expanded',on?'true':'false');
-    if(on){var autre=id==='panInsp'?'panSources':'panInsp';el(autre).classList.remove('ouvert');}}
+    if(on){var autre=id==='panInsp'?'panSources':'panInsp';el(autre).classList.remove('ouvert');if(id==='panInsp')tendanceFiche();}}
   el('btSources').addEventListener('click',function(){ouvrir('panSources',!el('panSources').classList.contains('ouvert'));});
   el('btInsp').addEventListener('click',function(){ouvrir('panInsp',!el('panInsp').classList.contains('ouvert'));});
   Array.prototype.forEach.call(document.querySelectorAll('[data-ferme]'),function(b){b.addEventListener('click',function(){ouvrir(b.getAttribute('data-ferme'),false);});});
@@ -1124,9 +1415,22 @@
         difference_24h:{apparus:['pop:profileur:demo2','cible:api.demo.test'],disparus:[],hausses:[{id:'pop:rotation:0d3m0a1b',metrique:'adresses',de:1210,a:1840}],baisses:[{id:'pop:famille:messagerie',metrique:'adresses',de:290,a:210}],
           rotation_levee:['pop:rotation:0d3m0a1b'],rotation_tombee:[],tronque:false,reference_ts:new Date(ref*1000).toISOString().replace('Z','000Z'),reference_epoch:ref,reference_partiel:false,ecart_s:86400}};
     })();
+    // chronologie : toutes les 30 min sur 48 h puis toutes les heures, 4,6 jours d'historique, un trou de trois heures, un relevé partiel
+    var tsDemo=function(e){return new Date(e*1000).toISOString().replace('Z','000Z');},E0=paysageDemo.epoch,courbe=function(n,p,e){var x=(E0-e)/86400;return Math.max(0,Math.round(n+(p-n)*Math.min(x,1.4)+(n>20?.09*n*Math.sin(6*Math.PI*x):0)));},
+      epoques=[],veille={populations:6,rotation:0,reseaux:131,adresses:2215,cibles:8,bans:921,cves:3},veillePop={'pop:rotation:0d3m0a1b':[1210,51,190],'pop:famille:balayage_web':[590,40,470],'pop:famille:messagerie':[290,21,141],'pop:famille:acces_distant':[95,22,12],'pop:profileur:demo2':null};
+    for(var k=0;k<96;k++)epoques.push(E0-k*1800);for(k=48;k<110;k++)epoques.push(E0-k*3600);
+    epoques=epoques.filter(function(e){return !(e<E0-6.2*3600&&e>E0-9.4*3600);}).reverse();
+    var cActuels=paysageDemo.instantane.compteurs,chronologieDemo={tronque:false,instantanes:epoques.map(function(e){var c={};Object.keys(cActuels).forEach(function(x){c[x]=courbe(cActuels[x],veille[x],e);});return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,compteurs:c};})};
+    var rienDemo=function(x){var d={apparus:[],disparus:[],hausses:[],baisses:[],rotation_levee:[],rotation_tombee:[],tronque:false};for(var y in (x||{}))d[y]=x[y];return d;},
+      filDemo=[{},{hausses:[{id:'pop:rotation:0d3m0a1b',metrique:'adresses',de:1490,a:1812}]},{},{},{apparus:['pop:profileur:demo2','cible:api.demo.test','asn:64504']},{},{rotation_levee:['pop:rotation:0d3m0a1b'],apparus:['asn:64497','asn:64498','classe:rotation:0d3m0a1b:acces']},{},{},{},{apparus:['cve:CVE-2099-10003'],baisses:[{id:'pop:famille:messagerie',metrique:'adresses',de:290,a:221}],disparus:['pop:profileur:demo1','cible:ancien.demo.test']},{}];
+    chronologieDemo.differences=epoques.slice(-12).reverse().map(function(e,i){return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,difference:rienDemo(filDemo[i])};});
+    var tendancesDemo={},parHeure={};epoques.forEach(function(e){var x=Math.floor(e/3600);if(parHeure[x]===undefined)parHeure[x]=e;});
+    var premiers=Object.keys(parHeure).map(function(x){return parHeure[x];}).sort(function(x,y){return x-y;});
+    Object.keys(veillePop).forEach(function(id){var mq=paysageDemo.instantane.graphe.noeuds.filter(function(x){return x.id===id;})[0].metriques,v=veillePop[id];
+      tendancesDemo[id]={id:id,illisibles:0,points:premiers.concat(premiers.indexOf(E0)<0?[E0]:[]).filter(function(e){return v||e>E0-8000;}).map(function(e){return {ts:tsDemo(e),epoch:e,adresses:courbe(mq.adresses,v?v[0]:mq.adresses,e),reseaux:courbe(mq.reseaux,v?v[1]:mq.reseaux,e),bans:courbe(mq.bans,v?v[2]:mq.bans,e)};})};});
     return {overview:{disponible:true,genere_le:iso(2),verifie_le:iso(1),complet:false,perime:false,entites:compte,relations:a.length},
       sources:[{source:'status',etat:'inaccessible',motif:'santé des modules périmée (plus de 300 s)',vu_le:iso(14)},{source:'network',etat:'ok',motif:null,vu_le:iso(2)}],
-      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,paysage:paysageDemo,_attrs:at,_just:just};
+      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,paysage:paysageDemo,chronologie:chronologieDemo,tendances:tendancesDemo,_attrs:at,_just:just};
   })();
   function contexteDemo(id){
     var D=DEMO_DONNEES,e=etat.noeuds[id];if(!e)return null;e=JSON.parse(JSON.stringify(e));e.attributes=JSON.parse(JSON.stringify(D._attrs[id]||{}));

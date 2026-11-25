@@ -118,8 +118,9 @@ def test_releve_date_partiel_et_perime_en_clair():
     s = _script()
     assert "P_PERIME_S=7200" in s
     c = _fonction("rendreEtatPaysage")
-    for t in ("relevé de ", "partiel", "périmé", "plus de 2 h", "cumul par population"):
+    for t in ("relevé de ", "partiel", "périmé", "plus de 2 h"):
         assert t in c, t
+    assert "cumul par population" in _fonction("rendreCompteurs")  # une adresse vue dans deux populations compte deux fois
     assert "relevé des populations indisponible" in s
     assert "'—'" in c or "nombre(" in c  # mesure absente : tiret, jamais 0
 
@@ -283,3 +284,145 @@ def test_cle_identifie_l_instantane_dessine():
     assert "instantane.ts" in _fonction("clePaysage")
     assert "indexerPaysage(" not in _fonction("prendrePaysage") or "rejoue" in _fonction("prendrePaysage")
     assert "paysage.lu" not in _fonction("inspecter")
+
+
+# --- tâche 6 : compteurs à histogrammes, tendance, synthèse et fil ------------------------------------------------
+
+def test_tache6_fonctions_et_bascule():
+    p, s = _page(), _script()
+    for f in ("function rendreCompteurs(chronologie,maintenantTs)", "function rendreTendance(noeud,points)",
+              "function rendreSynthese(instantane,difference)"):
+        assert f in s, f
+    assert "['24h','24 h']" in s and "['7j','7 j']" in s and "'aria-pressed'" in _fonction("rendreCompteurs")
+    assert "'paysage/chronologie?de='" in s and "'paysage/tendance/'" in s and "differences=12" in s
+    # barre basse : sous le graphe ET l'inspecteur, pleine largeur du cadre
+    assert p.index('id="panInsp"') < p.index('id="pBarre"') < p.index('Lecture seule · chaque relation')
+    assert re.search(r"\.pBarre\{[^}]*grid-column:1/-1", p)
+    for k in ("populations", "rotation", "reseaux", "adresses", "cibles", "bans", "cves"):
+        assert re.search(r"P_COMPTEURS=\[.*\['" + k + "'", s), k
+
+
+def test_tache6_histogrammes_et_fleches():
+    h = _fonction("histoPaysage")
+    assert "s('title'" in h and "texteCase(" in h and "tabindex:'0'" in h and "ArrowLeft" in _fonction("lectureHisto")
+    t = _entre("// <series-paysage>", "// </series-paysage>")
+    assert "▲" in t and "▼" in t and "non mesuré" in t and "innerHTML" not in t
+
+
+def test_tache6_synthese_deterministe():
+    """Aucun texte libre du serveur : ni motif, ni détail d'erreur ; seulement des identifiants, des nombres et des gabarits."""
+    for f in ("rendreSynthese", "rendreFil", "evenementsFil"):
+        c = _fonction(f)
+        for interdit in ("motif", "detail", "message", "innerHTML"):
+            assert interdit not in c, (f, interdit)
+    c = _fonction("rendreSynthese")
+    for k in ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee"):
+        assert k in c, k
+    assert "sans_precedent" in _fonction("rendreFil")
+
+
+def _series(programme):
+    return _node(_entre("function nombre(", "\n") + _entre("// <series-paysage>", "// </series-paysage>")
+                 + "var H=3600,T0=Math.floor(1795000000/3600)*3600;" + programme)
+
+
+def test_series_24h_par_epoques_sans_pas_suppose():
+    r = _series(r"""
+      var m=T0+1500,P=[],i;
+      // relevés irréguliers : toutes les 47 min sur 20 h, trou de 3 h, un partiel, une valeur absente, un relevé futur
+      for(i=0;i<26;i++){var e=m-100-i*47*60;if(e>m-9*H&&e<m-6*H)continue;P.push({epoch:e,partiel:i===0,v:{adresses:100+i,bans:i===2?null:0}});}
+      P.push({epoch:m+50,partiel:false,v:{adresses:9999}});
+      var C=casesPaysage('24h',m),S=seriePaysage(P,'adresses',C,T0-8*86400,m),B=seriePaysage(P,'bans',C,T0-8*86400,m);
+      process.stdout.write(JSON.stringify({n:C.length,heures:C.every(function(c){return c.a-c.de===H&&c.de%H===0;}),
+        fin:[C[23].de<=m&&m<C[23].a,C[23].courant,C[0].courant],S:S,B:B.map(function(x){return x.etat+':'+x.v;}),
+        textes:S.map(function(c){return texteCase(c,'24h','adresses');})}));""")
+    assert r["n"] == 24 and r["heures"] and r["fin"] == [True, True, False]
+    etats = [c["etat"] for c in r["S"]]
+    assert etats[-1] == "ok" and r["S"][-1]["v"] == 100 and r["S"][-1]["partiel"] is True  # ni le futur, ni un 0
+    assert "relevé partiel" in r["textes"][-1] and "en cours" in r["textes"][-1]
+    trou = [c for c in r["S"] if c["etat"] == "non_mesure"]
+    assert len(trou) >= 2 + 3 and all(c["v"] is None for c in trou)
+    assert all(("non mesuré" in t) == (e == "non_mesure") for t, e in zip(r["textes"], etats))
+    assert not any(": 0 " in t for t in r["textes"])
+    assert "ok:0" in r["B"]  # un zéro mesuré reste un zéro
+
+
+def test_series_valeur_absente_non_chargee_et_noeud_absent():
+    r = _series(r"""
+      var m=T0+1500,C=casesPaysage('24h',m),P=[{epoch:T0+10,partiel:false,v:{adresses:null}},{epoch:T0-H+10,partiel:false,v:{}},
+        {epoch:T0-2*H+10,partiel:false,v:{adresses:4}},{epoch:T0-2*H+900,partiel:false,v:{adresses:'12'}},{epoch:T0-3*H+5,partiel:false,v:null}];
+      var S=seriePaysage(P,'adresses',C,T0-10*H,m,[T0-4*H+20]);
+      process.stdout.write(JSON.stringify([S.map(function(x){return x.etat;}).reverse(),S[21].v,texteCase(S[19],'24h','adresses'),texteCase(S[23],'24h','adresses'),texteCase(S[0],'24h','adresses')]));""")
+    assert r[0][:5] == ["vide", "vide", "ok", "vide", "absent"] and r[1] == 4
+    assert r[0][5:10] == ["non_mesure"] * 5 and set(r[0][11:]) == {"non_charge"}
+    assert "absent du relevé" in r[2] and "mesure absente" in r[3] and "non chargé" in r[4]
+
+
+def test_series_7j_jours_locaux_et_dernier_releve_du_jour():
+    r = _series(r"""
+      process.env.TZ='Europe/Paris';
+      var m=new Date(2026,9,27,15,0,0).getTime()/1000,C=casesPaysage('7j',m),P=[];   // passage à l'heure d'hiver le 25/10/2026
+      for(var i=0;i<60;i++)P.push({epoch:m-i*H,partiel:false,v:{adresses:1000-i}});
+      var S=seriePaysage(P,'adresses',C,m-8*86400,m);
+      process.stdout.write(JSON.stringify({n:C.length,duree:C.map(function(c){return (c.a-c.de)/H;}),suite:C.every(function(c,i){return !i||C[i-1].a===c.de;}),
+        v:S.map(function(x){return x.v;}),e:S.map(function(x){return x.etat;}),t:texteCase(S[6],'7j','adresses')}));""")
+    assert r["n"] == 7 and r["duree"] == [24, 24, 24, 24, 25, 24, 24] and r["suite"]
+    assert r["e"][:4] == ["non_mesure"] * 4 and r["e"][4:] == ["ok"] * 3 and r["v"][6] == 1000
+    assert r["v"][5] == 1000 - 16 and "en cours" in r["t"]  # dernier relevé de la veille : 23 h
+
+
+def test_ecart_seulement_si_les_deux_points_existent():
+    r = _series(r"""
+      var m=T0+100,e=T0,p=function(dt,v,part){return {epoch:e+dt,partiel:!!part,v:{adresses:v}};},L=[
+        ecartPaysage([p(0,50),p(-86400+1700,40),p(-86400-900,30),p(-3600,9)],'adresses','24h',m),
+        ecartPaysage([p(0,50),p(-86400+7300,40)],'adresses','24h',m),ecartPaysage([p(0,50),p(-86400,null)],'adresses','24h',m),
+        ecartPaysage([p(0,null),p(-86400,3)],'adresses','24h',m),ecartPaysage([],'adresses','24h',m),
+        ecartPaysage([p(0,20),p(-7*86400+3000,80,true)],'adresses','7j',m),ecartPaysage([p(0,5),p(-86400,5)],'adresses','24h',m)];
+      process.stdout.write(JSON.stringify([L,L.map(function(x){return texteEcart(x).t;}),texteEcart(L[0]).titre,texteEcart(L[1]).titre,texteEcart(L[5]).titre]));""")
+    e = r[0]
+    assert (e[0]["de"], e[0]["a"], e[0]["partiel"]) == (30, 50, False)  # le plus proche de la même heure la veille
+    assert r[1] == ["▲ +20", "—", "—", "—", "—", "▼ ≈ −60", "= 0"]
+    assert "relevé de " in r[2] and "30 → 50" in r[2] and "24 h plus tôt" in r[2]
+    assert "aucun relevé" in r[3] and "± 2 h" in r[3] and "partiel" in r[4] and "7 j plus tôt" in r[4]
+
+
+def test_anneau_de_part_bannie_sur_les_populations():
+    c = _fonction("formePaysage")
+    assert "'anneauBan'" in c and "partBannie(" in c and "pathLength:100" in c
+    r = _node(_entre("function metr(", "\n") + _entre("function partBannie(", "\n") + r"""
+      process.stdout.write(JSON.stringify([{adresses:200,bans:50},{adresses:0,bans:0},{adresses:10},{bans:3},{adresses:10000,bans:1},
+        {adresses:10000,bans:9999},{adresses:5,bans:9},{adresses:'5',bans:1}].map(function(m){return partBannie({metriques:m});})));""")
+    assert r == [25, None, None, None, 1, 99, 100, None]
+    assert "part bannie" in _fonction("descPaysage") and "part bannie" in _fonction("inspecterPaysage")
+
+
+def test_echap_limite_au_graphe_et_a_l_inspecteur():
+    s = _script()
+    assert not re.search(r"document\.addEventListener\('keydown'", s)
+    assert "['topo','panInsp'].forEach(function(i){el(i).addEventListener('keydown',sortieEchap);})" in s
+    assert "defaultPrevented" in _fonction("sortieEchap")
+
+
+def test_requetes_bornees():
+    c = _fonction("chargeChronologie")
+    assert "document.hidden" in c and "vue!=='paysage'" in c and "P_RELECTURE_MS" in c
+    t = _fonction("chargeTendance")
+    assert "ficheVisible()" in t and "P_RELECTURE_MS" in t and "P_TENDANCES_MAX" in t
+
+
+def test_demo_chronologie_et_tendances():
+    s = _script()
+    i = s.index("var DEMO_DONNEES=(function(){")
+    j = s.index("\n  })();", i) + len("\n  })();")
+    d = _node(s[i:j] + "process.stdout.write(JSON.stringify(DEMO_DONNEES));")
+    ch, pay = d["chronologie"], d["paysage"]
+    assert ch["instantanes"][-1] == {"ts": pay["instantane"]["ts"], "epoch": pay["epoch"], "partiel": False,
+                                     "compteurs": pay["instantane"]["compteurs"]}
+    e = [x["epoch"] for x in ch["instantanes"]]
+    assert e == sorted(e) and max(b - a for a, b in zip(e, e[1:])) > 2 * 3600 and any(x["partiel"] for x in ch["instantanes"])
+    assert len(ch["differences"]) == 12 and [x["epoch"] for x in ch["differences"]] == sorted(
+        (x["epoch"] for x in ch["differences"]), reverse=True)
+    noeuds = {n["id"]: n for n in pay["instantane"]["graphe"]["noeuds"]}
+    for k, t in d["tendances"].items():
+        assert noeuds[k]["type"] == "population" and t["points"][-1]["adresses"] == noeuds[k]["metriques"]["adresses"]
+    assert "Math.random" not in s

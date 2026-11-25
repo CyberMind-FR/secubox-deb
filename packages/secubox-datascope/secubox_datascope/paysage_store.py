@@ -81,6 +81,13 @@ def _entete(r: sqlite3.Row) -> Dict[str, Any]:
             "compteurs": _objet(r["compteurs_json"]) or {}}
 
 
+def dernier_entete(db: sqlite3.Connection) -> Optional[Dict[str, Any]]:
+    """En-tête du dernier instantané, graphe non décodé (lisible même si le graphe est corrompu)."""
+    r = db.execute("SELECT ts, epoch, partiel, compteurs_json FROM paysage_instantanes ORDER BY epoch DESC"
+                   " LIMIT 1").fetchone()
+    return _entete(r) if r else None
+
+
 def dernier(db: sqlite3.Connection) -> Optional[Dict[str, Any]]:
     r = db.execute("SELECT ts FROM paysage_instantanes ORDER BY epoch DESC LIMIT 1").fetchone()
     return lire(db, r["ts"]) if r else None
@@ -108,6 +115,15 @@ def chronologie(db: sqlite3.Connection, de: float, a: float, limite: Optional[in
         " ORDER BY epoch DESC LIMIT ?", (de, a, limite))]
     lignes.reverse()
     return lignes
+
+
+def differences(db: sqlite3.Connection, de: float, a: float, limite: int) -> List[Dict[str, Any]]:
+    """Différences stockées des `limite` derniers instantanés de la période, du plus récent au plus ancien (sans graphe).
+    Une différence illisible est rendue None, jamais « rien n'a changé »."""
+    return [{"ts": r["ts"], "epoch": r["epoch"], "partiel": bool(r["partiel"]),
+             "difference": _objet(r["difference_json"])} for r in db.execute(
+        "SELECT ts, epoch, partiel, difference_json FROM paysage_instantanes WHERE epoch >= ? AND epoch <= ?"
+        " ORDER BY epoch DESC LIMIT ?", (de, a, limite))]
 
 
 def proche(db: sqlite3.Connection, cible: float, epoch_max: float) -> Optional[Dict[str, Any]]:

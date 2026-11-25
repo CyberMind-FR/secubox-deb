@@ -337,6 +337,7 @@ CHRONO_MAX_S = 31 * 86400.0
 CHRONO_MAX = 1500  # en-têtes renvoyés au plus (31 j éclaircis : ~800)
 DIFF_MAX = 300  # éléments par liste de différence
 TENDANCE_JOURS_MAX = 30
+FIL_MAX = 24  # différences stockées rendues au plus avec la chronologie
 PARAM_MAX = 40  # caractères : au-delà, 400 (la borne de Query rendrait 422)
 _LISTES_DIFF = ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee")
 
@@ -367,6 +368,12 @@ def _epoch_param(v: Optional[str], nom: str) -> Optional[float]:
     if not math.isfinite(f) or f < 0 or f > 253402300799:
         raise HTTPException(status_code=400, detail=f"{nom} invalide")
     return f
+
+
+def _entier_param(v: str, nom: str, maxi: int) -> int:
+    if len(v) > 8 or not v.isascii() or not v.isdigit() or not 1 <= int(v) <= maxi:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide (1 à {maxi})")
+    return int(v)
 
 
 def _borner_diff(d: Dict[str, Any]) -> Dict[str, Any]:
@@ -425,8 +432,10 @@ async def paysage() -> Dict[str, Any]:
 
 
 @router.get("/paysage/chronologie", dependencies=[Depends(require_jwt)])
-async def paysage_chronologie(de: Optional[str] = Query(None), a: Optional[str] = Query(None)) -> Dict[str, Any]:
+async def paysage_chronologie(de: Optional[str] = Query(None), a: Optional[str] = Query(None),
+                              differences: Optional[str] = Query(None)) -> Dict[str, Any]:
     fa, fde = _epoch_param(a, "a"), _epoch_param(de, "de")
+    nb = None if differences is None else _entier_param(differences, "differences", FIL_MAX)
     if fa is None:
         fa = _maintenant()
     if fde is None:
@@ -436,7 +445,11 @@ async def paysage_chronologie(de: Optional[str] = Query(None), a: Optional[str] 
 
     def lire(db):
         lignes = paysage_store.chronologie(db, fde, fa, CHRONO_MAX + 1)
-        return {"instantanes": lignes[-CHRONO_MAX:], "tronque": len(lignes) > CHRONO_MAX}
+        out: Dict[str, Any] = {"instantanes": lignes[-CHRONO_MAX:], "tronque": len(lignes) > CHRONO_MAX}
+        if nb is not None:  # fil des changements : calculé à l'écriture, aucun graphe décodé ici
+            out["differences"] = [{**x, "difference": None if x["difference"] is None else _borner_diff(x["difference"])}
+                                  for x in paysage_store.differences(db, fde, fa, nb)]
+        return out
     return await asyncio.to_thread(_lire_base, lire)
 
 
@@ -469,9 +482,7 @@ def _entier(v: Any) -> Optional[int]:
 async def paysage_tendance(id: str, jours: str = Query("7")) -> Dict[str, Any]:
     if not _ID_NOEUD.fullmatch(id):
         raise HTTPException(status_code=400, detail="identifiant invalide")
-    if len(jours) > 8 or not jours.isascii() or not jours.isdigit() or not 1 <= int(jours) <= TENDANCE_JOURS_MAX:
-        raise HTTPException(status_code=400, detail="jours invalide (1 à 30)")
-    nb = int(jours)
+    nb = _entier_param(jours, "jours", TENDANCE_JOURS_MAX)
 
     def lire(db):
         dernier = db.execute("SELECT max(epoch) FROM paysage_instantanes").fetchone()[0]

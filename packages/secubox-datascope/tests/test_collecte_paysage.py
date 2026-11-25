@@ -176,3 +176,50 @@ def test_passe_eclaircissement_en_echec_ne_defait_pas_l_ecriture(cfg, monkeypatc
     s = collecte.passe(cfg, NOW)["sources"]["paysage"]
     assert s["etat"] == "ok" and s["ecrit"] is True and "OperationalError" in s["motif"]
     assert len(_instantanes(cfg)) == 1
+
+
+@pytest.mark.parametrize("blob", [b"pas du zlib", b"", "78da"])
+def test_passe_dernier_instantane_illisible_ne_bloque_pas_les_suivants(cfg, blob):
+    """R6 : un dernier instantané corrompu compte comme « pas de précédent », la collecte continue et le dit."""
+    _releve(cfg, NOW - 3600)
+    assert collecte.passe(cfg, NOW - 3500)["sources"]["paysage"]["ecrit"] is True
+    db = ouvrir(Path(cfg.base))
+    db.execute("UPDATE paysage_instantanes SET graphe = ?", (blob,))
+    db.commit()
+    db.close()
+    r = collecte.passe(cfg, NOW - 3400)  # même relevé : rien à écrire, aucune lecture du graphe corrompu
+    assert r["sources"]["paysage"] == {"etat": "inchange", "ecrit": False}
+    _releve(cfg, NOW - 1800)
+    s = collecte.passe(cfg, NOW - 1700)["sources"]["paysage"]
+    assert s["etat"] == "ok" and s["ecrit"] is True and "illisible" in s["motif"]
+    db = ouvrir(Path(cfg.base))
+    d = paysage_store.dernier(db)
+    db.close()
+    assert d["epoch"] == NOW - 1800 and d["difference"]["sans_precedent"] == "illisible"
+    _releve(cfg, NOW - 100)  # la comparaison reprend, sans motif
+    s = collecte.passe(cfg, NOW)["sources"]["paysage"]
+    assert s == {"etat": "ok", "ecrit": True}
+    db = ouvrir(Path(cfg.base))
+    assert "sans_precedent" not in paysage_store.dernier(db)["difference"]
+    db.close()
+
+
+def test_passe_dernier_illisible_et_eclaircissement_en_echec_gardent_les_deux_motifs(cfg, monkeypatch):
+    _releve(cfg, NOW - 3600)
+    collecte.passe(cfg, NOW - 3500)
+    db = ouvrir(Path(cfg.base))
+    db.execute("UPDATE paysage_instantanes SET graphe = x'00'")
+    db.commit()
+    db.close()
+    monkeypatch.setattr(paysage_store, "eclaircir", lambda db, m: 1 / 0)
+    _releve(cfg, NOW - 600)
+    s = collecte.passe(cfg, NOW)["sources"]["paysage"]
+    assert s["ecrit"] is True and "illisible" in s["motif"] and "éclaircissement échoué" in s["motif"]
+
+
+def test_premier_instantane_marque_sans_precedent(cfg):
+    _releve(cfg, NOW - 600)
+    collecte.passe(cfg, NOW)
+    db = ouvrir(Path(cfg.base))
+    assert paysage_store.dernier(db)["difference"]["sans_precedent"] == "premier"
+    db.close()
