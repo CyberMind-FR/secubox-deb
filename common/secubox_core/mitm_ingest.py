@@ -101,7 +101,14 @@ def mount_ingest_routes(
     ingestion (raw event is still persisted).
     """
     db_path = Path(db_path)
-    _init_db(db_path)
+    # Rien n'est écrit au montage, donc à l'import du module (#3946) : la base naît au premier événement, et renaît
+    # si elle a été retirée en marche. Une lecture avant cela rend zéro.
+    base = {"prete": False}
+
+    def _assurer_base() -> None:
+        if not base["prete"] or not db_path.exists():
+            _init_db(db_path)
+            base["prete"] = True
 
     @app.post(endpoint_path)
     async def ingest(event: MitmEvent) -> dict:
@@ -114,6 +121,7 @@ def mount_ingest_routes(
             except Exception as e:
                 log.warning("mitm enrich_hook failed (%s): %s", kind, e)
         try:
+            _assurer_base()
             with sqlite3.connect(db_path, timeout=2) as c:
                 c.execute(
                     "INSERT INTO mitm_events(ts_ms, kind, client_mac_hash, client_ip, payload) "
@@ -140,6 +148,8 @@ def mount_ingest_routes(
         limit: int = Query(200, ge=1, le=2000),
         since_ms: Optional[int] = Query(None, description="only events newer than this ts_ms"),
     ) -> dict:
+        if not db_path.exists():
+            return {"kind": kind, "count": 0, "events": []}
         try:
             with sqlite3.connect(db_path, timeout=2) as c:
                 where = []
@@ -173,6 +183,8 @@ def mount_ingest_routes(
         mac_hash: Optional[str] = Query(None),
         last_seconds: int = Query(86400, ge=60, le=604800),
     ) -> dict:
+        if not db_path.exists():
+            return {"kind": kind, "count": 0, "since_seconds": last_seconds}
         cutoff = int(time.time() * 1000) - last_seconds * 1000
         try:
             with sqlite3.connect(db_path, timeout=2) as c:
