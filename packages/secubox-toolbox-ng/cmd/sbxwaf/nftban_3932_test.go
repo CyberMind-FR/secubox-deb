@@ -165,6 +165,9 @@ func TestProlonger_NeRaccourcitPasUnBanPlusLong(t *testing.T) {
 	if k.elems["203.0.113.1"] != 7*86400 || k.elems["203.0.113.2"] != 0 {
 		t.Fatalf("%v", k.elems)
 	}
+	if brut, _ := os.ReadFile(b.store.path); len(brut) != 0 {
+		t.Fatalf("prolongation inutile : aucune ligne au journal : %s", brut)
+	}
 }
 
 // ── 3, 4, 5. levées pendant une repose ───────────────────────────────────────
@@ -430,6 +433,30 @@ func TestProtegees_JamaisPosees(t *testing.T) {
 	b.Reload()
 	if apres, _ := os.Stat(b.store.path); apres.Size() != taille.Size() {
 		t.Fatal("le rattrapage ne se refait pas")
+	}
+}
+
+// Plus de 200 bans visés : la plage est douteuse, aucun n'est levé (le CGNAT, si) ; l'état et l'audit le disent, une fois.
+func TestProtegees_PlafondDeLevees(t *testing.T) {
+	for _, n := range []int{maxLeveesProtegees, maxLeveesProtegees + 1} {
+		now := time.Now().Unix()
+		recs := bansTest(n, now)
+		recs = append(recs, BanRecord{IP: "100.64.0.9", At: now, Expires: now + 3600, Action: "ban"})
+		b, k := banneurLots(t, recs)
+		b.audit = filepath.Join(t.TempDir(), "audit.log")
+		b.protegees = parseCIDRs("11.0.0.0/16")
+		for _, r := range recs {
+			k.elems[r.IP] = 3000
+		}
+		b.Reload()
+		b.Reload()
+		leve := n <= maxLeveesProtegees
+		if (k.nb() == 0) != leve || (len(b.store.ActiveBans(now)) == 0) != leve || (!leve && k.nb() != n) {
+			t.Fatalf("%d : %d dans nft, %d au journal", n, k.nb(), len(b.store.ActiveBans(now)))
+		}
+		if a := lignesJSON(t, b.audit); !leve && (len(a) != 2 || a[0]["action"] != "ban_protegee_plafond" || !strings.Contains(b.Etat().DernierEchec, "AUCUN")) {
+			t.Fatalf("audit %v, état %+v", a, b.Etat())
+		}
 	}
 }
 

@@ -1517,12 +1517,13 @@ func main() {
 	rotationRejeu := flag.Bool("rotation-rejeu", false, "rejeu HORS LIGNE du détecteur de rotation sur les journaux d'accès nginx donnés en arguments (.gz admis) : rapport JSON sur la sortie standard, puis fin. Rien n'est banni ni écrit (#3919)")
 	rotationRejeuSansGrace := flag.Bool("rotation-rejeu-sans-grace", true, "rejeu : juger dès la première ligne ; false : comme en auto avec une mémoire vide, rien n'est jugé les 24 premières heures")
 	rotationRejeuAdresses := flag.Bool("rotation-rejeu-adresses", false, "rejeu : donner au plus 20 adresses en exemple par campagne (défaut : des comptes seulement)")
-	verifier := flag.Bool("verifier", false, "vérifie les drapeaux, les règles, les routes et les profils donnés, puis quitte (0 : le WAF peut démarrer) ; n'écoute pas, n'écrit rien, ne touche pas à nft (#3932)")
+	verifier := flag.Bool("verifier", false, "vérifie les drapeaux, les règles, les routes, les profils, les plages protégées et les journaux à ouvrir, puis quitte (0 : le WAF peut démarrer) ; n'écoute pas, n'écrit rien, ne touche pas à nft (#3932)")
 	flag.Parse()
 
 	if *verifier {
 		log.SetOutput(io.Discard) // le bilan tient en une ligne
-		bilan, err := VerifierConfiguration(*rules, *routesFile, *vhostProfiles, flag.Args())
+		bilan, err := VerifierConfiguration(ConfigVerifiee{Regles: *rules, Routes: *routesFile, Profils: *vhostProfiles,
+			Cookies: *cookieAuditLog, Menaces: *threatLog, Protegees: *actorBanProtegees, Restants: flag.Args()})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "sbxwaf: vérification : %v\n", err)
 			os.Exit(1)
@@ -1530,6 +1531,8 @@ func main() {
 		fmt.Println("sbxwaf: vérification : " + bilan)
 		return
 	}
+
+	protegees := parseCIDRs(*actorBanProtegees) // une fois : ce qui est écarté n'est dit qu'une fois
 
 	// #3919 — rejeu hors ligne du détecteur de rotation : ni écoute, ni proxy, ni nft, ni écriture.
 	if *rotationRejeu {
@@ -1543,7 +1546,7 @@ func main() {
 			grace = -1
 		}
 		err := Rejouer(flag.Args(), RotationConfig{Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure, Grace: grace,
-			Protegees: parseCIDRs(*actorBanProtegees), SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
+			Protegees: protegees, SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "sbxwaf: rejeu : %v\n", err)
 			os.Exit(1)
@@ -1722,7 +1725,7 @@ func main() {
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
 		widgetHosts:   splitCSV(*widgetHosts),
 		leurreBan:     *leurreBan,
-		protegees:     parseCIDRs(*actorBanProtegees),
+		protegees:     protegees,
 		widgetExclude: splitCSV(*widgetExclude),
 		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
@@ -1763,7 +1766,7 @@ func main() {
 		store := NewBanStore(*banStore)
 		nb := NewNftBanner(*nftPath, *nftTable, *nftBanDuration, store)
 		nb.etatFichier = *nftEtat
-		nb.protegees = parseCIDRs(*actorBanProtegees)
+		nb.protegees = protegees
 		nb.audit = "/var/log/secubox/waf/audit.log"
 		// Robots d'indexation vérifiés (crawlers.go) : jamais bannis. La repose ne consulte que leur mémoire, sans DNS (#3930).
 		nb.robots = NewCrawlers()
@@ -1808,7 +1811,7 @@ func main() {
 			ab.etat = *actorBanEtat
 			ab.minBans = *actorBanMin
 			ab.maxParHeure = *actorBanMaxHeure
-			ab.protegees = parseCIDRs(*actorBanProtegees)
+			ab.protegees = protegees
 			nb.QuandPret(func() { go ab.Veiller(time.Minute) })
 			log.Printf("sbxwaf: actor-ban mode=%s (min=%d sanctions locales, plafond=%d/h, source=%s)", *actorBanMode, *actorBanMin, *actorBanMaxHeure, *actorProps)
 		}
@@ -1819,7 +1822,7 @@ func main() {
 			} else {
 				ss := NewScanSensor(nb.runner, emitter)
 				ss.seuil = *scanSeuil
-				ss.protegees = parseCIDRs(*actorBanProtegees)
+				ss.protegees = protegees
 				ss.geo = geo
 				nb.QuandPret(func() { go ss.Veiller(30 * time.Second) })
 				log.Printf("sbxwaf: capteur pare-feu actif (balayage = %d ports distincts en 10 min, relecture 30 s)", *scanSeuil)
@@ -1830,7 +1833,7 @@ func main() {
 			cb := NewCampagneBan(*threatLog, *campagneBanMode, store, nb)
 			cb.etat = *campagneBanEtat
 			cb.maxParHeure = *campagneBanMaxHeure
-			cb.protegees = parseCIDRs(*actorBanProtegees)
+			cb.protegees = protegees
 			nb.QuandPret(func() { go cb.Veiller(5 * time.Minute) })
 			log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
 		}
@@ -1848,7 +1851,7 @@ func main() {
 				cl = annuaire
 			}
 			rot := NewRotation(RotationConfig{Mode: *rotationMode, Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure,
-				Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: parseCIDRs(*actorBanProtegees),
+				Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: protegees,
 				SortiesTor: *rotationSortiesTor}, nb, cl)
 			if nb.robots != nil {
 				rot.SetRobots(nb.robots.VerifieSur)
@@ -1875,7 +1878,7 @@ func main() {
 			mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
 			mw.etat = "/var/lib/secubox/waf/mesures-etat.json"
 			mw.preuves = *mesuresPreuves
-			mw.protegees = parseCIDRs(*actorBanProtegees)
+			mw.protegees = protegees
 			mw.robots = nb.robots
 			mw.maxBansHeure = *mesuresMaxBans
 			srv.mesures = mw

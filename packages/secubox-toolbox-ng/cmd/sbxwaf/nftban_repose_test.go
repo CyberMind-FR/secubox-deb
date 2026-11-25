@@ -656,10 +656,11 @@ func TestVeiller_EtatEtReparationPendantUneReposeBloquee(t *testing.T) {
 		_ = json.Unmarshal(raw, &e)
 		return e
 	}
+	brut := func() string { raw, _ := os.ReadFile(b.etatFichier); return string(raw) }
 	_ = os.Remove(b.etatFichier)
 	attendre(t, "état publié pendant la repose", func() bool {
 		e := lire()
-		return e.Verifie != 0 && e.ReposeEnCours && e.BansAttendus == 3000
+		return e.Verifie != 0 && e.ReposeEnCours && strings.Contains(brut(), `"bans_attendus":null,"bans_poses":null`) // jamais 0
 	})
 	k.flushRuleset()
 	attendre(t, "table recréée pendant la repose", func() bool { k.mu.Lock(); defer k.mu.Unlock(); return k.table })
@@ -1071,7 +1072,7 @@ func TestRepose_NftReel(t *testing.T) {
 			}
 		})
 		chrono("ré-affirmation sans manquant", func() {
-			if got := b.Reload(); got != 0 || b.Etat().BansPoses != n {
+			if got := b.Reload(); got != 0 || b.Etat().BansPoses != compteBans(n) {
 				t.Fatalf("%d reposés, %+v", got, b.Etat())
 			}
 		})
@@ -1095,7 +1096,7 @@ func TestRepose_NftReel(t *testing.T) {
 		})
 		_ = exec.Command("nft", "flush", "ruleset").Run()
 		chrono("réparation après flush ruleset", func() {
-			if !b.Reparer("test") || b.Etat().BansPoses != n {
+			if !b.Reparer("test") || b.Etat().BansPoses != compteBans(n) {
 				t.Fatalf("%+v", b.Etat())
 			}
 		})

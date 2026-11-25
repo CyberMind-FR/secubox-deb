@@ -34,7 +34,7 @@ def _execstart(ligne):
     return f"{{ path=/usr/sbin/sbxwaf ; argv[]={ligne} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}"
 
 
-def _lancer(tmp_path, corps, ligne, actif=True, verifier=0):
+def _lancer(tmp_path, corps, ligne, actif=True, verifier=0, fauxes=None):
     """Exécute un morceau du postinst sous `set -e`, faux systemctl, logger, setpriv et binaire ; rend (résultat, journal)."""
     bin_ = tmp_path / "bin"
     bin_.mkdir()
@@ -49,8 +49,11 @@ def _lancer(tmp_path, corps, ligne, actif=True, verifier=0):
     faux("systemctl", f'echo "systemctl $*" >> {journal}\ncase "$1" in show) cat {tmp_path}/execstart;; is-active) exit {0 if actif else 3};; esac\nexit 0\n')
     faux("logger", f'echo "logger $*" >> {journal}\n')
     faux("setpriv", 'while [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n')
+    faux("chown", f'echo "chown $*" >> {journal}\n')
     faux("sbxwaf", f'for a in "$@"; do printf "[%s]" "$a" >> {journal}; done\necho >> {journal}\n[ {verifier} = 0 ] || echo "flag provided but not defined: -nouveau"\nexit {verifier}\n')
-    env = {"PATH": f"{bin_}:/usr/bin:/bin", "WAF_UNITE": str(UNITE), "WAF_BINAIRE": str(bin_ / "sbxwaf")}
+    for nom, texte in (fauxes or {}).items():
+        faux(nom, texte.replace("JOURNAL", str(journal)).replace("TMP", str(tmp_path)))
+    env = {"WAF_ESSAIS": "3", "WAF_REPOS": "0", "WAF_PROTEGEES_ENV": str(tmp_path / "protegees.env"), "PATH": f"{bin_}:/usr/bin:/bin", "WAF_UNITE": str(UNITE), "WAF_BINAIRE": str(bin_ / "sbxwaf")}
     r = subprocess.run(["sh", "-c", "set -e\n" + corps], check=False, capture_output=True, text=True, env=env, timeout=30)
     return r, journal.read_text()
 
@@ -111,6 +114,55 @@ def test_verifie_la_ligne_de_commande_effective(tmp_path):
     assert "--leurre-ban" in argv and argv[argv.index("--listen") + 1] == "127.0.0.1:8085"
 
 
+def test_verifie_les_plages_protegees_de_la_box(tmp_path):
+    (tmp_path / "protegees.env").write_text('# x\nSECUBOX_WAF_PROTEGEES=203.0.113.7/32\nSECUBOX_WAF_PROTEGEES="82.67.100.75/3"\n')
+    r, j = _verif(tmp_path)
+    argv = re.findall(r"\[(.*?)\]", [x for x in j.splitlines() if x.startswith("[")][0])
+    assert r.returncode == 0 and argv[argv.index("--actor-ban-protegees") + 1] == "82.67.100.75/3"
+
+
+def test_proprietaires_reposes_avant_de_verifier(tmp_path):
+    """Un journal à un autre compte, que l'ExecStartPre réparerait, ne doit pas faire refuser la nouvelle version."""
+    _, j = _verif(tmp_path)
+    assert j.index("chown -R secubox-waf:secubox-waf /var/log/secubox/cookie-audit /var/log/secubox/waf") < j.index("[--verifier]")
+
+
+# ── réponse réelle après la relance ──────────────────────────────────────────
+
+REPOND = 'if sbx_repond; then echo OUI; else echo "NON $sbx_motif"; fi\n'
+SYSTEMCTL = 'n=$(cat TMP/n 2>/dev/null || echo 0); case "$*" in *NRestarts*) echo $n;; esac\ncase "$1" in is-active) exit 0;; esac\nexit 0\n'
+
+
+def _repond(tmp_path, curl, systemctl=SYSTEMCTL):
+    r, j = _lancer(tmp_path, _bloc("réponse réelle") + REPOND, "", fauxes={"curl": curl, "systemctl": systemctl, "sleep": ":\n"})
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip(), j
+
+
+@pytest.mark.parametrize("code,oui", [("421", True), ("200", True), ("302", True), ("404", True), ("503", False), ("000", False)])
+def test_une_reponse_http_est_exigee(tmp_path, code, oui):
+    s, j = _repond(tmp_path, f'echo "curl $*" >> JOURNAL\nprintf {code}\n[ {code} != 000 ]\n')
+    assert s.startswith("OUI" if oui else f"NON aucune réponse HTTP valable (dernier code {code})")
+    assert j.count("curl") == (1 if oui else 3)                          # attente bornée
+    assert "Host: localhost" in j and "http://127.0.0.1:8085/" in j and "-m 3" in j
+
+
+def test_port_ouvert_mais_rien_de_servi(tmp_path):
+    """Le faux vert de la relecture : connexion acceptée, jamais de réponse (chargement figé, panique)."""
+    s, _ = _repond(tmp_path, "printf 000\nexit 28\n")
+    assert s.startswith("NON aucune réponse")
+
+
+def test_repond_puis_redemarre(tmp_path):
+    s, _ = _repond(tmp_path, "echo 1 > TMP/n\nprintf 421\n")
+    assert s.startswith("NON le service redémarre") and "NRestarts 0 puis 1" in s
+
+
+def test_le_controle_suit_la_relance():
+    t = POSTINST.read_text()
+    assert t.index(RELANCE) < t.index("if ! sbx_repond") and "ss -ltn" not in t
+
+
 def test_binaire_refuse_l_ancien_continue_de_servir(tmp_path):
     r, j = _verif(tmp_path, verifier=2)
     assert r.returncode == 0 and "relancer=\n" in r.stdout
@@ -166,7 +218,7 @@ def test_le_cache_n_est_plus_recrit_en_entier_a_chaque_demarrage():
 
 def test_le_postinst_attend_la_chaine_apres_le_port():
     t = POSTINST.read_text()
-    assert t.index("127.0.0.1:8085 '") < t.index("nft list chain inet secubox waf_drop") and "for _i in 1 2 3" in t[t.index("--nft-ban'"):]
+    assert t.index("if ! sbx_repond") < t.index("nft list chain inet secubox waf_drop") and "for _i in 1 2 3" in t[t.index("--nft-ban'"):]
 
 
 # ── CGNAT (100.64.0.0/10) : jamais banni par wafctl, toujours levable ────────

@@ -9,18 +9,45 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // VÉRIFICATION AVANT REDÉMARRAGE (#3932). Le postinst lance le NOUVEAU binaire avec la ligne de commande réellement effective
 // (unité et surcharge locale) et `--verifier` : un drapeau inconnu, des règles ou des routes illisibles se voient pendant que
 // l'ancien processus sert encore, au lieu de laisser le port fermé.
 
+// ConfigVerifiee : ce que la ligne de commande donne ; "" = non donné.
+type ConfigVerifiee struct {
+	Regles, Routes, Profils string
+	Cookies, Menaces        string
+	Protegees               string
+	Restants                []string
+}
+
 // VerifierConfiguration rend un bilan d'une ligne, ou ce qui empêcherait le WAF de servir. Profils illisibles : le WAF démarre
 // quand même, plus strict (phase G désactivée) — dit, pas refusé.
-func VerifierConfiguration(regles, routes, profils string, restants []string) (string, error) {
+//
+// Refusés aussi : une plage protégée trop large (analyserCIDRs), et un registre des cookies ou un journal des menaces que le
+// compte du service ne peut pas ouvrir — sbxwaf PANIQUE sur le premier (503 partout, port déjà ouvert), perd ses détections sur
+// le second. Rien n'est créé ni écrit.
+func VerifierConfiguration(c ConfigVerifiee) (string, error) {
+	regles, routes, profils, restants := c.Regles, c.Routes, c.Profils, c.Restants
 	if len(restants) > 0 {
 		return "", fmt.Errorf("argument inattendu : %q (les drapeaux qui le suivent seraient ignorés)", restants[0])
+	}
+	if _, larges, _ := analyserCIDRs(c.Protegees); len(larges) > 0 {
+		return "", fmt.Errorf("plage protégée plus large que /%d (IPv4) ou /%d (IPv6) : %s (/etc/secubox/waf/protegees.env)",
+			prefixeMinProtege4, prefixeMinProtege6, strings.Join(larges, ", "))
+	}
+	for _, j := range []struct{ quoi, chemin string }{{"registre des cookies", c.Cookies}, {"journal des menaces", c.Menaces}} {
+		if j.chemin == "" {
+			continue
+		}
+		if err := ouvrableEnAjout(j.chemin); err != nil {
+			return "", fmt.Errorf("%s : %w", j.quoi, err)
+		}
 	}
 	var bilan []string
 	// Un fichier ABSENT n'est pas un refus : le WAF démarre sans lui, comme aujourd'hui. Illisible, si.
@@ -69,4 +96,31 @@ func lireObjetJSON(chemin string) error {
 		return fmt.Errorf("%s : %w", chemin, err)
 	}
 	return nil
+}
+
+// ouvrableEnAjout : le fichier s'ouvre en ajout, ou peut être créé (dossier, existant ou le premier ancêtre, inscriptible).
+func ouvrableEnAjout(chemin string) error {
+	f, err := os.OpenFile(chemin, os.O_WRONLY|os.O_APPEND|syscall.O_NONBLOCK, 0)
+	if err == nil {
+		return f.Close()
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	for d := filepath.Dir(chemin); ; d = filepath.Dir(d) {
+		st, err := os.Stat(d)
+		if errors.Is(err, os.ErrNotExist) && d != filepath.Dir(d) {
+			continue
+		}
+		switch {
+		case err != nil:
+			return err
+		case !st.IsDir():
+			return fmt.Errorf("%s n'est pas un dossier", d)
+		}
+		if err := syscall.Access(d, 0x2|0x1); err != nil { // écriture et traversée
+			return fmt.Errorf("%s ne peut pas être créé, %s : %w", chemin, d, err)
+		}
+		return nil
+	}
 }

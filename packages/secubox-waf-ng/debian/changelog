@@ -22,6 +22,14 @@ secubox-waf-ng (1.46.0-1~trixie1) trixie; urgency=medium
     une seconde, les règles une troisième), après vérification du nouveau
     binaire (sbxwaf --verifier) ; en échec l'ancien continue de servir.
   * postinst : signale les drapeaux de l'unité absents de la surcharge locale.
+  * Après la relance, une vraie réponse HTTP est exigée (le port s'ouvre avant
+    le chargement) et le service ne doit pas avoir redémarré ; --verifier
+    refuse aussi un registre de cookies ou un journal des menaces impossible à
+    ouvrir.
+  * Plage protégée plus large que /16 (IPv4) ou /32 (IPv6) : refusée par
+    --verifier, ignorée et dite par le service ; plus de 200 levées visées au
+    démarrage : aucune.
+  * nft-etat.json : comptes de bans gardés (ou null) pendant une repose.
   * secubox-actord-ingest : passée quand actord n'est pas actif (ref #3939).
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:00:00 +0100

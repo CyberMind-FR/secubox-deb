@@ -100,8 +100,8 @@ type NftBanner struct {
 	listeMu        sync.Mutex             // un seul gros `list set` à la fois (mémoire)
 	reposeEnCours  bool
 	derniereRepose time.Time
-	bansAttendus   int
-	bansPoses      int
+	bansAttendus   compteBans
+	bansPoses      compteBans
 	nftFige        atomic.Bool
 }
 
@@ -124,6 +124,9 @@ func NewNftBanner(nftPath, table string, duration time.Duration, store *BanStore
 		cooldown: 30 * time.Second,
 		recent:   make(map[string]time.Time),
 		enPose:   make(map[string]struct{}),
+
+		bansAttendus: compteInconnu,
+		bansPoses:    compteInconnu,
 
 		robotsPas: robotsPas,
 		robotsVus: make(map[string]uint8),
@@ -364,7 +367,7 @@ func (b *NftBanner) poser(ip, cat, sev string, duree time.Duration, now time.Tim
 	if secs > resteMax {
 		secs = resteMax
 	}
-	out, err := b.poserElement(set, ip, secs, prolonge)
+	out, intact, err := b.poserElement(set, ip, secs, prolonge)
 	if err != nil && tableEffacee(out) {
 		// La table venait d'être effacée par un rechargement du ruleset : elle
 		// est recréée (ici, ou par un autre ban de la même rafale qui a pris le
@@ -373,7 +376,7 @@ func (b *NftBanner) poser(ip, cat, sev string, duree time.Duration, now time.Tim
 		if b.recreer("échec d'un ban") {
 			b.lancerRepose()
 		}
-		out, err = b.poserElement(set, ip, secs, prolonge)
+		out, intact, err = b.poserElement(set, ip, secs, prolonge)
 	}
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -382,6 +385,10 @@ func (b *NftBanner) poser(ip, cat, sev string, duree time.Duration, now time.Tim
 		return
 	}
 	pose = true
+	if prolonge && intact {
+		log.Printf("sbxwaf: nft — prolongation de %s inutile : l'élément en place finit au moins aussi tard", ip)
+		return // rien n'a changé : aucune ligne au journal
+	}
 	b.mu.Lock()
 	b.dernierBan = reel
 	b.mu.Unlock()
@@ -400,18 +407,18 @@ var reElementPresent = regexp.MustCompile(`(?m)^(?:\S+:\d+:\d+-\d+: )?Error: Cou
 // l'ensemble entier (0,7 s à 60 000 éléments, sous poseMu), il ne sert qu'à un élément déjà là. Présent mais illisible : laissé tel quel, jamais
 // raccourci ; la repose le remettra s'il finit avant l'échéance du journal.
 //
-// `remplacer` (prolongation) : l'élément est refait, compteur remis à zéro, en UNE transaction — aucun instant où l'adresse
+// `intact` : lu en place, finissant au moins aussi tard, laissé tel quel. `remplacer` (prolongation) : l'élément est refait, compteur remis à zéro, en UNE transaction — aucun instant où l'adresse
 // est libre, et sur un noyau d'avant 6.12 où `add` ne change pas le délai d'un élément présent (#3932).
-func (b *NftBanner) poserElement(set, ip string, secs int64, remplacer bool) ([]byte, error) {
+func (b *NftBanner) poserElement(set, ip string, secs int64, remplacer bool) (out []byte, intact bool, err error) {
 	elem := fmt.Sprintf("{ %s timeout %ds }", ip, secs)
 	nft := func(verbe string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return b.runner(ctx, verbe, "element", "inet", b.table, set, elem)
 	}
-	out, err := nft("create")
+	out, err = nft("create")
 	if err == nil || !reElementPresent.Match(out) {
-		return out, err
+		return out, false, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -419,16 +426,18 @@ func (b *NftBanner) poserElement(set, ip string, secs int64, remplacer bool) ([]
 	case present && reste >= 0 && reste < secs && remplacer:
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return b.scripts(c, scriptRemplacer(b.table, set, ip, secs))
+		out, err = b.scripts(c, scriptRemplacer(b.table, set, ip, secs))
+		return out, false, err
 	case present && reste >= 0 && reste < secs:
-		return nft("add")
+		out, err = nft("add")
+		return out, false, err
 	case present:
-		return nil, nil
+		return nil, true, nil
 	}
 	if out, err = nft("create"); err != nil && reElementPresent.Match(out) { // sinon : échu entre-temps, créé
-		return nil, nil
+		return nil, false, nil
 	}
-	return out, err
+	return out, false, err
 }
 
 // scriptRemplacer refait un élément avec un nouveau délai. Le premier ajout absorbe un élément échu entre-temps : retirer un
@@ -608,6 +617,18 @@ func (b *NftBanner) veillerJusqua(fin <-chan struct{}, pas, pasReload time.Durat
 	}
 }
 
+// compteBans : un compte, ou compteInconnu (null) tant qu'aucune repose n'a fini — jamais 0, qui dirait « rien à appliquer ».
+type compteBans int
+
+const compteInconnu compteBans = -1
+
+func (c compteBans) MarshalJSON() ([]byte, error) {
+	if c < 0 {
+		return []byte("null"), nil
+	}
+	return strconv.AppendInt(nil, int64(c), 10), nil
+}
+
 // EtatNft est l'état du blocage, pour le tableau de bord : un WAF qui décide
 // des bans que rien n'applique ne doit plus passer pour un WAF calme.
 // Verifie date l'instantané : un fichier qui ne se renouvelle plus veut dire
@@ -623,11 +644,11 @@ type EtatNft struct {
 	EchecA       int64  `json:"echec_a,omitempty"`
 
 	// Repose des bans du journal (#3930) : bans_poses < bans_attendus, des bans décidés ne sont pas (encore) appliqués.
-	ReposeEnCours  bool  `json:"repose_en_cours"`
-	DerniereRepose int64 `json:"derniere_repose"`
-	BansAttendus   int   `json:"bans_attendus"`
-	BansPoses      int   `json:"bans_poses"`
-	NftFige        bool  `json:"nft_fige"` // la dernière vérification de la table n'a pas eu de réponse
+	ReposeEnCours  bool       `json:"repose_en_cours"`
+	DerniereRepose int64      `json:"derniere_repose"`
+	BansAttendus   compteBans `json:"bans_attendus"`
+	BansPoses      compteBans `json:"bans_poses"`
+	NftFige        bool       `json:"nft_fige"` // la dernière vérification de la table n'a pas eu de réponse
 }
 
 func unixOuZero(t time.Time) int64 {

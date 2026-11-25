@@ -55,6 +55,9 @@ const (
 	budgetIsolement = 256                    // essais nft en plus, pour isoler des éléments refusés
 	resteMax        = int64(365 * 24 * 3600) // un délai aberrant ferait refuser tout son lot (« value too large »)
 	sortieNftMax    = 32 << 20               // 50 000 éléments : 5,4 Mo
+
+	// Une levée écrite au journal ne se défait pas : au-delà, la plage est douteuse et aucun ban n'est levé (#3932).
+	maxLeveesProtegees = 200
 )
 
 // nftScript exécute un script nft lu sur l'entrée standard. Injectable pour les tests.
@@ -489,7 +492,6 @@ func (b *NftBanner) passe(ctx context.Context, generation int64) (r bilanRepose)
 	if !b.protegeesLevees {
 		b.protegeesLevees = b.leverProtegees(ensembles) && illisible == nil
 	}
-	b.publierRepose(r)
 	defer func() {
 		b.poseMu.Lock()
 		defer b.poseMu.Unlock()
@@ -503,19 +505,23 @@ func (b *NftBanner) passe(ctx context.Context, generation int64) (r bilanRepose)
 		if r.tableAbsente {
 			return r
 		}
-		b.publierRepose(r)
 	}
 	r.complet = ctx.Err() == nil && r.illisible == nil
 	return r
 }
 
-func (b *NftBanner) publierRepose(r bilanRepose) {
+// finRepose publie le compte d'une repose FINIE (#3932) : pendant qu'elle court, l'état garde celui d'avant, ou null.
+func (b *NftBanner) finRepose(r bilanRepose) {
 	b.mu.Lock()
-	b.bansAttendus = r.attendus
-	if r.illisible == nil { // sinon le compte est inconnu : le précédent reste
-		b.bansPoses = r.poses()
+	defer b.mu.Unlock()
+	b.reposeEnCours = false
+	if r.complet {
+		b.derniereRepose = time.Now()
 	}
-	b.mu.Unlock()
+	b.bansAttendus = compteBans(r.attendus)
+	if r.illisible == nil { // sinon le compte est inconnu : le précédent reste
+		b.bansPoses = compteBans(r.poses())
+	}
 }
 
 // retirerLeves retire de nft les éléments que le lot vient de poser (`poses`, et ceux des passes d'avant restés à retirer)
@@ -641,7 +647,7 @@ func (b *NftBanner) scriptRetrait(lot []netip.Addr) (script []byte) {
 
 // leverProtegees rattrape les bans posés sur une adresse devenue protégée, ou en CGNAT (#3932) : levés du journal (`unban`)
 // puis de nft, et audités. `ensembles` : les adresses que nft porte. false : à refaire (retrait refusé). reposeMu tenu ; une
-// fois par démarrage, à la première passe.
+// fois par démarrage, à la première passe. Plus de maxLeveesProtegees sur des plages déclarées : aucune n'est levée.
 func (b *NftBanner) leverProtegees(ensembles map[bool]map[netip.Addr]struct{}) bool {
 	intouchable := func(a netip.Addr) bool { return rejeuCGNAT.Contains(a) || b.protegee(a) }
 	complet := true
@@ -660,8 +666,22 @@ func (b *NftBanner) leverProtegees(ensembles map[bool]map[netip.Addr]struct{}) b
 		}
 	}
 	lot := make([]netip.Addr, 0, len(cibles))
+	proteges := 0
 	for a := range cibles {
-		lot = append(lot, a)
+		if b.protegee(a) {
+			proteges++
+		}
+	}
+	if proteges > maxLeveesProtegees {
+		msg := fmt.Sprintf("%d bans sur des plages protégées au démarrage, plus de %d : AUCUN n'est levé (SECUBOX_WAF_PROTEGEES trop large ?)", proteges, maxLeveesProtegees)
+		log.Printf("sbxwaf: nft — ATTENTION : %s", msg)
+		b.noterEchec(msg)
+		b.auditer(time.Now(), "ban_protegee_plafond", msg)
+	}
+	for a := range cibles {
+		if proteges <= maxLeveesProtegees || !b.protegee(a) {
+			lot = append(lot, a)
+		}
 	}
 	sort.Slice(lot, func(i, j int) bool { return lot[i].Less(lot[j]) })
 	for i := 0; i < len(lot); i += tailleLot {
@@ -775,13 +795,7 @@ func (b *NftBanner) reposer() int {
 			break // finie, ou rien ne changera en rejouant
 		}
 	}
-	b.mu.Lock()
-	b.reposeEnCours = false
-	if r.complet {
-		b.derniereRepose = time.Now()
-	}
-	b.mu.Unlock()
-	b.publierRepose(r)
+	b.finRepose(r)
 	if !r.complet || r.refuses > 0 {
 		msg := fmt.Sprintf("repose incomplète : %d ban(s) sur %d en place", r.poses(), r.attendus)
 		if r.illisible != nil {
