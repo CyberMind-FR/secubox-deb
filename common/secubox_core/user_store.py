@@ -179,18 +179,23 @@ def set_password(username: str, plaintext: str, *, provision: bool = False,
     """
     if not username or not plaintext:
         raise ValueError("username and plaintext are required")
-    from . import comptes_admin
+    from . import comptes_admin, mot_de_passe_defaut
 
     hash_ = _HASHER.hash(plaintext)            # hors du verrou : argon2 est lent
     with comptes_admin.verrou(USERS_PATH):
-        return _set_password_verrouille(username, hash_, provision, role, email)
+        return _set_password_verrouille(username, hash_, provision, role, email,
+                                        mot_de_passe_defaut.est_le_defaut(plaintext))
 
 
 def _set_password_verrouille(username: str, hash_: str, provision: bool, role: str,
-                             email: Optional[str]) -> Dict[str, Any]:
+                             email: Optional[str], par_defaut: bool = False) -> Dict[str, Any]:
+    from . import comptes_admin
+
     doc = _load_users_json()
     if doc is None:
         raise RuntimeError("users.json missing/corrupt; refusing to write")
+    if par_defaut and comptes_admin.configure_un_jour(doc):
+        raise ValueError("le mot de passe du premier démarrage ne se choisit plus")
     doc.setdefault("users", [])
     for u in doc["users"]:
         if u.get("username") == username:
@@ -198,6 +203,7 @@ def _set_password_verrouille(username: str, hash_: str, provision: bool, role: s
             u["must_change_password"] = False
             if email is not None:
                 u["email"] = email
+            comptes_admin.poser_marque(doc)
             _atomic_write_users(doc)
             log.info("user_store: password set for %s", username)
             return u
@@ -214,6 +220,7 @@ def _set_password_verrouille(username: str, hash_: str, provision: bool, role: s
         "google": None,
     }
     doc["users"].append(new_user)
+    comptes_admin.poser_marque(doc)
     _atomic_write_users(doc)
     log.info("user_store: provisioned new user %s (role=%s)", username, role)
     return new_user

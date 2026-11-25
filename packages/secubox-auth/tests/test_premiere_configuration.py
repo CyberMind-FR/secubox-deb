@@ -351,3 +351,55 @@ def test_changement_impose_reste_ouvert_sur_une_box_configuree(configuree, tmp_p
     (tmp_path / "users.json").write_text(json.dumps(d))
     r = _login(configuree, "bob", "provisoire-tres-long", "1").json()
     assert _poser(configuree, r["setup_token"], "ma phrase a moi, longue").status_code == 200
+
+
+# ── Seconde revue ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+def test_marque_durable_les_revendications_restent_fermees(c, tmp_path):
+    """R1 : le seul admin réinitialisé (provisoire) ne rouvre ni les comptes sans mot de passe ni root/secubox."""
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "admin_configure_le": "2026-01-01",
+        "users": [_compte("chef", "provisoire-tres-long", True), _compte("sert", None, True),
+                  _compte("root", "secubox", True)]}))
+    assert _login(c, "sert", "", "1").status_code == 401
+    assert _login(c, "root", "secubox", "1").status_code == 401
+    r = _login(c, "chef", "provisoire-tres-long", "1").json()
+    assert _poser(c, r["setup_token"], "ma phrase a moi, longue").status_code == 200
+
+
+def test_set_password_registre_occupe_503(c, monkeypatch):
+    from api import main as m
+    jeton = _login(c, "gk3", "", "1").json()["setup_token"]
+
+    def occupe(*a, **k):
+        raise m._users_engine_mod.EngineBusy("occupé")
+    monkeypatch.setattr(m._users_engine, "set_password", occupe)
+    assert _poser(c, jeton).status_code == 503
+
+
+def test_connexion_reussie_jamais_500_si_le_registre_ne_s_ecrit_pas(c, tmp_path, monkeypatch):
+    from api import main as m
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("chef", "une phrase longue et choisie", False)]}))
+    monkeypatch.setattr(m._users_engine, "_save", lambda d: (_ for _ in ()).throw(PermissionError("lecture seule")))
+    assert _login(c, "chef", "une phrase longue et choisie", "1").json().get("access_token")
+
+
+def test_mfa_hors_de_la_boucle_et_codes_de_secours_derriere_la_porte(c, tmp_path, monkeypatch):
+    import inspect
+    from contextlib import contextmanager
+    from api import main as m
+    from secubox_core import porte_argon2
+    assert not inspect.iscoroutinefunction(m._login_mfa)
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("chef", "une phrase longue et choisie", False)]}))
+    m._users_engine.enroll_totp("chef", "JBSWY3DPEHPK3PXP")
+    jeton = _login(c, "chef", "une phrase longue et choisie", "0").json()["mfa_token"]
+
+    @contextmanager
+    def pleine(*_a):
+        raise porte_argon2.Saturee(503)
+        yield
+    monkeypatch.setattr(porte_argon2.PORTE, "passage", pleine)
+    h = {"Authorization": "Bearer " + jeton}
+    assert c.post("/login/mfa", json={"code": "ABCDEFGHJK"}, headers=h).status_code == 503
+    assert c.post("/login/mfa", json={"code": "000000"}, headers=h).status_code == 401      # TOTP : pas d'argon2

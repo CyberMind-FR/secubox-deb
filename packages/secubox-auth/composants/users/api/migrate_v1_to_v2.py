@@ -110,7 +110,7 @@ def _migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
     legacy_users: Dict[str, Dict[str, Any]] = {}
     array_users: Dict[str, Dict[str, Any]] = {}
     for key, value in (doc or {}).items():
-        if key in ("users", "groups", "version"):
+        if key in ("users", "groups", "version", "admin_configure_le"):
             continue
         if isinstance(value, dict):
             legacy_users[key] = value
@@ -151,6 +151,8 @@ def _migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
         "users": sorted(merged_users.values(), key=lambda x: x["username"]),
         "groups": doc.get("groups", []) or [],
     }
+    if doc.get("admin_configure_le"):              # marque durable (#3708)
+        v2["admin_configure_le"] = doc["admin_configure_le"]
     v2 = _merge_auth_toml(v2, auth_toml_path) or v2
     _atomic_write(users_path, v2)
 

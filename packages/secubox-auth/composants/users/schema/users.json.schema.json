@@ -8,6 +8,7 @@
   "properties": {
     "$schema": {"type": "string"},
     "version": {"const": 2},
+    "admin_configure_le": {"type": "string", "format": "date-time"},
     "users": {
       "type": "array",
       "items": {"$ref": "#/definitions/user"}

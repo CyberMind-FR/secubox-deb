@@ -55,6 +55,19 @@ SESSIONS_FILE = os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/s
 # Single engine instance — all mutations go through here
 _engine = _engine_mod.Engine(users_path=Path(USERS_FILE))
 
+
+def _refus_moteur(exc: Exception, statut: int) -> HTTPException:
+    """Registre occupé : 503 partout, jamais un 400 ou un 404 trompeur."""
+    if isinstance(exc, _engine_mod.EngineBusy):
+        return HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "5"})
+    return HTTPException(status_code=statut, detail=str(exc))
+
+
+@app.exception_handler(_engine_mod.EngineBusy)
+def _moteur_occupe(_request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": str(exc)}, status_code=503, headers={"Retry-After": "5"})
+
 # ══════════════════════════════════════════════════════════════════
 # Default Permissions & Roles
 # ══════════════════════════════════════════════════════════════════
@@ -569,7 +582,7 @@ def create_user(user: UserCreate):
             must_change=True,
         )
     except ValueError as exc:                       # EngineError, PolicyError
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _refus_moteur(exc, 400) from None
 
     # COMPTES DANS LES SERVICES (#1375), par le helper root. Avant : des `ctl`
     # appelés en processus, sans sudo — donc en échec — avec des sous-commandes
@@ -613,7 +626,7 @@ def update_user(username: str, update: UserUpdate):
             else:
                 _engine.disable_user(username)
         except _engine_mod.EngineError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
+            raise _refus_moteur(exc, 404) from None
 
     # For email and services, update via engine's atomic I/O
     if update.email is not None or update.services is not None or update.email_recuperation is not None:
@@ -649,7 +662,7 @@ def disable_user(username: str):
     try:
         revoked = _engine.disable_user(username)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _refus_moteur(exc, 404) from None
     return {"ok": True, "revoked_sessions": revoked}
 
 
@@ -659,7 +672,7 @@ def enable_user(username: str):
     try:
         _engine.enable_user(username)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _refus_moteur(exc, 404) from None
     return {"ok": True}
 
 @app.delete("/user/{username}", dependencies=[Depends(require_permission("users.delete"))])
@@ -685,7 +698,7 @@ def delete_user(username: str):
     try:
         _engine.delete_user(username)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _refus_moteur(exc, 404) from None
 
     return {"success": True, "deprovision_results": deprovision_results}
 
@@ -713,7 +726,7 @@ def change_password(username: str, pwd: PasswordChange):
     try:
         _engine.set_password(username, pwd.password)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _refus_moteur(exc, 400) from None
 
     # Même mot de passe dans ses services (#1375), par le helper root.
     results = {}
@@ -832,7 +845,7 @@ def reinitialise_mot_de_passe(username: str, corps: Optional[ActionService] = No
     try:
         _engine.set_password(username, pw, must_change=True)     # une écriture : jamais « choisi » même un instant
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _refus_moteur(exc, 400) from None
     services = {}
     for svc in u.get("services", []):
         if svc in _cs.GERES:
@@ -851,17 +864,17 @@ def reinitialise_mot_de_passe(username: str, corps: Optional[ActionService] = No
 # ══════════════════════════════════════════════════════════════════
 
 @app.post("/user/{username}/totp/disable", dependencies=[Depends(require_permission("users.edit"))])
-async def disable_user_totp(username: str):
+def disable_user_totp(username: str):
     """Admin: disable TOTP for a user (clears secret and backup codes)."""
     try:
         _engine.disable_totp(username)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise _refus_moteur(exc, 404) from None
     return {"ok": True}
 
 
 @app.put("/user/{username}/otp-mode", dependencies=[Depends(require_permission("users.edit"))])
-async def set_user_otp_mode(username: str, corps: Dict[str, Any], creds=Depends(require_session)):
+def set_user_otp_mode(username: str, corps: Dict[str, Any], creds=Depends(require_session)):
     """Second facteur PAR COMPTE (#2745) : defaut | hors_lan | toujours | jamais. Désactiver (`jamais`) le second facteur d'un ADMINISTRATEUR l'ouvre depuis internet
     avec le seul mot de passe : confirmation explicite (`confirmer: true`, un booléen, pas « true » ni 1) et journal (qui, quel compte, ancien et nouveau mode)."""
     mode = corps.get("mode")
@@ -877,17 +890,17 @@ async def set_user_otp_mode(username: str, corps: Dict[str, Any], creds=Depends(
     try:
         _engine.set_otp_mode(username, mode, par=par, confirme=True if confirme else None)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _refus_moteur(exc, 400) from None
     return {"ok": True, "otp_mode": mode}
 
 
 @app.post("/user/{username}/totp/backup-codes", dependencies=[Depends(require_permission("users.edit", allow_self_for_param="username"))])
-async def regen_backup_codes(username: str):
+def regen_backup_codes(username: str):
     """Admin: regenerate TOTP backup codes for a user (returns plaintext — shown once)."""
     try:
         codes = _engine.regenerate_backup_codes(username)
     except _engine_mod.EngineError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise _refus_moteur(exc, 400) from None
     return {"backup_codes": codes}
 
 
@@ -959,7 +972,7 @@ def delete_group(name: str):
             if group.get("name") == name:
                 doc["groups"].pop(i)
                 _engine._save(doc)
-            return {"success": True}
+                return {"success": True}
     raise HTTPException(status_code=404, detail="Group not found")
 
 # ══════════════════════════════════════════════════════════════════
@@ -1110,7 +1123,7 @@ def assign_user_roles(username: str, assignment: UserRoleAssign):
                 user["roles"] = assignment.roles
                 user["roles_updated"] = datetime.now().isoformat()
                 _engine._save(doc)
-            return {"success": True, "roles": assignment.roles}
+                return {"success": True, "roles": assignment.roles}
 
     raise HTTPException(status_code=404, detail="User not found")
 
@@ -1240,6 +1253,8 @@ def import_users(file: UploadFile = File(...)):
         try:
             _engine.create_user(username, email=email, role=role, password=pw or None)
             created.append(username)
+        except _engine_mod.EngineBusy as exc:
+            raise _refus_moteur(exc, 503) from None
         except _engine_mod.EngineError as exc:
             err_msg = str(exc)
             # Distinguish "already exists" (skipped) from other engine errors

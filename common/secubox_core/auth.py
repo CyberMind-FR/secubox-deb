@@ -1454,14 +1454,10 @@ async def login(req: LoginRequest, request: Request, response: Response):
     # Même porte que secubox-auth (#3708), et hors de la boucle : argon2 y gelait tous les modules de l'agrégateur.
     from . import mot_de_passe_defaut, porte_argon2
 
-    def _verifie() -> bool:
-        if len(req.password) > porte_argon2.LONGUEUR_MAX:
-            return False
-        zone = _requete_lan(request) or mot_de_passe_defaut.adresse_du_maillage(client_ip)
-        with porte_argon2.PORTE.passage(client_ip, zone):
-            return _check_password(req.username, req.password)
+    zone = _requete_lan(request) or mot_de_passe_defaut.adresse_du_maillage(client_ip)
     try:
-        juste = await asyncio.to_thread(_verifie)
+        juste = len(req.password) <= porte_argon2.LONGUEUR_MAX and await porte_argon2.PORTE.executer(
+            client_ip, zone, lambda: _check_password(req.username, req.password))
     except porte_argon2.Saturee as exc:
         raise HTTPException(status_code=exc.statut, detail="Trop de connexions en cours, réessayez dans un instant",
                             headers={"Retry-After": "5"}) from None

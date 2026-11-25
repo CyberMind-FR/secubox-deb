@@ -31,6 +31,9 @@ PYEOF
         if ischroot 2>/dev/null || [ -n "${SECUBOX_IMAGE_BUILD:-}" ]; then HOSTNAME_SHORT=""; fi
         /usr/sbin/usersctl semer --machine="$HOSTNAME_SHORT" || echo "WARN: comptes non semés" >&2
 
+        # Marque durable (#3708) : une box déjà configurée ne rouvre plus jamais la revendication d'elle-même.
+        /usr/sbin/usersctl marquer-configure || echo "WARN: box non marquée configurée" >&2
+
         # Migration (#3708) : désactive (jamais de suppression) tout admin sans mot de passe dès qu'un AUTRE admin actif
         # en a choisi un ; une ligne d'audit par compte. Retour : usersctl set-password NOM && usersctl enable NOM.
         /usr/sbin/usersctl desactiver-admins-sans-mot-de-passe --origine=postinst \
@@ -45,6 +48,11 @@ PYEOF
         if [ -f /etc/secubox/users.json ]; then
             chown root:secubox /etc/secubox/users.json
             chmod 0640 /etc/secubox/users.json
+        fi
+        # Verrou des écrivains (#3708) : illisible par le service, il fermerait toute écriture.
+        if [ -f /etc/secubox/.users.json.verrou ] && [ ! -L /etc/secubox/.users.json.verrou ]; then
+            chown root:secubox /etc/secubox/.users.json.verrou
+            chmod 0640 /etc/secubox/.users.json.verrou
         fi
         if [ -f /etc/secubox/auth.toml ]; then
             chown root:secubox /etc/secubox/auth.toml

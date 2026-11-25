@@ -12,6 +12,7 @@ from secubox_core.config import get_config
 import json
 import logging
 import os
+import re
 import secrets
 import time
 import threading
@@ -129,6 +130,17 @@ _SESSIONS_FILE = __SESSIONS_FILE
 _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
+
+
+
+@app.exception_handler(_users_engine_mod.EngineError)
+def _refus_moteur(_request, exc):
+    """Registre occupé : 503 ; toute autre règle du moteur : 400. Jamais un 500."""
+    from fastapi.responses import JSONResponse
+    occupe = isinstance(exc, _users_engine_mod.EngineBusy)
+    return JSONResponse({"detail": str(exc)}, status_code=503 if occupe else 400,
+                        headers={"Retry-After": "5"} if occupe else None)
+
 
 _pending      = PendingStore(_TOTP_PENDING_FILE, ttl_seconds=900)
 _users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
@@ -652,13 +664,19 @@ async def _veille_delegations() -> None:
 
 
 @_login_router.post("/login/mfa")
-async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
+def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     payload = _check_scope(request.headers.get("Authorization"), "mfa-challenge")
     username = payload["sub"]
     if not user_store.is_enabled(username):
         raise HTTPException(status_code=401, detail="Compte désactivé")
-    ok = (_verify_totp_ntp_aware(username, req.code)
-          or _users_engine.consume_backup_code(username, req.code))
+    ok = _verify_totp_ntp_aware(username, req.code)
+    if not ok and re.fullmatch(r"[A-Z2-7]{10}", req.code):
+        # Code de secours : jusqu'à dix argon2, donc derrière la porte commune (#3708).
+        try:
+            with _passage(request, _client_meta(request)[0]):
+                ok = _users_engine.consume_backup_code(username, req.code)
+        except _porte.Saturee as exc:
+            raise _saturee(exc) from None
     if not ok:
         _append_audit("mfa_failed", username, {})
         raise HTTPException(status_code=401, detail="Code invalide")

@@ -18,11 +18,13 @@ demandes présentes : il ne grossit pas avec le nombre d'adresses vues.
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import Dict, Iterator
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 #: Au-delà, le mot de passe n'est pas examiné (le Coffre et la politique s'arrêtent bien avant).
 LONGUEUR_MAX = 1024
@@ -55,35 +57,47 @@ class Porte:
         self._cours = {True: 0, False: 0}
         self._attente = {True: 0, False: 0}
         self._sources: Dict[str, int] = {}
+        self._fils: Optional[ThreadPoolExecutor] = None
 
     def _libre(self, confiance: bool) -> bool:
         if self._cours[True] + self._cours[False] >= self.total:
             return False
         return confiance or self._cours[False] < self.hors_zone
 
-    @contextmanager
-    def passage(self, adresse: str, confiance: bool) -> Iterator[None]:
+    def reserver(self, adresse: str, confiance: bool) -> Tuple[str, bool]:
+        """Prend un rang, SANS attendre (sûr sur une boucle asyncio) : refus immédiat si la source ou la file est pleine.
+        Le jeton rendu se tient une fois par `tenir`, ou se rend par `rendre`."""
         src, zone = _source(adresse), bool(confiance)
         with self._c:
             if self._sources.get(src, 0) >= self.par_source:
                 raise Saturee(429)
-            if not self._libre(zone) and self._attente[zone] >= self.attente_max:
+            if self._attente[zone] >= self.attente_max:
                 raise Saturee(503)
             self._sources[src] = self._sources.get(src, 0) + 1
+            self._attente[zone] += 1
+        return src, zone
+
+    def rendre(self, jeton: Tuple[str, bool]) -> None:
+        with self._c:
+            self._attente[jeton[1]] -= 1
+            self._rendre_source(jeton[0])
+
+    @contextmanager
+    def tenir(self, jeton: Tuple[str, bool]) -> Iterator[None]:
+        src, zone = jeton
+        with self._c:
+            fin = time.monotonic() + self.delai
             try:
-                fin = time.monotonic() + self.delai
-                self._attente[zone] += 1
-                try:
-                    while not self._libre(zone):
-                        reste = fin - time.monotonic()
-                        if reste <= 0:
-                            raise Saturee(503)
-                        self._c.wait(reste)
-                finally:
-                    self._attente[zone] -= 1
+                while not self._libre(zone):
+                    reste = fin - time.monotonic()
+                    if reste <= 0:
+                        raise Saturee(503)
+                    self._c.wait(reste)
             except BaseException:
                 self._rendre_source(src)
                 raise
+            finally:
+                self._attente[zone] -= 1
             self._cours[zone] += 1
         try:
             yield
@@ -92,6 +106,29 @@ class Porte:
                 self._cours[zone] -= 1
                 self._rendre_source(src)
                 self._c.notify_all()
+
+    @contextmanager
+    def passage(self, adresse: str, confiance: bool) -> Iterator[None]:
+        with self.tenir(self.reserver(adresse, confiance)):
+            yield
+
+    async def executer(self, adresse: str, confiance: bool, f: Callable[[], Any]) -> Any:
+        """`f` derrière la porte, hors de la boucle. Le rang est pris AVANT de demander un fil, et l'exécuteur, propre à
+        la porte, a un fil par rang possible : une rafale refusée n'occupe aucun fil et personne n'attend derrière elle."""
+        jeton = self.reserver(adresse, confiance)
+
+        def travail():
+            with self.tenir(jeton):
+                return f()
+        try:
+            with self._c:
+                if self._fils is None:
+                    self._fils = ThreadPoolExecutor(self.total + 2 * self.attente_max, thread_name_prefix="porte-argon2")
+            futur = asyncio.get_running_loop().run_in_executor(self._fils, travail)
+        except BaseException:
+            self.rendre(jeton)
+            raise
+        return await asyncio.shield(futur)        # demande abandonnée : le travail finit et rend sa place
 
     def _rendre_source(self, src: str) -> None:
         n = self._sources.get(src, 0) - 1

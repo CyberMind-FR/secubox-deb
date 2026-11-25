@@ -358,7 +358,7 @@ def test_verrou_tenu_refus_borne_sans_rien_changer(box, monkeypatch):
 def test_verrou_par_lien_refuse(box):
     (box.d / ".users.json.verrou").symlink_to("/etc/passwd")
     box.pose(compte("chef", CHOISI), compte("orphelin"))
-    with pytest.raises(OSError):
+    with pytest.raises(EngineError):
         box.e.desactiver_admins_sans_mot_de_passe()
 
 
@@ -427,4 +427,7 @@ def test_postinst_execute(box, depart, attendu):
         r = _postinst(box)
         assert r.returncode == 0 and "WARN" not in r.stderr, r.stderr
         assert box.etat() == attendu
-    assert len(box.audit()) == sum(not v for v in attendu.values())
+    ev = [a["evenement"] for a in box.audit()]
+    assert ev.count("admin_sans_mot_de_passe_desactive") == sum(not v for v in attendu.values())
+    configure = any(u["password_hash"] == CHOISI for u in depart)
+    assert bool(json.loads(box.users.read_text()).get("admin_configure_le")) is configure

@@ -180,6 +180,18 @@ def cmd_semer(args):
     return 0
 
 
+def cmd_marquer_configure(args):
+    if _engine().marquer_configure():
+        print("box marquée configurée (#3708)")
+    return 0
+
+
+def cmd_rouvrir(args):
+    _engine().rouvrir_premiere_configuration()
+    print("première configuration rouverte : définissez vite le mot de passe admin depuis le LAN")
+    return 0
+
+
 def cmd_desactiver_sans_mot_de_passe(args):
     noms = _engine().desactiver_admins_sans_mot_de_passe(origine=args.origine)
     _purger_sessions(noms)
@@ -220,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("username")
     sp.set_defaults(func=cmd_set_password)
 
-    sp = sub.add_parser("clear-password", help="Remove the password; no longer claimable at login once another admin is configured (#3708)")
+    sp = sub.add_parser("clear-password", help="Remove the password; no longer claimable at login once the box was configured (#3708)")
     sp.add_argument("username")
     sp.set_defaults(func=cmd_clear_password)
 
@@ -261,6 +273,14 @@ def build_parser() -> argparse.ArgumentParser:
                              "another admin is configured; undo: set-password then enable (#3708)")
     sp.add_argument("--origine", default="usersctl")
     sp.set_defaults(func=cmd_desactiver_sans_mot_de_passe)
+
+    sub.add_parser("marquer-configure", help="Record that this box has a configured admin (postinst, #3708)"
+                   ).set_defaults(func=cmd_marquer_configure)
+
+    sub.add_parser("rouvrir-premiere-configuration",
+                   help="Root, factory reset: forget the box was configured (refused while an admin is configured); "
+                        "passwordless accounts can be claimed from the LAN again"
+                   ).set_defaults(func=cmd_rouvrir)
 
     sp = sub.add_parser("renommer-compte-machine",
                         help="After a box rename: no passwordless admin left under the old name (#3708)")

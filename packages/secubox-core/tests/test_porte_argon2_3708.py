@@ -5,6 +5,7 @@
 """#3708 : une rafale de connexions ne remplit ni la mémoire ni les fils, et le propriétaire passe."""
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from secubox_core.porte_argon2 import Porte, Saturee
@@ -88,3 +89,50 @@ def test_une_exception_rend_la_place():
         with pytest.raises(RuntimeError):
             with porte.passage("203.0.113.1", False):
                 raise RuntimeError
+
+
+def test_rafale_sur_la_connexion_historique_le_lan_passe(monkeypatch):
+    """R3 : l'exécuteur par défaut, non borné et AVANT la porte, faisait attendre le propriétaire 13 s."""
+    import asyncio
+
+    from fastapi import HTTPException, Response
+    from secubox_core import auth, porte_argon2
+
+    monkeypatch.setattr(porte_argon2, "PORTE", Porte(attente_max=8, delai=2.0))
+    monkeypatch.setattr(auth, "_check_password", lambda u, p: time.sleep(0.3) or False)
+    monkeypatch.setattr(auth, "_requete_lan", lambda r: r == "lan")
+    monkeypatch.setattr(auth, "adresse_client", lambda r: r)
+    monkeypatch.setattr(auth, "_emit_session_event", lambda *a: None)
+
+    class Req(str):
+        headers = {}
+
+    async def entre(source):
+        try:
+            await auth.login(auth.LoginRequest(username="x", password="y"), Req(source), Response())
+        except HTTPException as e:
+            return e.status_code
+
+    async def scene():
+        # Exécuteur par défaut d'un ARM à 4 cœurs : 8 fils.
+        asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(8))
+        rafale = [asyncio.create_task(entre(f"198.51.100.{i}")) for i in range(200)]
+        await asyncio.sleep(0.05)
+        t = time.monotonic()
+        assert await entre("lan") == 401
+        duree = time.monotonic() - t
+        return duree, await asyncio.gather(*rafale)
+    duree, codes = asyncio.run(scene())
+    assert duree < 1.0, duree
+    assert codes.count(503) >= 180 and set(codes) <= {401, 503}
+
+
+def test_places_reservees_sans_fil_puis_rendues():
+    porte = Porte(attente_max=2)
+    t1, t2 = porte.reserver("203.0.113.1", False), porte.reserver("203.0.113.2", False)
+    with pytest.raises(Saturee):
+        porte.reserver("203.0.113.3", False)
+    for t in (t1, t2):
+        with porte.tenir(t):
+            pass
+    assert porte._sources == {} and porte._attente == {True: 0, False: 0} == porte._cours

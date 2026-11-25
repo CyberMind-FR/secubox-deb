@@ -36,6 +36,10 @@ class EngineError(ValueError):
     """Raised for any policy/state violation. Maps to HTTP 4xx in API."""
 
 
+class EngineBusy(EngineError):
+    """Verrou du registre indisponible : HTTP 503, réessayer."""
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -122,12 +126,15 @@ class Engine:
     @contextlib.contextmanager
     def verrou(self):
         """Le verrou de users.json, pour qui lit puis écrit (`_load` … `_save`) hors du moteur aussi."""
-        ca = _comptes_admin()
+        garde = _comptes_admin().verrou(self.users_path)
         try:
-            with ca.verrou(self.users_path):
-                yield
-        except ca.VerrouOccupe as exc:
-            raise EngineError(f"{exc} : rien n'est changé, réessayer") from None
+            garde.__enter__()
+        except OSError as exc:                        # occupé, illisible, anormal : rien n'est changé
+            raise EngineBusy(f"registre des comptes indisponible ({exc}) : réessayer") from None
+        try:
+            yield
+        finally:
+            garde.__exit__(None, None, None)
 
     # ── File I/O ──────────────────────────────────────────────────────
 
@@ -146,6 +153,7 @@ class Engine:
         the auth.toml emergency users and rejects every login. Mirrors
         secubox_core.user_store.set_password's owner-preservation.
         """
+        _comptes_admin().poser_marque(doc)         # première fois qu'un administrateur est configuré : durable (#3708)
         self.users_path.parent.mkdir(parents=True, exist_ok=True)
         prev_stat = None
         try:
@@ -316,7 +324,7 @@ class Engine:
             semes.append("admin")
         doc = self._load()
         if (machine and not self._find(doc, machine) and machine not in ca.comptes_systeme()
-                and not ca.admin_avec_mot_de_passe(doc)):
+                and not ca.configure_un_jour(doc) and not ca.admin_avec_mot_de_passe(doc)):
             self.create_user(machine, email=None, role="admin")
             semes.append(machine)
         return semes
@@ -338,6 +346,30 @@ class Engine:
         for n in noms:
             self._audit("user_disabled", n, {"motif": "admin sans mot de passe"})
         return noms
+
+    @_ecrit
+    def marquer_configure(self) -> bool:
+        """Postinst : une box qui a déjà un admin au mot de passe choisi (même « à changer ») est marquée configurée."""
+        doc = self._load()
+        if not _comptes_admin().poser_marque(doc, provisoire_compte=True):
+            return False
+        self._auditer_securite("box_marquee_configuree")
+        self._save(doc)
+        return True
+
+    @_ecrit
+    def rouvrir_premiere_configuration(self) -> None:
+        """Geste ROOT de remise à zéro : retire la marque, donc rouvre la revendication des comptes sans mot de passe
+        depuis le LAN. Refusé tant qu'un administrateur est configuré (il suffit de s'en servir)."""
+        ca = _comptes_admin()
+        if os.geteuid() != 0:
+            raise EngineError("réservé à root")
+        doc = self._load()
+        if ca.admin_configure(doc):
+            raise EngineError("un administrateur est configuré : rien à rouvrir")
+        self._auditer_securite("premiere_configuration_rouverte")
+        doc.pop(ca.CLE_MARQUE, None)
+        self._save(doc)
 
     def renommer_compte_machine(self, ancien: str, nouveau: str, acteur: Optional[str] = None) -> str:
         """Après un renommage de box : plus de compte admin semé sous l'ancien nom. Rend « aucun » (rien à faire, dont
@@ -361,7 +393,7 @@ class Engine:
             if not ca.jamais_servi(u, ca.traces_d_usage()):
                 etat = "garde"
                 return []
-            if libre and not ca.admin_configure(doc):
+            if libre and not ca.admin_configure(doc) and not ca.configure_un_jour(doc):
                 etat = "renomme"
                 u["username"] = nouveau
                 return [{"evenement": "compte_machine_renomme", "compte": ancien, "nouveau": nouveau, "acteur": acteur}]
@@ -398,6 +430,9 @@ class Engine:
                 raise EngineError(f"utilisateur inconnu : {username}")
             if verifie:
                 verifie(doc)
+            ca = _comptes_admin()
+            if ca.configure_un_jour(doc) and ca.est_le_defaut(plaintext):
+                raise EngineError("le mot de passe du premier démarrage ne se choisit plus")
             u["password_hash"] = empreinte
             u["must_change_password"] = bool(must_change)
             u.pop("origine", None)                            # choisi par une personne : plus un compte de service
@@ -604,7 +639,7 @@ class Engine:
         """Ne fait jamais échouer une connexion : registre occupé, la date attendra la suivante."""
         try:
             self._touch_last_login(username)
-        except EngineError as exc:
+        except (EngineError, OSError) as exc:
             log.warning("last_login de %s non noté (%s)", username, exc)
 
     @_ecrit

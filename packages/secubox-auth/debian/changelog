@@ -26,6 +26,13 @@ secubox-auth (1.8.22-1~trixie1) trixie; urgency=medium
     import d'un admin sans mot de passe refusé.
   * Connexion : une vérification argon2 par demande, derrière la porte commune ;
     anciens comptes de console ou de délégation jamais comptés.
+  * Marque durable « box configurée » (users.json, admin_configure_le) : posée au
+    premier mot de passe choisi et par le postinst ; la première configuration ne
+    se rouvre que par usersctl rouvrir-premiere-configuration (root, audité).
+    Le mot de passe du premier démarrage ne se choisit plus ensuite.
+  * Registre occupé : 503 partout ; une connexion réussie n'échoue jamais pour
+    last_login ; verrou réparé (root:secubox 0640) ; second facteur hors de la
+    boucle, codes de secours derrière la porte argon2.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 

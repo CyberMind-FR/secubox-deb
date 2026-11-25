@@ -11,6 +11,7 @@ secubox-core (1.8.46-1~trixie1) trixie; urgency=medium
     fois, dont 2 au plus hors de la zone de confiance, 2 par source, attente
     bornée (429/503) ; connexion historique des modules hors de la boucle et au
     même coût pour un compte inconnu. Verrou commun des écrivains de users.json.
+  * Connexion historique : rang pris avant tout fil, exécuteur propre à la porte.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 

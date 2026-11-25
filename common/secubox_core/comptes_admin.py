@@ -23,6 +23,7 @@ Aucun nom de compte ne sort de `resume()` : elle est servie à des appelants san
 from __future__ import annotations
 
 import fcntl
+import grp
 import importlib.util
 import json
 import os
@@ -77,6 +78,13 @@ class VerrouOccupe(OSError):
     pass
 
 
+def _gid_secubox() -> Optional[int]:
+    try:
+        return grp.getgrnam("secubox").gr_gid
+    except KeyError:
+        return None
+
+
 _verrous: Dict[str, threading.RLock] = {}
 _tenus: Dict[str, int] = {}
 _verrous_garde = threading.Lock()
@@ -85,7 +93,7 @@ _verrous_garde = threading.Lock()
 @contextmanager
 def verrou(users: Path, delai: float = 10.0) -> Iterator[None]:
     """Lecture-modification-écriture exclusive de users.json, entre fils (RLock, réentrant) et entre processus (flock
-    sur un fichier voisin). Attente bornée. Le fichier suit le propriétaire du dossier : root et secubox l'ouvrent."""
+    sur un fichier voisin, root:secubox 0640). Attente bornée."""
     cle = str(Path(users))
     with _verrous_garde:
         r = _verrous.setdefault(cle, threading.RLock())
@@ -102,13 +110,17 @@ def verrou(users: Path, delai: float = 10.0) -> Iterator[None]:
             except FileNotFoundError:
                 try:
                     fd = os.open(fichier, drapeaux | os.O_CREAT | os.O_EXCL, 0o640)
-                    if os.geteuid() == 0:
-                        d = os.stat(fichier.parent)
-                        os.fchown(fd, d.st_uid, d.st_gid)
                 except FileExistsError:
                     fd = os.open(fichier, drapeaux)
-            if not stat.S_ISREG(os.fstat(fd).st_mode):
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
                 raise VerrouOccupe("verrou de users.json anormal")
+            if os.geteuid() == 0:
+                # Réparé à chaque ouverture par root : un verrou que le service ne lit plus fermerait toute écriture.
+                os.fchmod(fd, 0o640)
+                gid = _gid_secubox()
+                if gid is not None and (st.st_uid, st.st_gid) != (0, gid):
+                    os.fchown(fd, 0, gid)
             fin = time.monotonic() + delai
             while True:
                 try:
@@ -230,6 +242,10 @@ def _verdict(u: Dict[str, Any]) -> str:
         return "inconnu"
 
 
+def est_le_defaut(clair: str) -> bool:
+    return bool(_defaut().est_le_defaut(clair))
+
+
 def au_mot_de_passe_defaut(u: Dict[str, Any]) -> bool:
     return _verdict(u) == "actif"
 
@@ -316,8 +332,34 @@ def a_refermer(doc: Any) -> Dict[str, str]:
 
 
 def premiere_configuration_permise(compte: str, doc: Any) -> bool:
-    """La première configuration (#1707) reste-t-elle ouverte à ce compte ? Registre illisible : non."""
-    return isinstance(doc, dict) and isinstance(doc.get("users"), list) and not admin_configure(doc, sauf=compte)
+    """La première configuration (#1707) reste-t-elle ouverte à ce compte ? Registre illisible : non. La marque est
+    DURABLE : réinitialiser le seul administrateur (mot de passe provisoire, effacé) ne rouvre rien."""
+    return (isinstance(doc, dict) and isinstance(doc.get("users"), list) and not configure_un_jour(doc)
+            and not admin_configure(doc, sauf=compte))
+
+
+# ── Marque durable : la box a été configurée ───────────────────────────────────────────────────────────────────────────
+
+#: Dans users.json lui-même : écrite d'un même geste que le mot de passe, sous le verrou ; retirée par un geste root
+#: (`usersctl rouvrir-premiere-configuration`) ou avec le registre (remise à zéro de la box).
+CLE_MARQUE = "admin_configure_le"
+
+
+def configure_un_jour(doc: Any) -> bool:
+    return isinstance(doc, dict) and bool(doc.get(CLE_MARQUE))
+
+
+def poser_marque(doc: Dict[str, Any], provisoire_compte: bool = False) -> bool:
+    """Pose la marque si un administrateur est configuré. `provisoire_compte` (postinst) : un mot de passe « à changer »
+    autre que celui du premier démarrage suffit, la box a déjà servi. Rend vrai si elle vient d'être posée."""
+    if configure_un_jour(doc):
+        return False
+    s = comptes_systeme() | _anciens_services() if provisoire_compte else frozenset()
+    if not (admin_configure(doc) or (provisoire_compte and any(
+            est_admin_actif(u) and _humain(u, s) and _verdict(u) == "inactif" for u in comptes(doc)))):
+        return False
+    doc[CLE_MARQUE] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return True
 
 
 def resume(chemin: Optional[Path] = None) -> Dict[str, Any]:

@@ -43,7 +43,7 @@ def _admin_configure(doc) -> bool:
         spec = importlib.util.spec_from_file_location("_sbx_comptes_admin_pp", Path(list(paquet.submodule_search_locations)[0]) / "comptes_admin.py")
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)
-        return bool(m.admin_configure(doc))
+        return bool(m.configure_un_jour(doc) or m.admin_configure(doc))
     except (ImportError, OSError, AttributeError, TypeError, ValueError):
         return False
 
