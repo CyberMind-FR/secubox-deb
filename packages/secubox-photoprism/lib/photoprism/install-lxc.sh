@@ -201,11 +201,16 @@ EOF
         log "Réglages existants conservés : $(printf '%s\n' "$repris" | wc -l) ligne(s)"
         printf '\n# Conservé de la config existante (cycle de vie, réglages, montages locaux)\n%s\n' \
             "$repris" >> "$cfg"
+        # #3941 : des lignes reprises de l'ancien budget (#496, échange interdit) sont migrées, pas recopiées.
+        if [ -x /usr/sbin/secubox-lxc-memoire ]; then
+            /usr/sbin/secubox-lxc-memoire migrer "$LXC_NAME" || true
+        fi
     else
         cat >> "$cfg" <<'EOF'
 
 lxc.cgroup2.memory.high = 1500M
 lxc.cgroup2.memory.max = 2G
+lxc.cgroup2.memory.swap.max = 1G
 
 lxc.start.auto = 1
 lxc.start.delay = 5

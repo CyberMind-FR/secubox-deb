@@ -91,6 +91,8 @@ lxc.start.auto = 0
 # main+daily demande ~1,2–1,5 Go ; ConcurrentDatabaseReload est coupé pour ne pas doubler.
 lxc.cgroup2.memory.high = 1400M
 lxc.cgroup2.memory.max = 1800M
+# Échange borné, jamais interdit : high < max sans échange étouffe le conteneur (#3941).
+lxc.cgroup2.memory.swap.max = 900M
 CFG
   # Le rootfs déballé est à l'uid 0 de l'HÔTE ; l'idmap veut 100000 (cf. ytsas, #1308).
   if [ "$(stat -c %u "$LXC_PATH/$LXC_NAME/rootfs")" = "0" ]; then

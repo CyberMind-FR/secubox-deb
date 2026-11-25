@@ -40,10 +40,10 @@ RestartSec=5
 # a porte l'API a 750 Mo et pousse gk2 en swap (charge 110+). Regime normal
 # mesure apres correctif sur copie des donnees de gk2 : ~130 Mo, ~200 Mo avec
 # 30 jours de vhost_stats charges (matplotlib precharge compris), stable.
-# Au-dessus de MemoryHigh le noyau reprend la memoire du service (ralenti, pas
-# tue) ; a MemoryMax il est tue et Restart=always le relance. Jamais de swap :
-# une fuite ne doit pas pouvoir deborder sur toute la box.
-MemoryHigh=300M
+# A MemoryMax il est tue et Restart=always le relance. Jamais de swap : une
+# fuite ne doit pas pouvoir deborder sur toute la box. PAS DE MemoryHigh (#3941) :
+# sans swap, un frein sous le plafond ne laisse au noyau que les pages de
+# fichiers a evincer, le service relit son code sans fin et n'est jamais tue.
 MemoryMax=400M
 MemorySwapMax=0
 # L'arret attendait 90 s puis SIGKILL (fils bloques dans des sous-processus).

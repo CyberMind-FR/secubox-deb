@@ -1,3 +1,19 @@
+secubox-gitea (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * giteactl memoire : dernière ligne memory.max « max » ou vide = pas de budget ; lxc-attach sans entrée standard
+    (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:33:22 +0100
+
+secubox-gitea (1.9.0-1~trixie1) trixie; urgency=medium
+
+  * Mémoire : échange borné à la moitié du budget (conteneur et runners), jamais de frein ; configuration existante
+    migrée au configure (secubox-lxc-memoire), conteneur jamais redémarré.
+  * giteactl memoire : GOMEMLIMIT à 70 % du budget (drop-in gitea.service ou start-gitea.sh), effectif au prochain
+    redémarrage du service ; bornes de diff dans l'app.ini d'une nouvelle installation seulement (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-gitea (1.8.1-1~trixie1) trixie; urgency=medium
 
   * Réveil planifié : gitea coupé par le profil ou endormi par politique = « rien à faire » (code 0),

@@ -21,7 +21,7 @@ setup() {
     local ligne="$*" dernier="${*: -1}"
     echo "ATTACH $ligne" >> "$CALLS"
     case "$*" in
-      *"cat >"*) cat >> "$CALLS" ;;
+      *"cat >"*) cat >> "$CALLS"; [[ -z "${IDENTIQUE:-}" || ( -n "${CHANGE:-}" && "$*" == *"$CHANGE"* ) ]] && echo surcharge-changee; return 0 ;;
       "systemctl is-failed --quiet "*) grep -qx "$dernier" "$ECHECS" ;;
       "systemctl is-active --quiet "*) ! grep -qx "$dernier" "$TENACES" ;;
       *"systemctl start "*) sed -i "/^${ligne##* }\$/d" "$ECHECS" ;;
@@ -66,6 +66,40 @@ setup() {
   n_oom=$(grep -n 'clamav-daemon.service.d/20-secubox-oom.conf' "$CALLS" | head -1 | cut -d: -f1)
   n_restart=$(grep -n 'restart clamav-daemon' "$CALLS" | head -1 | cut -d: -f1)
   [ -n "$n_oom" ] && [ -n "$n_restart" ] && [ "$n_oom" -lt "$n_restart" ]
+}
+
+@test "mailctl services : surcharges identiques, aucun service relancé (#3941)" {
+  export IDENTIQUE=1
+  run cmd_services
+  [ "$status" -eq 0 ]
+  grep -q 'dovecot.service.d' "$CALLS"
+  ! grep -q 'systemctl restart' "$CALLS"
+}
+
+@test "mailctl services : surcharges identiques, un service en échec est relancé (#3941)" {
+  export IDENTIQUE=1; echo dovecot > "$ECHECS"
+  run cmd_services
+  [ "$status" -eq 0 ]
+  grep -q 'restart dovecot' "$CALLS"
+  ! grep -q 'restart clamav-daemon' "$CALLS"
+}
+
+@test "mailctl services : priorité OOM changée seule, rspamd et clamav-daemon relancés, pas dovecot (#3941)" {
+  export IDENTIQUE=1 CHANGE=20-secubox-oom
+  run cmd_services
+  [ "$status" -eq 0 ]
+  grep -q 'restart rspamd' "$CALLS"
+  grep -q 'restart clamav-daemon' "$CALLS"
+  ! grep -q 'restart dovecot' "$CALLS"
+}
+
+@test "la surcharge posée est comparée : deux poses identiques, un seul changement (#3941)" {
+  lxc_attach() { shift; bash -c "${3//\/etc\/systemd/$BATS_TEST_TMPDIR\/etc}"; }; export -f lxc_attach
+  SURCHARGES_CHANGEES=" "
+  printf 'a\n' | { _lxc_poser_surcharge dovecot 20-x mail; _surcharge_changee dovecot 20-x; }
+  printf 'a\n' | { _lxc_poser_surcharge dovecot 20-x mail; ! _surcharge_changee dovecot 20-x; }
+  printf 'b\n' | { _lxc_poser_surcharge dovecot 20-x mail; _surcharge_changee dovecot 20-x; }
+  [ "$(ls -A "$BATS_TEST_TMPDIR/etc/system/dovecot.service.d")" = "20-x.conf" ]
 }
 
 @test "veille : tout en service, rien n'est relancé" {

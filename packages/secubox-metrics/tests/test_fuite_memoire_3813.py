@@ -236,7 +236,7 @@ def test_unite_bornee_en_memoire():
     u = (PKG / "debian" / "secubox-metrics.service").read_text()
     lignes = {x.split("=", 1)[0]: x.split("=", 1)[1] for x in u.splitlines()
               if "=" in x and not x.lstrip().startswith("#")}
-    assert lignes.get("MemoryHigh") and lignes.get("MemoryMax")
+    assert lignes.get("MemoryMax") and "MemoryHigh" not in lignes     # #3941 : pas de frein sans échange
     assert lignes.get("Restart") == "always"
     assert lignes.get("MemorySwapMax") == "0"
 
