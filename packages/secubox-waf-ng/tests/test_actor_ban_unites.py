@@ -73,7 +73,9 @@ def test_l_unite_donne_le_cache_au_service_sans_drop_in_manuel():
     """Le correctif de #1001 vivait dans un drop-in posé à la main sur gk2 (corrompu par un heredoc à backticks). Il appartient à l'unité."""
     t = (SYS / "secubox-waf-ng.service").read_text()
     assert re.search(r"^ExecStartPre=\+/bin/mkdir -p /var/cache/secubox/waf$", t, re.M)
-    assert re.search(r"^ExecStartPre=\+/bin/chown -R secubox-waf:secubox-waf /var/cache/secubox/waf$", t, re.M)
+    # #3932 : seulement ce qui n'est pas déjà au service (des dizaines de milliers de fichiers de cache, port fermé).
+    assert re.search(r"^ExecStartPre=-\+/usr/bin/find /var/cache/secubox/waf -xdev \( ! -user secubox-waf -o ! -group secubox-waf \) "
+                     r"-exec /bin/chown -h secubox-waf:secubox-waf \{\} \+$", t, re.M)
 
 
 def test_aucun_fichier_d_unite_ou_de_dropin_du_paquet_n_est_corrompu():

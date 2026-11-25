@@ -106,7 +106,9 @@ ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
 # pouvait pas y écrire ses signaux d'activité, le fichier est resté figé ONZE JOURS et tous les vhosts paraissaient inactifs — la mise en veille branchée dessus aurait éteint la box.
 # Ce correctif vivait dans un drop-in posé à la main sur gk2 ; il est ici, dans le paquet.
 ExecStartPre=+/bin/mkdir -p /var/cache/secubox/waf
-ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/cache/secubox/waf
+# #3932 : seulement ce qui n'est pas déjà au service. `chown -R` récrivait chaque fichier du cache média (des dizaines de milliers)
+# à chaque démarrage, port fermé. `-` : un fichier du cache évincé pendant la passe n'empêche pas de démarrer.
+ExecStartPre=-+/usr/bin/find /var/cache/secubox/waf -xdev ( ! -user secubox-waf -o ! -group secubox-waf ) -exec /bin/chown -h secubox-waf:secubox-waf {} +
 # DELAI AMONT : 10 s PAR DEFAUT, TROP COURT POUR QUI ECRIT SUR DISQUE (#1030).
 #
 # Un depot de 22 Mio a mis 116 s a s'ecrire sur cette board. Le WAF abandonnait
