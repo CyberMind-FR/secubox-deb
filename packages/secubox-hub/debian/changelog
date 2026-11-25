@@ -1,3 +1,14 @@
+secubox-hub (1.13.0-1~trixie1) trixie; urgency=medium
+
+  * Graphiques vivants (ref #3945, maquette validée) : composant partagé
+    /shared/pouls.js (cartes, compteurs, barres), sans bibliothèque. Une mesure
+    bat au présent, recule sur ses dernières mesures réelles (date écrite),
+    rebondit et revient ; une seule à la fois ; arrêt au survol, hors écran,
+    onglet caché, mouvement réduit et au bouton « vivant / fixe ». Sans
+    historique, rien ne bouge. API dans le README, tests node et navigateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-hub (1.12.63-1~trixie1) trixie; urgency=medium
 
   * Dé du menu (copie de secubox-webos, ref #3938) : face verte redressée, fusée
