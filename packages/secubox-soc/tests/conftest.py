@@ -12,8 +12,9 @@ import tempfile
 
 import pytest
 
-# AVANT tout import de `api.main`, qui lit cette variable une fois (#3946) : aucune suite ne doit toucher l'état SOC
-# du poste qui la lance, ni dépendre de son existence. Le dossier disparaît avec le processus.
+# AVANT tout import de `api.main`, qui lit cette variable une fois (#3946) : les fichiers JSON et la base
+# d'ingestion de l'API vont dans un dossier temporaire. `defense.db` n'en dépend pas : chaque suite la déplace par
+# SECUBOX_SOC_DEFENSE_DB.
 _ETAT = tempfile.TemporaryDirectory(prefix="soc-tests-")
 os.environ["SECUBOX_SOC_DATA"] = _ETAT.name
 

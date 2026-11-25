@@ -1,4 +1,4 @@
-secubox-waf-ng (1.47.0-1~trixie1) UNRELEASED; urgency=medium
+secubox-waf-ng (1.46.2-1~trixie1) trixie; urgency=medium
 
   * AppArmor secubox-waf-indices : audit.log en « w » ; « a » refusait chaque
     write(), et un ban d'indice non audité n'est pas posé (ref #3861, #3946).

@@ -102,7 +102,7 @@ def _soc_enrich(event: dict) -> dict:
 
 
 # Dossier d'état : posé par le postinst (secubox, 0750). Rien n'est créé à l'import (#3946) : les tests le déplacent
-# par SECUBOX_SOC_DATA, la première écriture le recrée s'il manque (_save_json, _init_db de mitm_ingest).
+# par SECUBOX_SOC_DATA (sauf defense.db : SECUBOX_SOC_DEFENSE_DB), la première écriture le recrée s'il manque (_save_json, _init_db de mitm_ingest).
 DATA_DIR = Path(os.environ.get("SECUBOX_SOC_DATA", "/var/lib/secubox/soc"))
 MITM_DB = DATA_DIR / "mitm-ingest.db"
 

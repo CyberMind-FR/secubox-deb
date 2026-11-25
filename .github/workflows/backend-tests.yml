@@ -58,6 +58,8 @@ on:
       - 'packages/secubox-health/**'
       - 'packages/secubox-hub/**'
       - 'packages/secubox-system/**'
+      # Protégés du moteur de profils, comparés aux unités de secubox_core (system).
+      - 'packages/secubox-profiles/api/manifest.py'
       - 'packages/secubox-mqtt/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
@@ -77,6 +79,7 @@ on:
       - 'packages/*/menu.d/**'
       # Profils AppArmor : audit.log en « w » (pilotage, #3861).
       - 'packages/*/apparmor/**'
+      - 'packages/*/composants/*/apparmor/**'
       # conftest.py et pytest.ini de la racine pèsent sur la collecte.
       - 'conftest.py'
       - 'pytest.ini'

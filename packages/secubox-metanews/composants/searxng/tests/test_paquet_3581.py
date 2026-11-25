@@ -67,6 +67,7 @@ def test_config_lxc_non_privilegiee_bornee_et_reecrite(ctl, cfg):
     c = ctl.config_lxc(cfg, ancienne)
     assert "lxc.idmap = u 0 100000 65536" in c and "lxc.idmap = g 0 100000 65536" in c
     assert "lxc.start.auto = 1" in c and "lxc.cgroup2.memory.max = 384M" in c and "lxc.cgroup2.memory.high = 320M" in c
+    assert "lxc.cgroup2.memory.swap.max = 192M\n" in c       # #3941 : échange borné à la moitié du plafond, jamais interdit
     assert "lxc.net.0.ipv4.address = 10.100.0.85/24" in c and "lxc.net.0.link = br-lxc" in c
     assert "lxc.rootfs.path = dir:/data/lxc/searxng/rootfs" in c
     assert c.count("lxc.net.0.type") == 1 and "lxcbr0" not in c and "lxc.mount.entry" not in c   # réécrit, jamais ajouté

@@ -772,6 +772,7 @@ lxc.net.0.name = eth0
 
 # Resource limits
 lxc.cgroup2.memory.max = 1G
+lxc.cgroup2.memory.swap.max = 512M
 lxc.cgroup2.cpu.max = 100000 100000
 EOF
 

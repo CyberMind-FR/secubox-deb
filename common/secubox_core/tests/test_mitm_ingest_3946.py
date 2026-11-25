@@ -48,6 +48,17 @@ def test_une_base_retiree_en_marche_est_recreee(tmp_path):
     assert c.get("/mitm-events").json()["count"] == 1
 
 
+def test_une_base_remplacee_en_marche_retrouve_son_schema(tmp_path):
+    db = tmp_path / "etat" / "mitm.db"
+    c = _client(db)
+    c.post("/event", json={"ts_ms": 101})
+    vide = tmp_path / "vide.db"
+    vide.write_bytes(b"")
+    vide.replace(db)                             # même chemin, autre fichier, sans table
+    assert c.post("/event", json={"ts_ms": 103}).json()["ok"] is True
+    assert c.get("/mitm-events").json()["count"] == 1
+
+
 def test_un_dossier_impossible_a_creer_ne_tombe_qu_a_l_ecriture(tmp_path):
     barrage = tmp_path / "fichier"
     barrage.write_text("")

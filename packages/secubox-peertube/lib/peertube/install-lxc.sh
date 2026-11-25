@@ -198,6 +198,8 @@ lxc.mount.entry = $DATA_DIR/redis var/lib/redis none bind,create=dir 0 0
 # Tune via /etc/secubox/tuning/lxc-memory-high.toml (secubox-system-tuning).
 lxc.cgroup2.memory.high = 1500M
 lxc.cgroup2.memory.max = 2G
+# Échange borné, jamais interdit : high < max sans échange étouffe le conteneur (#3941).
+lxc.cgroup2.memory.swap.max = 1G
 
 # Le plafond CPU (#1010) est pose par secubox-system-tuning depuis
 # /etc/secubox/tuning/lxc-cpu.toml (#1011), et DELIBEREMENT PAS ici : la meme

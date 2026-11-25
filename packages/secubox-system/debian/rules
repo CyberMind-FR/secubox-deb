@@ -74,6 +74,7 @@ override_dh_auto_install:
 	# Composant absorbé : system-tuning (#2050)
 	install -d debian/secubox-system/usr/sbin
 	install -m 755 composants/system-tuning/sbin/secubox-tuning-apply debian/secubox-system/usr/sbin/
+	install -m 755 composants/system-tuning/sbin/secubox-lxc-memoire debian/secubox-system/usr/sbin/
 	install -d debian/secubox-system/etc/secubox/tuning
 	install -m 644 composants/system-tuning/etc/secubox/tuning/config.toml debian/secubox-system/etc/secubox/tuning/
 	install -m 644 composants/system-tuning/etc/secubox/tuning/lxc-memory-high.toml debian/secubox-system/etc/secubox/tuning/

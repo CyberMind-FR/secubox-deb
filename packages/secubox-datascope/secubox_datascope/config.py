@@ -21,6 +21,7 @@ DEFAUT_CACHE = Path("/var/cache/secubox/datascope")
 DEFAUT_NAC_DB = Path("/var/lib/secubox/nac/devices.db")
 DEFAUT_NETSTATS = Path("/var/lib/secubox/hub/netstats.json")
 DEFAUT_MODULES = Path("/var/cache/secubox/health/modules.json")
+DEFAUT_POPULATIONS = Path("/var/lib/secubox/waf/populations.json")
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Config:
     netstats: Path
     modules: Path
     modules_perime_s: int = 300
+    populations: Path = DEFAUT_POPULATIONS
 
 
 def _section(brut: Dict[str, Any], nom: str) -> Dict[str, Any]:
@@ -67,4 +69,5 @@ def charger(chemin_toml: Path = CONFIG) -> Config:
         netstats=_chemin("SECUBOX_DATASCOPE_NETSTATS", so.get("netstats"), DEFAUT_NETSTATS),
         modules=_chemin("SECUBOX_DATASCOPE_MODULES", so.get("modules"), DEFAUT_MODULES),
         modules_perime_s=perime,
+        populations=_chemin("SECUBOX_DATASCOPE_POPULATIONS", so.get("populations"), DEFAUT_POPULATIONS),
     )

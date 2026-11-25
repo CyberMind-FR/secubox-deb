@@ -102,13 +102,21 @@ def mount_ingest_routes(
     """
     db_path = Path(db_path)
     # Rien n'est écrit au montage, donc à l'import du module (#3946) : la base naît au premier événement, et renaît
-    # si elle a été retirée en marche. Une lecture avant cela rend zéro.
-    base = {"prete": False}
+    # si elle a été retirée OU remplacée en marche (autre inode). Une lecture avant cela rend zéro.
+    base: dict = {"fichier": None}
+
+    def _identite() -> tuple[int, int] | None:
+        try:
+            st = db_path.stat()
+        except FileNotFoundError:
+            return None
+        return st.st_dev, st.st_ino
 
     def _assurer_base() -> None:
-        if not base["prete"] or not db_path.exists():
+        vu = _identite()
+        if vu is None or vu != base["fichier"]:
             _init_db(db_path)
-            base["prete"] = True
+            base["fichier"] = _identite()
 
     @app.post(endpoint_path)
     async def ingest(event: MitmEvent) -> dict:

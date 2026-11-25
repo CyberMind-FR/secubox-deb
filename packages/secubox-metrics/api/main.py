@@ -919,6 +919,12 @@ def build_health_summary() -> dict:
         "mem_pct": mem_pct
     }
 
+    # #3941 — conteneur ou service étouffé par sa limite mémoire depuis plus de dix minutes (nombre seulement :
+    # ce résumé est servi au bandeau public ; les noms sont dans /memory/history).
+    etouffes = memoire.etouffes_durables()
+    if etouffes:
+        modules["memoire"] = {"status": "warn", "etouffes": len(etouffes)}
+
     # Get CPU usage
     cpu_pct = 0
     try:

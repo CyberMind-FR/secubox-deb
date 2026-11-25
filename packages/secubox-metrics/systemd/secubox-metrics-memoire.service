@@ -14,6 +14,8 @@ WorkingDirectory=/usr/lib/secubox/metrics
 Nice=15
 IOSchedulingClass=idle
 StateDirectory=secubox/metrics
+# #3941 : une ligne d'audit quand un conteneur ou un service reste étouffé plus de dix minutes, une à la fin.
+ReadWritePaths=-/var/log/secubox/audit.log
 ExecStart=/usr/bin/python3 -m api.memoire
 NoNewPrivileges=true
 ProtectSystem=strict

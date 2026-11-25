@@ -63,6 +63,7 @@ LXC_NAME="$(cfg lxc nom voicestudio)"
 LXC_PATH="$(cfg lxc chemin /data/lxc)"
 LXC_IP="$(cfg lxc ip 10.100.0.230)"
 MEMOIRE="$(cfg lxc memoire 4G)"
+ECHANGE="$(cfg lxc swap 1G)"
 CPU_POIDS="$(cfg lxc cpu_poids 50)"
 DONNEES="$(cfg lxc donnees /srv/secubox/voicestudio)"
 COMMIT="$(cfg source commit)"
@@ -82,7 +83,7 @@ MODE_INTERFACE=0
 MODE_RAPIDE=0
 [ "${1:-}" = "--voix-rapide" ] && MODE_RAPIDE=1
 readonly VETH="veth-vstudio0"
-readonly LXC_NAME LXC_PATH LXC_IP MEMOIRE CPU_POIDS DONNEES COMMIT SHA256 DEPOT ASR
+readonly LXC_NAME LXC_PATH LXC_IP MEMOIRE ECHANGE CPU_POIDS DONNEES COMMIT SHA256 DEPOT ASR
 
 if [ -z "$COMMIT" ] || [ -z "$SHA256" ]; then
   log "source.commit / source.sha256 absents de $CONF"
@@ -119,6 +120,7 @@ lxc.net.0.ipv4.gateway = $LXC_GW
 # >>> secubox-voicestudio
 lxc.start.auto = 1
 lxc.cgroup2.memory.max = $MEMOIRE
+lxc.cgroup2.memory.swap.max = $ECHANGE
 lxc.cgroup2.cpu.weight = $CPU_POIDS
 # <<< secubox-voicestudio
 

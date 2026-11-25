@@ -1,3 +1,9 @@
+secubox-voicestudio (0.5.12-1~trixie1) trixie; urgency=medium
+
+  * Création du conteneur : échange borné (1G, réglage lxc.swap), jamais interdit ; conteneur existant inchangé (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-voicestudio (0.5.11-1~trixie1) trixie; urgency=medium
 
   * Exception explicite à #3285 : le conteneur reste en bookworm (DEBIAN_SUITE, surcharge

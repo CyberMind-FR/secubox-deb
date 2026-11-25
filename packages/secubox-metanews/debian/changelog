@@ -1,3 +1,10 @@
+secubox-metanews (0.6.4-1~trixie1) trixie; urgency=medium
+
+  * Composant searxng (ref #3581) : échange borné à la moitié du plafond dans la configuration du conteneur, réécrite par
+    « searxngctl install » (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-metanews (0.6.3-1~trixie1) trixie; urgency=medium
 
   * Blogs du Club Mediapart : suivi sans RSS (#3835). Mediapart ne publie

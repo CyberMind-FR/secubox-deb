@@ -87,7 +87,7 @@ def test_profils_pilotage_audit_en_w(profil):
 def test_aucun_profil_du_depot_n_accorde_audit_log_en_a_seul():
     """`a` seul casse write() sur un descripteur O_WRONLY|O_APPEND : aucun profil du dépôt ne doit y revenir."""
     fautifs = []
-    for p in PAQUETS.glob("*/apparmor/*"):
+    for p in [*PAQUETS.glob("*/apparmor/*"), *PAQUETS.glob("*/composants/*/apparmor/*")]:
         if p.is_file() and re.search(r"^\s*/var/log/secubox/audit\.log\s+a\s*,", code(p), re.M):
             fautifs.append(str(p.relative_to(PAQUETS)))
     assert fautifs == []

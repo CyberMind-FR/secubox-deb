@@ -4,8 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Profil AppArmor ENFORCE de DataScope (#3853), nommé par AppArmorProfile= dans secubox-datascope.service et
-# secubox-datascope-collect.service, chargé par le postinst. LECTURE des trois sources (appareils du NAC, débits des
-# interfaces, santé des modules) et de datascope.toml ; ÉCRITURE de la base, du cache et de la socket, rien d'autre.
+# secubox-datascope-collect.service, chargé par le postinst. LECTURE des quatre sources (appareils du NAC, débits des
+# interfaces, santé des modules, populations.json du WAF) et de datascope.toml ; ÉCRITURE de la base, du cache et de la socket, rien d'autre.
 # Aucun secret, aucun sudo, aucun réseau IP.
 
 #include <tunables/global>
@@ -49,6 +49,8 @@ profile secubox-datascope flags=(attach_disconnected) {
   /var/lib/secubox/nac/devices.db-wal rk,
   /var/lib/secubox/nac/devices.db-shm rk,
   /var/lib/secubox/hub/netstats.json r,
+  # Relevé des populations du WAF (#3921) : lecture seule d'un seul fichier ; la traversée du dossier vient d'une ACL.
+  /var/lib/secubox/waf/populations.json r,
   /var/cache/secubox/health/modules.json r,
 
   # Base (/data si point de montage, sinon /var/lib) et cache (double tampon, écriture atomique).

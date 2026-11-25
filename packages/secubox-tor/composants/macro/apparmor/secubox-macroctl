@@ -57,7 +57,13 @@
   /var/lib/secubox/macro/**   rw,
 
   # ── Audit log (append-only; parent dir traversal is 0755 per CMSD policy) ─
-  /var/log/secubox/audit.log  a,
+  # #3861 : « w » et non « a » — le noyau revérifie chaque write() avec MAY_WRITE, « a » refusait toute ligne.
+  # Le code ouvre en O_APPEND, jamais en troncature : l'ajout seul tient au code.
+  /var/log/secubox/audit.log  w,
+  # Audit impossible : l'échec est dit au journal système (#3946).
+  /dev/log w,
+  /{,var/}run/systemd/journal/dev-log w,
+  network unix dgram,
 
   # ── Networking (nft netlink + mesh socket) ───────────────────────────────
   network inet   stream,

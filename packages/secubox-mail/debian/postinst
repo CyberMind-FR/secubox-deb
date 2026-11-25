@@ -123,15 +123,18 @@ if [ "$1" = "configure" ]; then
     # ce fichier n'est OWNED que par ce paquet.
     if [ -d /etc/unbound/unbound.conf.d ] && \
        [ -f /usr/share/secubox/mail/unbound/97-mail-srv.conf ]; then
-        install -m 0644 /usr/share/secubox/mail/unbound/97-mail-srv.conf \
-            /etc/unbound/unbound.conf.d/97-mail-srv.conf
-        _unbound_ok=1
-        if command -v unbound-checkconf >/dev/null 2>&1; then
-            unbound-checkconf >/dev/null 2>&1 || _unbound_ok=""
-        fi
-        if [ -n "$_unbound_ok" ] && command -v systemctl >/dev/null 2>&1 \
-           && systemctl is-active --quiet unbound.service 2>/dev/null; then
-            systemctl reload-or-restart unbound.service >/dev/null 2>&1 || true
+        # #3941 : rien si le fichier est identique (l'ancien rechargement inconditionnel coupait le DNS de tout le
+        # réseau, plus d'une minute sur gk2) ; sinon checkconf puis fast_reload par secubox_unbound.
+        if ! cmp -s /usr/share/secubox/mail/unbound/97-mail-srv.conf /etc/unbound/unbound.conf.d/97-mail-srv.conf; then
+            _unbound_etat=arrete
+            if systemctl is-active --quiet unbound.service 2>/dev/null; then _unbound_etat=actif; fi
+            if command -v unbound-checkconf >/dev/null 2>&1; then
+                python3 -I /usr/lib/secubox/mail/lib/unbound_srv.py /usr/share/secubox/mail/unbound/97-mail-srv.conf \
+                    /etc/unbound/unbound.conf.d/97-mail-srv.conf "$_unbound_etat" || true
+            else
+                install -m 0644 /usr/share/secubox/mail/unbound/97-mail-srv.conf \
+                    /etc/unbound/unbound.conf.d/97-mail-srv.conf
+            fi
         fi
     fi
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+# #3941 : empreinte du code servi par l'agrégateur AVANT le déballage ; le postinst ne relance l'agrégateur (Hall hors
+# ligne 4 à 8 min) que si elle a changé. Même calcul des deux côtés. /run est à root seul.
+rm -f /run/secubox-system.empreinte
+if [ "$1" = upgrade ]; then
+    find /usr/lib/secubox/system /usr/lib/secubox/admin /usr/lib/secubox/ksm /usr/share/secubox/system-hub/api \
+        -name '*.py' -type f -exec sha256sum {} + 2>/dev/null | LC_ALL=C sort | sha256sum > /run/secubox-system.empreinte || true
+fi
+#DEBHELPER#
+exit 0
