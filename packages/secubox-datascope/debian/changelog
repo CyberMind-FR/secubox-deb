@@ -1,3 +1,11 @@
+secubox-datascope (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Enregistreur (ref #3921) : bouton ↻, lecture en boucle. La reprise se fait
+    aux relevés déjà en cache : aucune lecture de plus sur la box. Arrêt à
+    l'onglet caché, comme la lecture simple.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 17:00:00 +0100
+
 secubox-datascope (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Vue « Carte » (#3921, #3945) : origine géographique estimée des populations
