@@ -11,6 +11,19 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-25 (10:00) — WAF 1.46.1, Actor détaillé, DataScope 0.2.0, freins mémoire, CI verte, dé 3D sur le parc
+
+- **#3932/#3936/#3939 (PR #3942, #3944, déployé gk2)** : waf-ng 1.46.1 (1.46.0 jamais installée : sa borne refusait les plages Meta de gk2). Une
+  relance au lieu de deux, trois sondes couture en échec ; 0 ban manquant sur 19 084 le lendemain matin. Page Actor refaite.
+- **#3941 (PR #3948, déployé gk2)** : gitea étouffé (frein 384 Mo sous budget 512, échange interdit) : 13 700 relectures/s et 41 % de pression
+  mémoire sur la box → moins de 2 %. system 1.14.1, gitea 1.9.1, metrics 1.30.1, mail 2.17.2 ; 70 sondes couture sans échec, agrégateur non relancé.
+- **#3921 (PR #3949, déployé gk2)** : DataScope 0.2.0, vue Paysage, compteurs, enregistreur ; un instantané par relevé. Vue Carte en cours (0.3.0).
+- **#3938 (PR #3943)** : accueil de nœud, dé 3D sur échiquier : gk1, gk2, gk3, gk6 (gk6 sans domaine). postinst du core rendu prudent.
+- **#3939 (PR #3940)** : un instantané listait `systeme-eteindre` ; profiles 0.29.3 n'exécute plus jamais une action. gk6 revenue en interface locale.
+- **#3946 (PR #3952), #3950 (PR #3951)** : CI de master entièrement verte (168/168) ; en-têtes posés d'avance, RULES-CODE § 11, `avant-commit.sh`.
+- **#3925** : fenêtre mail automatique de 04:57, rapports partis à 05:01 et 05:38. Garde 0.3.12 fusionnée (PR #3915).
+- En cours : #3708 comptes admin (deux relectures, pas prêt), #3945 graphiques vivants, bêta 2 (#3878, audit du 25/11).
+
 ## 2026-11-25 (03:20) — live.secubox.in refondue, fenêtre mail active, pilotage, consigne de densité Aurora
 
 - **#3933 (PR #3937, déployé gk2, secubox-live 0.2.0)** : page publique redessinée d'après la maquette validée (nuit par défaut, jour au
