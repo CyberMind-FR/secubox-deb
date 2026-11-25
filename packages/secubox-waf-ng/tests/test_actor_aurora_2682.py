@@ -93,7 +93,8 @@ OVER = {"top_pays": [{"code": "US", "n": 9}], "recents": [{"ts": 1760000000, "ac
         "robots": [{"famille": "Googlebot<script>", "hits": 7, "ips": 2}], "activite_acteurs": {"ACT-1": list(range(24))}, "techniques": {"ACT-1": [{"nom": "sql.injection", "n": 3}]}}
 API_ACTOR = {"/api/v1/actor/stats": (200, STATS), "/api/v1/actor/actors": (200, [ACT, ACT_XSS]),
              "/api/v1/actor/campaigns": (200, [{"signature": "sig", "nb_acteurs": 2, "sources": 4, "cibles": ["x"], "cibles_inexistantes": 0, "pays": 1, "acteurs": ["ACT-1"]}]),
-             "/api/v1/actor/overview": (200, OVER)}
+             "/api/v1/actor/overview": (200, OVER),
+             "/api/v1/actor/actors/ACT-1": (200, dict(ACT, detail={"heures": {"debut": 1760000400, "pas": 3600, "valeurs": list(range(24))}, "techniques": [{"nom": "sql.injection", "n": 3}]}))}
 
 
 def test_actor_valeurs_serveur_jamais_interpretees_et_zero_est_une_mesure(nav):
@@ -113,7 +114,8 @@ def test_actor_profil_activite_techniques(nav):
     ctx, p, err, _ = ouvre(nav, "actor", "actor.html", API_ACTOR)
     p.wait_for_selector("#profile .pid")
     assert p.inner_text("#profile .pid") == "ACT-1"
-    assert "Techniques observées" in p.inner_text("#profile").replace("TECHNIQUES OBSERVÉES", "Techniques observées") and p.locator("#profile svg.actv").count() == 1
+    p.wait_for_selector("#profile svg.actv")
+    assert "Techniques" in p.inner_text("#profile") and p.locator("#profile .duo svg.actv").count() == 1
     assert "sql.injection" in p.inner_text("#profile") and err == []
     ctx.close()
 
