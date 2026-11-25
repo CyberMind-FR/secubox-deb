@@ -1,3 +1,10 @@
+secubox-system (1.13.7-1~trixie1) trixie; urgency=medium
+
+  * secubox-systeme-renommer@ : écriture de /var/lib/secubox/auth (sessions d'un
+    compte désactivé au renommage, ref #3708).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-system (1.13.6-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
