@@ -95,7 +95,9 @@ func TestPlagesProtegees_Bornes(t *testing.T) {
 	for c, accepte := range map[string]bool{
 		"203.0.113.7": true, "82.67.0.0/16": true, "2a01:e0a::/32": true, "2001:db8::1": true, "::ffff:203.0.113.7/128": true,
 		"10.0.0.0/8": true, "172.16.0.0/12": true, "100.64.0.0/10": true, "fc00::/7": true, "fd00::/8": true, // jamais bannissables
-		"82.67.100.75/3": false, "0.0.0.0/0": false, "82.66.0.0/15": false, "::/0": false, "2a01::/31": false,
+		// Plages réelles d'un opérateur (Meta, protegees.env de la production, 2026-11-25) : jamais refusées.
+		"57.144.0.0/14": true, "2803:6080::/29": true, "2a03:2880::/31": true, "82.64.0.0/12": true, "2a00::/28": true,
+		"82.67.100.75/3": false, "0.0.0.0/0": false, "82.0.0.0/11": false, "::/0": false, "2a00::/27": false,
 		"::ffff:0.0.0.0/96": false, "8.0.0.0/7": false, "10.0.0.0/7": false, "172.0.0.0/8": false, "fc00::/6": false,
 	} {
 		plages, larges, illisibles := analyserCIDRs(c)

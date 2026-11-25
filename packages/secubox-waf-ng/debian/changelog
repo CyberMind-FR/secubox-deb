@@ -1,3 +1,12 @@
+secubox-waf-ng (1.46.1-1~trixie1) trixie; urgency=medium
+
+  * Borne des plages protégées portée à /12 (IPv4) et /28 (IPv6) : celle de
+    1.46.0 refusait des plages d'opérateur légitimes déclarées sur une box
+    (/14, /29, /31) et aurait empêché la relance du WAF (ref #3932). Le plafond
+    de 200 levées au démarrage reste la garde.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 04:42:46 +0100
+
 secubox-waf-ng (1.46.0-1~trixie1) trixie; urgency=medium
 
   * Suites de la relecture de 1.45.0 (ref #3932).
