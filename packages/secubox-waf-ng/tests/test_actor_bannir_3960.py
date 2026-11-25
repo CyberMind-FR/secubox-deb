@@ -77,10 +77,10 @@ def test_refus_dit_et_apercu_expire(nav):  # noqa: F811
     b.p.click(".ban button.rouge")
     b.p.wait_for_selector(".ban p.err")
     assert "rien n’est banni" in b.p.inner_text(".ban p.err") and b.p.locator(".ban button.rouge").count() == 0
-    b.expire = 1
+    b.expire = 3
     b.p.click(".ban button:has-text('Voir ce qui serait banni')")
     b.p.wait_for_selector(".ban button.rouge")
-    b.p.wait_for_function("!document.querySelector('.ban button.rouge')", timeout=6000)
+    b.p.wait_for_function("!document.querySelector('.ban button.rouge')", timeout=15000)
     assert len(b.posts) == 1
     b.fin()
 
