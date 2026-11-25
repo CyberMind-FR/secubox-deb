@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Détecteur d'intrusion, d'évasion et d'infection automatique — conception (#3794)
 
 Date : 2026-11-18. Statut : conception, à valider par le propriétaire avant tout plan.
