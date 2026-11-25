@@ -1950,8 +1950,8 @@ def test_carte_rayon_exact_a_x16():
         pg.click("#eLire")
         pg.wait_for_timeout(1500)
         return pg.evaluate("ecarts")
-    l = _navigateur(sc, query="", api=api, largeur=1280, crochet="{E:Enregistreur,p:paysage,c:carte,est:estimerAffiche,r:rayonPays,k:echelleCarte}")
-    assert len({ts for ts, _ in l}) >= 3 and max(e for _, e in l) < .01, max(e for _, e in l)
+    mesures = _navigateur(sc, query="", api=api, largeur=1280, crochet="{E:Enregistreur,p:paysage,c:carte,est:estimerAffiche,r:rayonPays,k:echelleCarte}")
+    assert len({ts for ts, _ in mesures}) >= 3 and max(e for _, e in mesures) < .01, max(e for _, e in mesures)
 
 
 @pytest.mark.parametrize("cas", ["perime", "echec", "panne", "sain"])
@@ -1984,7 +1984,7 @@ def test_carte_premier_clic_depuis_le_paysage_garde_les_lectures():
 
     def sc(pg):
         lents = []
-        pg.route("**/carte-monde.js", lents.append)
+        pg.route("**/carte-monde.js", lambda x: lents.append(x))
         pg.click("#vuePaysage")
         pg.wait_for_function("__t.p.chrono.rep")
         pg.evaluate("window.avortes = 0; void (AbortController.prototype.abort = (f => function () { avortes++; return f.call(this); })(AbortController.prototype.abort))")
