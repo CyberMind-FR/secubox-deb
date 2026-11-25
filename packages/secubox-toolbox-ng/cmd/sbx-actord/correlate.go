@@ -81,10 +81,16 @@ func (s *Server) rebuild() {
 		log.Printf("actord: rebuild: %v", err)
 		return
 	}
+	var ancien, recent int64
+	if len(evs) > 0 {
+		ancien, recent = evs[len(evs)-1].Timestamp, evs[0].Timestamp
+	}
+	inst := s.ouvrirRejeu(ancien, recent)
 	for i := len(evs) - 1; i >= 0; i-- { // Recent = plus récent d'abord
 		e := evs[i]
 		s.observe(&e)
 	}
+	s.fermerRejeu(inst)
 	log.Printf("actord: graphe reconstruit (%d événements → %d acteurs)", len(evs), s.graph.Len())
 }
 
@@ -100,6 +106,7 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 			s.robots = &Robots{}
 		}
 		r := s.robots
+		s.act.noterGlobal(e)
 		s.mu.Unlock()
 		r.Observe(famille, e.SrcIP, e.Timestamp, e.Vhost)
 		return "", 0, 0
@@ -119,6 +126,8 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 	}
 	a := s.graph.Observe(obs)
 	s.noterSource(e)
+	s.act.noterGlobal(e)
+	s.act.noter(a, e) // #3936 : compteurs d'affichage, rien ne revient au graphe
 	acc := s.accum[a.ID]
 	if acc == nil {
 		acc = &actorSignals{windows: map[int64]bool{}, days: map[string]bool{}}
@@ -276,6 +285,7 @@ func (s *Server) consolidationLoop() {
 			inex[k] = true
 		}
 		n := s.graph.Consolider(inex)
+		s.act.suivreFusions(s.graph)
 		restants := s.graph.Len()
 		s.mu.Unlock()
 		if n > 0 {
@@ -292,6 +302,7 @@ func (s *Server) purgerMemoire(avant int64) int {
 	ids := s.graph.Purger(avant)
 	for _, id := range ids {
 		delete(s.accum, id)
+		delete(s.act.acteurs, id)
 	}
 	return len(ids)
 }

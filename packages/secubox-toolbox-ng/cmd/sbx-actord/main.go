@@ -119,6 +119,9 @@ func main() {
 		rebuildMax: *rebuildMax,
 		annuaire:   ann,
 	}
+	if *replayPath == "" && !*readOnly {
+		srv.actChemin = filepath.Join(filepath.Dir(*dbPath), "activite.json") // #3936
+	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
 	if ctx.Err() != nil {
 		log.Printf("actord: arrêt demandé pendant le rejeu")
@@ -166,6 +169,7 @@ func main() {
 
 	go srv.pruneLoop(*retention)
 	go srv.consolidationLoop()
+	go srv.boucleInstantane()
 
 	// #3919 : annuaire rechargé au SIGHUP (capté dès le démarrage) et toutes les 24 h.
 	go func() {
@@ -183,6 +187,7 @@ func main() {
 	}()
 	log.Printf("actord: démarré (db=%s, retention=%s, rejeu max=%d)", *dbPath, *retention, *rebuildMax)
 	<-ctx.Done()
+	srv.sauverActivite()
 	log.Printf("actord: arrêt")
 }
 

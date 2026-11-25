@@ -33,7 +33,10 @@ type webActor struct {
 	Src      srcCounts    `json:"src"`
 	First    string       `json:"first"`
 	Last     string       `json:"last"`
-	Targets  []string     `json:"targets"`
+	// #3936 : first/last sont des heures sans date (gardées pour les lecteurs existants).
+	Premier int64    `json:"premier"`
+	Dernier int64    `json:"dernier"`
+	Targets []string `json:"targets"`
 	// Bans : combien de fois cet acteur a ete SANCTIONNE. L'interface en fait un
 	// niveau DEFCON — un profil sanctionne dix fois et qui revient n'a pas le
 	// meme poids qu'un profil observe une fois.
@@ -117,7 +120,7 @@ func toWeb(a *graph.Actor) webActor {
 		ID:   a.ID, Name: "", Priority: a.Priority, Level: niveau(a.Priority),
 		Tags: tags(a.Vector), Vec: a.Vector,
 		Src:   srcCounts{IPs: len(a.IPs), ASNs: len(a.ASNs), Countries: len(a.Countries)},
-		First: hhmm(a.FirstSeen), Last: hhmm(a.LastSeen),
+		First: hhmm(a.FirstSeen), Last: hhmm(a.LastSeen), Premier: a.FirstSeen, Dernier: a.LastSeen,
 		Targets: a.Targets, Hyp: hypotheses(a.Vector), TL: []any{},
 	}
 }
@@ -130,39 +133,22 @@ func (s *Server) handleActors(w http.ResponseWriter, r *http.Request) {
 	if reduite {
 		red := make([]webActorReduit, 0, len(list))
 		for _, a := range list {
-			red = append(red, toWebReduit(a))
+			w := toWebReduit(a)
+			w.Premier = s.premierVu(a)
+			red = append(red, w)
 		}
 		out = red
 	} else {
 		comp := make([]webActor, 0, len(list))
 		for _, a := range list {
-			comp = append(comp, toWeb(a))
+			w := toWeb(a)
+			w.Premier = s.premierVu(a)
+			comp = append(comp, w)
 		}
 		out = comp
 	}
 	s.mu.Unlock()
 	writeJSON(w, out)
-}
-
-func (s *Server) handleActor(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	reduite := vueReduite(r)
-	s.mu.Lock()
-	a, ok := s.graph.Get(id)
-	var wa any
-	if ok {
-		if reduite {
-			wa = toWebReduit(a)
-		} else {
-			wa = toWeb(a)
-		}
-	}
-	s.mu.Unlock()
-	if !ok {
-		http.Error(w, "acteur inconnu", http.StatusNotFound)
-		return
-	}
-	writeJSON(w, wa)
 }
 
 // handleCampaigns : une campagne = un acteur multi-sources (plusieurs IP ou pays)
