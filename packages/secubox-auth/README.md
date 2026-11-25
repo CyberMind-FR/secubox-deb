@@ -73,19 +73,27 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 ## Comptes administrateur sans mot de passe (1.8.22, #3708)
 
 Règle unique : `secubox_core.comptes_admin`. Un administrateur est **configuré** s'il est humain, actif, de rôle `admin`,
-avec un mot de passe argon2 choisi : ni le mot de passe du premier démarrage, ni une empreinte illisible, ni un compte de
+avec un mot de passe argon2 choisi : ni « à changer », ni le mot de passe du premier démarrage, ni une empreinte illisible, ni un compte de
 service (`console`, kiosque, IA, webhooks, compte de `[console] compte`, comptes délégués).
 
 | Moment | Box sans administrateur configuré | Box configurée |
 |---|---|---|
 | Semis (postinst) | `admin`, et le compte au nom de la machine si aucun admin n'a de mot de passe (le défaut en est un) | `admin` s'il manque, aussitôt refermé ; jamais le nom de la machine |
-| Migration (postinst) | rien | tout admin actif sans mot de passe est **désactivé** (jamais supprimé), une ligne `admin_sans_mot_de_passe_desactive` par compte dans `/var/log/secubox/audit.log` ; audit impossible : rien n'est changé |
+| Migration (postinst) | rien | tout admin actif **jamais servi**, sans mot de passe ou au mot de passe du premier démarrage, est **désactivé** (jamais supprimé), une ligne `admin_sans_mot_de_passe_desactive` par compte dans `/var/log/secubox/audit.log` ; audit impossible : rien n'est changé |
 | Renommage de la box | le compte sans mot de passe de l'ancien nom prend le nouveau (`compte_machine_renomme`) | il est désactivé |
 | `POST /login`, mot de passe vide | première configuration depuis le LAN (#1707) | 401 uniforme, audité (`premiere_configuration_refusee`), **pour tout compte** sans mot de passe |
 | `POST /set-password` | — | revérifié à la pose : un jeton obtenu avant ne sert plus, un mot de passe posé entre-temps n'est jamais écrasé |
 
-Ne sont jamais touchés : un compte à mot de passe, un compte de service, un non-administrateur, le dernier admin actif.
+Un compte qui **sert** n'est jamais désactivé : second facteur, Google, service, connexion passée, appareil rattaché
+(/acces, sbxid), session. Une trace illisible compte comme un usage. Le refus à la connexion le protège déjà.
+`POST /login` d'un admin au mot de passe du premier démarrage : même 401 sur une box configurée.
+
+**Charge** (`secubox_core.porte_argon2`, une porte par processus) : 3 vérifications argon2 à la fois (192 Mio), dont 2 au
+plus hors de la zone de confiance (la troisième reste au LAN, au kiosque et au maillage), 2 demandes par source, 8 en
+attente par zone, 4 s au plus ; au-delà 429 (source) ou 503, sans dépendre du compte. Mot de passe de 1024 caractères au plus.
+
+Ne sont jamais touchés : un compte au mot de passe choisi, un compte de service, un non-administrateur, le dernier admin actif.
 Retour arrière : `usersctl set-password NOM` puis `usersctl enable NOM` (rouvert **sans** mot de passe, le compte est
 refermé à la mise à jour suivante). À la main : `usersctl desactiver-admins-sans-mot-de-passe`.
-Un compte créé sans mot de passe (`usersctl add`, import) sur une box configurée se configure par un administrateur
+Un import d'admin sans mot de passe est refusé. Un compte créé sans mot de passe (`usersctl add`, import) sur une box configurée se configure par un administrateur
 (page Utilisateurs ou `usersctl set-password`), plus par la page de connexion.

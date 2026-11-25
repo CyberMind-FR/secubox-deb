@@ -34,6 +34,7 @@ def c(tmp_path: Path, monkeypatch):
                  "SECUBOX_AUTH_SESSIONS": tmp_path / "sessions.json",
                  "SECUBOX_AUTH_AUDIT": tmp_path / "audit.log",
                  "SECUBOX_AUTH_TOTP_PENDING": tmp_path / "totp-pending.json",
+                 "SECUBOX_AUTH_DELEGUES": tmp_path / "delegues.json", "SECUBOX_CONF": tmp_path / "secubox.conf",
                  "SECUBOX_AUTH_REGLAGES": tmp_path / "reglages.json",
                  "SECUBOX_USERS_JSON": users, "SECUBOX_AUDIT_LOG": tmp_path / "audit-secubox.log"}.items():
         monkeypatch.setenv(k, str(v))
@@ -213,13 +214,98 @@ def test_reponses_uniformes_quel_que_soit_le_compte(configuree, lan, mdp):
     assert reponses == {(401, '{"detail":"Identifiants incorrects"}')}
 
 
-def test_un_refus_sans_empreinte_coute_une_verification(configuree, monkeypatch):
-    from api import main as m
-    appels = []
-    monkeypatch.setattr(m, "_meme_duree", appels.append)
-    for n in ("inconnu", "boite", "coupe", "console"):
+@pytest.mark.parametrize("mdp", ["", "faux", "secubox", "une phrase longue et choisie"])
+def test_une_et_une_seule_verification_argon2_par_demande(configuree, monkeypatch, mdp):
+    """M1 : compte connu, inconnu, désactivé, sans empreinte, de service ; verdict lu une fois. Les empreintes des AUTRES
+    admins (règle « configuré ») sont en cache après la première lecture."""
+    from secubox_core import user_store
+    vrai, appels = user_store._HASHER, []
+
+    class Compte:
+        def hash(self, x):
+            return vrai.hash(x)
+
+        def verify(self, h, p):
+            appels.append(h)
+            return vrai.verify(h, p)
+    for n in ("boite", "inconnu"):
         _login(configuree, n, "", "1")
-    assert len(appels) == 4
+    monkeypatch.setattr(user_store, "_HASHER", Compte())
+    for n in ("inconnu", "boite", "coupe", "console", "usager", "chef"):
+        appels.clear()
+        _login(configuree, n, mdp, "1")
+        assert len(appels) == 1, n
+
+
+def test_mot_de_passe_demesure_refuse_sans_argon2(configuree, monkeypatch):
+    from secubox_core import user_store
+    monkeypatch.setattr(user_store, "_HASHER", None)
+    r = _login(configuree, "chef", "x" * 5000, "1")
+    assert r.status_code == 401 and r.json() == {"detail": "Identifiants incorrects"}
+
+
+def test_porte_saturee_503_quel_que_soit_le_compte(configuree, monkeypatch):
+    from contextlib import contextmanager
+    from secubox_core import porte_argon2
+
+    @contextmanager
+    def pleine(*_a):
+        raise porte_argon2.Saturee(503)
+        yield
+    monkeypatch.setattr(porte_argon2.PORTE, "passage", pleine)
+    rs = [_login(configuree, n, "x", "1") for n in ("inconnu", "boite", "chef", "console")]
+    assert {(r.status_code, r.text, r.headers["retry-after"]) for r in rs} == {
+        (503, '{"detail":"Trop de connexions en cours, réessayez dans un instant"}', "5")}
+
+
+def _ajoute(tmp_path, *comptes):
+    f = tmp_path / "users.json"
+    d = json.loads(f.read_text())
+    d["users"] += comptes
+    f.write_text(json.dumps(d))
+
+
+def test_admin_au_mot_de_passe_par_defaut_ferme_quand_un_autre_est_configure(configuree, tmp_path):
+    """I4 : `root/secubox` d'une image restait ouvert après la configuration d'admin."""
+    _ajoute(tmp_path, _compte("root", "secubox", True))
+    r, f = _login(configuree, "root", "secubox", "1"), _login(configuree, "root", "faux", "1")
+    assert r.status_code == f.status_code == 401 and r.json() == f.json()
+    assert _audit(tmp_path)[-1]["evenement"] == "premiere_configuration_refusee"
+
+
+def test_cle_neuve_plusieurs_admins_au_defaut_reste_utilisable(c, tmp_path):
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("admin", "secubox", True), _compte("root", "secubox", True)]}))
+    jeton_root = _setup(c, "root")
+    plus_tard = _setup(c)
+    assert _poser(c, _setup(c)).status_code == 200            # admin configuré
+    assert _poser(c, jeton_root).status_code == 401           # jeton obtenu avant : refusé à la pose
+    assert _plus_tard(c, plus_tard).status_code in (401, 403)
+    assert _login(c, "root", "secubox", "1").status_code == 401
+
+
+def test_un_admin_a_changer_ne_ferme_pas_la_premiere_configuration(c, tmp_path):
+    """I1 : « configuré » exige un mot de passe choisi, pas provisoire."""
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("admin", None, True), _compte("chef", "provisoire-tres-long", True)]}))
+    assert _login(c, "admin", "", "1").json().get("setup_required") is True
+
+
+def test_pose_sous_le_verrou_deux_revendications_simultanees(c, tmp_path):
+    """M7 : deux comptes revendiqués en même temps — un seul est posé."""
+    import threading
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("admin", None, True), _compte("boite", None, True)]}))
+    jetons = [_login(c, n, "", "1").json()["setup_token"] for n in ("admin", "boite")]
+    codes, depart = [], threading.Barrier(2)
+
+    def pose(j):
+        depart.wait()
+        codes.append(_poser(c, j).status_code)
+    fils = [threading.Thread(target=pose, args=(j,)) for j in jetons]
+    [f.start() for f in fils]
+    [f.join() for f in fils]
+    assert sorted(codes) == [200, 401]
 
 
 def test_un_compte_de_service_a_mot_de_passe_ne_ferme_pas_la_box_vierge(c, tmp_path):

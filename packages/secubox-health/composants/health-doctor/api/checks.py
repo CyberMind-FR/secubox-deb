@@ -211,8 +211,8 @@ def check_comptes_admin(users: Path | None = None) -> tuple[bool, dict]:
         return True, {"skipped": True, "lisible": False}
     n = r["sans_mot_de_passe"]
     return n == 0, {"sans_mot_de_passe": n, **({"message": (
-        f"{n} administrateur(s) actif(s) sans mot de passe : à configurer ou à désactiver (page Utilisateurs, "
-        "ou « usersctl desactiver-admins-sans-mot-de-passe »).")} if n else {})}
+        f"{n} administrateur(s) actif(s) sans mot de passe : à configurer ou à désactiver "
+        "(page Utilisateurs).")} if n else {})}
 
 
 # ── Registry ──────────────────────────────────────────────────────────────

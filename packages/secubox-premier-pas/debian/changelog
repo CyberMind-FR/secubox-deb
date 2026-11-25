@@ -2,6 +2,8 @@ secubox-premier-pas (0.9.19-1~trixie1) trixie; urgency=medium
 
   * Assistant : poser le mot de passe d'un compte admin refermé faute de mot de
     passe (ref #3708) le rouvre ; un admin désactivé à la main le reste.
+  * Box en service dès qu'un administrateur est configuré, quel que soit son nom ;
+    `admin` ne se rouvre que refermé pour #3708, audité.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 

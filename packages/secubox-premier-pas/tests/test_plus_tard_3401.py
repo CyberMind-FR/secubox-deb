@@ -100,11 +100,17 @@ def _moteur(monkeypatch, tmp_path, **admin):
 
 def test_admin_referme_faute_de_mot_de_passe_rouvre_quand_l_assistant_en_pose_un(tmp_path, monkeypatch):
     """#3708 : sinon l'assistant annoncerait un mot de passe admin qui n'ouvre rien."""
-    u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash=None, must_change_password=True)
-    assert u["enabled"] is True and u["password_hash"] == "$argon2id$neuf"
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash=None, must_change_password=True,
+                desactive_motif="sans-mot-de-passe-3708")
+    assert u["enabled"] is True and u["password_hash"] == "$argon2id$neuf" and "desactive_motif" not in u
+    assert "admin_rouvert" in (tmp_path / "audit.log").read_text()
 
 
 def test_admin_desactive_a_la_main_le_reste(tmp_path, monkeypatch):
+    for h in (None, "$argon2id$vieux"):
+        u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash=h, must_change_password=False)
+        assert u["enabled"] is False
     u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash="$argon2id$vieux", must_change_password=False)
     assert u["enabled"] is False
 

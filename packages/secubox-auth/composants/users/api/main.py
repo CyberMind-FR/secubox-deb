@@ -563,11 +563,11 @@ def create_user(user: UserCreate):
             user.username,
             email=user.email,
             role=engine_role,
+            # Le mot de passe saisi vaut pour SecuBox (#3708) : sans empreinte, le compte ne s'ouvrait que par la première
+            # configuration, fermée dès qu'un administrateur est configuré. À changer à la première connexion.
+            password=user.password or None,
+            must_change=True,
         )
-        # Le mot de passe saisi vaut pour SecuBox (#3708) : sans empreinte, le compte ne s'ouvrait que par la première
-        # configuration, fermée dès qu'un administrateur est configuré. À changer à la première connexion.
-        if user.password:
-            _engine.set_password(user.username, user.password)
     except ValueError as exc:                       # EngineError, PolicyError
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -587,23 +587,23 @@ def create_user(user: UserCreate):
         except _cs.ActionRefusee as e:
             provision_results[svc] = e.detail
 
-    doc = _engine._load()
-    for u in doc.get("users", []):
-        if u.get("username") == user.username:
-            u["services"] = [x for x in voulus if provision_results.get(x) is True]
-            u["provision_results"] = provision_results
-            u["must_change_password"] = True
-            if user.email_recuperation:
-                u["email_recuperation"] = user.email_recuperation.strip()
-            break
-    _engine._save(doc)
+    with _engine.verrou():
+        doc = _engine._load()
+        for u in doc.get("users", []):
+            if u.get("username") == user.username:
+                u["services"] = [x for x in voulus if provision_results.get(x) is True]
+                u["provision_results"] = provision_results
+                if user.email_recuperation:
+                    u["email_recuperation"] = user.email_recuperation.strip()
+                break
+        _engine._save(doc)
     new_user = _engine.get_user(user.username) or new_user
 
     # Expurgé : l'enregistrement brut porte l'empreinte et le secret TOTP (#1753).
     return {"success": True, "user": redact_user(new_user), "provision_results": provision_results}
 
 @app.put("/user/{username}", dependencies=[Depends(require_permission("users.edit"))])
-async def update_user(username: str, update: UserUpdate):
+def update_user(username: str, update: UserUpdate):
     """Update user."""
     # For the enabled flag, delegate to engine to get session revocation + audit
     if update.enabled is not None:
@@ -617,22 +617,23 @@ async def update_user(username: str, update: UserUpdate):
 
     # For email and services, update via engine's atomic I/O
     if update.email is not None or update.services is not None or update.email_recuperation is not None:
-        doc = _engine._load()
-        found = False
-        for user in doc.get("users", []):
-            if user.get("username") == username:
-                found = True
-                if update.email is not None:
-                    user["email"] = update.email
-                if update.email_recuperation is not None:
-                    user["email_recuperation"] = update.email_recuperation.strip()
-                if update.services is not None:
-                    user["services"] = update.services
-                    user["updated"] = datetime.now().isoformat()
-                break
-        if not found:
-            raise HTTPException(status_code=404, detail="User not found")
-        _engine._save(doc)
+        with _engine.verrou():
+            doc = _engine._load()
+            found = False
+            for user in doc.get("users", []):
+                if user.get("username") == username:
+                    found = True
+                    if update.email is not None:
+                        user["email"] = update.email
+                    if update.email_recuperation is not None:
+                        user["email_recuperation"] = update.email_recuperation.strip()
+                    if update.services is not None:
+                        user["services"] = update.services
+                        user["updated"] = datetime.now().isoformat()
+                    break
+            if not found:
+                raise HTTPException(status_code=404, detail="User not found")
+            _engine._save(doc)
 
     user_record = _engine.get_user(username)
     if not user_record:
@@ -643,7 +644,7 @@ async def update_user(username: str, update: UserUpdate):
 
 
 @app.post("/user/{username}/disable", dependencies=[Depends(require_permission("users.edit"))])
-async def disable_user(username: str):
+def disable_user(username: str):
     """Disable user and revoke their sessions."""
     try:
         revoked = _engine.disable_user(username)
@@ -653,7 +654,7 @@ async def disable_user(username: str):
 
 
 @app.post("/user/{username}/enable", dependencies=[Depends(require_permission("users.edit"))])
-async def enable_user(username: str):
+def enable_user(username: str):
     """Re-enable a previously disabled user."""
     try:
         _engine.enable_user(username)
@@ -747,16 +748,17 @@ def _utilisateur(username: str) -> dict:
 
 
 def _note_services(username: str, svc: str, present: bool) -> None:
-    doc = _engine._load()
-    for u in doc.get("users", []):
-        if u.get("username") == username:
-            l = [x for x in u.get("services", []) if x != svc]
-            if present:
-                l.append(svc)
-            u["services"] = l
-            u["updated"] = datetime.now().isoformat()
-            break
-    _engine._save(doc)
+    with _engine.verrou():
+        doc = _engine._load()
+        for u in doc.get("users", []):
+            if u.get("username") == username:
+                l = [x for x in u.get("services", []) if x != svc]
+                if present:
+                    l.append(svc)
+                u["services"] = l
+                u["updated"] = datetime.now().isoformat()
+                break
+        _engine._save(doc)
 
 
 def _envoi(u: dict, quoi: str, pw: str, envoyer: bool) -> dict:
@@ -828,15 +830,9 @@ def reinitialise_mot_de_passe(username: str, corps: Optional[ActionService] = No
     u = _utilisateur(username)
     pw = _cs.mot_de_passe_provisoire()
     try:
-        _engine.set_password(username, pw)
+        _engine.set_password(username, pw, must_change=True)     # une écriture : jamais « choisi » même un instant
     except _engine_mod.EngineError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    doc = _engine._load()
-    for x in doc.get("users", []):
-        if x.get("username") == username:
-            x["must_change_password"] = True
-            break
-    _engine._save(doc)
     services = {}
     for svc in u.get("services", []):
         if svc in _cs.GERES:
@@ -933,34 +929,36 @@ async def list_groups():
     return {"groups": data.get("groups", [])}
 
 @app.post("/group", dependencies=[Depends(require_permission("groups.create"))])
-async def create_group(group: GroupCreate):
+def create_group(group: GroupCreate):
     """Create a new group."""
-    doc = _engine._load()
+    with _engine.verrou():
+        doc = _engine._load()
 
-    for g in doc.get("groups", []):
-        if g.get("name") == group.name:
-            raise HTTPException(status_code=400, detail="Group already exists")
+        for g in doc.get("groups", []):
+            if g.get("name") == group.name:
+                raise HTTPException(status_code=400, detail="Group already exists")
 
-    new_group = {
-        "name": group.name,
-        "description": group.description,
-        "permissions": group.permissions,
-        "members": [],
-        "created": datetime.now().isoformat()
-    }
-    doc.setdefault("groups", []).append(new_group)
-    _engine._save(doc)
+        new_group = {
+            "name": group.name,
+            "description": group.description,
+            "permissions": group.permissions,
+            "members": [],
+            "created": datetime.now().isoformat()
+        }
+        doc.setdefault("groups", []).append(new_group)
+        _engine._save(doc)
 
     return {"success": True, "group": new_group}
 
 @app.delete("/group/{name}", dependencies=[Depends(require_permission("groups.delete"))])
-async def delete_group(name: str):
+def delete_group(name: str):
     """Delete a group."""
-    doc = _engine._load()
-    for i, group in enumerate(doc.get("groups", [])):
-        if group.get("name") == name:
-            doc["groups"].pop(i)
-            _engine._save(doc)
+    with _engine.verrou():
+        doc = _engine._load()
+        for i, group in enumerate(doc.get("groups", [])):
+            if group.get("name") == name:
+                doc["groups"].pop(i)
+                _engine._save(doc)
             return {"success": True}
     raise HTTPException(status_code=404, detail="Group not found")
 
@@ -1092,7 +1090,7 @@ async def get_user_roles(username: str):
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.put("/user/{username}/roles", dependencies=[Depends(require_permission("roles.assign"))])
-async def assign_user_roles(username: str, assignment: UserRoleAssign):
+def assign_user_roles(username: str, assignment: UserRoleAssign):
     """Assign roles to a user. (`roles.assign` n'appartient qu'au rôle admin,
     et `require_permission` refuse déjà d'agir sur un administrateur sans
     l'être — #1811.)"""
@@ -1105,12 +1103,13 @@ async def assign_user_roles(username: str, assignment: UserRoleAssign):
         raise HTTPException(status_code=400, detail=f"Invalid roles: {invalid_roles}")
 
     # Use engine's atomic I/O
-    doc = _engine._load()
-    for user in doc.get("users", []):
-        if user.get("username") == username:
-            user["roles"] = assignment.roles
-            user["roles_updated"] = datetime.now().isoformat()
-            _engine._save(doc)
+    with _engine.verrou():
+        doc = _engine._load()
+        for user in doc.get("users", []):
+            if user.get("username") == username:
+                user["roles"] = assignment.roles
+                user["roles_updated"] = datetime.now().isoformat()
+                _engine._save(doc)
             return {"success": True, "roles": assignment.roles}
 
     raise HTTPException(status_code=404, detail="User not found")
@@ -1203,11 +1202,11 @@ async def export_users():
             "groups": data.get("groups", [])}
 
 @app.post("/import", dependencies=[Depends(require_permission("system.import"))])
-async def import_users(file: UploadFile = File(...)):
+def import_users(file: UploadFile = File(...)):
     """Import users from JSON file. Each row goes through engine.create_user so
     username regex, role enum, and must_change_password defaults are enforced."""
     try:
-        content = await file.read()
+        content = file.file.read()
         import_data = json.loads(content)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON file")
@@ -1233,13 +1232,14 @@ async def import_users(file: UploadFile = File(...)):
         email = row.get("email")
         role = row.get("role", "viewer")
 
+        pw = row.get("password")
+        if role == "admin" and not pw:
+            errors.append({"username": username, "error": "un administrateur s'importe avec un mot de passe (#3708)"})
+            continue
+
         try:
-            _engine.create_user(username, email=email, role=role)
+            _engine.create_user(username, email=email, role=role, password=pw or None)
             created.append(username)
-            # If a plaintext password is provided, hash it via engine (validates policy)
-            pw = row.get("password")
-            if pw:
-                _engine.set_password(username, pw)
         except _engine_mod.EngineError as exc:
             err_msg = str(exc)
             # Distinguish "already exists" (skipped) from other engine errors

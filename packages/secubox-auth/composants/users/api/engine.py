@@ -10,6 +10,8 @@ Every API handler and the CLI call into this module. No code outside
 """
 from __future__ import annotations
 
+import contextlib
+import functools
 import json
 import logging
 import os
@@ -62,6 +64,15 @@ def _comptes_admin():
     return sys.modules[cle]
 
 
+def _ecrit(f):
+    """Toute mutation tient le verrou commun de users.json, de la lecture à l'écriture (#3708)."""
+    @functools.wraps(f)
+    def _f(self, *a, **k):
+        with self.verrou():
+            return f(self, *a, **k)
+    return _f
+
+
 class Engine:
     """Atomic, single-file mutation engine."""
 
@@ -108,6 +119,16 @@ class Engine:
             except Exception as exc:
                 log.warning("audit callback failed: %s", exc)
 
+    @contextlib.contextmanager
+    def verrou(self):
+        """Le verrou de users.json, pour qui lit puis écrit (`_load` … `_save`) hors du moteur aussi."""
+        ca = _comptes_admin()
+        try:
+            with ca.verrou(self.users_path):
+                yield
+        except ca.VerrouOccupe as exc:
+            raise EngineError(f"{exc} : rien n'est changé, réessayer") from None
+
     # ── File I/O ──────────────────────────────────────────────────────
 
     def _load(self) -> Dict[str, Any]:
@@ -115,6 +136,7 @@ class Engine:
             return {"version": 2, "users": [], "groups": []}
         return json.loads(self.users_path.read_text())
 
+    @_ecrit
     def _save(self, doc: Dict[str, Any]) -> None:
         """Atomic write: temp + os.replace in the same dir.
 
@@ -170,7 +192,20 @@ class Engine:
     def get_user(self, username: str) -> Optional[Dict[str, Any]]:
         return self._find(self._load(), username)
 
-    def create_user(self, username: str, email: Optional[str], role: str) -> Dict[str, Any]:
+    def create_user(self, username: str, email: Optional[str], role: str, password: Optional[str] = None,
+                    must_change: bool = False, origine: Optional[str] = None) -> Dict[str, Any]:
+        """Avec `password`, le compte naît avec : jamais un instant sans mot de passe dans le registre."""
+        empreinte = None
+        if password:
+            from argon2 import PasswordHasher
+            from . import password_policy
+
+            password_policy.validate(password, {"username": username})
+            empreinte = PasswordHasher().hash(password)
+        return self._create_user(username, email, role, empreinte, must_change, origine)
+
+    @_ecrit
+    def _create_user(self, username, email, role, empreinte, must_change, origine) -> Dict[str, Any]:
         if not USERNAME_RE.match(username):
             raise EngineError(f"username invalid: {username!r}")
         if role not in ALLOWED_ROLES:
@@ -183,19 +218,22 @@ class Engine:
             "email": email,
             "role": role,
             "enabled": True,
-            "password_hash": None,
-            "must_change_password": True,
+            "password_hash": empreinte,
+            "must_change_password": bool(must_change or not empreinte),
             "totp": None,
             "google": None,
             "services": [],
             "created": _now_iso(),
             "last_login": None,
         }
+        if origine:
+            u["origine"] = origine
         doc.setdefault("users", []).append(u)
         self._save(doc)
         self._audit("user_created", username, {"role": role})
         return u
 
+    @_ecrit
     def disable_user(self, username: str) -> int:
         """Disable user, revoke sessions. Returns count of revoked sessions."""
         doc = self._load()
@@ -213,12 +251,14 @@ class Engine:
         self._audit("user_disabled", username, {"revoked": revoked})
         return revoked
 
+    @_ecrit
     def enable_user(self, username: str) -> None:
         doc = self._load()
         u = self._find(doc, username)
         if not u:
             raise EngineError(f"user not found: {username}")
         u["enabled"] = True
+        u.pop("desactive_motif", None)
         self._save(doc)
         self._audit("user_enabled", username, {})
 
@@ -233,16 +273,38 @@ class Engine:
         except OSError as exc:
             raise EngineError(f"audit impossible ({exc.__class__.__name__}) : rien n'est changé") from None
 
-    def _save_audite(self, doc: Dict[str, Any], lignes: List[Dict[str, Any]]) -> None:
-        for ligne in lignes:
-            self._auditer_securite(**ligne)
-        try:
-            self._save(doc)
-        except OSError as exc:
-            self._auditer_securite("comptes_admin_echec", erreur=exc.__class__.__name__,
-                                   comptes=[x.get("compte") for x in lignes])
-            raise EngineError(f"users.json non écrit ({exc.__class__.__name__}) : rien n'est changé") from None
+    def _decider(self, decision: Callable[[Dict[str, Any]], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """Décide, audite, RELIT, écrit. Le verrou exclut les écrivains à jour ; un écrivain qui ne le prend pas (code
+        d'avant encore chargé pendant la mise à jour) est vu par la relecture : la décision est annulée (auditée) et
+        reprise sur l'état neuf, jamais écrite par-dessus."""
+        for _ in range(3):
+            with self.verrou():
+                doc = self._load()
+                avant = json.dumps(doc, sort_keys=True)
+                lignes = decision(doc)
+                if not lignes:
+                    return []
+                for ligne in lignes:
+                    self._auditer_securite(**ligne)
+                if json.dumps(self._load(), sort_keys=True) != avant:
+                    self._auditer_securite("comptes_admin_decision_annulee", motif="users.json a changé",
+                                           comptes=[x.get("compte") for x in lignes])
+                    continue
+                try:
+                    self._save(doc)
+                except OSError as exc:
+                    self._auditer_securite("comptes_admin_echec", erreur=exc.__class__.__name__,
+                                           comptes=[x.get("compte") for x in lignes])
+                    raise EngineError(f"users.json non écrit ({exc.__class__.__name__}) : rien n'est changé") from None
+                return lignes
+        raise EngineError("users.json change sans cesse : rien n'est changé")
 
+    def _fermer(self, doc: Dict[str, Any], nom: str) -> None:
+        u = self._find(doc, nom)
+        u["enabled"] = False
+        u["desactive_motif"] = _comptes_admin().MOTIF_FERMETURE
+
+    @_ecrit
     def semer_comptes(self, machine: str = "") -> List[str]:
         """Sème `admin` s'il manque, et le compte au nom de la machine tant qu'AUCUN administrateur n'a de mot de passe.
         Un `admin` semé sur une box configurée est refermé par la désactivation qui suit (il doit exister : premier-pas
@@ -260,17 +322,19 @@ class Engine:
         return semes
 
     def desactiver_admins_sans_mot_de_passe(self, origine: str = "") -> List[str]:
-        """Désactive tout admin actif sans mot de passe dès qu'un AUTRE admin actif en a choisi un. Idempotent ; ne
-        touche ni un compte à mot de passe, ni un compte de service, ni un non-admin, ni le dernier admin actif."""
+        """Désactive tout admin actif JAMAIS SERVI, sans mot de passe (ou encore au mot de passe du premier démarrage),
+        dès qu'un AUTRE admin est configuré. Idempotent ; ne touche ni un compte qui sert, ni un compte de service, ni un
+        non-admin, ni le dernier admin actif."""
         ca = _comptes_admin()
-        doc = self._load()
-        noms = ca.admins_sans_mot_de_passe(doc)
-        if not noms or not ca.admin_configure(doc):
-            return []
-        for n in noms:
-            self._find(doc, n)["enabled"] = False
-        self._save_audite(doc, [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": n,
-                                 "origine": origine or None} for n in noms])
+        ca.a_refermer(self._load())                           # argon2 d'avance : le verrou ne dure que l'écriture
+
+        def decision(doc):
+            motifs = ca.a_refermer(doc)
+            for n in motifs:
+                self._fermer(doc, n)
+            return [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": n, "motif": m,
+                     "origine": origine or None} for n, m in motifs.items()]
+        noms = [x["compte"] for x in self._decider(decision)]
         for n in noms:
             self._audit("user_disabled", n, {"motif": "admin sans mot de passe"})
         return noms
@@ -278,49 +342,69 @@ class Engine:
     def renommer_compte_machine(self, ancien: str, nouveau: str, acteur: Optional[str] = None) -> str:
         """Après un renommage de box : plus de compte admin semé sous l'ancien nom. Rend « aucun » (rien à faire, dont
         un compte à mot de passe), « desactive » (un autre admin est configuré, ou le nouveau nom n'est pas disponible
-        et un autre admin reste), « renomme » (box pas encore configurée) ou « garde » (dernier admin actif)."""
+        et un autre admin reste), « renomme » (box pas encore configurée) ou « garde » (il sert, ou c'est le dernier
+        admin actif)."""
         ca = _comptes_admin()
-        doc = self._load()
-        u = self._find(doc, ancien)
-        systeme = ca.comptes_systeme()
-        if (ancien == nouveau or ancien == "admin" or not u or ancien in systeme or not ca.est_admin_actif(u)
-                or not ca.sans_mot_de_passe(u)):
-            return "aucun"
-        jamais_servi = not any(u.get(c) for c in ("last_login", "totp", "google", "services"))
-        libre = bool(USERNAME_RE.match(nouveau)) and nouveau not in systeme and not self._find(doc, nouveau)
-        autre = any(ca.est_admin_actif(x) and x["username"] != ancien and x["username"] not in systeme
-                    for x in ca.comptes(doc))
-        if not ca.admin_configure(doc) and libre and jamais_servi:
-            u["username"] = nouveau
-            self._save_audite(doc, [{"evenement": "compte_machine_renomme", "compte": ancien, "nouveau": nouveau,
-                                     "acteur": acteur}])
-            self._audit("user_renamed", ancien, {"nouveau": nouveau})
-            return "renomme"
-        if not autre:
-            return "garde"
-        u["enabled"] = False
-        self._save_audite(doc, [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": ancien,
-                                 "origine": "renommage", "acteur": acteur}])
-        self._audit("user_disabled", ancien, {"motif": "box renommée"})
-        return "desactive"
+        ca.admin_configure(self._load())
+        etat = "aucun"
+
+        def decision(doc):
+            nonlocal etat
+            etat = "aucun"
+            u, systeme = self._find(doc, ancien), ca.comptes_systeme()
+            if (ancien == nouveau or ancien == "admin" or not u or ancien in systeme or not ca.est_admin_actif(u)
+                    or not ca.sans_mot_de_passe(u)):
+                return []
+            libre = bool(USERNAME_RE.match(nouveau)) and nouveau not in systeme and not self._find(doc, nouveau)
+            autre = any(ca.est_admin_actif(x) and x["username"] != ancien and x["username"] not in systeme
+                        for x in ca.comptes(doc))
+            if not ca.jamais_servi(u, ca.traces_d_usage()):
+                etat = "garde"
+                return []
+            if libre and not ca.admin_configure(doc):
+                etat = "renomme"
+                u["username"] = nouveau
+                return [{"evenement": "compte_machine_renomme", "compte": ancien, "nouveau": nouveau, "acteur": acteur}]
+            if not autre:
+                etat = "garde"
+                return []
+            etat = "desactive"
+            self._fermer(doc, ancien)
+            return [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": ancien, "motif": "sans_mot_de_passe",
+                     "origine": "renommage", "acteur": acteur}]
+        self._decider(decision)
+        if etat in ("renomme", "desactive"):
+            self._audit("user_renamed" if etat == "renomme" else "user_disabled", ancien, {"nouveau": nouveau})
+        return etat
 
     # ── Passwords ────────────────────────────────────────────────────
 
-    def set_password(self, username: str, plaintext: str) -> None:
-        """Hash + store password. Validates policy. Clears must_change_password."""
+    def set_password(self, username: str, plaintext: str, verifie: Optional[Callable[[Dict[str, Any]], None]] = None,
+                     must_change: bool = False) -> None:
+        """Hash + store password. Validates policy. `verifie(doc)` est appelé SOUS LE VERROU, sur le registre relu : il
+        lève pour refuser (#3708)."""
         from argon2 import PasswordHasher
         from . import password_policy
 
-        doc = self._load()
-        u = self._find(doc, username)
+        u = self.get_user(username)
         if not u:
             raise EngineError(f"utilisateur inconnu : {username}")
         password_policy.validate(plaintext, u)
-        u["password_hash"] = PasswordHasher().hash(plaintext)
-        u["must_change_password"] = False
-        self._save(doc)
+        empreinte = PasswordHasher().hash(plaintext)          # hors du verrou : argon2 est lent
+        with self.verrou():
+            doc = self._load()
+            u = self._find(doc, username)
+            if not u:
+                raise EngineError(f"utilisateur inconnu : {username}")
+            if verifie:
+                verifie(doc)
+            u["password_hash"] = empreinte
+            u["must_change_password"] = bool(must_change)
+            u.pop("origine", None)                            # choisi par une personne : plus un compte de service
+            self._save(doc)
         self._audit("password_set", username, {})
 
+    @_ecrit
     def clear_password(self, username: str) -> None:
         """Remove password hash and force re-set on next login."""
         doc = self._load()
@@ -350,23 +434,22 @@ class Engine:
         """Persist secret + freshly generated backup codes. Returns the 10 plaintext codes (shown once)."""
         from . import totp as _totp
 
-        doc = self._load()
-        u = self._find(doc, username)
-        if not u:
-            raise EngineError(f"user not found: {username}")
-        if u.get("totp") and u["totp"].get("enabled"):
-            raise EngineError(f"TOTP already enrolled for {username}")
+        def libre(doc):
+            u = self._find(doc, username)
+            if not u:
+                raise EngineError(f"user not found: {username}")
+            if u.get("totp") and u["totp"].get("enabled"):
+                raise EngineError(f"TOTP already enrolled for {username}")
+            return u
+
+        libre(self._load())
         plain = _totp.generate_backup_codes(n=10, length=10)
-        u["totp"] = {
-            "secret": secret,
-            "enabled": True,
-            "enrolled_at": _now_iso(),
-            "last_step": None,
-            "backup_codes": [
-                {"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain
-            ],
-        }
-        self._save(doc)
+        codes = [{"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain]     # lent : hors du verrou
+        with self.verrou():
+            doc = self._load()
+            libre(doc)["totp"] = {"secret": secret, "enabled": True, "enrolled_at": _now_iso(), "last_step": None,
+                                  "backup_codes": codes}
+            self._save(doc)
         self._audit("totp_enrolled", username, {})
         return plain
 
@@ -434,16 +517,24 @@ class Engine:
         u = self._find(doc, username)
         if not u or not (u.get("totp") and u["totp"].get("enabled")):
             return False
-        for bc in u["totp"]["backup_codes"]:
-            if bc["used_at"] is None and _totp.verify_backup_code(bc["hash"], code):
-                bc["used_at"] = _now_iso()
-                self._save(doc)
+        for trouve in u["totp"]["backup_codes"]:
+            if trouve["used_at"] is None and _totp.verify_backup_code(trouve["hash"], code):
+                with self.verrou():                           # vérifié hors du verrou (lent), consommé dedans, une fois
+                    doc = self._load()
+                    u = self._find(doc, username) or {}
+                    bc = next((x for x in ((u.get("totp") or {}).get("backup_codes") or [])
+                               if x["hash"] == trouve["hash"] and x["used_at"] is None), None)
+                    if bc is None:
+                        return False
+                    bc["used_at"] = _now_iso()
+                    self._save(doc)
                 self._audit("backup_code_used", username, {
                     "remaining": sum(1 for x in u["totp"]["backup_codes"] if x["used_at"] is None)
                 })
                 return True
         return False
 
+    @_ecrit
     def disable_totp(self, username: str) -> None:
         doc = self._load()
         u = self._find(doc, username)
@@ -453,6 +544,7 @@ class Engine:
         self._save(doc)
         self._audit("totp_disabled", username, {})
 
+    @_ecrit
     def set_otp_mode(self, username: str, mode: Any, par: Optional[str] = None, confirme: Optional[bool] = None) -> None:
         """Règle le second facteur du compte (#2745). `defaut` retire le champ (users.json reste propre). Le secret TOTP n'est PAS touché : réactiver ne demande
         pas de ré-enrôlement. Un mode inchangé n'écrit ni ne journalise rien. Le journal dit qui (`par`), quel compte, l'ancien et le nouveau mode."""
@@ -480,20 +572,25 @@ class Engine:
     def regenerate_backup_codes(self, username: str) -> list:
         from . import totp as _totp
 
-        doc = self._load()
-        u = self._find(doc, username)
-        if not u or not (u.get("totp") and u["totp"].get("enabled")):
-            raise EngineError(f"TOTP not enrolled for {username}")
+        def enrole(doc):
+            u = self._find(doc, username)
+            if not u or not (u.get("totp") and u["totp"].get("enabled")):
+                raise EngineError(f"TOTP not enrolled for {username}")
+            return u
+
+        enrole(self._load())
         plain = _totp.generate_backup_codes(n=10, length=10)
-        u["totp"]["backup_codes"] = [
-            {"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain
-        ]
-        self._save(doc)
+        codes = [{"hash": _totp.hash_backup_code(c), "used_at": None} for c in plain]
+        with self.verrou():
+            doc = self._load()
+            enrole(doc)["totp"]["backup_codes"] = codes
+            self._save(doc)
         self._audit("backup_codes_regenerated", username, {})
         return plain
 
     # ── Sessions / audit helpers ─────────────────────────────────────
 
+    @_ecrit
     def delete_user(self, username: str) -> None:
         doc = self._load()
         before = len(doc.get("users", []))
@@ -504,6 +601,14 @@ class Engine:
         self._audit("user_deleted", username, {})
 
     def touch_last_login(self, username: str) -> None:
+        """Ne fait jamais échouer une connexion : registre occupé, la date attendra la suivante."""
+        try:
+            self._touch_last_login(username)
+        except EngineError as exc:
+            log.warning("last_login de %s non noté (%s)", username, exc)
+
+    @_ecrit
+    def _touch_last_login(self, username: str) -> None:
         doc = self._load()
         u = self._find(doc, username)
         if not u:

@@ -48,6 +48,20 @@ def test_box_en_service(lieux, contenu, attendu):
     assert E.box_en_service(u) is attendu
 
 
+def test_en_service_des_qu_un_admin_est_configure_quel_que_soit_son_nom(lieux):
+    """#3708 : `admin` refermé faute de mot de passe, « chef » configuré — l'assistant ne se rouvre pas."""
+    from argon2 import PasswordHasher
+    u, d = lieux
+    chef = {"username": "chef", "role": "admin", "enabled": True, "password_hash": PasswordHasher().hash("choisi par quelqu'un")}
+    admin = {"username": "admin", "role": "admin", "enabled": False, "password_hash": None, "must_change_password": True}
+    pose(u, d, {"users": [admin, chef]})
+    assert E.box_en_service(u) is True
+    pose(u, d, {"users": [admin, {**chef, "must_change_password": True}]})
+    assert E.box_en_service(u) is False
+    pose(u, d, {"users": [admin, {**chef, "password_hash": PasswordHasher().hash("secubox")}]})
+    assert E.box_en_service(u) is False
+
+
 def test_sans_fichier_ou_fichier_casse_la_box_n_est_pas_en_service(lieux):
     u, _ = lieux
     assert E.box_en_service(u) is False

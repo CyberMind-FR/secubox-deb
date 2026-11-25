@@ -10,7 +10,7 @@ une mise à jour en plein parcours fermait l'assistant. Constaté sur un RPi400 
 
 DEUX QUESTIONS, qu'il ne faut pas confondre.
 - La box est-elle EN SERVICE ? Un compte admin a servi : mot de passe choisi, ou TOTP déjà enrôlé (vu sur l'amd64 : TOTP enrôlé, mot de passe par
-  défaut jamais changé). C'est la règle de l'ancien postinst, inchangée.
+  défaut jamais changé) ; OU un administrateur est configuré, quel que soit son nom (#3708 : `admin` peut être refermé, faute de mot de passe).
 - Un assistant est-il EN COURS ? Un profil est en train d'être rempli (`profil.toml` non vide). Une box peut être les deux : l'admin a servi PENDANT
   la préparation. Alors l'assistant n'est pas fini, et le fermer d'office enferme la personne dehors. Un profil qu'on ne sait pas lire compte comme
   « en cours » : dans le doute on ne ferme pas.
@@ -19,6 +19,7 @@ Le marqueur n'est posé que pour une box en service SANS assistant en cours.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import sys
@@ -35,6 +36,18 @@ def _dossier() -> Path:
     return Path(os.environ.get("PREMIER_PAS_DIR", "/var/lib/secubox/premier-pas"))
 
 
+def _admin_configure(doc) -> bool:
+    """Règle partagée, par son chemin (secubox_core tire FastAPI ; ce module se lance en `python3 -m` au postinst)."""
+    try:
+        paquet = importlib.util.find_spec("secubox_core")
+        spec = importlib.util.spec_from_file_location("_sbx_comptes_admin_pp", Path(list(paquet.submodule_search_locations)[0]) / "comptes_admin.py")
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return bool(m.admin_configure(doc))
+    except (ImportError, OSError, AttributeError, TypeError, ValueError):
+        return False
+
+
 def box_en_service(users: Optional[Path] = None) -> bool:
     try:
         d = json.loads((users or _users()).read_text())
@@ -42,6 +55,8 @@ def box_en_service(users: Optional[Path] = None) -> bool:
     except (OSError, ValueError, AttributeError, TypeError):
         return False
     a = admin[0] if admin else {}
+    if _admin_configure(d):
+        return True
     return bool(a.get("password_hash") and (not a.get("must_change_password") or a.get("totp")))
 
 

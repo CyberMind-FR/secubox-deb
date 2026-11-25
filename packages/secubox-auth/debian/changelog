@@ -16,6 +16,16 @@ secubox-auth (1.8.22-1~trixie1) trixie; urgency=medium
     renommer-compte-machine.
   * postinst : composants configurés une fois, plus trois (l'agrégateur était
     relancé six fois par mise à jour, il l'est deux fois).
+  * Seuls les admins JAMAIS SERVIS sont désactivés (second facteur, Google,
+    service, connexion, appareil rattaché ou session : gardés ; trace illisible :
+    gardés). « Configuré » exige un mot de passe choisi, pas « à changer ».
+  * Admin au mot de passe du premier démarrage : refusé (et désactivé s'il n'a
+    jamais servi) dès qu'un autre administrateur est configuré.
+  * Écritures de users.json sous un verrou commun, relues avant d'écrire ;
+    mot de passe posé sous ce verrou ; création avec mot de passe en une fois ;
+    import d'un admin sans mot de passe refusé.
+  * Connexion : une vérification argon2 par demande, derrière la porte commune ;
+    anciens comptes de console ou de délégation jamais comptés.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 

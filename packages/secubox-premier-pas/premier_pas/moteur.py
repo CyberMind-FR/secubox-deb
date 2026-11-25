@@ -28,6 +28,7 @@ rien, et `plan` montre exactement ce qui serait fait.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -179,6 +180,11 @@ def _ecrit_conf(domaine: Optional[str]) -> None:
     os.replace(tmp, SECUBOX_CONF)
 
 
+def _verrou(e):
+    """Verrou commun des écrivains de users.json (#3708) ; un secubox-auth antérieur ne l'a pas."""
+    return e.verrou() if hasattr(e, "verrou") else contextlib.nullcontext()
+
+
 def _pose_empreinte_admin(empreinte: str) -> None:
     """Empreinte argon2 déjà calculée ailleurs (le clair ne transite jamais).
     Passe par le moteur de secubox-users : même écriture atomique, même
@@ -186,15 +192,20 @@ def _pose_empreinte_admin(empreinte: str) -> None:
     sys.path.insert(0, "/usr/lib/secubox/users")
     from api import engine  # noqa: PLC0415
     e = engine.Engine(users_path=USERS_FILE)
-    doc = e._load()
-    u = e._find(doc, "admin")
-    if not u:
-        raise RuntimeError("compte admin absent de users.json")
-    if not u.get("password_hash"):
-        u["enabled"] = True     # refermé faute de mot de passe (#3708) : il en a un désormais, choisi ici
-    u["password_hash"] = empreinte
-    u["must_change_password"] = False
-    e._save(doc)
+    with _verrou(e):
+        doc = e._load()
+        u = e._find(doc, "admin")
+        if not u:
+            raise RuntimeError("compte admin absent de users.json")
+        # Rouvert SEULEMENT s'il a été refermé faute de mot de passe (#3708) ; désactivé à la main, il le reste.
+        if not u.get("enabled") and u.get("desactive_motif") == "sans-mot-de-passe-3708":
+            from secubox_core import comptes_admin  # noqa: PLC0415
+            comptes_admin.auditer("admin_rouvert", compte="admin", par="premier-pas")     # non audité : pas rouvert
+            u["enabled"] = True
+            u.pop("desactive_motif", None)
+        u["password_hash"] = empreinte
+        u["must_change_password"] = False
+        e._save(doc)
     try:
         e._audit("password_set", "admin", {"par": "premier-pas"})
     except Exception:
@@ -212,12 +223,13 @@ def _garde_mot_de_passe_defaut() -> None:
         raise RuntimeError(f"moteur des comptes introuvable (paquet secubox-auth absent ?) : {e}") from None
     from secubox_core import mot_de_passe_defaut  # noqa: PLC0415
     e = engine.Engine(users_path=USERS_FILE)
-    doc = e._load()
-    u = e._find(doc, "admin")
-    if not u:
-        raise RuntimeError("compte admin absent de users.json")
-    u["must_change_password"] = True
-    e._save(doc)
+    with _verrou(e):
+        doc = e._load()
+        u = e._find(doc, "admin")
+        if not u:
+            raise RuntimeError("compte admin absent de users.json")
+        u["must_change_password"] = True
+        e._save(doc)
     mot_de_passe_defaut.audit("premier_pas_plus_tard", {"compte": "admin"})
 
 

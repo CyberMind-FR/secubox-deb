@@ -78,7 +78,13 @@ def _snapshot(path: Path) -> Optional[Path]:
 
 def migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
     """Convert users.json to v2 in place. Idempotent."""
-    users_path = Path(users_path)
+    from .engine import Engine
+
+    with Engine(users_path=Path(users_path)).verrou():        # le verrou commun des écrivains de users.json (#3708)
+        _migrate(Path(users_path), auth_toml_path)
+
+
+def _migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
     doc: Dict[str, Any]
     try:
         doc = json.loads(users_path.read_text())
@@ -184,4 +190,10 @@ def _atomic_write(path: Path, doc: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(doc, indent=2, sort_keys=True))
+    try:                                       # droits et propriétaire gardés : le service lit ce fichier
+        st = path.stat()
+        os.chmod(tmp, st.st_mode & 0o777)
+        os.chown(tmp, st.st_uid, st.st_gid)
+    except OSError as exc:
+        log.info("migrate: owner/mode of %s not preserved (%s)", path, exc)
     os.replace(tmp, path)

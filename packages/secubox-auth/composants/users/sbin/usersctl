@@ -77,7 +77,7 @@ def cmd_show(args):
 
 def cmd_add(args):
     _engine().create_user(args.username, email=args.email, role=args.role)
-    print(f"created: {args.username}")
+    print(f"created: {args.username} (no password: usersctl set-password {args.username})")
     return 0
 
 
@@ -167,7 +167,8 @@ def _purger_sessions(noms) -> None:
         return
     try:
         from secubox_core import sessions
-        sessions.muter(lambda rows: [r for r in rows if r.get("username") not in noms], chemin)
+        if any(sessions.jtis_du_compte(n) for n in noms):
+            sessions.muter(lambda rows: [r for r in rows if r.get("username") not in noms], chemin)
     except (ImportError, OSError) as exc:
         print(f"sessions non coupées ({exc.__class__.__name__}) ; les comptes désactivés restent refusés",
               file=sys.stderr)
@@ -209,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("username")
     sp.set_defaults(func=cmd_show)
 
-    sp = sub.add_parser("add", help="Create a user")
+    sp = sub.add_parser("add", help="Create a user without a password: follow with set-password")
     sp.add_argument("username")
     sp.add_argument("--email", required=True)
     sp.add_argument("--role", required=True, choices=["admin", "operator", "viewer"])
@@ -219,11 +220,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("username")
     sp.set_defaults(func=cmd_set_password)
 
-    sp = sub.add_parser("clear-password", help="Reset to must_change_password=true")
+    sp = sub.add_parser("clear-password", help="Remove the password; no longer claimable at login once another admin is configured (#3708)")
     sp.add_argument("username")
     sp.set_defaults(func=cmd_clear_password)
 
-    sp = sub.add_parser("enable", help="Enable a user")
+    sp = sub.add_parser("enable", help="Enable a user (set-password first: a never-used passwordless admin is closed again at upgrade)")
     sp.add_argument("username")
     sp.set_defaults(func=cmd_enable)
 
@@ -256,7 +257,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_semer)
 
     sp = sub.add_parser("desactiver-admins-sans-mot-de-passe",
-                        help="Disable passwordless admins once another active admin has a password (#3708)")
+                        help="Disable never-used admins without a password (or still on the first-boot one) once "
+                             "another admin is configured; undo: set-password then enable (#3708)")
     sp.add_argument("--origine", default="usersctl")
     sp.set_defaults(func=cmd_desactiver_sans_mot_de_passe)
 
