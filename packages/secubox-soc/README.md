@@ -57,6 +57,11 @@ Une place par panneau : le WAF garde le détail, le SOC en donne la synthèse.
   la page du WAF et la bande porte un lien « Détail dans le WAF → ».
 - Bloc « Campagnes en cours » (1.13.0, #3919) : 4 populations d'attaquants au plus, lues dans `waf/populations` (nom, adresses, état, 7 jours) ; tout le bloc mène à l'onglet Campagnes du WAF (`/waf/#campaigns`), rendu par `cartes-campagnes.js` et `reperes.js`, copies identiques de celles de secubox-waf-ng.
 
+## Carte vivante de la Vigie (1.14.0, #3945)
+
+« D'où l'on frappe » recule sur les relevés successifs de l'onglet (`waf/alerts?aggregate`, `sessionStorage`, 12 au plus, 3 h), date
+écrite, puis revient au présent. Composant `/shared/pouls.js` (secubox-hub ≥ 1.13.0) ; absent, la carte reste fixe.
+
 ## SADE — Cyber Defense Live
 
 Console de défense active du SOC : page `/soc/defense.html`, routes montées sous `/defense` (préfixe `/api/v1/soc`
