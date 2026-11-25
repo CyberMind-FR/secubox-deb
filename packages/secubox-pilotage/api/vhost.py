@@ -86,6 +86,7 @@ def page_confirmation(box: str, retour: Optional[str]) -> HTMLResponse:
              f'<a href="{escape(lien)}">Ouvrir {escape(box)}</a></main></body></html>')
     return HTMLResponse(corps, headers={
         "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY",
+        "Cross-Origin-Opener-Policy": "same-origin",
         "Content-Security-Policy": f"default-src 'none'; style-src 'sha256-{_EMPREINTE_STYLE}'; base-uri 'none'; form-action 'none'; "
                                    "frame-ancestors 'none'"})
 
@@ -163,6 +164,8 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
         hors_origine = site is not None and site not in ("same-origin", "none")
         confirmer = (site == "same-site" and request.headers.get("sec-fetch-mode") == "navigate"
                      and request.headers.get("sec-fetch-dest") == "document")
+        if "prefetch" in request.headers.get("sec-purpose", "").lower():
+            raise HTTPException(403, "préchargement refusé : le code ne s'émet que sur une ouverture réelle")
         if hors_origine and not confirmer:
             raise HTTPException(403, "demande de connexion hors de l'origine du maître")
         if retour is not None and not V.RE_RETOUR.fullmatch(retour):

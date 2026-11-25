@@ -387,6 +387,25 @@ def test_confirmation_reservee_aux_navigations_du_domaine(w, change):
     asyncio.run(cas())
 
 
+@pytest.mark.parametrize("site", ["none", "same-origin", "same-site"])
+def test_prechargement_du_navigateur_n_emet_aucun_code(w, site):
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/boxes/gk5/connexion-vhost", headers=dict(NAVIGATION, **{"Sec-Fetch-Site": site, "Sec-Purpose": "prefetch;prerender"}))
+        assert r.status_code == 403 and [e for e, _ in w.lignes] == []
+    asyncio.run(cas())
+
+
+def test_la_confirmation_ne_consomme_pas_le_debit(w):
+    async def cas():
+        async with w.client() as c:
+            for _ in range(12):
+                r = await c.get("/boxes/gk5/connexion-vhost", headers=NAVIGATION)
+                assert r.status_code == 200 and r.headers["cross-origin-opener-policy"] == "same-origin"
+            assert (await c.get("/boxes/gk5/connexion-vhost")).status_code == 303
+    asyncio.run(cas())
+
+
 def test_confirmation_box_inconnue_ou_retour_invalide(w):
     async def cas():
         async with w.client() as c:
