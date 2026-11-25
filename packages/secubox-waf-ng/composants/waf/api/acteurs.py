@@ -15,7 +15,7 @@ sbx-actord reste en lecture seule : il fournit la chronologie (adresse, date) ; 
   `wafctl ban-lot` (plages protégées exigées). 24 h, jamais un bloc ;
 - `POST /acteurs/gestes/{id}/lever` : retire les seules adresses posées par ce geste. Reste bannie celle dont la fin
   n'est plus celle du geste, ou que sbxwaf tient pour bannie (`bans.jsonl`). Limite connue : une adresse que quelqu'un
-  d'autre bannit pour 24 h dans les 20 s qui suivent le geste ne s'en distingue pas ; un ban plus court posé après lui
+  d'autre bannit pour 24 h dans les 20 s qui suivent le geste (75 s si la pose a été interrompue) ne s'en distingue pas ; un ban plus court posé après lui
   est déjà sans effet (elle est bannie) et ne revient pas à la levée, sauf ceux de sbxwaf.
 
 Épargnées : forme ou plage non publique, liste blanche, liste blanche SADE, pair du maillage, adresse d'une session
@@ -153,6 +153,11 @@ def _reseau_sur(texte: str) -> Any:
     return n
 
 
+def _local(demandeur: str) -> bool:
+    """Kiosque ou console de la box : toute la chaîne est locale, aucune adresse publique à protéger."""
+    return demandeur in ("", "::1", "localhost") or demandeur.startswith("127.")
+
+
 def _sade_publiee() -> bool:
     """Le fichier publié par le SOC existe, régulier, à root ou à son compte, fermé en écriture aux autres."""
     try:
@@ -164,17 +169,18 @@ def _sade_publiee() -> bool:
 
 def _protections(demandeur: str) -> List[Tuple[str, List[Any]]]:
     """[(motif, réseaux)] ; toute source illisible refuse le geste."""
+    publiee = _sade_publiee()          # avant la lecture : un fichier paru entre les deux ne vaut pas une liste vide
     try:
         sade = _g.lire_sade()
         # fichier absent (SOC installé) ou non fiable : lire_sade rend « observe » et une liste vide, que rien ne garantit
         if sade is not None and (sade["liste"] is None or sade["mode"] == "observe" and not sade["liste"]
-                                 and not _sade_publiee()):
+                                 and not publiee):
             raise _g.Illisible("liste blanche SADE")
         blanche = [x.strip() for x in _config["liste_blanche"]() if x.strip()]
         return [("liste_blanche", [_reseau_sur(x) for x in blanche]),
                 ("sade", sade["liste"] if sade else []),
                 ("pair", _g.pairs_wg_mesh() + _g.pairs_threatmesh()),
-                ("session", _reseaux_sessions() + [_reseau_sur(demandeur)])]
+                ("session", _reseaux_sessions() + ([] if _local(demandeur) else [_reseau_sur(demandeur)]))]
     except (_g.ProtectionInconnue, _g.Illisible, OSError, KeyError, TypeError, AttributeError) as e:
         log.warning("acteurs : protection illisible : %s", e)
         raise HTTPException(503, detail={"motif": "protegee_inconnue"}) from None

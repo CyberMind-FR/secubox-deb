@@ -126,6 +126,16 @@ def test_protection_devenue_illisible_ou_nouvelle(b, monkeypatch):
     assert b.bannir(a).status_code == 200 and b.appels[0][2] == [B6]
 
 
+@pytest.mark.parametrize("chaine", ["127.0.0.1", "127.0.0.1, ::1"])
+def test_kiosque_local_admis(b, chaine):
+    b.c.headers.pop("X-Forwarded-For")
+    b.m.adresse_client, avant = (lambda r: ""), b.m.adresse_client
+    try:
+        assert b.apercu(**{"X-Forwarded-For": chaine}).status_code == 200
+    finally:
+        b.m.adresse_client = avant
+
+
 def test_plafond_de_200_adresses(b):
     now = int(time.time())
     b.events = [(f"198.51.100.{i}", now - i) for i in range(1, 250)] + [(f"203.0.113.{i}", now - 300 - i) for i in range(1, 50)]
