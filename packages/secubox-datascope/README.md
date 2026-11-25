@@ -82,7 +82,18 @@ Un instantané (graphe compressé zlib + compteurs + différence avec le précé
 les **30 min** (période de `populations.json`). Au-delà de **48 h**, un seul par heure est gardé ; au-delà de
 **30 jours**, plus aucun ; le tout dans un budget de **60 Mio** (les plus anciens partent d'abord, le dernier jamais).
 Migration `migrations/0002-paysage.sql`, repères partagés `www/datascope/reperes.js`, tous deux installés par
-`debian/rules`. Un relevé absent, périmé ou d'un mauvais type est signalé, jamais remplacé par un graphe vide.
+`debian/rules`. Un relevé absent, refusé, illisible, futur ou d'un mauvais type ne donne aucun instantané et jamais un graphe vide :
+le collecteur publie l'état et le motif (« relevé absent », « droit refusé », « relevé illisible », « relevé daté dans
+le futur »…) sous la source `paysage` des curseurs (`GET sources`, `overview.json`), hors de `complet` ; la page les
+affiche à la place du graphe, ou à côté du dernier instantané s'il y en a un. Un relevé simplement ancien n'est pas une
+panne de source : la page le marque « périmé » au-delà de 2 h. Le détail d'une erreur interne reste au journal.
+
+### Cibles et hébergement
+
+Une cible est un hôte, ou un compte masqué tel que le WAF l'écrit (`ger…`, identifiant `cible:compte:ger`) ; le nombre
+de cibles est celui du relevé. `HEBERGE` (cible → `infra:<box>`) n'est tracée que si le nom de la cible est exactement
+celui d'un service que la topologie de DataScope rattache à la box (`HOSTED_ON`) : le nom d'hôte visé vient de
+l'attaquant et ne prouve rien. La colonne « Infrastructure » peut donc être vide ; elle disparaît alors.
 
 ### Droits de lecture (populations.json)
 
@@ -91,10 +102,15 @@ Sur la box, `/var/lib/secubox/waf` est `0770 secubox-waf:secubox-waf` ; `populat
 manque. Le `postinst` pose à chaque configure `setfacl -m u:secubox-datascope:--x /var/lib/secubox/waf` (silencieux
 si le dossier ou `setfacl` est absent ; `Recommends: acl`), rien d'autre ; `prerm remove` la retire. Si `secubox-waf-ng`
 refait `chmod 0770` (tmpfiles), le masque ACL redevient `rwx` et l'entrée `--x` reste effective ; un `chmod 0700` la
-neutraliserait (le paysage resterait alors vide, motif affiché). Côté confinement : `ProtectSystem=strict` laisse la
+neutraliserait (le paysage resterait alors vide, « droit refusé » affiché). Côté confinement : `ProtectSystem=strict` laisse la
 lecture, aucun `InaccessiblePaths` ; le profil AppArmor n'autorise que `/var/lib/secubox/waf/populations.json r,`.
 
 ### Limites connues
+
+Au démarrage de `secubox-waf-ng`, son `ExecStartPre` rend `/var/lib/secubox/waf` à `secubox-waf:secubox-waf`,
+`populations.json` compris : le fichier (`0640`) est alors illisible pour DataScope (« droit refusé », le dernier
+instantané reste affiché) jusqu'au relevé suivant, soit 30 min au plus ; il se rétablit seul. Correction prévue dans
+`secubox-waf-ng` (exclusion du fichier).
 
 Un instantané toutes les 30 min : la lecture d'un événement plus fin n'est pas possible. L'historique est court au
 début (rien avant la mise en place de 0.2.0) ; les compteurs et l'enregistreur disent « historique non chargé » ou

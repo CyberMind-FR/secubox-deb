@@ -20,7 +20,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Collection, Dict, List, Optional, Tuple
 
 MAX_OCTETS = 2 * 1024 * 1024  # MemoryMax 128M : le relevé réel fait quelques dizaines de Kio
 MAX_POPULATIONS = 12
@@ -35,10 +35,12 @@ _CVE = re.compile(r"^CVE-\d{4}-\d{4,7}$")
 _SIGNATURE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 _PAYS = re.compile(r"^[A-Z]{2}$")
 _HOTE = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,251}[a-z0-9])?$")
+_COMPTE = re.compile(r".{1,3}…", re.DOTALL)  # compte masqué par le producteur (populations.masquer_compte)
+_COMPTE_SUR = re.compile(r"[A-Za-z0-9_-]{1,3}")
 _CLASSE = re.compile(r"^[a-z_]{1,40}$")
 _IPV4 = re.compile(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)")
 _JETON = re.compile(r"[0-9A-Fa-f:.]{2,}")
-_CTRL = re.compile(r"[\x00-\x1f\x7f]")
+_CTRL = re.compile(r"[\x00-\x1f\x7f\ud800-\udfff]")  # contrôles, et demi-codes isolés (non encodables en UTF-8)
 _EPOCH_MAX = 253402300799  # 9999-12-31
 
 
@@ -117,26 +119,31 @@ def _epoch(v: Any) -> Optional[float]:
     return float(v) if 0 <= v <= _EPOCH_MAX else None
 
 
-def _charger(chemin: Path) -> Any:
+def _charger(chemin: Path) -> Tuple[Any, Optional[str]]:
+    """(contenu, None), ou (None, motif) : le motif est publié tel quel, il ne porte jamais de chemin."""
     try:
         fd = os.open(chemin, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
-    except OSError:
-        return None
+    except FileNotFoundError:
+        return None, "relevé absent"
+    except PermissionError:
+        return None, "droit refusé"
+    except OSError as e:
+        return None, f"relevé illisible ({type(e).__name__})"
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return None
+            return None, "relevé illisible (pas un fichier régulier)"
         with os.fdopen(fd, "rb", closefd=False) as f:
             brut = f.read(MAX_OCTETS + 1)
-    except OSError:
-        return None
+    except OSError as e:
+        return None, f"relevé illisible ({type(e).__name__})"
     finally:
         os.close(fd)
     if len(brut) > MAX_OCTETS:
-        return None
+        return None, "relevé trop gros"
     try:
-        return json.loads(brut.decode("utf-8"))
+        return json.loads(brut.decode("utf-8")), None
     except (ValueError, RecursionError):
-        return None
+        return None, "relevé illisible (JSON invalide)"
 
 
 class _Graphe:
@@ -176,10 +183,26 @@ def _metriques(p: dict) -> Dict[str, Any]:
 
 
 def _cible(v: Any) -> Optional[str]:
-    if not isinstance(v, str):
+    """Cible reconnue : hôte (en minuscules), ou compte masqué exactement comme le producteur l'écrit (« ger… », casse
+    gardée). Tout le reste, et toute chaîne portant une IP, est écarté."""
+    if not isinstance(v, str) or _contient_ip(v):
         return None
+    if _COMPTE.fullmatch(v):
+        return v
     h = v.strip().lower()
     return h if _HOTE.match(h) and not _contient_ip(h) else None
+
+
+def _id_cible(c: str) -> str:
+    """Identifiant ASCII d'une cible. Compte masqué : `cible:compte:<préfixe>` (le « : » n'existe dans aucun hôte) ;
+    un préfixe hors [A-Za-z0-9_-] est assaini puis suivi d'un condensat : deux comptes distincts restent distincts."""
+    if not _COMPTE.fullmatch(c):
+        return _id("cible", c)
+    debut = c[:-1]
+    if not _COMPTE_SUR.fullmatch(debut):
+        h = hashlib.sha1(debut.encode("utf-8", "surrogatepass")).hexdigest()[:8]
+        debut = re.sub(r"[^A-Za-z0-9_-]", "_", debut) + "." + h
+    return f"cible:compte:{debut}"
 
 
 def _reseaux(p: dict) -> List[Tuple[int, str, str, int]]:
@@ -200,14 +223,22 @@ def _reseaux(p: dict) -> List[Tuple[int, str, str, int]]:
     return res
 
 
-def lire(chemin: Path, hote: str) -> Optional[Paysage]:
-    """Le paysage du relevé `chemin`, ou None (absent, illisible, trop gros, sans `genere_le` valide)."""
-    d = _charger(Path(chemin))
+def lire(chemin: Path, hote: str, services: Collection[str] = ()) -> Optional[Paysage]:
+    """Le paysage du relevé `chemin`, ou None (motif : voir lire_releve)."""
+    return lire_releve(chemin, hote, services)[0]
+
+
+def lire_releve(chemin: Path, hote: str, services: Collection[str] = ()) -> Tuple[Optional[Paysage], Optional[str]]:
+    """(paysage, None), ou (None, motif). `services` : noms (minuscules) des services que la topologie de DataScope
+    sait portés par `hote`. Eux seuls reçoivent une arête HEBERGE : le nom d'une cible vient de l'attaquant."""
+    d, motif = _charger(Path(chemin))
+    if motif is not None:
+        return None, motif
     if not isinstance(d, dict):
-        return None
+        return None, "relevé de forme inattendue"
     epoch = _epoch(d.get("genere_le"))
     if epoch is None:
-        return None
+        return None, "relevé sans date valide (genere_le)"
     # Un relevé qui ne dit pas expressément « complet » est traité comme partiel.
     partiel = d.get("complet") is not True
 
@@ -259,9 +290,9 @@ def lire(chemin: Path, hote: str) -> Optional[Paysage]:
             if h not in cibles_gardees and len(cibles_gardees) >= MAX_CIBLES:
                 continue
             cibles_gardees.add(h)
-            cid = g.noeud(_id("cible", h), "cible", h)
+            cid = g.noeud(_id_cible(h), "cible", _texte(h, 253))
             g.arete(pid, cid, "VISE")
-            if hote_s:
+            if hote_s and h in services:
                 g.arete(cid, g.noeud(f"infra:{hote_s}", "infra", hote_s), "HEBERGE")
         for v in _liste(p.get("cves")):
             if not isinstance(v, str) or not _CVE.match(v):
@@ -277,7 +308,7 @@ def lire(chemin: Path, hote: str) -> Optional[Paysage]:
     if reste > 0:
         g.noeud("autres:populations", "autres", f"+ {reste} autres", metriques={"repliees": reste})
 
-    return Paysage(epoch=epoch, partiel=partiel, graphe=_finir(g), compteurs=c)
+    return Paysage(epoch=epoch, partiel=partiel, graphe=_finir(g), compteurs=c), None
 
 
 def _finir(g: _Graphe) -> dict:

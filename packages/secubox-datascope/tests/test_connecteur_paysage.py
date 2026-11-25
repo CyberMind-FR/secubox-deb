@@ -83,7 +83,7 @@ def test_graphe_types_et_aretes(tmp_path):
               cibles=["mail.gk2.secubox.in", "gitea.gk2.secubox.in"], bans=2, rotation=True, cves=[],
               reseaux_top=[{"asn": 212238, "org": "Datacamp", "classe": "hebergeur", "adresses": 10}],
               adresses=10, reseaux=1, campagne_actord=None)
-    s = paysage.lire(_ecrire(tmp_path, [_pop(), p2]), "gk2")
+    s = paysage.lire(_ecrire(tmp_path, [_pop(), p2]), "gk2", {"gitea.gk2.secubox.in"})
     g = s.graphe
     assert s.epoch == 1794999000 and s.partiel is False
     assert {"pop:famille:collecte", "pop:profileur:ab4f0c11", "asn:212238", "asn:3215",
@@ -100,7 +100,7 @@ def test_graphe_types_et_aretes(tmp_path):
     assert ("camp:sig-abc_1", "pop:famille:collecte") in {(a["de"], a["vers"]) for a in _aretes(g, "MEMBRE_DE")}
     assert ("pop:famille:collecte", "cve:CVE-2024-1234") in {(a["de"], a["vers"]) for a in _aretes(g, "EXPLOITE")}
     assert ("pop:famille:collecte", "pays:US") in {(a["de"], a["vers"]) for a in _aretes(g, "ORIGINE")}
-    assert ("cible:gitea.gk2.secubox.in", "infra:gk2") in {(a["de"], a["vers"]) for a in _aretes(g, "HEBERGE")}
+    assert {(a["de"], a["vers"]) for a in _aretes(g, "HEBERGE")} == {("cible:gitea.gk2.secubox.in", "infra:gk2")}
     ids = _ids(g)
     assert all(a["de"] in ids and a["vers"] in ids for a in g["aretes"])
     assert s.compteurs == {"populations": 2, "rotation": 1, "reseaux": 3, "adresses": 130,
@@ -266,3 +266,72 @@ def test_ids_classe_et_cible_longs_tiennent_et_gardent_le_poids(tmp_path):
     cibles = _ids(g, "cible")
     assert len(cibles) == 1 and all(len(c) <= 166 for c in cibles)
     assert len(_aretes(g, "VISE")) == 2  # les deux populations visent la même cible raccourcie
+
+
+def test_comptes_masques_sont_des_cibles(tmp_path):
+    """I1 : la forme masquée du producteur (masquer_compte) est une cible à part entière, comptée et nommée."""
+    pops = [_pop("famille:messagerie", nom_cible="ger…", cibles=["ger…", "roo…", "mail.example.org"]),
+            _pop("famille:acces_distant", nom_cible="Ger…", cibles=["Ger…", "é<b…", "é>b…"]),
+            _pop("rotation:0011aabb", nom_cible="roo…", cibles=["roo…", "a b…", "x\ny…"])]
+    s = paysage.lire(_ecrire(tmp_path, pops), "gk2")
+    cibles = {n["id"]: n["libelle"] for n in s.graphe["noeuds"] if n["type"] == "cible"}
+    assert cibles["cible:compte:ger"] == "ger…" and cibles["cible:compte:Ger"] == "Ger…"
+    assert cibles["cible:compte:roo"] == "roo…" and cibles["cible:mail.example.org"] == "mail.example.org"
+    assert {"é<b…", "é>b…", "a b…", "x y…"} <= set(cibles.values())
+    assert all(ID.match(i) and i.isascii() for i in cibles)
+    assert len(cibles) == s.compteurs["cibles"] == 8  # même nombre que le relevé
+    vise = {(a["de"], a["vers"]) for a in _aretes(s.graphe, "VISE")}
+    assert {("pop:famille:messagerie", "cible:compte:roo"), ("pop:rotation:0011aabb", "cible:compte:roo")} <= vise
+    assert next(n for n in s.graphe["noeuds"] if n["id"] == "pop:famille:messagerie")["libelle"] == "ger…"
+
+
+@pytest.mark.parametrize("v", ["…", "", "gera…", "ger...", "ger…x", "ger……", "::1…", 5, None])
+def test_forme_masquee_exacte_seulement(tmp_path, v):
+    s = paysage.lire(_ecrire(tmp_path, [_pop(nom_cible="x", cibles=[v])]), "gk2")
+    assert len(_ids(s.graphe, "cible")) == s.compteurs["cibles"] == 0
+
+
+def test_comptes_masques_ids_distincts_des_hotes_et_caracteres_isoles(tmp_path):
+    pops = [_pop(nom_cible="\ud800ab…", cibles=["\ud800ab…", "ger…", "compte.ger", "compte_ger"],
+                 reseaux_top=[{"asn": 64500, "org": "Org\udfff", "classe": "acces", "adresses": 1}])]
+    s = paysage.lire(_ecrire(tmp_path, pops), "gk2")
+    assert len(_ids(s.graphe, "cible")) == s.compteurs["cibles"] == 4
+    json.dumps(s.graphe, ensure_ascii=False).encode("utf-8")  # écrivable en base : aucun caractère isolé
+
+
+def test_heberge_seulement_pour_un_service_connu(tmp_path):
+    """I2 : l'hôte visé vient de l'attaquant ; sans service connu de la topologie, aucun lien d'hébergement."""
+    pops = [_pop("famille:collecte", cibles=["evil-phish.com", "NAC", "nac.evil.example"]),
+            _pop("famille:acces_distant", cibles=["leurre", "nac…"])]
+    f = _ecrire(tmp_path, pops)
+    g = paysage.lire(f, "gk2").graphe
+    assert _aretes(g, "HEBERGE") == [] and _ids(g, "infra") == set()
+    g = paysage.lire(f, "gk2", {"nac", "waf"}).graphe
+    assert [(a["de"], a["vers"]) for a in _aretes(g, "HEBERGE")] == [("cible:nac", "infra:gk2")]
+    assert _ids(g, "infra") == {"infra:gk2"}
+
+
+def test_motif_du_releve_refuse(tmp_path, monkeypatch):
+    """I3 : l'état dit pourquoi le relevé manque."""
+    f = tmp_path / "populations.json"
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé absent")
+    f.mkdir()
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé illisible (pas un fichier régulier)")
+    f.rmdir()
+    f.write_text("{pas du json")
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé illisible (JSON invalide)")
+    f.write_text("[]")
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé de forme inattendue")
+    f.write_text('{"populations": []}')
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé sans date valide (genere_le)")
+    f.write_text(json.dumps({"genere_le": 1, "x": "a" * paysage.MAX_OCTETS}))
+    assert paysage.lire_releve(f, "gk2") == (None, "relevé trop gros")
+    f.write_text(json.dumps({"genere_le": 1, "populations": []}))
+    p, motif = paysage.lire_releve(f, "gk2")
+    assert p is not None and motif is None
+
+    def refus(*a, **k):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(paysage.os, "open", refus)
+    assert paysage.lire_releve(f, "gk2") == (None, "droit refusé")

@@ -19,14 +19,14 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from .config import Config, charger
 from . import paysage_store
 from .connecteurs import network, paysage, status
 from .difference import difference
-from .store import (BASE_MAX_OCTETS, VOISINS_ARETES_MAX, VOISINS_NOEUDS_MAX, _taille, appliquer, etat_sources, ouvrir,
-                    purger)
+from .store import (BASE_MAX_OCTETS, VOISINS_ARETES_MAX, VOISINS_NOEUDS_MAX, Releve, _taille, appliquer, etat_sources,
+                    ouvrir, purger)
 
 DISQUE_MIN_OCTETS = 512 * 1024 * 1024
 COMPLET_VALIDE_S = 15 * 60
@@ -156,6 +156,30 @@ def _espace_libre(base: Path) -> int:
     return shutil.disk_usage(str(p)).free
 
 
+def _services_de(db: sqlite3.Connection, hote: str) -> Set[str]:
+    """Noms (minuscules) des services que la topologie en base rattache à cette box."""
+    return {r["src"].split(":", 1)[1].lower() for r in db.execute(
+        "SELECT src FROM relationships WHERE type = 'HOSTED_ON' AND src LIKE 'service:%' AND dst = ?",
+        (f"node:{hote}",))}
+
+
+def _publier_etat_paysage(db: sqlite3.Connection, s: Dict[str, Any], horodatage: str) -> bool:
+    """État et motif du paysage dans les curseurs, comme les autres sources (« inchange » est sain : ok). Réécrit
+    seulement si l'état, le motif ou le relevé changent ; vrai alors. Ne lève jamais : l'échec va au journal."""
+    try:
+        etat = "ok" if s["etat"] in ("ok", "inchange") else "inaccessible"
+        entete = paysage_store.dernier_entete(db) if etat == "ok" else None
+        empreinte = f"{entete['epoch'] if entete else ''}|{s.get('motif') or ''}"
+        avant = db.execute("SELECT etat, empreinte FROM curseurs WHERE source = 'paysage'").fetchone()
+        if avant is not None and (avant["etat"], avant["empreinte"]) == (etat, empreinte):
+            return False
+        appliquer(db, Releve(source="paysage", etat=etat, motif=s.get("motif"), empreinte=empreinte), horodatage)
+        return True
+    except Exception as e:  # noqa: BLE001 - le paysage ne fait jamais échouer la passe
+        s["publication"] = f"état non publié : {type(e).__name__}"
+        return False
+
+
 def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: float) -> Dict[str, Any]:
     """Un instantané du paysage par nouveau relevé. Ne lève jamais : toute erreur est rendue dans l'état.
 
@@ -165,13 +189,12 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
     instantané illisible compte comme « pas de précédent » : écrit sans comparaison (listes vides, `sans_precedent`),
     avec un motif ; il ne bloque jamais les suivants."""
     try:
-        p = paysage.lire(cfg.populations, hote)
+        p, motif = paysage.lire_releve(cfg.populations, hote, _services_de(db, hote))
         if p is None:
-            return {"etat": "inaccessible", "motif": "relevé absent, illisible ou sans genere_le valide",
-                    "ecrit": False}
+            return {"etat": "inaccessible", "motif": motif, "ecrit": False}
         if p.epoch > maintenant + PAYSAGE_FUTUR_TOLERE_S:
             return {"etat": "inaccessible", "ecrit": False,
-                    "motif": f"genere_le dans le futur (+{int(p.epoch - maintenant)} s) : relevé écarté"}
+                    "motif": f"relevé daté dans le futur ({_iso(p.epoch)}) : écarté"}
         prec = paysage_store.dernier_entete(db)
         if prec is not None and p.epoch <= prec["epoch"]:
             if p.epoch == prec["epoch"]:
@@ -199,10 +222,12 @@ def _etape_paysage(db: sqlite3.Connection, cfg: Config, hote: str, maintenant: f
         try:
             paysage_store.eclaircir(db, maintenant)
         except Exception as e:  # noqa: BLE001 - l'instantané est écrit : l'éclaircissement reprendra à la passe suivante
-            motifs.append(f"éclaircissement échoué : {type(e).__name__}: {str(e)[:120]}")
+            motifs.append(f"éclaircissement échoué : {type(e).__name__}")
         return {"etat": "ok", "ecrit": True, **({"motif": " ; ".join(motifs)} if motifs else {})}
     except Exception as e:  # noqa: BLE001 - le paysage ne fait jamais échouer la passe
-        return {"etat": "inaccessible", "ecrit": False, "motif": f"{type(e).__name__}: {str(e)[:120]}"}
+        # le motif est publié (API /sources) : le détail de l'exception reste au journal
+        return {"etat": "inaccessible", "ecrit": False, "motif": f"erreur interne ({type(e).__name__})",
+                "detail": str(e)[:120]}
 
 
 def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
@@ -236,6 +261,10 @@ def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
                                    complet, maintenant),
         }
         sources["paysage"] = _etape_paysage(db, cfg, hote, maintenant)  # après la topologie V0.1, hors de `complet`
+        if _publier_etat_paysage(db, sources["paysage"], horodatage):  # l'aperçu déjà publié reprend le nouvel état
+            ecrit["overview.json"] = _publier(Path(cfg.cache) / "overview.json",
+                                              _vue_apercu(db, horodatage, complet), complet, maintenant,
+                                              battement=True)
         return fin({"etat": "complet" if complet else "degrade", "sources": sources, "caches": ecrit})
     finally:
         db.close()

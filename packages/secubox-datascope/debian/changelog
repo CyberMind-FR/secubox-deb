@@ -21,6 +21,10 @@ secubox-datascope (0.2.0-1~trixie1) trixie; urgency=medium
   * postinst : ACL setfacl u:secubox-datascope:--x sur /var/lib/secubox/waf à
     chaque configure (traversée seule, silencieuse si absent) ; prerm remove
     la retire. Recommends: acl.
+  * Comptes visés masqués (« ger… ») gardés comme cibles : mêmes nombres que le
+    relevé ; « hébergée sur » réservé aux services connus de la topologie.
+  * État et motif du relevé publiés sous la source « paysage » (GET sources,
+    overview.json) et affichés dans la page.
   * Limites : un instantané toutes les 30 min, historique court au début.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100

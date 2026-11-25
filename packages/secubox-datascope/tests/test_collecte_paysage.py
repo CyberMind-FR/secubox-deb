@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from secubox_datascope import collecte, paysage_store  # noqa: E402
 from secubox_datascope.config import Config  # noqa: E402
-from secubox_datascope.store import ouvrir  # noqa: E402
+from secubox_datascope.connecteurs import paysage  # noqa: E402
+from secubox_datascope.store import etat_sources, ouvrir  # noqa: E402
 
 NOW = 1795000000.0
 
@@ -55,6 +56,19 @@ def _instantanes(cfg):
         return [dict(r) for r in db.execute("SELECT ts, epoch FROM paysage_instantanes ORDER BY epoch")]
     finally:
         db.close()
+
+
+def _source(cfg):
+    db = ouvrir(Path(cfg.base))
+    try:
+        return next((s for s in etat_sources(db) if s["source"] == "paysage"), None)
+    finally:
+        db.close()
+
+
+def _apercu(cfg):
+    d = json.loads((Path(cfg.cache) / "overview.json").read_text())
+    return next((s for s in d["sources"] if s["source"] == "paysage"), None)
 
 
 def test_passe_ecrit_un_instantane(cfg):
@@ -114,6 +128,7 @@ def test_passe_genere_le_dans_le_futur_ne_bloque_pas(cfg):
     r = collecte.passe(cfg, NOW)
     s = r["sources"]["paysage"]
     assert s["etat"] == "inaccessible" and "futur" in s["motif"] and s["ecrit"] is False
+    assert _source(cfg)["motif"] == s["motif"] and "2026" in s["motif"]  # date du relevé : motif stable d'une passe à l'autre
     assert _instantanes(cfg) == []
     _releve(cfg, NOW - 100)  # le relevé correct qui suit est bien écrit
     r = collecte.passe(cfg, NOW + 60)
@@ -223,3 +238,73 @@ def test_premier_instantane_marque_sans_precedent(cfg):
     db = ouvrir(Path(cfg.base))
     assert paysage_store.dernier(db)["difference"]["sans_precedent"] == "premier"
     db.close()
+
+
+def test_etat_du_paysage_publie_comme_les_autres_sources(cfg, monkeypatch):
+    """I3 : état et motif dans les curseurs (API /sources) et dans overview.json, pas seulement au journal."""
+    r = collecte.passe(cfg, NOW)
+    s = _source(cfg)
+    assert (s["etat"], s["motif"]) == ("inaccessible", "relevé absent")
+    assert r["etat"] == "complet"  # le paysage reste hors de l'état de la passe
+    assert (_apercu(cfg)["etat"], _apercu(cfg)["motif"]) == ("inaccessible", "relevé absent")
+    vu = s["vu_le"]
+    collecte.passe(cfg, NOW + 60)
+    assert _source(cfg)["vu_le"] == vu  # rien de nouveau : curseur non réécrit
+    vrai = paysage.os.open
+
+    def refus(chemin, *a, **k):
+        if str(chemin) == str(cfg.populations):
+            raise PermissionError(13, "Permission denied")
+        return vrai(chemin, *a, **k)
+
+    with monkeypatch.context() as m:
+        m.setattr(paysage.os, "open", refus)
+        collecte.passe(cfg, NOW + 120)
+    assert _source(cfg)["motif"] == "droit refusé" and _source(cfg)["vu_le"] > vu
+    assert _apercu(cfg)["motif"] == "droit refusé"
+    _releve(cfg, NOW + 100)
+    collecte.passe(cfg, NOW + 180)
+    ok = _source(cfg)
+    assert (ok["etat"], ok["motif"]) == ("ok", None)
+    collecte.passe(cfg, NOW + 240)  # « inchange » est un état sain
+    assert _source(cfg) == ok
+    _releve(cfg, NOW + 200)
+    collecte.passe(cfg, NOW + 300)
+    assert _source(cfg)["etat"] == "ok" and _source(cfg)["vu_le"] > ok["vu_le"]
+
+
+def test_motif_publie_sans_detail_interne(cfg, monkeypatch):
+    def boum(*a, **k):
+        raise sqlite3.OperationalError("table /chemin/interne verrouillée")
+
+    monkeypatch.setattr(paysage_store, "ecrire", boum)
+    _releve(cfg, NOW - 600)
+    s = collecte.passe(cfg, NOW)["sources"]["paysage"]
+    assert s["motif"] == "erreur interne (OperationalError)" and "/chemin/interne" in s["detail"]  # journal seulement
+    assert _source(cfg)["motif"] == "erreur interne (OperationalError)"
+
+
+def test_publication_de_l_etat_en_echec_ne_fait_pas_echouer_la_passe(cfg, monkeypatch):
+    vrai = collecte.appliquer
+
+    def boum(db, releve, quand):
+        if releve.source == "paysage":
+            raise sqlite3.OperationalError("database is locked")
+        return vrai(db, releve, quand)
+
+    monkeypatch.setattr(collecte, "appliquer", boum)
+    _releve(cfg, NOW - 600)
+    r = collecte.passe(cfg, NOW)
+    assert r["etat"] == "complet" and r["sources"]["paysage"]["ecrit"] is True
+    assert "OperationalError" in r["sources"]["paysage"]["publication"]
+
+
+def test_heberge_vient_de_la_topologie_de_la_base(cfg):
+    """I2 : seuls les services que la base connaît (relation HOSTED_ON vers cette box) sont « hébergés sur »."""
+    _releve(cfg, NOW - 600, [_pop(cibles=["waf", "evil-phish.com", "h", "br-lan"])])
+    collecte.passe(cfg, NOW)
+    db = ouvrir(Path(cfg.base))
+    g = paysage_store.dernier(db)["graphe"]
+    db.close()
+    heb = [a for a in g["aretes"] if a["type"] == "HEBERGE"]
+    assert [a["de"] for a in heb] == ["cible:waf"]

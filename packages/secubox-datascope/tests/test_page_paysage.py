@@ -232,6 +232,10 @@ def test_demo_paysage():
     assert all(a["de"] in noeuds and a["vers"] in noeuds for a in i["graphe"]["aretes"])
     assert {a["type"] for a in i["graphe"]["aretes"]} == {"SOURCE_DE", "VISE", "MEMBRE_DE", "EXPLOITE", "HEBERGE",
                                                           "ORIGINE"}
+    # HEBERGE : seulement le service connu de la topologie de démonstration ; compte visé masqué par le producteur
+    assert [(a["de"], a["vers"]) for a in i["graphe"]["aretes"] if a["type"] == "HEBERGE"] == [
+        ("cible:nac", "infra:secubox-demo")]
+    assert noeuds["cible:compte:ger"]["libelle"] == "ger…"
     assert any(n["metriques"].get("rotation") for n in noeuds.values() if n["type"] == "population")
     j = d["difference_24h"]
     for k in ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee", "tronque",
@@ -248,7 +252,7 @@ def test_demo_paysage():
         if n["type"] == "reseau_source":
             assert 64496 <= int(k.split(":")[1]) <= 64511, k
         if n["type"] == "cible":
-            assert k.endswith((".test", ".example")), k
+            assert k.endswith((".test", ".example")) or k in ("cible:nac", "cible:compte:ger"), k
         if n["type"] == "cve":
             assert k.startswith("cve:CVE-2099-"), k
 
@@ -553,3 +557,23 @@ def test_demo_instantanes_de_l_enregistreur():
     attendu = difference(ref["graphe"], d["i"][-1]["graphe"])
     assert {c: d["p"]["difference_24h"][c] for c in attendu} == attendu
     assert attendu["apparus"] and attendu["disparus"] and attendu["hausses"] and attendu["baisses"] and attendu["rotation_levee"]
+
+
+def test_disposition_sans_infrastructure():
+    """I2 : sans cible rattachée à un service connu, la colonne d'infrastructure n'a ni titre ni place réservée."""
+    r = _node(_disposition() + MAX_JS + r"""
+      var g=graphe(3,3,5,2,1),sans=g.noeuds.filter(function(n){return n.type!=='infra'&&n.id!=='autres:noeuds';}),
+        a=disposerPaysage(g.noeuds,g.aretes,['pays'],1200),b=disposerPaysage(sans,g.aretes,['pays'],1200),c=disposerPaysage(sans,g.aretes,['pays'],0);
+      process.stdout.write(JSON.stringify({ta:a.colonnes.map(function(c){return c.t;}),tb:b.colonnes.map(function(c){return c.t;}),n:Object.keys(b.pos).length,t:sans.length,
+        W:[a.W,b.W,c.W],droite:Math.max.apply(null,Object.keys(c.pos).map(function(i){return c.pos[i].x+c.pos[i].l/2;})),
+        nan:/NaN|Infinity|undefined|null/.test(JSON.stringify([b,c])),heb:b.liens.filter(function(l){return l.type==='HEBERGE';}).length}));""")
+    assert r["ta"][3] == "INFRASTRUCTURE" and r["tb"] == ["RÉSEAUX SOURCES", "POPULATIONS ET CAMPAGNES", "CIBLES ET CVE", ""]
+    assert r["n"] == r["t"] - 3 and not r["nan"] and r["heb"] == 0  # trois pays repliés
+    assert r["W"][1] <= 1200 and r["W"][2] - r["droite"] <= 6.5  # rien de réservé à droite de la dernière colonne
+
+
+def test_noeud_deduit_d_un_compte_masque():
+    r = _node("var TYPE_PREFIXE={cible:'cible'};" + "\n".join(map(_fonction_js, (
+        "propre", "typeId", "noeudDeduit"))) + "\nprocess.stdout.write(JSON.stringify(['cible:compte:ger',"
+              "'cible:compte:_b_.0a1b2c3d','cible:compte.test','cible:a.test'].map(function(i){return noeudDeduit(i).libelle;})));")
+    assert r == ["ger…", "_b_…", "compte.test", "a.test"]

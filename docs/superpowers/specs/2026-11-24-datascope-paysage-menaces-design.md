@@ -70,7 +70,7 @@ Nouveaux types d'entité (s'ajoutent à `node`, `network`, `interface`, `device`
 
 Relations : `SOURCE_DE` (réseau → population), `VISE` (population → cible), `MEMBRE_DE` (campagne → population,
 quand `campagne_actord` les relie), `EXPLOITE` (population → cve, seulement si la population a déclenché un filtre
-lié à la CVE), `HEBERGE` (cible → service/box existants de la topologie V0.1), `ORIGINE` (population → pays).
+lié à la CVE), `HEBERGE` (cible → service/box existants de la topologie V0.1 ; seulement si la cible porte exactement le nom d'un service connu, l'hôte visé venant de l'attaquant), `ORIGINE` (population → pays).
 
 Plafonds de lisibilité : 12 populations, 8 réseaux par population (le reste replié dans `classe_reseau`), 60 cibles,
 20 CVE ; au-delà, nœud « + N autres ». Graphe rendu ≤ 400 nœuds.
