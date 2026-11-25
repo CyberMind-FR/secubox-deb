@@ -1,3 +1,13 @@
+secubox-system (1.14.1-1~trixie1) trixie; urgency=medium
+
+  * postinst : l'agrégateur n'est relancé que si le code Python qu'il sert a changé (empreinte prise au preinst).
+  * secubox-lxc-memoire : configuration écrite avant le cgroup et même échange des deux côtés, copie posée d'un coup,
+    sauvegardes et homonymes périmés ignorés, lxc.include et « lxc.cgroup2 = » suivis comme LXC.
+  * secubox-tuning-apply : propriétaire et mode gardés, dernière ligne sans \n jamais prolongée, rien d'écrit si
+    identique ; garde du dépôt renforcée (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:33:22 +0100
+
 secubox-system (1.14.0-1~trixie1) trixie; urgency=medium
 
   * Réglage mémoire : un conteneur LXC qui a son propre memory.max ne reçoit plus jamais de frein

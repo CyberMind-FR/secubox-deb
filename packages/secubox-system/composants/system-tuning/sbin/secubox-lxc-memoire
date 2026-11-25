@@ -25,16 +25,21 @@ import syslog
 import tempfile
 from pathlib import Path
 
-RACINES = [Path(p) for p in os.environ.get("SECUBOX_LXC_RACINES", "/data/lxc:/srv/lxc:/var/lib/lxc").split(":") if p]
+RACINES = [Path(p) for p in os.environ.get("SECUBOX_LXC_RACINES", "/data/lxc:/var/lib/lxc:/srv/lxc").split(":") if p]
 CGROUP = Path(os.environ.get("SECUBOX_CGROUP_RACINE", "/sys/fs/cgroup"))
 COPIE = ".avant-3941"
+RAZ = re.compile(r"^\s*lxc\.cgroup2(?:\.memory)?\s*=\s*$")
+INCLUSION = re.compile(r"^\s*lxc\.include\s*=\s*(/\S+)\s*$")
 CLE = re.compile(r"^\s*lxc\.cgroup2\.memory\.(max|high|swap\.max)\s*=\s*(\S*)\s*$")
 # Commentaire de l'ancien `secubox-apply-lxc-memory-budget` (#496, retiré) : signature de ses lignes ; il en ajoutait un
 # à chaque passage et ne les retirait jamais (gk2 : une douzaine).
 PHASE = re.compile(r"^\s*# Phase 6\.P \(#496\) : memory budget\s*$")
 BLOC_MAIL = re.compile(r"^# Mémoire du conteneur \(secubox-mail\)", re.M)
 NOM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+# Copies d'un conteneur laissées à côté de l'original : jamais un conteneur vivant.
+SAUVEGARDE = re.compile(r"[._-](bak|old|orig|avant|backup|sauvegarde|sauv|save|copie|copy)([._-].*|\d*)$|[._-]\d{8}", re.I)
 ECHANGE_PART = 2
+MAX_INCLUS, MAX_PROFONDEUR = 40, 6
 TAILLE_MAX = 256 * 1024
 
 
@@ -83,55 +88,98 @@ def ecrire_config(chemin: Path, ancien: str, nouveau: str) -> None:
     """Copie unique à côté (jamais écrasée), puis remplacement atomique : propriétaire et mode gardés."""
     st = os.stat(chemin, follow_symlinks=False)
     copie = chemin.with_name(chemin.name + COPIE)
+    if not os.path.lexists(copie):
+        tmp = _fichier_complet(chemin, ancien, st)
+        try:
+            os.link(tmp, copie)         # nom posé d'un coup, sur un fichier déjà complet ; jamais par-dessus une copie
+        except FileExistsError:
+            pass
+        finally:
+            os.unlink(tmp)
+    tmp = _fichier_complet(chemin, nouveau, st)
     try:
-        fd = os.open(copie, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    except FileExistsError:
-        pass
-    else:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(ancien)
-            os.fchown(f.fileno(), st.st_uid, st.st_gid)
-            os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
-    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".config.")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(nouveau)
-            os.fchown(f.fileno(), st.st_uid, st.st_gid)
-            os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
-            f.flush()
-            os.fsync(f.fileno())
         os.replace(tmp, chemin)
     except BaseException:
         os.unlink(tmp)
         raise
 
 
-def valeurs(texte: str) -> dict:
-    """Valeur effective de chaque clé : la DERNIÈRE ligne, comme LXC."""
-    out = {}
+def _fichier_complet(chemin: Path, texte: str, st) -> str:
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".config.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texte)
+            os.fchown(f.fileno(), st.st_uid, st.st_gid)
+            os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        os.unlink(tmp)
+        raise
+    return tmp
+
+
+def _parcourir(texte: str, val: dict, inclus: set, profondeur: int, reste: list, dedans: bool) -> None:
     for ligne in texte.splitlines():
-        m = CLE.match(ligne)
-        if m:
-            out[m.group(1)] = m.group(2)
-    return out
-
-
-def recrire(texte: str, retirer: set, poser: dict) -> str:
-    """Une seule ligne par clé mémoire, commentaires « Phase 6.P » retirés ; tout le reste à l'identique."""
-    effectif = {**valeurs(texte), **poser}
-    vu, out = set(), []
-    for ligne in texte.splitlines(keepends=True):
-        if PHASE.match(ligne):
+        if RAZ.match(ligne):
+            val.clear()
+            inclus.clear()
+            continue
+        m = INCLUSION.match(ligne)
+        if m and profondeur < MAX_PROFONDEUR:
+            cible = Path(m.group(1))
+            for f in sorted(cible.glob("*.conf")) if cible.is_dir() else [cible]:
+                if reste[0] <= 0:
+                    return
+                reste[0] -= 1
+                try:
+                    _parcourir(lire_config(f), val, inclus, profondeur + 1, reste, True)
+                except Illisible:
+                    pass                # LXC refuserait de démarrer ; ici, ce fichier ne dit simplement rien de la mémoire
             continue
         m = CLE.match(ligne)
         if not m:
-            out.append(ligne)
             continue
         cle = m.group(1)
-        if cle in retirer or cle in vu:
+        inclus.discard(cle)
+        if not m.group(2):
+            val.pop(cle, None)          # « clé = » vide : LXC oublie la clé
             continue
-        vu.add(cle)
-        out.append(f"lxc.cgroup2.memory.{cle} = {effectif[cle]}\n")
+        val[cle] = m.group(2)
+        if dedans:
+            inclus.add(cle)
+
+
+def valeurs_completes(texte: str):
+    """(valeurs effectives, clés qui viennent d'un fichier inclus). La DERNIÈRE ligne gagne, « lxc.cgroup2 = » efface tout."""
+    val, inclus = {}, set()
+    _parcourir(texte, val, inclus, 0, [MAX_INCLUS], False)
+    return val, inclus
+
+
+def valeurs(texte: str) -> dict:
+    return valeurs_completes(texte)[0]
+
+
+def recrire(texte: str, retirer: set, poser: dict) -> str:
+    """Une seule ligne par clé mémoire effective, à la place de la DERNIÈRE (une remise à zéro a pu précéder) ; commentaires
+    « Phase 6.P » retirés ; tout le reste à l'identique."""
+    effectif, inclus = valeurs_completes(texte)
+    effectif.update(poser)
+    lignes = texte.splitlines(keepends=True)
+    if lignes and not lignes[-1].endswith("\n"):
+        lignes[-1] += "\n"
+    dernier = {m.group(1): i for i, m in ((i, CLE.match(x)) for i, x in enumerate(lignes)) if m}
+    out = []
+    for i, ligne in enumerate(lignes):
+        if PHASE.match(ligne):
+            continue
+        m = CLE.match(ligne)
+        cle = m.group(1) if m else None
+        if cle is None or (cle not in retirer and (cle not in effectif or cle in inclus)):
+            out.append(ligne)
+        elif cle not in retirer and i == dernier[cle]:
+            out.append(f"lxc.cgroup2.memory.{cle} = {effectif[cle]}\n")
     return "".join(out)
 
 
@@ -155,7 +203,8 @@ def cgroup_ecrire(nom: str, cle: str, val: str) -> bool:
 
 
 def conteneurs(noms):
-    """(nom, chemin de config) sans doublon (/var/lib/lxc est souvent un montage ou un lien de /data/lxc)."""
+    """(nom, chemin de config). Un nom = une config : la première racine gagne, un homonyme périmé ailleurs est ignoré
+    (/var/lib/lxc est souvent un montage ou un lien de /data/lxc) ; les copies de sauvegarde aussi."""
     vus = set()
     for racine in RACINES:
         try:
@@ -164,28 +213,28 @@ def conteneurs(noms):
             continue
         for d in dossiers:
             cfg = d / "config"
-            if not NOM.match(d.name) or (noms and d.name not in noms) or not (cfg.is_file() or cfg.is_symlink()):
+            if not NOM.match(d.name) or d.name in vus or not (cfg.is_file() or cfg.is_symlink()):
                 continue
-            st = cfg.stat() if cfg.exists() else cfg.lstat()
-            if (st.st_dev, st.st_ino) in vus:
+            if d.name not in noms if noms else SAUVEGARDE.search(d.name):
                 continue
-            vus.add((st.st_dev, st.st_ino))
+            vus.add(d.name)
             yield d.name, cfg
 
 
-def corriger_vif(nom: str, echange_interdit_herite: bool, essai: bool) -> str:
-    """Limites du conteneur en marche, jugées sur leurs propres valeurs. L'échange est ouvert avant le retrait du frein."""
+def corriger_vif(nom: str, voulu, echange_interdit_herite: bool, essai: bool) -> str:
+    """Limites du conteneur en marche, avec l'échange de SA configuration (`voulu`) pour que les deux restent d'accord ; à
+    défaut la moitié du plafond vif. L'échange est ouvert d'abord : refusé, le frein reste en place."""
     dur, haut = octets(cgroup_lire(nom, "max")), octets(cgroup_lire(nom, "high"))
     if dur is None or cgroup_lire(nom, "swap.max") != "0":
         return ""
     frein = haut is not None and haut < dur
     if not (frein or echange_interdit_herite):
         return ""
+    echange = voulu or moitie(dur)
     if not essai:
-        cgroup_ecrire(nom, "swap.max", moitie(dur))
-        if frein:
-            cgroup_ecrire(nom, "high", "max")
-    return " ; appliqué à chaud" + (" (frein retiré)" if frein else "")
+        if not cgroup_ecrire(nom, "swap.max", echange) or (frein and not cgroup_ecrire(nom, "high", "max")):
+            return " ; limites à chaud NON appliquées (au prochain démarrage du conteneur)"
+    return f" ; appliqué à chaud (échange {echange}{', frein retiré' if frein else ''})"
 
 
 def migrer_un(nom: str, cfg: Path, essai: bool) -> None:
@@ -196,29 +245,31 @@ def migrer_un(nom: str, cfg: Path, essai: bool) -> None:
         return
     if BLOC_MAIL.search(texte):
         return          # bloc unique tenu par secubox-mail (lib/mail/memoire.sh)
-    v = valeurs(texte)
+    v, inclus = valeurs_completes(texte)
     dur, haut, echange = octets(v.get("max")), octets(v.get("high")), octets(v.get("swap.max"))
     marque = any(PHASE.match(x) for x in texte.splitlines())
     frein = dur is not None and haut is not None and haut < dur and echange == 0
     herite = dur is not None and echange == 0 and marque
-    vif = corriger_vif(nom, herite, essai)
     prefixe = "ESSAI, rien d'écrit : " if essai else ""
+    if (frein or herite) and inclus & ({"swap.max", "high"} if frein else {"swap.max"}):
+        dire(f"{nom} : frein ou échange interdit posé par un fichier inclus, à corriger à la main ({cfg})")
+        return
     if frein or herite:
-        retirer = {"high"} if frein else set()
-        nouveau = recrire(texte, retirer, {"swap.max": moitie(dur)})
-        if not essai:
-            ecrire_config(cfg, texte, nouveau)
+        nouvel = moitie(dur)
+        if not essai:           # la configuration d'abord : si elle ne s'écrit pas, rien ne change à chaud
+            ecrire_config(cfg, texte, recrire(texte, {"high"} if frein else set(), {"swap.max": nouvel}))
+        vif = corriger_vif(nom, nouvel, herite, essai)
         quoi = f"frein memory.high {v['high']} retiré (sous le budget {v['max']}, échange interdit)" if frein \
             else f"budget {v['max']} avec échange interdit (ancien budget #496)"
-        dire(f"{prefixe}{nom} : {quoi} ; échange borné à {moitie(dur)} — {cfg}, copie {cfg.name}{COPIE}{vif}")
+        dire(f"{prefixe}{nom} : {quoi} ; échange borné à {nouvel} — {cfg}, copie {cfg.name}{COPIE}{vif}")
         return
     if marque and texte != recrire(texte, set(), {}):
         if not essai:
             ecrire_config(cfg, texte, recrire(texte, set(), {}))
-        dire(f"{prefixe}{nom} : lignes de l'ancien budget #496 repliées, valeurs inchangées — {cfg}{vif}")
-        return
+        dire(f"{prefixe}{nom} : lignes de l'ancien budget #496 repliées, valeurs inchangées — {cfg}")
+    vif = corriger_vif(nom, v["swap.max"] if echange else None, False, essai)
     if vif:
-        dire(f"{prefixe}{nom} : limites à chaud corrigées, configuration déjà saine{vif}")
+        dire(f"{prefixe}{nom} : frein vif sous le plafond avec échange interdit, configuration sans ce défaut{vif}")
     if dur is not None and echange == 0:
         dire(f"{nom} : échange interdit sous un budget de {v['max']}, choix local non touché ({cfg})")
     elif dur is None and haut is not None and echange == 0:
@@ -258,7 +309,8 @@ def frein(nom: str, essai: bool) -> int:
         return 0
     retraits = []
     for cfg, texte in cfgs:
-        if "high" in valeurs(texte):
+        complet, inclus = valeurs_completes(texte)
+        if "high" in complet and "high" not in inclus:
             if not essai:
                 ecrire_config(cfg, texte, recrire(texte, {"high"}, {}))
             retraits.append(f"frein {valeurs(texte)['high']} retiré de {cfg} (copie {cfg.name}{COPIE})")

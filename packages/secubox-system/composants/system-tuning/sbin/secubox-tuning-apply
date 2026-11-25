@@ -122,8 +122,9 @@ persiste_cle() {
   local motif; motif=$(printf '%s' "$cle" | sed 's/\./\\./g')
 
   # Ecriture par fichier temporaire puis renommage : une config LXC tronquee
-  # par une interruption laisse le conteneur non demarrable.
-  local tmp="${conf}.tuning-tmp"
+  # par une interruption laisse le conteneur non demarrable. Proprietaire et mode
+  # gardes, derniere ligne sans \n jamais prolongee, rien d'ecrit si identique (#3941).
+  local tmp; tmp=$(mktemp "${conf}.XXXXXX") || return 1
   if grep -qE "^${motif}[[:space:]]*=" "$conf"; then
     # On garde la PREMIERE occurrence a sa place — l'ordre du fichier reste
     # lisible — et on efface les suivantes.
@@ -132,10 +133,14 @@ persiste_cle() {
       { print }
     ' "$conf" > "$tmp"
   else
-    cp "$conf" "$tmp"
+    # awk 1 rend le fichier ligne a ligne : une derniere ligne sans \n est terminee.
+    awk 1 "$conf" > "$tmp"
     printf '%s = %s\n' "$cle" "$val" >> "$tmp"
   fi
-  mv "$tmp" "$conf"
+  if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; return 0; fi
+  chmod --reference="$conf" "$tmp"
+  chown --reference="$conf" "$tmp"
+  mv -f "$tmp" "$conf"
 }
 
 apply_swap() {

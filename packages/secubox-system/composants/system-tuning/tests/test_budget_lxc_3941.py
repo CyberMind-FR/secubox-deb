@@ -137,7 +137,7 @@ def test_derniere_ligne_gagne_et_unites_sans_espaces(banc):
     banc.conteneur("x", "lxc.cgroup2.memory.max=2G\nlxc.cgroup2.memory.high=100M\nlxc.cgroup2.memory.swap.max=0\n"
                         "lxc.cgroup2.memory.max = 300M\n")
     banc.outil("migrer")
-    assert banc.config("x") == "lxc.cgroup2.memory.max = 300M\nlxc.cgroup2.memory.swap.max = 150M\n"
+    assert banc.config("x") == "lxc.cgroup2.memory.swap.max = 150M\nlxc.cgroup2.memory.max = 300M\n"
 
 
 def test_pas_d_ecriture_a_travers_un_lien(banc, tmp_path):
@@ -173,6 +173,95 @@ def test_seulement_les_conteneurs_nommes(banc):
 def test_sans_aucun_conteneur(banc):
     r = banc.outil("migrer")
     assert r.returncode == 0 and r.stdout.strip() == ""
+
+
+def test_vif_prend_l_echange_de_la_configuration(banc):
+    """M1 : configuration et cgroup restent d'accord (échange local de 100M, plafond relevé à chaud à 1G)."""
+    banc.conteneur("gitea", "lxc.cgroup2.memory.max = 512M\nlxc.cgroup2.memory.swap.max = 100M\n",
+                   max="1073741824", high="402653184", swap_max="0")
+    banc.outil("migrer")
+    assert banc.vif("gitea", "swap.max") == "100M" and banc.vif("gitea", "high") == "max"
+    banc.conteneur("nc", NEXTCLOUD, max="1073741824", high="max", swap_max="0")
+    banc.outil("migrer", "nc")
+    assert banc.vif("nc", "swap.max") == "256M" and "swap.max = 256M" in banc.config("nc")
+
+
+def test_ecriture_vive_refusee_est_dite_et_le_frein_reste(banc):
+    banc.conteneur("gitea", GITEA, max="536870912", high="402653184", swap_max="0")
+    f = banc.cg / "lxc.payload.gitea" / "memory.swap.max"
+    f.chmod(0o400)
+    if os.access(f, os.W_OK):
+        pytest.skip("root")
+    r = banc.outil("migrer")
+    assert "refusée" in r.stderr and "appliqué à chaud" not in r.stdout and banc.vif("gitea", "high") == "402653184"
+
+
+def test_config_non_ecrite_rien_a_chaud(banc):
+    banc.conteneur("gitea", GITEA, max="536870912", high="402653184", swap_max="0")
+    d = banc.lxc / "gitea"
+    d.chmod(0o500)
+    try:
+        if os.access(d, os.W_OK):
+            pytest.skip("root")
+        r = banc.outil("migrer")
+    finally:
+        d.chmod(0o700)
+    assert r.returncode == 1 and banc.vif("gitea", "high") == "402653184"
+
+
+@pytest.mark.parametrize("nom", ["gitea.bak", "gitea.avant-3941", "gitea-old", "gitea_backup", "gitea.sauvegarde-2026", "gitea.20261101"])
+def test_dossiers_de_sauvegarde_ignores(banc, nom):
+    banc.conteneur(nom, GITEA)
+    banc.outil("migrer")
+    assert banc.config(nom) == GITEA
+
+
+def test_homonyme_perime_d_une_racine_suivante_ignore(banc, tmp_path):
+    banc.conteneur("gitea", "lxc.cgroup2.memory.max = 512M\nlxc.cgroup2.memory.swap.max = 256M\n",
+                   max="536870912", high="max", swap_max="268435456")
+    vieux = tmp_path / "srv" / "gitea"
+    vieux.mkdir(parents=True)
+    (vieux / "config").write_text(GITEA)
+    banc.env["SECUBOX_LXC_RACINES"] += f":{tmp_path}/srv"
+    banc.outil("migrer")
+    assert (vieux / "config").read_text() == GITEA
+
+
+def test_remise_a_zero_lxc_cgroup2_vide(banc):
+    """« lxc.cgroup2 = » efface ce qui précède, une valeur vide efface la clé : comme LXC."""
+    raz = GITEA + "lxc.cgroup2 =\n"
+    banc.conteneur("a", raz)
+    vide = "lxc.cgroup2.memory.max = 512M\nlxc.cgroup2.memory.high = 384M\nlxc.cgroup2.memory.swap.max = 0\nlxc.cgroup2.memory.high =\n"
+    banc.conteneur("b", vide)
+    banc.conteneur("c", GITEA + "lxc.cgroup2 =\n" + ROUNDCUBE)
+    banc.outil("migrer")
+    assert banc.config("b") == vide
+    assert "memory.max" in banc.config("a") and "swap.max = 0" in banc.config("a"), "rien d'effectif à corriger"
+    fin = banc.config("c").split("lxc.cgroup2 =\n")[1]
+    assert fin == "lxc.cgroup2.memory.max = 256M\nlxc.cgroup2.memory.swap.max = 128M\n"
+
+
+def test_reglages_dans_un_fichier_inclus(banc, tmp_path):
+    inc = tmp_path / "commun.conf"
+    inc.write_text("lxc.cgroup2.memory.max = 512M\nlxc.cgroup2.memory.high = 384M\nlxc.cgroup2.memory.swap.max = 0\n")
+    cfg = f"lxc.include = {inc}\nlxc.uts.name = x\n"
+    banc.conteneur("x", cfg, max="max", high="max", swap_max="max")
+    r = banc.outil("migrer")
+    assert banc.config("x") == cfg and "fichier inclus" in r.stdout
+    banc.tuning({"x": "300M"})
+    assert banc.config("x") == cfg and banc.vif("x", "high") == "max", "un budget inclus est un budget propre"
+
+
+def test_inclusion_en_boucle_bornee(banc):
+    banc.conteneur("x", f"lxc.include = {banc.lxc}/x/config\n" + ROUNDCUBE)
+    assert banc.outil("migrer").returncode == 0
+
+
+def test_copie_complete_sans_reste(banc):
+    banc.conteneur("gitea", GITEA)
+    banc.outil("migrer")
+    assert sorted(p.name for p in (banc.lxc / "gitea").iterdir()) == ["config", "config.avant-3941"]
+    assert (banc.lxc / "gitea" / "config.avant-3941").stat().st_mode & 0o777 == 0o640
 
 
 # ── secubox-tuning-apply ──
