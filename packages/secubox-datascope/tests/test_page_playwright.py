@@ -587,8 +587,10 @@ def _iso(e):
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(e)) + ".000000Z"
 
 
-def _paysage_et_chronologie(nb=60, pas=1800, trou=(8, 13), partiels=(2,)):
-    """Le paysage maximal et une chronologie irrégulière ; `trou` : relevés manquants (indices, du plus récent)."""
+def _paysage_et_chronologie(nb=60, pas=1800, trou=(8, 13), partiels=(1, 2)):
+    """Le paysage maximal et une chronologie irrégulière ; `trou` : relevés manquants (indices, du plus récent).
+
+    Partiels 1 et 2 : à toute minute de l'horloge, une heure et une seule finit sur un relevé partiel."""
     d = _paysage_max(age_s=120.0)
     e0 = d["epoch"]
     d["instantane"]["ts"] = _iso(e0)
@@ -846,3 +848,125 @@ def test_anneau_et_contraste_des_compteurs():
     a, k = _navigateur(sc)
     a = {x[0]: x[1:] for x in a}
     assert a["pop:famille:balayage_web"] == [1, "81 100"] and a["pop:profileur:demo2"] == [1, ""] and k >= 4.5
+
+
+# --- tâche 6, relecture (tour 1) --------------------------------------------------------------------------------
+
+VISIBLE = """(sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(), c = getComputedStyle(e);
+  return r.width > 1 && r.height > 1 && (c.fill !== 'none' && !/, 0\\)$/.test(c.fill) || c.stroke !== 'none') && +c.opacity > .5; }"""
+
+
+def test_case_en_cours_et_derniere_mesure_toujours_marquees():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        r = []
+        for k in ("24h", "7j"):
+            pg.click(f"[data-k='per-{k}']")
+            s = "svg[data-k='h-c-adresses']"
+            r.append([pg.locator(f"{s} g.cour .b").count(), pg.evaluate(VISIBLE, f"{s} g.cour .encours"), pg.locator(f"{s} g.dern").count(),
+                      pg.evaluate("""s => { const f = e => getComputedStyle(e).fill; return f(document.querySelector(s + ' g.dern .b')) !== f(document.querySelector(s + ' g:not(.dern):not(.part) .b')); }""", s)])
+        return r
+    # démonstration à 11:00 pile : l'heure en cours n'a encore aucun relevé (pas de barre), elle reste repérée
+    assert _navigateur(sc) == [[0, True, 1, True], [1, True, 1, True]]
+
+
+def test_trou_mesure_absente_et_noeud_absent_se_distinguent():
+    _, api = _paysage_et_chronologie(pas=3600)
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        st = """s => { const e = document.querySelector(s), c = getComputedStyle(e); return [c.fill, c.stroke, e.getBoundingClientRect().height > 8]; }"""
+        return pg.evaluate(st, "svg[data-k='h-c-bans'] g.e-non_mesure .trou"), pg.evaluate(st, "svg[data-k='h-c-bans'] g.e-vide .trou"), \
+            pg.eval_on_selector("svg[data-k='h-c-bans'] g.e-non_mesure .bord", "e => e.getBoundingClientRect().width > 2 && getComputedStyle(e).stroke !== 'none'"), pg.inner_text("#pBarre .pbTete")
+    nm, vide, bord, tete = _navigateur(sc, query="", api=api)
+    assert nm[0] != vide[0] and vide[0] == "none" and vide[1] != "none" and bord is True
+    assert "url(" not in nm[0]  # teinte pleine : une trame devient invisible dans une barre de 3 px
+    assert "mesure absente" in tete
+
+
+def test_cibles_tactiles():
+    _, api = _paysage_et_chronologie()
+    d = api["paysage"][1]
+    d["difference_24h"] = {"apparus": ["pop:famille:p01", "cve:CVE-2099-10003"], "disparus": [], "hausses": [], "baisses": [], "rotation_levee": [],
+                           "rotation_tombee": [], "tronque": False, "reference_ts": "x", "reference_epoch": d["epoch"] - 86400, "ecart_s": 86400}
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        pg.click("#btInsp")
+        pg.wait_for_timeout(200)
+        return pg.evaluate("matchMedia('(pointer:coarse)').matches"), pg.locator("#insp .sLigne .lien").count(), pg.locator("#insp .filL .lien").count(), \
+            pg.eval_on_selector_all("#insp .sLigne .lien, #insp .filL .lien, #insp summary, #pBarre button, #pBarre svg.histo",
+                                    "l => l.map(e => [e.textContent.slice(0, 30), e.getBoundingClientRect()]).filter(x => x[1].height < 40 || x[1].width < 40).map(x => x[0])"), \
+            _debordement(pg)
+    coarse, s, f, petits, deborde = _navigateur(sc, query="", api=api, largeur=400, has_touch=True, is_mobile=True)
+    assert coarse and s >= 2 and f >= 2 and petits == [] and not deborde
+
+
+def test_partiel_signale_des_deux_cotes_de_la_comparaison():
+    d, api = _paysage_et_chronologie(partiels=(2, 12))
+    d["instantane"]["partiel"] = True
+    d["difference_24h"] = {"apparus": [], "disparus": [], "hausses": [{"id": "pop:famille:p01", "metrique": "adresses", "de": 1000, "a": 1910}],
+                           "baisses": [], "rotation_levee": [], "rotation_tombee": [], "tronque": False, "reference_ts": "x",
+                           "reference_epoch": d["epoch"] - 86400, "reference_partiel": False, "ecart_s": 86400}
+    c = api["paysage/chronologie"][1]
+    # les 12 lignes du fil vont de l'indice 0 à 11 ; le prédécesseur de la plus ancienne n'est que dans la chronologie
+    e0 = d["epoch"]
+    c["instantanes"] = sorted(({"ts": _iso(e0 - i * 1800), "epoch": e0 - i * 1800, "partiel": i in (2, 12),
+                                "compteurs": d["instantane"]["compteurs"]} for i in range(20)), key=lambda x: x["epoch"])
+    vide = {k: [] for k in ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee")}
+    c["differences"] = [{"ts": _iso(e0 - i * 1800), "epoch": e0 - i * 1800, "partiel": i == 2, "difference": dict(vide)} for i in range(12)]
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = [pg.inner_text("#insp"), pg.eval_on_selector_all("#insp .filL", "l => l.map(e => e.innerText)")]
+        pg.focus("#topo .nd[data-id='pop:famille:p01']")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(200)
+        return r + [pg.inner_text("#insp")]
+    syn, fil, fiche = _navigateur(sc, query="", api=api)
+    assert "relevé affiché partiel" in syn and "relevé affiché partiel" in fiche
+    prec = [i for i, t in enumerate(fil) if "comparé à un relevé partiel" in t]
+    assert len(prec) == 2 and prec[1] == len(fil) - 1  # le suivant du partiel, et la plus ancienne ligne
+    assert sum("partiel" in t and "comparé" not in t for t in fil) == 1
+
+
+def test_defilement_et_parties_depliees_gardes_au_nouveau_releve():
+    d, api = _paysage_et_chronologie()
+    d["difference_24h"] = {"apparus": [], "disparus": [], "hausses": [], "baisses": [], "rotation_tombee": [], "tronque": False,
+                           "rotation_levee": [f"pop:famille:p{i:02d}" for i in range(12)], "reference_ts": "x", "reference_epoch": d["epoch"] - 86400,
+                           "ecart_s": 86400}
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        pg.click("#insp details[data-k='syn-rotation_levee'] summary")
+        pg.evaluate("document.getElementById('panInsp').scrollTop = 120")
+        av = pg.evaluate("document.getElementById('panInsp').scrollTop")
+        d["instantane"]["ts"] = _iso(d["epoch"] + 60)
+        d["epoch"] += 60
+        pg.evaluate("document.querySelector('#insp .sPhrase').dataset.t = '1'; document.getElementById('rafraichir').click()")
+        pg.wait_for_timeout(400)
+        return av, pg.evaluate("document.getElementById('panInsp').scrollTop"), pg.locator("#insp [data-t]").count(), pg.locator("#insp details[data-k='syn-rotation_levee'][open]").count()
+    assert _navigateur(sc, query="", api=api, largeur=1400, hauteur=700) == (120, 120, 0, 1)
+
+
+def test_session_refusee_pendant_la_lecture_de_l_historique():
+    _, api = _paysage_et_chronologie()
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("__p.chrono.enVol = 'en-cours'; __p.chrono.echec = true")
+        api["paysage"], bon = (401, {}), api["paysage"]
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(200)
+        r = pg.evaluate("[__p.chrono.enVol, __p.chrono.rep, __p.chrono.echec]")
+        api["paysage"] = bon
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(300)
+        return r, pg.evaluate("!!__p.chrono.rep")
+    assert _navigateur(sc, query="", api=api, crochet="0;window.__p=paysage") == (["", None, False], True)
