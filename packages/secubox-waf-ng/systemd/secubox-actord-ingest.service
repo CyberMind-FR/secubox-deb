@@ -26,6 +26,12 @@ After=secubox-actord.service
 
 [Service]
 Type=oneshot
+# #3939 : sans actord ACTIF, aucune socket ne viendra : l'unité est passée (condition non remplie, pas un échec) au lieu d'attendre
+# 960 s puis d'échouer — un changement de profil entier en a été annulé le 2026-11-25 (actord désactivé, ce oneshot activé).
+# Un démarrage lent reste couvert : actord est Type=simple, donc « active » dès son lancement, pendant tout son rejeu (11 à 18 min
+# vus, socket fermée). Et quand il démarre, son Wants= (et WantedBy= ici) tire cette unité, rangée APRÈS lui (After=) : la
+# condition est lue une fois actord actif, redémarrages compris.
+ExecCondition=/bin/systemctl -q is-active secubox-actord.service
 # actord peut mettre plusieurs minutes à ouvrir sa socket (reconstruction du graphe) : le script attend jusqu'à 15 min.
 TimeoutStartSec=960
 # SURTOUT PAS RemainAfterExit. Avec lui, l'unite restait « active » apres son
