@@ -62,9 +62,10 @@ def run_once() -> dict:
     state: Dict[str, Any] = {
         "generated_at": now,
         "checks": {},
-        "summary": {"total": 0, "ok": 0, "fail": 0, "transitions": []},
+        "summary": {"total": 0, "ok": 0, "fail": 0, "avertissements": 0, "transitions": []},
     }
-    for name, fn in checks.REGISTRY.items():
+    for name, fn in {**checks.REGISTRY, **checks.REGISTRY_AVERTISSEMENTS}.items():
+        avertissement = name in checks.REGISTRY_AVERTISSEMENTS
         t0 = time.time()
         try:
             ok, details = fn()
@@ -78,11 +79,12 @@ def run_once() -> dict:
             "ts": now,
         }
         state["checks"][name] = entry
-        state["summary"]["total"] += 1
-        if ok:
-            state["summary"]["ok"] += 1
+        if avertissement:
+            entry["niveau"] = "avertissement"
+            state["summary"]["avertissements"] += 0 if ok else 1
         else:
-            state["summary"]["fail"] += 1
+            state["summary"]["total"] += 1
+            state["summary"]["ok" if ok else "fail"] += 1
         # State-transition events (ok->fail and fail->ok only)
         prev_ok = prev_checks.get(name, {}).get("ok")
         if prev_ok is not None and prev_ok != ok:

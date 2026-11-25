@@ -56,13 +56,14 @@ def list_checks():
 
 @app.get("/status/{name}", dependencies=[Depends(require_lecture)])
 def status_of(name: str):
-    if name not in checks.REGISTRY:
+    sondes = {**checks.REGISTRY, **checks.REGISTRY_AVERTISSEMENTS}
+    if name not in sondes:
         raise HTTPException(status_code=404, detail=f"unknown check: {name}")
     state = runner.current()
     entry = state.get("checks", {}).get(name)
     if not entry:
         # Run on demand if not yet cached
-        ok, details = checks.REGISTRY[name]()
+        ok, details = sondes[name]()
         return {"name": name, "ok": ok, "details": details, "cached": False}
     return {"name": name, **entry, "cached": True}
 
@@ -87,7 +88,7 @@ def waf_selftest_run():
 @app.get("/registered", dependencies=[Depends(require_lecture)])
 def registered():
     """List all registered check names (for discovery)."""
-    return {"checks": sorted(checks.REGISTRY.keys())}
+    return {"checks": sorted({**checks.REGISTRY, **checks.REGISTRY_AVERTISSEMENTS})}
 
 
 # ── Bouton « Réparer » (#3628) ─────────────────────────────────────────────────────────────────

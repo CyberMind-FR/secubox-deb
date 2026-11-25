@@ -42,6 +42,9 @@ Socket Unix : `/run/secubox/health-doctor.sock`, `/run/secubox/metrics.sock`.
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 
+Sondes d'avertissement (`REGISTRY_AVERTISSEMENTS`, `"niveau": "avertissement"`, comptées dans `summary.avertissements`,
+jamais dans `fail`) : `comptes-admin` (#3708), administrateurs actifs sans mot de passe. Un nombre, jamais un nom.
+
 ## Dépendances SecuBox
 
 `secubox-core`.

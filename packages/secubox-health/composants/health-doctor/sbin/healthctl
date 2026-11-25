@@ -32,6 +32,8 @@ except IndexError:
 
 from api import checks, runner  # noqa: E402
 
+SONDES = {**checks.REGISTRY, **checks.REGISTRY_AVERTISSEMENTS}
+
 
 def _color(ok: bool) -> str:
     return "\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"
@@ -39,11 +41,11 @@ def _color(ok: bool) -> str:
 
 def cmd_check(args) -> int:
     if args.name:
-        if args.name not in checks.REGISTRY:
+        if args.name not in SONDES:
             print(f"unknown check: {args.name}", file=sys.stderr)
-            print(f"available: {', '.join(sorted(checks.REGISTRY.keys()))}", file=sys.stderr)
+            print(f"available: {', '.join(sorted(SONDES.keys()))}", file=sys.stderr)
             return 2
-        ok, details = checks.REGISTRY[args.name]()
+        ok, details = SONDES[args.name]()
         if args.json:
             print(json.dumps({"name": args.name, "ok": ok, "details": details}, indent=2))
         else:
@@ -70,8 +72,8 @@ def cmd_check(args) -> int:
 def cmd_list(args) -> int:
     state = runner.current()
     cached = state.get("checks", {})
-    width = max((len(n) for n in checks.REGISTRY), default=10)
-    for name in sorted(checks.REGISTRY.keys()):
+    width = max((len(n) for n in SONDES), default=10)
+    for name in sorted(SONDES.keys()):
         entry = cached.get(name)
         if entry:
             sym = _color(entry["ok"])
@@ -83,14 +85,14 @@ def cmd_list(args) -> int:
 
 
 def cmd_status(args) -> int:
-    if args.name not in checks.REGISTRY:
+    if args.name not in SONDES:
         print(f"unknown check: {args.name}", file=sys.stderr)
         return 2
     state = runner.current()
     entry = state.get("checks", {}).get(args.name)
     if not entry:
         print(f"{args.name}: never run; running now …")
-        ok, details = checks.REGISTRY[args.name]()
+        ok, details = SONDES[args.name]()
         entry = {"ok": ok, "details": details, "ts": "now"}
     print(json.dumps({"name": args.name, **entry}, indent=2))
     return 0 if entry["ok"] else 1
@@ -120,7 +122,7 @@ def cmd_components() -> int:
         "timer": "secubox-health-doctor.timer",
         "cache": str(runner.CACHE_PATH),
         "api_base": "/api/v1/health-doctor",
-        "registered_checks": sorted(checks.REGISTRY.keys()),
+        "registered_checks": sorted(SONDES.keys()),
         "version": "1.0.0",
     }, indent=2))
     return 0
