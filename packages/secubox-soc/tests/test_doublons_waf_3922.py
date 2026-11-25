@@ -24,10 +24,11 @@ def test_index_a_un_lien_de_premier_niveau_vers_le_waf():
     assert 'target="_top"' in m.group(0) and "data-vue" not in m.group(0)
 
 
-def test_les_autres_onglets_restent_et_le_defaut_est_guardian():
-    for t in ("tdef", "t0", "tn", "td", "tr", "t1", "t2", "t3"):
+def test_les_autres_onglets_restent_et_le_defaut_est_situations():
+    for t in ("tsit", "tdef", "t0", "tn", "td", "tr", "t1", "t2", "t3"):
         assert f'id="{t}"' in INDEX, t
-    assert re.search(r'id="t0"', INDEX) and 'aria-selected="true" aria-controls="e0" id="t0"' in INDEX
+    assert re.findall(r'aria-selected="true" aria-controls="e4" id="([a-z0-9]+)"', INDEX) == ["tsit"]      # #3963 (Guardian avant)
+    assert INDEX.count('role="tab" aria-selected="true"') == 1 and INDEX.index('id="tsit"') < INDEX.index('id="tdef"')
 
 
 def test_aucune_reference_aux_onglets_retires_dans_le_script():

@@ -74,9 +74,10 @@ def test_aucune_ressource_externe_dans_la_source():
     assert not re.search(r"(src|href)=[\"']https?://|url\(\s*[\"']?https?://|@import", PAGE.read_text(encoding="utf-8"))
 
 
-def test_l_onglet_par_defaut_de_soc_est_guardian_et_l_encadre():
+def test_l_onglet_guardian_de_soc_reste_et_l_encadre():
     h = (WWW / "index.html").read_text(encoding="utf-8")
-    assert re.search(r'id="t0"[^>]*>.*?Guardian', h) and 'aria-selected="true" aria-controls="e0"' in h and 'src="guardian.html"' in h
+    assert re.search(r'id="t0"[^>]*>.*?Guardian', h) and 'src="guardian.html" loading="lazy"' in h
+    assert re.search(r'id="e0" role="tabpanel" aria-labelledby="t0" hidden', h)       # #3963 : « Situations » ouvre la Vigie, Guardian suit
     assert re.search(r'id="e1" role="tabpanel" aria-labelledby="t1" hidden', h)       # Vigie (l'ancienne page) reste, masquée par défaut
 
 

@@ -6,7 +6,7 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   Administration du WAF au profil Aurora (.claude/AURORA-REFERENCE.md) : page hôte autonome, aucune dépendance.
-  Elle encadre les sept pages Aurora (vue d'ensemble, menaces, attaquants, visites, surfaces, historique, campagnes), toutes de même
+  Elle encadre les pages Aurora (sites #3963, vue d'ensemble, menaces, attaquants, visites, surfaces, historique, campagnes), toutes de même
   origine, et porte les actions de configuration : état du WAF, bannir / lever un ban, vider les bans, exporter, catégories.
   Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes. Aucun secret affiché.
 -->
@@ -123,6 +123,7 @@
         <div class="live" id="live"><span class="pt" id="pt"></span><span id="liveTexte">Aucune attaque récente.</span></div>
 
         <div class="onglets" id="wafTabs" role="tablist" aria-label="Pages du WAF">
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="sites">Sites</button>
             <button class="waf-tab active" type="button" role="tab" aria-selected="true" data-tab="vue">Vue d'ensemble</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="overview">Menaces</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="attackers">Attaquants suivis</button>
@@ -395,11 +396,15 @@
         $('rafraichir').addEventListener('click', () => { charger(); rechargerCadre(); });
 
         // ----- Onglets : pages autonomes encadrées (même origine) -----
-        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres', filtresia: 'filtres-ia', modes: 'modes' };
+        const WAF_PAGES = { sites: 'sites', overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres', filtresia: 'filtres-ia', modes: 'modes' };
         const ONGLETS = ['vue', 'config'].concat(Object.keys(WAF_PAGES));
+        let SITE = '';   // #3963 : « #sites:<nom> » ouvre le dossier de ce site
         const suffixe = (embed) => (embed ? '?embed=1' : '') + (DEMO ? (embed ? '&' : '?') + 'demo=1' : '');
         function rechargerCadre() { const f = ONGLET === 'vue' ? $('vueFrame') : WAF_PAGES[ONGLET] ? $('pageFrame') : null; if (f && !DEMO) { try { f.contentWindow.location.reload(); } catch (e) { /* sans objet */ } } }
         function switchTab(name) {
+            const voulu = /^sites:([a-z0-9][a-z0-9._-]{0,252})$/.exec(name);
+            SITE = voulu ? voulu[1] : '';
+            if (voulu) name = 'sites';
             if (ONGLETS.indexOf(name) < 0) name = 'vue';
             ONGLET = name;
             document.querySelectorAll('#wafTabs .waf-tab').forEach(b => { const on = b.dataset.tab === name; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
@@ -409,9 +414,9 @@
             $('configCard').hidden = name !== 'config';
             if (page) {
                 const f = $('pageFrame');
-                if (f.dataset.p !== page) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html' + suffixe(true); }
+                if (f.dataset.p !== page || SITE) { f.dataset.p = page; f.style.height = '1200px'; f.src = page + '.html' + suffixe(true) + (SITE ? '&site=' + encodeURIComponent(SITE) : ''); }
             }
-            try { history.replaceState(null, '', '#' + name); } catch (e) { /* sans objet */ }
+            try { history.replaceState(null, '', '#' + name + (SITE ? ':' + SITE : '')); } catch (e) { /* sans objet */ }
             annoncer();
         }
         document.querySelectorAll('#wafTabs .waf-tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
@@ -420,12 +425,13 @@
         // #3919 : empilées sur un téléphone, les cartes de campagne dépassent 4000 px, et un cadre coupé ajoute un second défilement. Cette page mesure
         // son cadre (jamais le document) : sa hauteur ne dépend pas de celle de l'iframe, une borne plus haute ne la fait pas grandir.
         const HAUTEUR_MAX = { campagnes: 16000 };
+        HAUTEUR_MAX.sites = 16000;   // #3963 : liste puis dossier, empilés sur un téléphone
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
             const px = (h, onglet) => Math.min(Object.prototype.hasOwnProperty.call(HAUTEUR_MAX, onglet) ? HAUTEUR_MAX[onglet] : 4000, Math.max(300, +h + 4)) + 'px';
             if (e.data.sbxwafVue) { const f = $('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
             if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue, e.data.onglet); }
-            if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue); }
+            if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue, e.data.onglet); }
         });
 
         // ----- Hauteur annoncée à l'hôte (iframes) -----
@@ -439,6 +445,7 @@
         const dep = (location.hash || '').slice(1);   // lu avant switchTab, qui réécrit le fragment
         switchTab("vue");   // #2293 : la vue d'ensemble est l'onglet par défaut
         if (dep && dep !== 'vue') switchTab(dep);
+        window.addEventListener('hashchange', () => switchTab((location.hash || '').slice(1)));   // #3963 : le geste d'un dossier mène à un autre onglet
         charger();
         // Pas d'actualisation pendant une confirmation ouverte, ni onglet masqué.
         setInterval(() => { if (document.hidden || DEMO || CONF) return; charger(); }, 30000);

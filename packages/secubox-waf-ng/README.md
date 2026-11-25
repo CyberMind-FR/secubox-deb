@@ -587,3 +587,22 @@ Ce que la box ne sait pas (vulnérabilités connues, candidats du relais gk0, KE
 | `POST /api/v1/waf/filtres-ia/{id}/retirer` | `require_jwt` | bilan de `cvectl filtres-ia retirer --apply` (acteur = l'administrateur) ; audit `waf-filtres-ia-retirer` intention puis issue ; 404 id inconnu, 422 id invalide |
 
 Page : `/waf/filtres-ia.html` (onglet « Filtres IA » de `/waf/`), `?demo=1` : adresses de documentation, aucune écriture.
+
+## Dossiers par site (#3963, 1.49.0)
+
+Page `/waf/sites.html` (onglet « Sites », premier de `/waf/` ; `/waf/#sites:<nom>` ouvre un dossier). Lecture seule.
+
+| Route | Garde | Rend |
+|---|---|---|
+| `GET /api/v1/waf/dossiers/sites` | `require_lecture` | `genere_le`, `couverture_depuis`, `age_s`, `perime`, `journal`, `heures_mesurees`, `partielles`, `chiffres`, `sites` (par urgence, série de 24 h), `calmes`, `decisions` (rotation, campagnes, acteurs : des comptes) |
+| `GET /api/v1/waf/dossiers/sites/{id}` | `require_lecture` | le dossier : `phrase`, `couches`, `robots`, `chaine`, `categories`, `origine`, `faits`, `geste` ; 404 si le nom n'est pas servi |
+
+- **Aucune adresse** n'est gardée ni rendue. Les noms non servis forment un seul dossier, `noms-inconnus`.
+- **Couches** : `banned` = arrêté ; `warning` = refusé (page 403, 421 pour un nom non servi) ; `leurre_redirige` = détourné (champ `servies`) ;
+  `detect` = laissé passer ; `robot` à part. Les lignes d'état ne comptent pas ; celles de sbx-authwatch sont dans `chiffres.hors_web`.
+- **Heure non mesurée = `null`** : aucune ligne datée de cette heure et aucun signe de vie du moteur (`nft-etat.json` de moins de 3 min).
+- **Coût** : tâche de fond, une passe par minute, seulement les octets neufs (curseur de `veille_lecture`, rotation et troncature suivies) ;
+  premier départ borné à 24 Mio. Plafonds : 300 sites, 24 motifs par site et par heure, 40 000 cellules. État
+  `/var/lib/secubox/waf/dossiers.json`, écrit toutes les 5 min par remplacement atomique (0640).
+- **Pas mesurable** : requêtes reçues par site sur 24 h (`visits-stats.json` ne porte que les 1 000 dernières visites) : « — ».
+- « Sous attaque » : 30 requêtes hostiles ou plus en deux heures, et trois fois le rythme moyen des autres heures mesurées (six au moins).

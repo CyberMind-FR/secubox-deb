@@ -1,3 +1,24 @@
+secubox-waf-ng (1.49.0-1~trixie1) trixie; urgency=medium
+
+  * Dossiers par site (ref #3963) : onglet « Sites », premier de la navigation
+    du WAF (aucun onglet retiré, la vue d'ensemble reste ouverte par défaut).
+    Liste triée par urgence avec mini-série de 24 h ; dossier : phrase,
+    journée par couches, chaîne, motifs, origine, faits datés, geste (lien).
+  * API : GET /dossiers/sites et /dossiers/sites/{id} (require_lecture, aucune
+    adresse). Agrégat horaire tenu en tâche de fond par le curseur de
+    veille_lecture : seuls les octets neufs du journal sont lus, une passe par
+    minute, plafonds explicites, état atomique dans
+    /var/lib/secubox/waf/dossiers.json, reprise bornée à 24 Mio.
+  * Couches : arrêté (banned), refusé (warning, page 403), détourné
+    (leurre_redirige), laissé passer (detect) ; robots à part. Heure non
+    mesurée = null. « Requêtes reçues » vaut « — » : le moteur n'a pas de
+    total par site sur 24 h.
+  * Un fragment changé (#modes, #sites:<nom>) change d'onglet.
+  * Pas repris : « Durcir ce site » (issue à part), « Pages légitimes
+    touchées » (aucune mesure).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 20:00:00 +0100
+
 secubox-waf-ng (1.48.1-1~trixie1) trixie; urgency=medium
 
   * Actor (ref #3960) : un geste est rattaché à une fiche par ses adresses, plus

@@ -8,7 +8,7 @@
   SecuBox — Vigie SOC au profil Aurora (.claude/AURORA-REFERENCE.md, #2676). Page autonome, aucune dépendance.
 
   ELLE NE PEINT RIEN QU'ELLE N'A OBSERVÉ. Elle lit les SOURCES VIVANTES de la box : le WAF (menaces, bans, campagnes
-  corrélées, géo), les métriques, les profils, la sentinelle GSM, et encadre les pages de même origine (Guardian, Réseau
+  corrélées, géo), les métriques, les profils, la sentinelle GSM, et encadre les pages de même origine (Situations, Guardian, Réseau
   en direct, /dpi/vue.html, /actor-intelligence/ ; le détail du WAF s'ouvre dans /waf/, une place par panneau, #3922). Un panneau qui ne peut pas lire sa source le DIT : une mesure
   absente s'affiche « — », jamais 0 (« rien ne nous attaque » et « on ne voit plus rien » ne se ressemblent pas).
   Page en lecture seule : aucun appel d'écriture.
@@ -179,8 +179,9 @@
   <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
 
   <div class="onglets" role="tablist" aria-label="Écrans du SOC">
+    <button class="onglet" role="tab" aria-selected="true" aria-controls="e4" id="tsit" data-vue="situations.html?embed=1"><span class="pt"></span>Situations</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tdef" data-vue="defense.html?embed=1"><span class="pt"></span>Cyber Defense Live</button>
-    <button class="onglet" role="tab" aria-selected="true" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
+    <button class="onglet" role="tab" aria-selected="false" aria-controls="e0" id="t0"><span class="pt"></span>Guardian</button>
     <button class="onglet" role="tab" aria-selected="false" aria-controls="e4" id="tn" data-vue="reseau.html?embed=1"><span class="pt"></span>Réseau en direct</button>
     <span class="grp" aria-hidden="true">Pare-feu</span>
     <a class="onglet lien" id="twaf" href="/waf/" target="_top" title="Le détail des menaces, attaquants, campagnes, surfaces, visites et historique vit dans le WAF (#3922)"><span class="pt"></span>Détail dans le WAF ↗</a>
@@ -194,13 +195,13 @@
   </div>
 
   <!-- ÉCRAN 4 — LES VUES RASSEMBLÉES (#2358) : une page Aurora de même origine par onglet, une seule source (/dpi, /actor-intelligence), hauteur annoncée par la page -->
-  <section class="ecran" id="e4" role="tabpanel" hidden>
+  <section class="ecran" id="e4" role="tabpanel">
     <iframe id="vueFrame" title="Vue SecuBox"></iframe>
   </section>
 
   <!-- ÉCRAN 0 — GUARDIAN (#2341) : la vue d'ensemble de la maquette, page encadrée de même origine, hauteur annoncée par la page -->
-  <section class="ecran" id="e0" role="tabpanel" aria-labelledby="t0">
-    <iframe id="guardianFrame" src="guardian.html" title="SecuBox Guardian — la vigie du réseau"></iframe>
+  <section class="ecran" id="e0" role="tabpanel" aria-labelledby="t0" hidden>
+    <iframe id="guardianFrame" src="guardian.html" loading="lazy" title="SecuBox Guardian — la vigie du réseau"></iframe>
   </section>
 
   <!-- ÉCRAN 1 — VIGIE -->
@@ -814,7 +815,7 @@
     // Les vues rassemblées : WAF (sbxWafVue + onglet), DPI (sbxdpiVue), génériques (sbxVue) ; une page sans annonce garde la hauteur par défaut.
     var hv = e.data.sbxWafVue || e.data.sbxdpiVue || e.data.sbxVue;
     if (hv && v && e.source === v.contentWindow) {
-      v.style.height = Math.min(4000, Math.max(400, +hv + 4)) + "px";
+      v.style.height = Math.min(9000, Math.max(400, +hv + 4)) + "px";
     }
     if (hv && g && e.source === g.contentWindow) {
       g.style.height = Math.min(4000, Math.max(600, +hv + 4)) + "px";
@@ -838,6 +839,14 @@
       hauteur();
     });
   });
+  // #3963 : « Situations » ouvre la Vigie ; Guardian ne se charge (loading="lazy") qu'à l'ouverture de son onglet.
+  $("tsit").click();
+  function parFragment() {
+    var o = document.getElementById((location.hash || "").slice(1));
+    if (o && onglets.indexOf(o) >= 0 && o.getAttribute("aria-selected") !== "true") { o.click(); }
+  }
+  window.addEventListener("hashchange", parFragment);
+  parFragment();
   if (DEMO) { $("guardianFrame").src = avecDemo("guardian.html"); }
 
   // ── Chargement ─────────────────────────────────────────────────────
