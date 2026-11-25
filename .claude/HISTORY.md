@@ -11,6 +11,16 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-25 (03:20) — live.secubox.in refondue, fenêtre mail active, pilotage, consigne de densité Aurora
+
+- **#3933 (PR #3937, déployé gk2, secubox-live 0.2.0)** : page publique redessinée d'après la maquette validée (nuit par défaut, jour au
+  bouton). Vérifiée en production à 1280 et 400 px, sans erreur. Sites protégés 132 → 131 : un vhost hors pare-feu n'est plus compté.
+  Rôle de gk3 corrigé dans `/etc/secubox/live.toml` (« voicestudio » → « ia »).
+- **#3925** : essai réussi à 02:44 (mémoire minimale 1 462 Mo, témoin jamais en erreur, fermeture en 12 s) ; fenêtre activée.
+- **#3934 (PR #3935, déployé gk2, pilotage 0.7.2)** : page de confirmation au lieu du 403 quand une box est ouverte par un lien du domaine.
+- **Aurora § 12 bis** : densité des mesures (consigne du propriétaire). En cours : Actor (#3936), DataScope (#3921, tâches 1 à 4 validées).
+- Nuit WAF 1.45.0 : 0 ban manquant à 02:41 (17 106 attendus), la campagne Gitea trouvée par le détecteur, rien de banni par lui.
+
 ## 2026-11-24 (17:00) — WAF 1.45.0 en production : bans reposés, leurres mail, campagnes à rotation en observation
 
 - **PR #3931 (intégration #3919, #3924, #3930), déployé** : gk2 waf-ng 1.45.0, toolbox-ng 0.20.0, soc 1.13.2 ; gk3 ai 2.3.2.

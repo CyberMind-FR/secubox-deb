@@ -155,6 +155,24 @@ au chargement, au redimensionnement et à chaque rendu (`ResizeObserver` sur `bo
   mesure ; libellés explicites (« Entrant maintenant », pas « In »).
 - `aria-selected` sur les onglets, focus visible, cibles tactiles confortables, contraste texte/fond conforme aux jetons ci-dessus.
 
+## 12 bis. Densité : chaque mesure se voit (consigne du propriétaire, 2026-11-25)
+
+Maximiser et intensifier les visualiseurs de mesures pour optimiser la place. La place gagnée sert aux données, jamais à l'ornement.
+
+- **Un chiffre seul est un manque** : toute mesure qui a une série porte sa mini-série dans la même case (24 barres d'une heure ou
+  7 d'un jour), sa tendance (▲/▼ et l'écart chiffré) et son pic en infobulle. Sans série réelle : pas de mini-graphe.
+- **Formes compactes d'abord** : mini-barres, barre empilée de parts, jauge fine, carte de chaleur heure × jour, puces d'état, plutôt qu'un
+  tableau de nombres ou un donut isolé. Une ligne de liste porte son nom, sa valeur, sa mini-série et son état.
+- **Petits multiples** plutôt qu'un grand graphe : mêmes axes de temps, une échelle par série, annoncée. Jamais deux échelles sur un axe.
+- **Hauteur utile** : en-tête et filtres tiennent sur une ligne ; pas de panneau plus haut que son contenu, pas de vide sous une colonne
+  (colonnes équilibrées). Le secondaire est replié (`<details>`) avec son chiffre clé dans le résumé.
+- **Intensité** : la couleur dit le sens (§ 2), l'opacité ou la teinte dit la quantité ; la barre courante et le pic sont accentués ; une
+  pulsation seulement pour « en cours maintenant ». `prefers-reduced-motion` : rien ne bouge.
+- **Lisible avant tout** : texte à lire ≥ .85rem, contraste ≥ 4,5:1, cible tactile ≥ 40 px. Densifier ne veut pas dire rapetisser.
+- **Mobile** : une colonne, les mini-séries gardent toute la largeur ; rien ne déborde, l'ordre est celui de l'urgence.
+- **Une place par mesure** (#3922) : un panneau partagé (#3920) plutôt qu'une copie ou un cadre de pleine page.
+- **Coût** : une mini-série vient d'un agrégat déjà calculé (cache), jamais d'un balayage par affichage.
+
 ## 13. Process
 
 Issue → worktree → PR (`AGENTS.md`). Version montée pour toute source déployée ; entrée `HISTORY.md` ; changelog du paquet qui dit ce
