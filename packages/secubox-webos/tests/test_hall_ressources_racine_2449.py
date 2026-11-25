@@ -17,7 +17,8 @@ def _absolus():
 
 def test_les_ressources_absolues_du_hall_existent_dans_son_dossier():
     refs = _absolus()
-    assert {"/domaine.js", "/lexie.js", "/hall-logo.svg"} <= refs and any(r.startswith("/fonts/") for r in refs) and any(r.startswith("/medaillons/") for r in refs)
+    # Le logo et les médaillons ont quitté index.html le 2026-11-19 (dé SbX, #3821) : ils ne sont plus exigés.
+    assert {"/domaine.js", "/lexie.js", "/sbx-dice.js"} <= refs and any(r.startswith("/fonts/") for r in refs)
     for r in refs:
         assert (RACINE / "www/hall" / r.lstrip("/")).is_file(), r
 
