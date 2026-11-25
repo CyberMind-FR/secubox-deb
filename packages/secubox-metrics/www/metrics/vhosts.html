@@ -248,7 +248,7 @@
   // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
   var VIE=null;
   function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
-  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
     // ── état ──
   let per = 'semaine', groupe = false, vue = null, certs = null, live = null, det = null, courant = null;
   let tri = 'requetes', sens = -1, filtre = '', recherche = '', toutAfficher = false, session = true;

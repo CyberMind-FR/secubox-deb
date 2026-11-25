@@ -143,7 +143,7 @@
   // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
   var VIE=null;
   function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
-  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
     function couleur(p){return p>=85?'#ff4d5e':p>=70?'#ff9f1c':'#2ecc71';}
   function duree(sec){if(!has(sec))return '—';sec=Math.floor(num(sec));var d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);return d>0?d+' j '+h+' h':h>0?h+' h '+m+' min':m+' min';}
   function mem(kb){return (num(kb)/1048576).toFixed(1).replace('.',',')+' Go';}
@@ -352,12 +352,16 @@
         var svg=el(x[0]),pan=svg.closest('.pan'),L={},rangs=el(x[1]).querySelectorAll('b');
         var l=(x[2]||[]).map(function(p){return {code:String(p.code).toUpperCase(),n:num(p.n)};}).sort(function(a,b){return b.n-a.n;}),r={t:lu,pays:l.slice(0,60)};
         l.filter(function(p){return CENTRE[p.code];}).slice(0,8).forEach(function(p,i){if(rangs[i])L[p.code]=rangs[i];});
-        P.carte(svg,{cle:x[0],coul:x[3],centres:CENTRE,format:fmt,liste:L,instantanes:!l.length?[]:d.demo?[r]:P.memoire(x[4],r),quand:pan.querySelector('h3'),zone:pan});});
+        P.carte(svg,{cle:x[0],coul:x[3],centres:CENTRE,format:fmt,liste:L,instantanes:!l.length?[]:d.demo?[r]:P.memoire(x[4],r),quand:pan.querySelector('h3'),zone:pan});
+      });
+      // Non mesuré = null, jamais 0.
+      var memN=ser.map(function(r){return has(r.total_mb)&&num(r.total_mb)>0&&has(r.used_mb)?100*num(r.used_mb)/num(r.total_mb):null;}),loadN=ser.map(function(r){return has(r.load1)?num(r.load1):null;});
       // Mémoire et charge : un relevé réel par heure sur 24 h, puis la valeur affichée.
       var h=ser.map(function(r,i){return {r:r,i:i};}).filter(function(o){return (ser.length-1-o.i)%12===0;}).slice(-24);
-      [[2,'memoire','#b57bff',memS,memP,function(v){return v==null?'—':Math.round(v)+' %';}],[4,'charge','#ffb000',loadS,has(l1)?l1:null,function(v){return v==null?'—':String(Math.round(v*100)/100).replace('.',',');}]].forEach(function(x){
+      [[2,'memoire','#b57bff',memN,memP,function(v){return v==null?'—':Math.round(v)+' %';}],[4,'charge','#ffb000',loadN,has(l1)?l1:null,function(v){return v==null?'—':String(Math.round(v*100)/100).replace('.',',');}]].forEach(function(x){
         var t=el('tuiles').children[x[0]];if(!t||h.length<2||x[4]===null)return;
-        P.compteur(t.querySelector('.v'),{cle:x[1],valeurs:h.map(function(o){return num(x[3][o.i]);}).concat([x[4]]),libelles:h.map(function(o){return hhmm(o.r.t);}).concat(['à l’instant']),format:x[5],coul:x[2],quand:t,zone:t});});
+        P.compteur(t.querySelector('.v'),{cle:x[1],valeurs:h.map(function(o){return x[3][o.i];}).concat([x[4]]),libelles:h.map(function(o){return hhmm(o.r.t);}).concat(['à l’instant']),format:x[5],coul:x[2],quand:t,zone:t});
+      });
     };
     vivre();
     hauteur();

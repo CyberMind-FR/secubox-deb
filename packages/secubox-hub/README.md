@@ -47,9 +47,14 @@ Configuration file: `/etc/secubox/hub.toml`
 
 Composant partagé, sans bibliothèque, pour les cartes du monde, compteurs et barres : une mesure est **fixe au présent** (elle bat) ;
 elle **recule** sur ses dernières mesures réelles (date écrite, orange), rebondit et revient (« maintenant », vert). Rien n'est
-inventé : l'interpolation n'existe que pendant le mouvement, tout arrêt tombe sur un relevé réel, `null` reste « non mesuré ».
+inventé : entre deux relevés réels, les valeurs affichées PENDANT le mouvement sont interpolées (ni mesurées ni gardées) et la date écrite est celle du relevé le plus proche ; tout arrêt tombe sur un relevé réel, `null` reste « non mesuré ».
 Sous deux mesures, en mouvement réduit, au bouton « ⏸ fixe », hors écran ou onglet caché : rien ne bouge et aucun minuteur ne tourne.
-Au survol, arrêt sur un relevé réel ; au focus clavier, retour au présent. Une seule mesure recule à la fois par page.
+Au survol, arrêt sur un relevé réel (8 s au plus, puis présent) ; au focus clavier, retour au présent. Une seule mesure recule à la fois par page.
+
+Coût : recul à 15 images/s sans halo ; au repos 5,5 images/s, seule l'opacité d'un calque de six halos change, deux mesures battent au plus.
+Trop lent (retard moyen > 25 ms sur 24 images, ou 3 des 10 dernières > 50 ms, ou 3 tâches longues en 10 s) : « ⏸ fixe (auto) » pour la
+session (`sessionStorage`, le choix retenu n'est pas touché), un appui ranime. Fixe d'office : 2 cœurs ou moins, 2 Go ou moins, `?kiosk=1`.
+`SbxPouls.vivant()` et l'événement `sbx-pouls` de la fenêtre disent l'état.
 
 Une page le charge par `createElement('script')` (`/shared/pouls.js`) ; absent, la page reste fixe. Une page publique sous CSP
 stricte en porte une copie identique (secubox-live, test). Aucun HTML ni `<style>` injecté (CSSOM seul), couleurs réglables par

@@ -23,7 +23,7 @@ CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'sel
 def test_fichier_sur_et_borne():
     js = SRC.read_text(encoding="utf-8")
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in js[:120]
-    assert len(js.encode()) < 16_384
+    assert len(js.encode()) < 17_500
     for interdit in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "cssText", "new Function", "fetch(", "XMLHttp",
                      "aria-live", "setInterval", "createElement('style')", "adoptedStyleSheets"):
         assert interdit not in js, interdit
@@ -53,7 +53,7 @@ PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8"><script src
 <section id="zb"><span id="qb"></span><b id="b">4 514</b><svg id="sb" viewBox="0 0 200 44" width="200" height="44"></svg></section>
 <section id="zc"><span id="qc"></span><svg id="c" viewBox="0 0 520 190" width="520" height="190"></svg></section>
 <script src="/essai.js"></script></body></html>"""
-COMPTE = """window.RAF=0;const _r=window.requestAnimationFrame.bind(window);window.requestAnimationFrame=f=>{window.RAF++;return _r(f)};
+COMPTE = """if(!sessionStorage.getItem('sbx-pouls-auto')&&!/auto/.test(location.search))sessionStorage.setItem('sbx-pouls-auto','non');window.RAF=0;const _r=window.requestAnimationFrame.bind(window);window.requestAnimationFrame=f=>{window.RAF++;return _r(f)};
 window.MUT=0;document.addEventListener('DOMContentLoaded',()=>{new MutationObserver(l=>{window.MUT+=l.length}).observe(document.body,{subtree:true,childList:true,attributes:true,characterData:true})});"""
 ESSAI = """const $=i=>document.getElementById(i),T=1764000000,C={FR:[46,2],US:[38,-97],CN:[35,103]};
 window.I=n=>Array.from({length:n},(_,i)=>({t:T-600*(n-1-i),pays:[{code:'FR',n:100+10*i},{code:'US',n:50},{code:'CN',n:7+i}]}));
@@ -70,7 +70,7 @@ def serveur():
 
     class H(http.server.BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
-            c = corps.get(self.path)
+            c = corps.get(self.path.split("?")[0])
             self.send_response(200 if c else 404)
             self.send_header("Content-Security-Policy", CSP)
             if c:
@@ -146,7 +146,7 @@ def test_nav_une_seule_mesure_a_la_fois_et_rythme_borne(page):
     r = pg.evaluate("""async()=>{carte();compteur();barres();const vus=new Set();let max=0,r0=RAF,t0=performance.now();
       while(performance.now()-t0<22000){const p=dates().map((x,i)=>x.startsWith('◀')?i:-1).filter(i=>i>=0);max=Math.max(max,p.length);p.forEach(i=>vus.add(i));await new Promise(f=>setTimeout(f,40))}
       return{max,vus:[...vus].sort(),ips:(RAF-r0)/22}}""")
-    assert r["max"] == 1 and r["vus"] == [0, 1, 2] and r["ips"] <= 31
+    assert r["max"] == 1 and r["vus"] == [0, 1, 2] and r["ips"] <= 16
 
 
 def test_nav_survol_fige_sur_une_mesure_reelle(page):
@@ -192,7 +192,7 @@ def test_nav_mise_a_jour_sans_relance(page):
     # cent mises à jour : un seul groupe, une seule date, une seule boucle
     r = pg.evaluate("""async()=>{const m=carte();for(let i=0;i<100;i++){carte();compteur();m.maj({})}const r0=RAF;await new Promise(f=>setTimeout(f,2000));
       return[(RAF-r0)/2,document.querySelectorAll('#za svg[data-sbxp=carte]').length,document.querySelectorAll('#qa > span').length,document.querySelectorAll('#b > i').length]}""")
-    assert r[0] <= 31 and r[1:] == [1, 1, 1]
+    assert r[0] <= 16 and r[1:] == [1, 1, 1]
 
 
 @pytest.mark.parametrize("n", [0, 1])
@@ -260,6 +260,64 @@ def test_nav_memoire_d_onglet_bornee(page):
       const d=l.map((s,i)=>i?s.t-l[i-1].t:0).slice(1,-1);sessionStorage.setItem('sbx-pouls:f','{pas du json');
       return{n:l.length,min:Math.min(...d),der:l[l.length-1].pays,age:l[l.length-1].t-l[0].t,garde:JSON.parse(sessionStorage.getItem('sbx-pouls:e')).length,f:SbxPouls.memoire('f',{t:1764000000,pays:[]}).length}}""")
     assert r["n"] <= 13 and r["garde"] <= 12 and r["min"] >= 60 and r["age"] <= 10800 and r["der"] == [{"code": "FR", "n": 499}] and r["f"] == 1
+
+
+def test_nav_fixe_n_altere_pas_les_barres_de_la_page(page):
+    pg = page(reduced_motion="reduce")
+    pg.evaluate("()=>{$('c').innerHTML='<rect/><rect/><rect/><rect/>';barres({barres:$('c').children})}")
+    assert pg.evaluate("[...$('c').children].every(e=>!e.style.opacity&&!e.style.filter)")
+
+
+def test_nav_sans_halo_au_recul_et_battement_par_calque(page):
+    pg = page()
+    pg.evaluate("carte();window.R0=0;new MutationObserver(l=>{window.R0+=l.filter(x=>x.attributeName==='r').length}).observe($('za'),{subtree:true,attributes:true})")
+    pg.wait_for_timeout(900)
+    assert pg.evaluate("window.R0") == 0
+    assert pg.locator("#za svg[data-sbxp=battement] g").count() == 1 and pg.locator("#za svg[data-sbxp=battement] circle").count() <= 12
+    recul(pg)
+    assert pg.evaluate("[$('za').querySelector('svg[data-sbxp=carte] > g').style.opacity,$('za').querySelector('svg[data-sbxp=battement]').style.opacity]") == ["0", "0"]
+
+
+def test_nav_souris_immobile_ne_bloque_pas_et_infobulle_suit(page):
+    pg = page()
+    pg.evaluate("carte();compteur()")
+    recul(pg)
+    pg.hover("#qa")
+    attendre(pg, "document.querySelectorAll('#za title').length > 0", 3000)
+    avant = pg.evaluate("document.querySelector('#za title').textContent")
+    pg.evaluate("carte({instantanes:I(13).map(s=>({t:s.t,pays:s.pays.map(p=>({code:p.code,n:p.n+1000}))}))})")
+    assert pg.evaluate("document.querySelector('#za title').textContent") != avant
+    attendre(pg, "dates()[0] === '● maintenant' && dates()[1].startsWith('◀')", 16000)
+
+
+@pytest.mark.parametrize("requete,reglage", [("?auto&kiosk=1", ""), ("?auto", "Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>2})"), ("?auto", "Object.defineProperty(navigator,'deviceMemory',{get:()=>2})")])
+def test_nav_fixe_par_defaut_machine_modeste(page, serveur, requete, reglage):
+    pg = page()
+    pg.evaluate("sessionStorage.clear()")
+    if reglage:
+        pg.add_init_script(reglage)
+    pg.goto(serveur + requete)
+    pg.evaluate("SbxPouls.bouton($('outils'));carte()")
+    b = pg.locator("#outils button")
+    assert b.inner_text() == "⏸ fixe (auto)" and pg.evaluate("SbxPouls.vivant()") is False
+    b.click()
+    assert b.inner_text() == "💓 vivant" and pg.evaluate("localStorage.getItem('sbx-pouls')") is None
+    recul(pg)
+
+
+def test_nav_repli_automatique_machine_lente(page, serveur):
+    pg = page()
+    pg.evaluate("sessionStorage.clear()")
+    pg.add_init_script("for(const [k,v] of [['hardwareConcurrency',8],['deviceMemory',8]])Object.defineProperty(navigator,k,{get:()=>v})")
+    pg.goto(serveur + "?auto")
+    pg.evaluate("SbxPouls.bouton($('outils'));carte();window.r0=window.requestAnimationFrame;window.requestAnimationFrame=f=>r0(t=>{const z=performance.now();while(performance.now()-z<90);f(t)});0")
+    attendre(pg, "$('outils').textContent === '⏸ fixe (auto)'")
+    assert pg.evaluate("[sessionStorage.getItem('sbx-pouls-auto'),localStorage.getItem('sbx-pouls')]") == ["fixe", None]
+    assert pg.evaluate("dates()[0]") == "● maintenant"
+    pg.evaluate("()=>{window.requestAnimationFrame=window.r0}")
+    pg.locator("#outils button").click()
+    pg.wait_for_timeout(4000)
+    assert pg.locator("#outils button").inner_text() == "💓 vivant"
 
 
 def test_documentation_de_l_api():

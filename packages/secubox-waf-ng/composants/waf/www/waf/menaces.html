@@ -135,7 +135,7 @@
   // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
   var VIE=null;
   function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
-  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
     var PAL=['#29b6f6','#a78bfa','#3b82f6','#ff9f1c','#2ecc71','#ff4d5e','#ffd23f'];
   var IC={
     men:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#a78bfa"/></svg>',

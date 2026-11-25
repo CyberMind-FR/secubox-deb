@@ -146,7 +146,7 @@
   // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
   var VIE=null;
   function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
-  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
     var PAL=['#3b82f6','#29b6f6','#a78bfa','#ff9f1c','#2ecc71','#ffd23f','#6f84a8'];
   var CT={browser:['🌐','Navigateur','#3b82f6'],'mobile-app':['📱','Application mobile','#29b6f6'],bot:['🤖','Robot','#ff9f1c'],crawler:['🕷️','Crawler','#a78bfa'],other:['❔','Autre','#6f84a8']};
   var OS={Windows:['🪟','#3b82f6'],macOS:['🍎','#a78bfa'],Linux:['🐧','#ffd23f'],Android:['🤖','#2ecc71'],iOS:['📱','#29b6f6'],other:['❔','#6f84a8']};

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ICI = Path(__file__).resolve().parent.parent
-CHARGE = "j.src='/shared/pouls.js';j.onload=vivre"
+CHARGE = "j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre"
 
 
 @pytest.mark.parametrize("page", ['www/metrics/index.html', 'www/metrics/vhosts.html'])
@@ -22,3 +22,10 @@ def test_composant_facultatif_et_donnees_reelles(page):
     for cle in ['metrics-attaques', 'metrics-visites'] if 'index' in page else ['vhosts-']:
         assert f"'{cle}" in src or f'"{cle}' in src
     assert "vivre();" in src and "P.bouton(" in src
+
+
+def test_un_releve_non_mesure_reste_null_jamais_zero():
+    src = (ICI / "www/metrics/index.html").read_text(encoding="utf-8")
+    vie = src[src.index("VIE=function"):src.index("vivre();\n    hauteur();")]
+    assert "memN,memP" in vie and "loadN," in vie and "num(x[3]" not in vie
+    assert vie.count(":null;}") == 2 and "memS" not in vie and "loadS" not in vie

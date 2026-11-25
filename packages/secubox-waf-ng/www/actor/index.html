@@ -357,7 +357,8 @@ function vivreKPIs(P){
   [[1,'bloques','#ff2d6f',SERIES.bl],[2,'tentatives','#ffb000',SERIES.te],[5,'evenements','#19f0ff',SERIES.ev]].forEach(function(x){
     var t=k[x[0]],v=x[3],g=t&&t.querySelector('svg.mini');if(!v||!g)return;
     var bs=g.querySelectorAll('.b'),i=0,b=v.map(function(y){return y==null?null:bs[i++];});
-    P.compteur(t.querySelector('.v'),{cle:x[1],total:true,valeurs:v,libelles:v.map(function(_,n){return heureDe(num(LOT.debut)+n*num(LOT.pas));}),format:nb,coul:x[2],barres:b,quand:t,zone:t,maintenant:'heure en cours'});});
+    P.compteur(t.querySelector('.v'),{cle:x[1],total:true,valeurs:v,libelles:v.map(function(_,n){return heureDe(num(LOT.debut)+n*num(LOT.pas));}),format:nb,coul:x[2],barres:b,quand:t,zone:t,maintenant:'heure en cours'});
+  });
 }
 function rendFlow(){var f=vide($('flow'));FLOW.forEach(function(x,i){var d=h('div','step'+(i===0?' on':''));add(d,h('b',null,String(i+1)),document.createTextNode(x));add(f,d);});}
 
@@ -388,7 +389,7 @@ function drapeau(c){c=String(c||'');if(!/^[A-Za-z]{2}$/.test(c))return '\u{1F310
 // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
 var VIE=null;
 function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
-(function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+(function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
 var TERRE_FAITE=false;
 function carteMonde(){
   var svg=$('carteMonde'),liste=vide($('paysTop')),pays=(APERCU&&APERCU.top_pays)||[];

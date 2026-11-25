@@ -582,7 +582,7 @@
   // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
   var VIE = null;
   function vivre() { var P = window.SbxPouls; if (!P || !VIE) { return; } try { VIE(P); } catch (e) { console.warn("pouls", e); } }
-  (function () { var j = document.createElement("script"); j.src = "/shared/pouls.js"; j.onload = vivre; document.head.appendChild(j); })();
+  (function () { var j = document.createElement("script"); j.src = "/shared/pouls.js?v=1.13.0"; j.onload = vivre; document.head.appendChild(j); })();
   function vivreCarte(rangs) {
     var r = { t: Date.now() / 1000, pays: rangs.slice(0, 60).map(function (x) { return { code: x[0], n: x[1] }; }) };
     VIE = function (P) {

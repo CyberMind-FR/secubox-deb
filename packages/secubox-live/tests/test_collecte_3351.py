@@ -382,3 +382,16 @@ def test_cartes_passe_sans_adresse_et_etat_douteux(tmp_path):
     for brut in ("{pas du json", "[]", '{"releves": 3}'):
         src.etat_cartes.write_text(brut)
         assert C.collecter(src, MAINTENANT, reseau=False)["cartes_passe"] == []
+
+
+def test_cartes_passe_booleens_refuses_et_ecriture_impossible(tmp_path, monkeypatch):
+    src = _sources(tmp_path)
+    src.etat_cartes.write_text(json.dumps({"releves": [{"genere_le": MAINTENANT - 700, "attaques": [{"code": "FR", "n": True}, {"code": "DE", "n": 2}],
+                                                        "visiteurs": [], "tuiles": {"bans_actifs": True}}]}))
+
+    def plein(*a, **k):
+        raise OSError(28, "plein")
+    monkeypatch.setattr(C, "ecrire", plein)
+    p = C.cartes_passe(src, MAINTENANT, {}, {})
+    assert [x["genere_le"] for x in p] == [MAINTENANT - 700]                       # le passé valide reste publié
+    assert p[0]["attaques"] == [{"code": "DE", "n": 2}] and p[0]["tuiles"]["bans_actifs"] is None

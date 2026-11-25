@@ -207,7 +207,8 @@
   function pouls(quoi, fn) { if (window.SbxPouls) essai('pouls ' + quoi, function () { fn(window.SbxPouls); }); }
   function passe() { return (liste(dernieres.cartes_passe) || []).filter(function (x) { return nb(x.genere_le); }).slice(-12); }
   function present() { return perime ? 'au relevé' : 'maintenant'; }
-  function ilya(t) { return window.SbxPouls.pur.ecart(t, nb(dernieres.genere_le) || t); }
+  function avant(t) { return !perime ? t : t.indexOf('il y a ') ? t : t.slice(7) + ' avant le relevé'; }
+  function ilya(t) { return avant(window.SbxPouls.pur.ecart(t, nb(dernieres.genere_le) || t)); }
   var minis = {}, perime = false;
   function vivreTuile(id, valeurs, libelles, coul) {
     pouls(id, function (P) {
@@ -282,7 +283,7 @@
     pouls('carte', function (P) {
       var L = {}, E = {}, N = ENFANTS.get($('top'));
       N.forEach(function (li, c) { L[c] = li.children[1]; E[c] = li.children[2]; });
-      P.carte(svg, { cle: 'monde', sujet: carte, coul: coul, centres: typeof CENTRE === 'object' ? CENTRE : {}, format: f, liste: L, ecarts: E,
+      P.carte(svg, { cle: 'monde', sujet: carte, dit: avant, coul: coul, centres: typeof CENTRE === 'object' ? CENTRE : {}, format: f, liste: L, ecarts: E,
         instantanes: brut ? passe().map(function (x) { return { t: x.genere_le, pays: liste(x[carte]) }; }).concat([{ t: dernieres.genere_le, pays: l }]) : [],
         quand: $('monde-quand'), zone: svg.closest('.nappe'), maintenant: present() });
     });
@@ -372,7 +373,7 @@
     attrs(svg, { 'aria-label': 'Requêtes bloquées par minute sur la dernière heure : ' + note });
     pouls('heure', function (P) {
       P.barres(svg, { cle: 'heure', valeurs: W.map(function (p) { return nb(p.bloquees); }), coul: 'var(--rose)', format: f, barres: heureCalques.barres.children,
-        libelles: function (i) { return 'il y a ' + (59 - dec - i) + ' min'; }, quand: $('heure-quand'), zone: svg.parentNode, maintenant: present() });
+        libelles: function (i) { return vieux ? (59 - dec - i) + ' min avant le relevé' : 'il y a ' + (59 - dec - i) + ' min'; }, quand: $('heure-quand'), zone: svg.parentNode, maintenant: present() });
     });
   }
 
@@ -552,6 +553,8 @@
       col = [];
       for (var i = 0; i < c.width / PAS; i++) col.push({ y: (i * 197) % Math.max(1, c.height), v: 18 + (i * 31) % 46, m: i * 7 });
     }
+    var etait = null;
+    function figee() { return calme.matches || !!(window.SbxPouls && !window.SbxPouls.vivant()); }   // « fixe » : la pluie s'arrête aussi
     function teinte() { couleur = getComputedStyle(RACINE).getPropertyValue('--pluie'); }
     function trace(dt) {
       var n = pluie.mots.length;
@@ -564,7 +567,7 @@
     }
     function boucle() {
       image = 0;
-      if (document.hidden || calme.matches) return;
+      if (document.hidden || figee()) return;
       var t = Date.now();
       trace(Math.min(.2, (t - avant) / 1000)); avant = t;
       minuteur = setTimeout(function () { minuteur = 0; image = requestAnimationFrame(boucle); }, c.width < 600 ? 120 : 70);
@@ -574,10 +577,11 @@
       if (minuteur) { clearTimeout(minuteur); minuteur = 0; }
       if (image) { cancelAnimationFrame(image); image = 0; }
       if (document.hidden) return;
-      if (calme.matches) trace(0); else { avant = Date.now(); boucle(); }
+      etait = figee(); if (etait) trace(0); else { avant = Date.now(); boucle(); }
     }
-    pluie = { mots: FIXES.slice(), trace: trace, fixe: function () { return calme.matches; }, teinte: function () { teinte(); if (calme.matches) trace(0); } };
-    window.addEventListener('resize', function () { taille(); if (calme.matches) trace(0); });
+    pluie = { mots: FIXES.slice(), trace: trace, fixe: figee, teinte: function () { teinte(); if (figee()) trace(0); } };
+    window.addEventListener('sbx-pouls', function () { if (figee() !== etait) reprendre(); });
+    window.addEventListener('resize', function () { taille(); if (figee()) trace(0); });
     document.addEventListener('visibilitychange', reprendre);
     if (calme.addEventListener) calme.addEventListener('change', reprendre);
     taille(); teinte(); reprendre();

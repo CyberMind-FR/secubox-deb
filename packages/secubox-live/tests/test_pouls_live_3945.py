@@ -100,6 +100,19 @@ def test_nav_releve_ancien_jamais_maintenant(ouvrir):  # noqa: F811
     pg, _ = ouvrir(e)
     assert pg.evaluate("document.getElementById('monde-quand').textContent") == "● au relevé"
     assert pg.evaluate("[...document.querySelectorAll('[data-sbxp=quand]')].every(x=>!/maintenant/.test(x.textContent))")
+    pg.evaluate("document.getElementById('heure').scrollIntoView({block:'center'})")
+    pg.wait_for_timeout(200)
+    avancer(pg, "#heure-quand", r"^◀ \d+ min avant le relevé : ")
+
+
+def test_nav_fixe_arrete_la_pluie(ouvrir):  # noqa: F811
+    pg, _ = ouvrir(donnees())
+    pg.evaluate("()=>{window.dispatchEvent(new StorageEvent('storage',{key:'sbx-pouls',newValue:'fixe'}));window.n=0;const x=CanvasRenderingContext2D.prototype,f=x.clearRect;x.clearRect=function(){window.n++;return f.apply(this,arguments)}}")
+    pg.clock.run_for(1500)
+    assert pg.evaluate("window.n") == 0
+    pg.evaluate("window.dispatchEvent(new StorageEvent('storage',{key:'sbx-pouls',newValue:'vivant'}))")
+    pg.clock.run_for(1500)
+    assert pg.evaluate("window.n") > 5
 
 
 def test_nav_sans_pouls_la_page_reste_entiere(navigateur, serveur):  # noqa: F811

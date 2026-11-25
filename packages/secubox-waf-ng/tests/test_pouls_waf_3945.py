@@ -21,7 +21,7 @@ PAGES = [WAF / f"{n}.html" for n in ("vue", "menaces", "visites", "surfaces", "t
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.stem)
 def test_composant_charge_par_la_page_et_facultatif(page):
     src = page.read_text(encoding="utf-8")
-    assert src.count("j.src='/shared/pouls.js';j.onload=vivre") == 1
+    assert src.count("j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre") == 1
     assert "if(!P||!VIE)return;" in src                                          # absent : la page reste fixe
     assert len(re.findall(r"<script(?![^>]+src=)[^>]*>", src)) == 1              # un seul script dans la page
     # Démonstration : jamais gardée ; sans donnée : aucun relevé, donc rien ne bouge.
@@ -31,7 +31,7 @@ def test_composant_charge_par_la_page_et_facultatif(page):
 
 def test_les_memoires_ne_melangent_pas_deux_mesures():
     cles = {p.stem: re.findall(r"P\.memoire\('([^']+)'", p.read_text(encoding="utf-8")) for p in PAGES}
-    assert cles == {"vue": ["waf-top"], "menaces": ["waf-pays"], "visites": ["waf-visites"], "surfaces": ["waf-pays"], "tableau": ["waf-tableau"], "index": ["actor-pays"]}
+    assert cles == {"vue": [], "menaces": ["waf-pays"], "visites": ["waf-visites"], "surfaces": ["waf-pays"], "tableau": ["waf-tableau"], "index": ["actor-pays"]}
 
 
 # ------------------------------------------------------------------------------------------------ navigateur
@@ -93,10 +93,11 @@ def ouvrir(navigateur, serveur):
         pg.err = []
         pg.on("pageerror", lambda e: pg.err.append(str(e)))
         pg.on("console", lambda m: pg.err.append(m.text) if m.text.startswith("pouls") else None)
+        pg.add_init_script("sessionStorage.setItem('sbx-pouls-auto','non')")
         if passe is not None:
             pg.add_init_script("for(const k of ['waf-pays','waf-top','waf-visites','waf-tableau'])if(!sessionStorage.getItem('sbx-pouls:'+k))sessionStorage.setItem('sbx-pouls:'+k,%s)" % json.dumps(json.dumps(passe)))
         if sans:
-            pg.route("**/shared/pouls.js", lambda r: r.fulfill(status=404))
+            pg.route("**/shared/pouls.js*", lambda r: r.fulfill(status=404))
         pg.goto(serveur + chemin)
         pg.wait_for_timeout(500)
         ouverts.append((c, pg))
@@ -144,7 +145,7 @@ def test_nav_waf_premier_releve_et_sans_composant(ouvrir, nom):
 
 def test_nav_waf_demo_jamais_gardee(ouvrir):
     pg = ouvrir("/waf/menaces.html?demo=1")
-    assert date(pg) == "" and pg.evaluate("Object.keys(sessionStorage).length") == 0
+    assert date(pg) == "" and pg.evaluate("Object.keys(sessionStorage).filter(k=>k.startsWith('sbx-pouls:')).length") == 0
 
 
 def test_nav_vue_points_de_la_page_gardent_survol_et_types(ouvrir):
@@ -174,3 +175,17 @@ def test_nav_actor_total_24h_jamais_change(ouvrir):
         vus.add(t[1])
         pg.wait_for_timeout(60)
     assert any(re.match(r"^◀ \d\d:\d\d : ", x) for x in vus), vus
+
+
+def test_nav_vue_repli_alertes_memoire_a_part_et_date_de_lecture(ouvrir):
+    pg = ouvrir("/waf/vue.html", passe())
+    pg.route("**/api/v1/waf/stats", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({**REPONSES["/api/v1/waf/stats"], "top_countries": []})))
+    pg.route("**/api/v1/waf/alerts*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"alerts": [{"country": "FR", "category": "sqli"}, {"country": "DE", "category": "scan"}]})))
+    avant = pg.evaluate("sessionStorage.getItem('sbx-pouls:waf-top')")
+    pg.evaluate("document.getElementById('rafraichir').click()")
+    pg.wait_for_timeout(400)
+    g = pg.evaluate("JSON.parse(sessionStorage.getItem('sbx-pouls:waf-alertes'))")
+    assert avant == pg.evaluate("sessionStorage.getItem('sbx-pouls:waf-top')") and len(g) == 1
+    pg.wait_for_timeout(1100)
+    pg.locator("#legT button").first.click()                                     # changer de type ne relit rien : même date
+    assert [x["t"] for x in pg.evaluate("JSON.parse(sessionStorage.getItem('sbx-pouls:waf-alertes'))")] == [g[0]["t"]]

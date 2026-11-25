@@ -81,7 +81,7 @@ def test_mouvement_reduit_et_page_cachee():
     bloc = css[css.index("prefers-reduced-motion"):]
     for c in (".pouls s", ".onde", ".flotte", ".averse"):
         assert c in bloc and "animation:none!important" in bloc, c
-    assert "document.hidden || calme.matches" in js and "prefers-reduced-motion" in js
+    assert "document.hidden || figee()" in js and "prefers-reduced-motion" in js
 
 
 def _lum(c):
@@ -339,7 +339,7 @@ def serveur():
 def ouvrir(navigateur, serveur):
     contextes = []
 
-    def _o(donnees, larg=1280, **ctx):
+    def _o(donnees, larg=1280, pouls=True, **ctx):
         """`donnees` : objet (modifiable ensuite par boite['e']), texte brut, ou None (relevé injoignable)."""
         c = navigateur.new_context(viewport={"width": larg, "height": 900}, locale="fr-FR", timezone_id="America/New_York", **ctx)
         contextes.append(c)
@@ -355,6 +355,9 @@ def ouvrir(navigateur, serveur):
             else:
                 r.fulfill(status=200, content_type="application/json", body=e if isinstance(e, str) else json.dumps(e))
         pg.route("**/etat.json", repondre)
+        pg.add_init_script("sessionStorage.setItem('sbx-pouls-auto','non')")         # horloge factice : pas de mesure de lenteur
+        if not pouls:
+            pg.route("**/pouls.js*", lambda r: r.fulfill(status=404))
         pg.clock.install()
         pg.goto(serveur)
         pg.wait_for_function("document.getElementById('releve').textContent !== 'relevé en cours…'")
@@ -502,10 +505,7 @@ def test_nav_mouvement_reduit(ouvrir):
 
 
 def test_nav_pluie_une_seule_boucle(ouvrir):
-    pg, _ = ouvrir(etat())
-    # mesures vivantes (#3945) figées : leur boucle, bornée par ailleurs, n'est pas celle de la pluie
-    pg.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'sbx-pouls', newValue: 'fixe' }))")
-    pg.clock.run_for(200)
+    pg, _ = ouvrir(etat(), pouls=False)
     pg.evaluate("""() => { window.file = new Map(); let n = 0;
         window.requestAnimationFrame = f => { window.file.set(++n, f); return n; };
         window.cancelAnimationFrame = i => window.file.delete(i);

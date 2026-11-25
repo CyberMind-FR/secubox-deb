@@ -29,6 +29,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import time
 import tomllib
 import urllib.request
@@ -478,12 +479,16 @@ def visites(src: Sources):
 
 # ---------------------------------------------------------------------------------------------------------------- passé récent
 
+def _entier(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
 def _pays_passe(v) -> Optional[list]:
     """Liste de pays relue de notre état : codes à deux lettres et entiers seulement ; None = non mesuré (jamais un zéro)."""
     if not isinstance(v, list):
         return None
-    return [{"code": p["code"], "n": int(p["n"])} for p in v if isinstance(p, dict) and isinstance(p.get("n"), int)
-            and p["n"] >= 0 and re.fullmatch(r"[A-Z]{2}", str(p.get("code")))][:30]
+    return [{"code": p["code"], "n": int(p["n"])} for p in v if isinstance(p, dict) and _entier(p.get("n"))
+            and re.fullmatch(r"[A-Z]{2}", str(p.get("code")))][:30]
 
 
 def cartes_passe(src: Sources, maintenant: float, cartes: dict, tuiles: dict) -> list:
@@ -493,16 +498,19 @@ def cartes_passe(src: Sources, maintenant: float, cartes: dict, tuiles: dict) ->
     gardes = []
     for x in brut.get("releves") if isinstance(brut, dict) and isinstance(brut.get("releves"), list) else []:
         t = x.get("genere_le") if isinstance(x, dict) else None
-        if isinstance(t, int) and not isinstance(t, bool) and maintenant - PASSE_AGE_S < t < maintenant:
+        if _entier(t) and maintenant - PASSE_AGE_S < t < maintenant:
             tu = x.get("tuiles") if isinstance(x.get("tuiles"), dict) else {}
             gardes.append({"genere_le": t, "attaques": _pays_passe(x.get("attaques")), "visiteurs": _pays_passe(x.get("visiteurs")),
-                           "tuiles": {k: tu[k] if isinstance(tu.get(k), int) and tu[k] >= 0 else None for k in PASSE_TUILES}})
+                           "tuiles": {k: tu[k] if _entier(tu.get(k)) else None for k in PASSE_TUILES}})
     gardes = sorted(gardes, key=lambda x: x["genere_le"])[-PASSE_MAX:]
     # 30 s de marge : la minuterie n'est pas à la seconde près
     if not gardes or maintenant - gardes[-1]["genere_le"] >= PASSE_PAS_S - 30:
         neuf = {"genere_le": int(maintenant), "attaques": _pays_passe(cartes.get("attaques")),
                 "visiteurs": _pays_passe(cartes.get("visiteurs")), "tuiles": {k: tuiles.get(k) for k in PASSE_TUILES}}
-        ecrire(src.etat_cartes, {"version": 1, "releves": (gardes + [neuf])[-PASSE_MAX:]}, mode=0o600)
+        try:
+            ecrire(src.etat_cartes, {"version": 1, "releves": (gardes + [neuf])[-PASSE_MAX:]}, mode=0o600)
+        except OSError as e:                        # disque plein : le passé déjà relu reste publié
+            print(f"secubox-live : passé récent non gardé ({e.__class__.__name__})", file=sys.stderr)
     return gardes
 
 

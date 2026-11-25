@@ -55,3 +55,11 @@ test('dates du passé', () => {
   assert.equal(pur.ecart(0, 7500), 'il y a 2 h 05');
   assert.match(pur.ecart(1764000000, 1764000000 + 90000), /^le \d/);
 });
+
+test('machine lente : 24 retards de plus de 25 ms en moyenne, ou 3 des 10 derniers au-delà de 50', () => {
+  assert.equal(pur.lent(Array(23).fill(40)), false);
+  assert.equal(pur.lent(Array(24).fill(26)), true);
+  assert.equal(pur.lent(Array(24).fill(8)), false);
+  assert.equal(pur.lent([60, 60, 1, 1, 60]), true);
+  assert.equal(pur.lent([60, 60, ...Array(9).fill(1), 60]), false);
+});

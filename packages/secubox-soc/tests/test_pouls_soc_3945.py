@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ICI = Path(__file__).resolve().parent.parent
-CHARGE = 'j.src = "/shared/pouls.js"; j.onload = vivre'
+CHARGE = 'j.src = "/shared/pouls.js?v=1.13.0"; j.onload = vivre'
 
 
 @pytest.mark.parametrize("page", ['www/soc/index.html'])
