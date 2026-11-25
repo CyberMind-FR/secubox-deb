@@ -32,6 +32,7 @@ def pop(**k):
 def sites(**k):
     return dict({"disponible": True, "genere_le": int(T), "perime": False, "journal": "ok", "heures_mesurees": 24,
                  "chiffres": {"ecartees": 11480, "passees": 312, "series": {"ecartees": [1] * 24, "passees": [0] * 24}}, "sites": [],
+                 "complet": True, "rattrapage": False, "cibles_servies": ["depot.exemple.test"],
                  "decisions": {"rotation": {"etat": "ok", "mode": "auto", "campagnes": []}, "campagnes": {"etat": "absent"}, "acteurs": {"etat": "absent"}}}, **k)
 
 
@@ -49,7 +50,7 @@ class Banc:
         self.sante({"haproxy": {"ok": True}})
         self.lents({})
 
-    def lire(self, source, chemin, entetes=None, delai=3.0):
+    def lire(self, source, chemin, entetes=None, delai=3.0, echeance=None):
         self.appels.append((source, chemin, dict(entetes or {})))
         r = self.rep.get((source, chemin))
         if isinstance(r, str):
@@ -65,8 +66,8 @@ class Banc:
     def lents(self, vhosts, recul=30):
         (self.tmp / "sites.json").write_text(json.dumps({"timestamp": self._ts(recul), "vhosts": vhosts}))
 
-    def calc(self):
-        return S.calculer({}, T)
+    def calc(self, admin=True, t=T):
+        return S.calculer({}, t, admin)
 
 
 @pytest.fixture
@@ -79,6 +80,7 @@ def banc(tmp_path, monkeypatch):
     S.vider()
     yield b
     S.vider()
+    S._EN_COURS.clear()
 
 
 def src(p, i):
@@ -102,7 +104,7 @@ def test_waf_plus_ancien_ou_muet_est_dit_et_le_reste_tient(banc, erreur, motif):
     banc.rep[("waf", "/populations")]["populations"] = [pop()]
     p = banc.calc()
     assert src(p, "waf_sites")["erreur"] == motif and src(p, "waf_populations")["ok"]
-    assert [x["titre"] for x in p["situations"]] == ["Collecte : depot.exemple.test"]
+    assert [x["titre"] for x in p["situations"]] == ["Collecte"]           # sans la liste des sites servis, une cible ne se nomme pas
     assert p["chiffres"]["en_cours"] == 1 and p["chiffres"]["en_cours_partiel"] and p["chiffres"]["a_decider"] is None
 
 
@@ -111,10 +113,49 @@ def test_releves_figes_ou_absents_sont_dits(banc):
     banc.rep[("waf", "/populations")] = {"disponible": False}
     p = banc.calc()
     assert src(p, "waf_sites")["erreur"] == "relevé figé" and src(p, "waf_populations")["erreur"] == "aucun relevé"
+    assert p["chiffres"]["ecartees_24h"] is None and p["chiffres"]["series"] == {"ecartees": None, "passees": None} and p["chiffres"]["a_decider"] is None
     banc.rep[("waf", "/dossiers/sites")] = {"disponible": False}
-    banc.rep[("waf", "/populations")] = {"disponible": True, "age_s": 90000, "populations": []}
+    banc.rep[("waf", "/populations")] = {"disponible": True, "age_s": 90000, "populations": [pop()]}
     p = banc.calc()
+    assert p["situations"] == []                                          # ni « depuis 24 h » ni « hier » sur un vieux relevé
     assert src(p, "waf_sites")["erreur"] == "premier relevé en cours" and src(p, "waf_populations")["erreur"] == "relevé figé"
+
+
+@pytest.mark.parametrize("k", [{"perime": True}, {"journal": "illisible", "complet": False}])
+def test_releve_fige_ne_dit_rien_d_en_ce_moment(banc, k):
+    banc.rep[("waf", "/dossiers/sites")] = sites(sites=[{"id": "s.exemple.test", "titre": "s", "attaque": True, "etiquettes": []}], **k)
+    p = banc.calc()
+    assert p["situations"] == [] and src(p, "waf_sites")["erreur"] == "relevé figé" and p["chiffres"]["passees_24h"] is None
+
+
+@pytest.mark.parametrize("k", [{"rattrapage": True}, {"complet": False}])
+def test_lecture_en_retard_source_degradee_chiffres_null(banc, k):
+    c = {"id": "rotation:0a1b2c3d", "hote": None, "a_bannir": 2, "sources": 60}
+    banc.rep[("waf", "/dossiers/sites")] = sites(sites=[{"id": "s.exemple.test", "titre": "s", "attaque": True, "etiquettes": []}],
+                                                 decisions={"rotation": {"etat": "ok", "mode": "propose", "campagnes": [c]}}, **k)
+    p = banc.calc()
+    assert src(p, "waf_sites")["erreur"].startswith("lecture en retard") and p["chiffres"]["ecartees_24h"] is None and p["chiffres"]["passees_24h"] is None
+    x, = p["situations"]                                                  # la décision en attente reste ; l'attaque ne se dit pas
+    assert x["titre"] == "Adresses tournantes : un nom non servi" and p["chiffres"]["a_decider"] == 1 and p["chiffres"]["a_decider_partiel"]
+
+
+def test_cible_jamais_recopiee_si_elle_n_est_pas_servie(banc):
+    banc.rep[("waf", "/populations")]["populations"] = [pop(nom_cible="attaquant.invalide"), pop(id="b", famille="acces_distant", nom_cible="adm…"),
+                                                        pop(id="c", famille=["x"], nom_cible=["y"])]
+    p = banc.calc()
+    t = json.dumps(p, ensure_ascii=False)
+    assert "attaquant.invalide" not in t and "adm…" not in t and "Collecte : un nom non servi" in t and "sur un nom non servi" in t
+
+
+def test_hier_juste_apres_minuit(banc):
+    """À 0 h 10, le relevé de 23 h 50 finit hier : sa dernière case n'est pas « aujourd'hui » et la phrase n'invente pas hier."""
+    minuit = datetime(2026, 11, 24, 23, 0, tzinfo=timezone.utc).timestamp()     # 25 novembre, 0 h à Paris
+    banc.rep[("waf", "/populations")] = {"disponible": True, "age_s": 1200, "populations": [pop()]}
+    (banc.tmp / "sante.json").unlink()
+    x, = banc.calc(t=minuit + 600)["situations"]
+    assert "Hier" not in x["phrase"] and x["jours_fin"] == int(minuit) - 600
+    x, = banc.calc(t=minuit + 3600)["situations"]
+    assert "Hier\u00a0: 600" in x["phrase"]
 
 
 def test_population_phrase_serie_par_jour_jamais_par_heure(banc):
@@ -168,6 +209,32 @@ def test_site_sous_attaque_detail_lu_et_sans_adresse(banc):
     assert not IP.search(json.dumps(p)) and "2001:db8" not in json.dumps(p) and p["chiffres"]["a_decider"] == 0
 
 
+def test_un_404_ne_rend_pas_muets_les_suivants(banc):
+    banc.rep[("waf", "/dossiers/sites")] = sites(sites=[{"id": f"s{i}.exemple.test", "titre": f"s{i}", "attaque": True, "etiquettes": [["sous attaque", "r"]], "total": 5 - i} for i in range(3)])
+    banc.rep[("waf", "/dossiers/sites/s0.exemple.test")] = "http 404"
+    for i in (1, 2):
+        banc.rep[("waf", f"/dossiers/sites/s{i}.exemple.test")] = dict(DOSSIER, id=f"s{i}.exemple.test")
+    p = banc.calc()
+    assert [x["couches"] is not None for x in sorted(p["situations"], key=lambda x: x["id"])] == [False, True, True]
+
+
+def test_troncatures_dites(banc):
+    banc.rep[("waf", "/dossiers/sites")] = sites(sites=[{"id": f"s{i}.exemple.test", "titre": f"s{i}", "attaque": True, "etiquettes": []} for i in range(9)])
+    banc.sante({f"controle-{i}": {"ok": False} for i in range(11)})
+    p = banc.calc()
+    assert p["autres"] == {"populations": 0, "sites": 3, "vitaux": 3} and p["chiffres"]["en_cours_partiel"]
+    banc.rep[("waf", "/dossiers/sites")] = sites(decisions={"rotation": {"etat": "ok", "mode": "propose", "campagnes": [], "tronque": True}})
+    assert banc.calc()["chiffres"]["a_decider"] is None
+
+
+def test_echeance_globale_epuisee(banc):
+    import time as _t
+    vrai = S.substrat.lire
+    banc.mp.setattr(S.substrat, "lire", lambda *a, **k: {"ok": False, "donnees": None, "erreur": "délai"} if k.get("echeance", 0) <= _t.monotonic() else vrai(*a, **k))
+    p = S.calculer({}, T, True, _t.monotonic() - 1)
+    assert {x["erreur"] for x in p["sources"][:3]} == {"ne répond pas à temps"} and banc.appels == []
+
+
 def test_detail_muet_n_est_attendu_qu_une_fois(banc):
     banc.rep[("waf", "/dossiers/sites")] = sites(sites=[{"id": f"s{i}.exemple.test", "titre": f"s{i}", "attaque": True, "etiquettes": [["sous attaque", "r"]], "total": 5} for i in range(4)])
     p = banc.calc()
@@ -208,6 +275,10 @@ def test_services_seulement_si_une_mesure_fraiche_le_dit(banc):
     assert [x["id"] for x in p["situations"]] == ["vital:nginx", "sites-muets", "sites-lents"]
     assert "2 sites ne répondent pas ou rendent une erreur au dernier contrôle : c.exemple.test, d.exemple.test." in p["situations"][1]["phrase"]
     assert "à 1 840 ms" in p["situations"][2]["phrase"] and not IP.search(json.dumps(p))
+    q = banc.calc(admin=False)                                            # inventaire : des comptes seulement
+    t = json.dumps(q, ensure_ascii=False)
+    assert [x["id"] for x in q["situations"]] == ["vitaux", "sites-muets", "sites-lents"] and "exemple.test" not in t and "nginx" not in t
+    assert "1\u00a0contrôle échoue" in t and "2\u00a0sites ne répondent pas" in t and "Le plus lent répond en 1\u00a0840 ms" in t
     banc.sante({"nginx": {"ok": False}}, recul=4000)
     banc.lents({"a.exemple.test": {"status": "slow", "latency_ms": 9e3}}, recul=4000)
     p = banc.calc()
@@ -232,7 +303,7 @@ def test_tri_par_urgence_et_plafond_des_populations(banc):
     banc.sante({"nginx": {"ok": False}})
     p = banc.calc()
     u = [x["urgence"] for x in p["situations"]]
-    assert u == sorted(u, reverse=True) and u[0] == 85 and len(u) == S.POPULATIONS_MAX + 1 and p["autres_populations"] == 18
+    assert u == sorted(u, reverse=True) and u[0] == 85 and len(u) == S.POPULATIONS_MAX + 1 and p["autres"]["populations"] == 18 and p["chiffres"]["en_cours_partiel"]
 
 
 def test_route_gardee_cache_court_et_identifiants_retransmis(banc):
@@ -247,14 +318,86 @@ def test_route_gardee_cache_court_et_identifiants_retransmis(banc):
         assert c.get("/situations", headers={"Authorization": "Bearer a"}).json()["genere_le"] == j["genere_le"] and len(banc.appels) == n
         c.get("/situations", headers={"Authorization": "Bearer b"})
         assert len(banc.appels) == 2 * n                                  # un cache par appelant
+        c.get("/situations", headers={"Authorization": "Bearer b", "Cookie": "pub=1; autre=2"})
+        assert len(banc.appels) == 2 * n                                  # un cookie quelconque ne fait ni clé ni retransmission
+        c.get("/situations", headers={"Authorization": "Bearer b", "Cookie": "pub=1; secubox_session=jeton; z=2"})
+        assert len(banc.appels) == 3 * n and banc.appels[-n][2].get("Cookie") == "secubox_session=jeton" if banc.appels[-n][0] == "waf" else False
         assert banc.appels[0][2]["Authorization"] == "Bearer a" and all("Authorization" not in e for s, _, e in banc.appels if s == "actord")
     finally:
         main.app.dependency_overrides.pop(require_lecture, None)
 
 
+def test_tableau_de_bord_sans_session_une_seule_cle(banc):
+    from types import SimpleNamespace
+    req = SimpleNamespace(headers={"authorization": "Bearer faux-1", "cookie": "secubox_session=faux", "x-secubox-lan": "1"}, cookies={"secubox_session": "faux"})
+    e = S._entetes(req, {"sub": None, "tableau_de_bord": True})
+    assert set(e) <= {"X-SecuBox-LAN"}                                    # des jetons refusés ne multiplient pas les calculs
+    assert set(S._entetes(req, {"sub": "a"})) >= {"Authorization", "Cookie"}
+
+
+def test_file_bornee_verrou_par_cle_et_503(banc, monkeypatch):
+    import threading
+    feu, lances = threading.Event(), []
+
+    def lent(entetes, maintenant, admin=False, echeance=None):
+        lances.append(entetes)
+        feu.wait(10)
+        return {"genere_le": int(maintenant), "situations": []}
+    monkeypatch.setattr(S, "calculer", lent)
+    try:
+        f = [S._obtenir({"Authorization": f"b{i}"}, False) for i in range(S.FILE_MAX)]
+        assert S._obtenir({"Authorization": "b0"}, False) is f[0]          # même clé : le calcul en cours, pas un second
+        with pytest.raises(S.Occupe):
+            S._obtenir({"Authorization": "de-trop"}, False)
+        assert S._obtenir({"Authorization": "b0"}, False) is f[0]          # une clé en cours reste servie, file pleine ou non
+        main.app.dependency_overrides[require_lecture] = lambda: {"sub": "lecteur"}
+        r = TestClient(main.app).get("/situations", headers={"Authorization": "Bearer z"})
+        assert r.status_code == 503 and r.headers["retry-after"] == "15"
+        monkeypatch.setattr(S, "ATTENTE_S", .1)
+        monkeypatch.setattr(S, "_entetes", lambda *a: {"Authorization": "b0"})
+        debut = time.monotonic()
+        assert TestClient(main.app).get("/situations").status_code == 503 and time.monotonic() - debut < 5     # attente bornée
+        assert len(lances) <= S.FILS                                       # fils dédiés, bornés
+    finally:
+        main.app.dependency_overrides.pop(require_lecture, None)
+        feu.set()
+        for x in f:
+            x.result(10)
+    assert S._obtenir({"Authorization": "b0"}, False)["situations"] == []
+
+
+def test_lecture_au_compte_gouttes_bornee_par_l_echeance(tmp_path, monkeypatch):
+    import socket
+    import threading
+    chemin = str(tmp_path / "s.sock")
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(chemin)
+    srv.listen(1)
+    stop = threading.Event()
+
+    def sert():
+        c, _ = srv.accept()
+        c.recv(4096)
+        c.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n")
+        while not stop.wait(.05):
+            try:
+                c.sendall(b" ")
+            except OSError:
+                return
+    f = threading.Thread(target=sert, daemon=True)
+    f.start()
+    monkeypatch.setitem(S.substrat.SOURCES, "waf", chemin)
+    debut = time.monotonic()
+    r = S.substrat.lire("waf", "/x", delai=5, echeance=debut + .5)
+    stop.set()
+    srv.close()
+    assert r == {"ok": False, "donnees": None, "erreur": "délai"} and time.monotonic() - debut < 3
+    assert S.substrat.lire("waf", "/x", echeance=time.monotonic() - 1)["erreur"] == "délai"
+
+
 def test_aucun_journal_balaye():
     code = Path(S.__file__).read_text(encoding="utf-8")
-    assert ".log" not in code and "subprocess" not in code and "glob" not in code.split('"""', 2)[2]
+    assert ".log" not in code and "subprocess" not in code and "glob." not in code and "open(" not in code.replace("os.open(", "").replace("os.fdopen(", "")
 
 
 # ── page ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -287,14 +430,14 @@ def reponse(**k):
                      "serie": None, "serie_jours": [1, 2, 3, None, 5, 6, 0], "serie_note": "Mesuré par jour.", "couches": None, "chaine": [{"nom": XSS, "n": None, "cle": "__proto__"}],
                      "categories": [], "origine": {"unite": "%", "lignes": [{"nom": XSS, "n": 40}]}, "faits": [{"ts": NOW, "texte": XSS, "preuve": XSS}],
                      "geste": {"libelle": "Ouvrir", "href": "/waf/#campaigns", "note": XSS, "genre": ""}}, **kk)
-    return dict({"genere_le": NOW, "age_s": 2, "situations": [sit(0), sit(1, serie_jours=None, serie_note=None), sit(2)], "autres_populations": 2,
+    return dict({"genere_le": NOW, "age_s": 2, "situations": [sit(0), sit(1, serie_jours=None, serie_note=None), sit(2)], "autres": {"populations": 2, "sites": 3, "vitaux": 1},
                  "sources": [{"id": "a", "nom": "WAF, campagnes", "ok": True, "erreur": None}, {"id": "b", "nom": XSS, "ok": False, "erreur": "injoignable"}],
                  "chiffres": {"a_decider": 3, "a_decider_partiel": False, "en_cours": 3, "en_cours_partiel": True, "ecartees_24h": 11480, "passees_24h": None,
                               "heures_mesurees": 5, "series": {"ecartees": [None] * 19 + [1, 2, 3, 4, 5], "passees": None}}}, **k)
 
 
-def ouvre(nav, rep, taille=(1280, 900), url="situations.html?embed=1", reduit=False):
-    ctx = nav.new_context(viewport={"width": taille[0], "height": taille[1]}, reduced_motion="reduce" if reduit else "no-preference", locale="fr-FR", timezone_id="Europe/Paris")
+def ouvre(nav, rep, taille=(1280, 900), url="situations.html?embed=1", reduit=False, fuseau="Europe/Paris"):
+    ctx = nav.new_context(viewport={"width": taille[0], "height": taille[1]}, reduced_motion="reduce" if reduit else "no-preference", locale="fr-FR", timezone_id=fuseau)
     p = ctx.new_page()
     p.erreurs, p.appels = [], []
     p.on("pageerror", lambda e: p.erreurs.append(str(e)))
@@ -319,7 +462,7 @@ def test_page_situations_donnees_hostiles_inertes_et_sources_dites(nav):
     p.wait_for_selector("#dossier h2")
     t = p.inner_text("body").replace(" ", " ")
     assert p.evaluate("window.xss") is None and p.locator("img").count() == 0 and XSS in t
-    assert f"Source « {XSS} » : injoignable." in t and "au moins : 1 source lue sur 2" in t and "5 heures mesurées" in t and "Et 2 autres campagnes actives" in t
+    assert f"Source « {XSS} » : injoignable." in t and "au moins : 1 source lue sur 2" in t and "5 heures mesurées" in t and "Au moins 14 campagnes actives" in t and "Au moins 9 sites sous attaque" in t and "Au moins 9 contrôles vitaux" in t
     assert "Sept derniers jours" in t and "1 jour non mesuré" in p.get_attribute(".graphe", "aria-label").replace(" ", " ") and "Mesuré par jour." in t
     assert p.locator("#chiffres b").all_inner_texts()[3] == "—" and p.locator("#chiffres svg").count() == 1
     p.click("#liste .item >> nth=1")
@@ -329,6 +472,19 @@ def test_page_situations_donnees_hostiles_inertes_et_sources_dites(nav):
     p.keyboard.press("Enter")
     p.wait_for_function("document.querySelector('#dossier h2').textContent.startsWith('Situation 2')")
     assert p.erreurs == [] and set(p.appels) == {"GET /api/v1/soc/situations"}
+    p.context.close()
+
+
+def test_page_jours_du_releve_et_fuseau_de_paris(nav):
+    r = reponse()
+    for x in r["situations"]:
+        x["jours_fin"] = int(datetime(2026, 11, 24, 22, 50, tzinfo=timezone.utc).timestamp())       # mardi 24, 23 h 50 à Paris
+        x["faits"] = [{"ts": int(datetime(2026, 7, 1, 10, 5, tzinfo=timezone.utc).timestamp()), "texte": "x", "preuve": "y"}]
+    p = ouvre(nav, r, fuseau="America/New_York")
+    p.wait_for_selector("#dossier h2")
+    titres = p.locator(".graphe .col title").all_text_contents()
+    assert titres[-1].startswith("mardi 24 (relevé partiel)") and titres[0].startswith("mercredi 18") and "aujourd" not in " ".join(titres)
+    assert "12:05" in p.inner_text(".faits time")
     p.context.close()
 
 

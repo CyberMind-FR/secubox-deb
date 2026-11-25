@@ -104,10 +104,41 @@ def test_heure_non_mesuree_vaut_null_jamais_zero(box):
     d = box.site()
     assert d["serie"][-6] == 1 and d["serie"][-1] == 1
     assert d["serie"][-5:-1] == [None] * 4 and d["serie"][0] is None                      # aucun signe de vie : pas mesuré
-    assert d["heures_mesurees"] == 2 and "Mesure sur 2 heures seulement." in d["phrase"]
-    box.vie(T + 2 * H)
-    d = box.site(t=T + 2 * H)
-    assert d["serie"][-1] == 0 and d["serie"][-2] is None                                 # le moteur vit : zéro mesuré
+    assert d["heures_mesurees"] == 2 and "Mesure complète sur 0\u00a0heure seulement." in d["phrase"]
+    for m in range(0, 76):                                                                # le moteur vit, de minute en minute
+        box.vie(T + 2 * H + 60 * m)
+        box.passe(T + 2 * H + 60 * m)
+    d = box.site(t=T + 2 * H + 4500)
+    assert d["serie"][-1] == 0 and d["serie"][-2] is None                                 # 15 h : zéro mesuré ; 14 h : partielle (30 min)
+
+
+def test_signe_de_vie_discontinu_ne_mesure_pas_un_zero(box):
+    box.ecrire()
+    box.vie(T - 1500)
+    box.passe(T - 1500)
+    box.vie()
+    v = box.passe()                                                                       # deux signes à 25 min : rien entre les deux
+    d = v["dossiers"][D.INCONNUS]
+    assert d["serie"][-1] is None and 23 in v["commun"]["partielles"] and d["etat"] == "non_mesure"
+    assert d["sous_titre"] == "Non mesuré" and d["total"] is None and ["calme", "v"] not in d["etiquettes"]
+    box.ecrire(ligne())
+    assert box.site()["serie"][-1] == 1                                                   # un compte reste un minimum lisible
+
+
+def test_lignes_rapprochees_couvrent_l_heure_lignes_eloignees_non(box):
+    box.ecrire(*[ligne(s, host="www.exemple.test") for s in range(5 * H, 2 * H, -300)], *[ligne(s, host="www.exemple.test") for s in range(2 * H, 0, -900)])
+    v = box.passe()
+    d = v["dossiers"]["www.exemple.test"]
+    assert {19, 20, 21} - set(v["commun"]["partielles"]) and v["commun"]["heures_mesurees"] >= 2
+    assert 22 in v["commun"]["partielles"] and v["dossiers"][D.INCONNUS]["serie"][20] == 0 and v["dossiers"][D.INCONNUS]["serie"][22] is None
+    assert d["serie"][22] == 4
+
+
+def test_site_calme_dit_les_heures_mesurees_jamais_24h(box):
+    box.ecrire(*[ligne(s, host="www.exemple.test") for s in range(5 * H, 0, -300)])
+    v = box.passe()
+    inc = v["dossiers"][D.INCONNUS]
+    assert inc["etat"] == "calme" and inc["sous_titre"].startswith("Rien d’hostile sur ") and "sur les heures mesurées" in inc["phrase"]
 
 
 def test_signe_de_vie_perime_ou_journal_absent_ne_mesure_rien(box):
@@ -115,11 +146,11 @@ def test_signe_de_vie_perime_ou_journal_absent_ne_mesure_rien(box):
     v = box.passe()
     assert v["commun"]["journal"] == "illisible" and not v["commun"]["complet"] and v["commun"]["heures_mesurees"] == 0
     assert v["liste"]["chiffres"]["hostiles"] is None and v["liste"]["chiffres"]["tenu_pct"] is None
-    assert v["dossiers"][D.INCONNUS]["phrase"] == "Aucune heure n’est encore mesurée."
+    assert v["dossiers"][D.INCONNUS]["phrase"] == "Aucune heure n’est mesurée."
     box.vie()
     assert box.passe()["commun"]["heures_mesurees"] == 0                                  # moteur vivant, journal absent
     box.ecrire()
-    assert box.passe()["commun"]["heures_mesurees"] == 1
+    assert box.passe()["commun"]["partielles"] == [23]
 
 
 # ── lecture ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -154,7 +185,8 @@ def test_double_rotation_ratee_est_un_trou_dit_partiel(box):
     v = box.passe()
     assert v["dossiers"]["depot.exemple.test"]["total"] == 2
     assert D._fond["agregateur"].e["trous"] == 1
-    assert v["commun"]["partielles"] == [20, 23]        # heure du dernier relevé, heure de la reprise
+    assert v["commun"]["partielles"] == [20, 23]        # heure du dernier relevé, heure de la reprise ; rien entre les deux
+    assert v["dossiers"]["depot.exemple.test"]["serie"][21:23] == [None, None]
 
 
 def test_troncature_sur_place(box):
@@ -164,14 +196,103 @@ def test_troncature_sur_place(box):
     assert box.site()["total"] == 6
 
 
-def test_fichier_reecrit_sous_le_curseur_repart_sans_compter_deux_fois(box):
-    box.ecrire(ligne(), ligne())
+def test_journal_reecrit_supprime_ou_recree_sans_double_compte(box):
+    j = box.c["journal"]
+    box.ecrire(ligne(100), ligne(90))
     box.passe()
-    with open(box.c["journal"], "r+") as f:             # même inode, plus long, le curseur tombe au milieu d'une ligne
-        f.truncate(0)
-        f.write("".join(ligne(path="/" + "a" * 37) + "\n" for _ in range(3)))
+    copie = j.read_bytes()
+    j.unlink()                                          # supprimé puis recréé (inode souvent réutilisé) avec d'autres lignes
+    box.ecrire(ligne(80), ligne(70), ligne(60), ligne(50))
+    assert box.site()["total"] == 6
+    j.unlink()
+    assert box.passe()["commun"]["journal"] == "illisible" and box.passe()["dossiers"]["depot.exemple.test"]["total"] == 6
+    j.write_bytes(copie)                                # un fichier déjà compté revient : rien n'est recompté
+    assert box.site()["total"] == 6
+    box.ecrire(ligne(40))
+    assert box.site()["total"] == 7
+    tmp = j.with_name("tmp")                            # recopié (autre inode, même contenu) : on continue au même octet
+    tmp.write_bytes(j.read_bytes())
+    tmp.rename(j)
+    box.ecrire(ligne(30))
+    assert box.site()["total"] == 8
+
+
+def test_point_un_deja_lu_n_est_pas_rejoue(box):
+    """Le courant disparaît sans être renommé : `.1`, déjà compté, ne doit pas être relu."""
+    j = box.c["journal"]
+    box.ecrire(ligne(300))
     box.passe()
+    j.rename(j.with_name("waf-threats.log.1"))
+    box.ecrire(ligne(200))
+    assert box.site()["total"] == 2
+    j.rename(j.with_name("perdu"))
+    box.ecrire(ligne(100))
     assert box.site()["total"] == 3
+
+
+def test_lot_entier_ou_rien(box, monkeypatch):
+    box.ecrire(ligne())
+    box.passe()
+    avant = json.dumps(D._fond["agregateur"].e)
+    box.ecrire(ligne(), ligne())
+    vrai = D._veille.lire_flux
+    appels = []
+
+    def casse(*a):
+        appels.append(1)
+        if len(appels) == 2:
+            raise OSError("disque")
+        return vrai(*a)
+    monkeypatch.setattr(D._veille, "lire_flux", casse)
+    with pytest.raises(OSError):
+        box.passe()                                     # le premier lot avait été ajouté : il n'en reste rien
+    assert json.dumps(D._fond["agregateur"].e) == avant
+    monkeypatch.setattr(D._veille, "lire_flux", vrai)
+    assert box.site()["total"] == 3
+
+
+def test_ligne_qui_leve_sautee_une_fois(box, monkeypatch):
+    vrai = D._categorie
+    monkeypatch.setattr(D, "_categorie", lambda c: 1 / 0 if c == "piege" else vrai(c))
+    box.ecrire(ligne(), ligne(category="piege"), ligne())
+    v = box.passe()
+    assert v["dossiers"]["depot.exemple.test"]["total"] == 2 and v["commun"]["illisibles"] == 1
+    assert box.passe()["commun"]["illisibles"] == 1     # pas relue
+
+
+def test_flot_saute_au_plus_recent_et_le_dit(box, monkeypatch):
+    box.ecrire(ligne(H))
+    box.passe(T - H)
+    une = len(ligne()) + 1
+    monkeypatch.setattr(D, "PASSE_LIGNES", 10)
+    monkeypatch.setattr(D, "PASSE_TOURS", 2)
+    monkeypatch.setattr(D, "RETARD_MAX", 60 * une)
+    monkeypatch.setattr(D, "SAUT_OCTETS", 8 * une)
+    box.ecrire(*[ligne(60) for _ in range(50)])         # 50 lignes à 20 par passe : en retard, sous la borne
+    v = box.passe()
+    assert v["commun"]["journal"] == "retard" and not v["commun"]["complet"] and v["liste"]["chiffres"]["hostiles"] is None
+    assert v["liste"]["chiffres"]["sous_attaque"] is None and v["liste"]["chiffres"]["series"]["ecartees"] is None
+    assert v["dossiers"]["depot.exemple.test"]["attaque"] is None
+    box.ecrire(*[ligne(30) for _ in range(90)])         # au-delà : saut
+    v = box.passe()
+    assert v["commun"]["complet"] and v["commun"]["sauts_24h"] == 1 and v["liste"]["chiffres"]["hostiles"] is not None
+    assert 21 < v["dossiers"]["depot.exemple.test"]["total"] < 40
+    assert D._fond["agregateur"].e["couv"][str(int(T // H) - 1)].bit_count() < 55 and 23 in v["commun"]["partielles"]
+    assert box.passe(T + 90000)["commun"]["sauts_24h"] == 0
+
+
+def test_routes_illisibles_tout_va_dans_inconnus(box):
+    for brut in (None, "{", "[]"):
+        D.vider()
+        box.c["etat"].unlink(missing_ok=True)
+        if brut is None:
+            box.c["routes"].unlink()
+        else:
+            box.c["routes"].write_text(brut)
+        box.c["journal"].write_text(ligne() + "\n")
+        v = box.passe()
+        assert set(v["dossiers"]) == {D.INCONNUS} and v["commun"]["routes"] == "illisible" and v["calmes"] == []
+        assert "table des sites est illisible" in v["dossiers"][D.INCONNUS]["phrase"] and v["liste"]["chiffres"]["sites_proteges"] is None
 
 
 def test_redemarrage_reprend_au_curseur(box):
@@ -188,7 +309,13 @@ def test_redemarrage_avec_etat_corrompu_relit_le_journal(box):
     box.ecrire(ligne())
     box.passe(forcer=True)
     for brut in ("{", "[]", json.dumps({"v": 1}), json.dumps({**D._neuf(), "heures": {"x": {}}}),
-                 json.dumps({**D._neuf(), "curseur": "../../etc"}),
+                 json.dumps({**D._neuf(), "curseur": "../../etc"}), json.dumps({**D._neuf(), "dernier_ts": "x"}),
+                 json.dumps({**D._neuf(), "dernier_ts": -1}), json.dumps({**D._neuf(), "dernier_ts": True}),
+                 json.dumps({**D._neuf(), "derniers": {"a.test": {"arrete": [1]}}}), json.dumps({**D._neuf(), "derniers": {"203.0.113.1": {}}}),
+                 json.dumps({**D._neuf(), "hors_web": {"1": "2"}}), json.dumps({**D._neuf(), "couv": {"1": 1 << 61}}),
+                 json.dumps({**D._neuf(), "couv": {"1": -1}}), json.dumps({**D._neuf(), "sauts": ["x"]}), json.dumps({**D._neuf(), "lus": [3]}),
+                 json.dumps({**D._neuf(), "tete": "zz"}), json.dumps({**D._neuf(), "illisibles": None}), json.dumps({**D._neuf(), "inconnu": 1}),
+                 json.dumps({**D._neuf(), "heures": {"1": {"<b>": {"c": {}, "o": {}}}}}), json.dumps({**D._neuf(), "initial": 1}),
                  json.dumps({**D._neuf(), "heures": {"1": {"a": {"c": {"sqli": [1]}, "o": {}}}}})):
         D.vider()
         box.c["etat"].write_text(brut)
@@ -235,12 +362,11 @@ def test_lignes_corrompues_ou_absurdes(box):
 def test_plafonds(box, monkeypatch):
     monkeypatch.setattr(D, "MAX_SITES", 3)
     monkeypatch.setattr(D, "MAX_CATS", 2)
-    box.c["routes"].unlink()                                            # sans table de routes, tout nom valide est un site
+    box.c["routes"].write_text(json.dumps({f"s{i}.exemple.test": ["x", 1] for i in range(10)}))
     box.ecrire(*[ligne(host=f"s{i}.exemple.test") for i in range(10)],
                *[ligne(host="s0.exemple.test", category=f"cat{i}") for i in range(6)])
     v = box.passe()
     assert len([s for s in v["dossiers"] if s != D.INCONNUS]) == 3 and v["commun"]["hors_plafond"] == 7
-    assert v["liste"]["chiffres"]["sites_proteges"] is None
     cats = {c["cle"]: c["n"] for c in v["dossiers"]["s0.exemple.test"]["categories"]}
     assert cats == {"sqli": 1, "cat0": 1, "autres": 5}
 
@@ -267,13 +393,56 @@ def test_fenetre_glissante_oublie_les_vieilles_heures(box):
 
 def test_sous_attaque_seulement_contre_un_rythme_mesure(box):
     box.ecrire(*[ligne(60) for _ in range(200)])
-    assert box.site()["attaque"] is False                               # pas d'historique : rien à comparer
+    d = box.site()
+    assert d["attaque"] is None and "sous attaque" not in json.dumps(d, ensure_ascii=False)   # pas d'historique : on ne sait pas
+    assert box.passe()["liste"]["chiffres"]["sous_attaque"] is None
     D.vider()
     box.c["etat"].unlink()
-    box.ecrire(*[ligne(h * H) for h in range(3, 20) for _ in range(2)])
-    d = box.site()
-    assert d["attaque"] and ["sous attaque", "r"] in d["etiquettes"] and d["urgence"] == 80
-    assert "En ce moment : 200 en deux heures, 50 fois le rythme habituel." in d["phrase"]
+    # 90 minutes depuis le début de l'heure précédente ; deux requêtes toutes les 5 min avant, une toutes les 5 min ensuite
+    box.ecrire(*[ligne(s) for s in range(20 * H, 5400, -300) for _ in range(2)], *[ligne(s) for s in range(5400, 0, -300)],
+               *[ligne(60) for _ in range(200)], mode="w")
+    v = box.passe()
+    d = v["dossiers"]["depot.exemple.test"]
+    assert d["attaque"] is True and ["sous attaque", "r"] in d["etiquettes"] and d["urgence"] == 80
+    m = re.search(r"En ce moment\u00a0: (\d+) en (\d+)\u00a0minutes, (\d+) fois le rythme habituel", d["phrase"])
+    assert m and 85 <= int(m[2]) <= 91 and int(m[3]) == 6 and v["liste"]["chiffres"]["sous_attaque"] == 1   # 218 contre 36 à durée égale
+
+
+def test_fenetre_d_attaque_proratisee_et_heures_partielles_exclues(box):
+    a = D.Agregateur()
+    h = int(T // H)
+    for k in range(2, 12):
+        a.e["couv"][str(h - k)] = (1 << 60) - 1
+    a.e["couv"][str(h - 1)], a.e["couv"][str(h)] = (1 << 60) - 1, (1 << 31) - 1                       # 91 minutes
+    serie = [None] * 12 + [60] * 10 + [60, 40]
+    assert D._attaque(a, serie, T, False) == (False, 100, 91, 91.0)
+    for k in range(2, 7):
+        a.e["couv"][str(h - k)] = 1                                                                 # heures partielles : hors du rythme
+    assert D._attaque(a, serie, T, False)[0] is None                                                # cinq complètes : pas d'historique
+    a.e["couv"][str(h - 2)] = (1 << 60) - 1
+    assert D._attaque(a, serie, T, False)[0] is False
+    a.e["couv"][str(h)] = 0b1                                                                       # heure en cours mal couverte
+    assert D._attaque(a, serie, T, False)[0] is None
+    assert D._attaque(a, serie[:-1] + [900], T, False)[0] is True                                   # un minimum qui dépasse suffit
+    assert D._attaque(a, serie[:-1] + [900], T, True)[0] is None                                    # lecture en retard : on ne sait pas
+    a.e["couv"][str(h)] = a.e["couv"][str(h - 1)] = 0
+    assert D._attaque(a, serie[:-2] + [None, None], T, False)[0] is None
+
+
+def test_journal_illisible_ni_attaque_ni_chiffre(box):
+    box.ecrire(*[ligne(s) for s in range(20 * H, 0, -300)])
+    assert box.passe()["liste"]["chiffres"]["sous_attaque"] == 0
+    box.c["journal"].rename(box.c["journal"].with_name("ailleurs"))
+    c = box.passe()["liste"]["chiffres"]
+    assert c["sous_attaque"] is None and c["hostiles"] is None and c["passees"] is None and c["hors_web"] is None
+
+
+def test_heures_de_paris_et_changement_d_heure():
+    def h(*a):
+        return int(datetime(*a, tzinfo=timezone.utc).timestamp() // 3600)
+    assert D.nom_heure(h(2026, 7, 1, 10)) == "12\u00a0h" and D.nom_heure(h(2026, 12, 1, 10)) == "11\u00a0h"
+    assert [D.nom_heure(h(2026, 10, 25, u)) for u in (0, 1, 2)] == ["2\u00a0h (été)", "2\u00a0h (hiver)", "3\u00a0h"]
+    assert [D.nom_heure(h(2026, 3, 29, u)) for u in (0, 1)] == ["1\u00a0h", "3\u00a0h"]
 
 
 def test_phrases_accords_et_nombres(box):
@@ -308,7 +477,7 @@ def test_decisions_en_attente_et_geste(box):
     assert "19 adresses sont proposées au bannissement et attendent ta décision." in d["phrase"]
     assert any(f["preuve"] == "attend ta décision" and "19" in f["texte"] for f in d["faits"])
     dec = v["liste"]["decisions"]
-    assert [c["id"] for c in dec["rotation"]["campagnes"]] == ["rotation:0a1b2c3d"]
+    assert [(c["id"], c["hote"]) for c in dec["rotation"]["campagnes"]] == [("rotation:0a1b2c3d", "depot.exemple.test"), ("rotation:ffffffff", None)]
     assert dec["campagnes"]["a_bannir"] == 1 and dec["campagnes"]["bannis"] == 1 and dec["acteurs"]["a_bannir"] is None
     assert not IPV4.search(json.dumps(v["liste"]))
 
@@ -326,6 +495,7 @@ def test_population_visant_le_site_devient_un_fait(box):
         {"id": "famille:collecte", "famille": "collecte", "nom_cible": "depot.exemple.test", "adresses": 2454, "etat": "observee",
          "actives_24h": 12, "dernier": int(T) - 600}]}))
     box.ecrire(ligne())
+    assert box.passe()["liste"]["cibles_servies"] == ["depot.exemple.test"]
     assert any(f["texte"] == "Collecte : 2 454 adresses en sept jours" for f in box.site()["faits"])
     assert len(box.site()["faits"]) <= D.MAX_FAITS
 
@@ -353,11 +523,14 @@ def test_routes_gardees_et_sans_calcul(box, waf, monkeypatch):
     monkeypatch.setattr(D._veille, "lire_flux", lambda *a, **k: pytest.fail("journal lu sur le chemin d'une requête"))
     j = c.get("/dossiers/sites").json()
     assert j["disponible"] and j["genere_le"] == int(T) and j["couverture_depuis"] == int(T) - 8 * H and j["perime"] in (True, False)
-    assert [s["id"] for s in j["sites"]] == ["depot.exemple.test", D.INCONNUS] and j["calmes_total"] == 2
+    assert [s["id"] for s in j["sites"]] == ["depot.exemple.test", D.INCONNUS] and j["calmes_total"] == 2 and j["calmes"] == []
     d = c.get("/dossiers/sites/depot.exemple.test").json()
     assert d["couches"][0]["nom"] == "Arrêté" and len(d["couches"][0]["serie"]) == 24 and d["couverture_depuis"]
+    assert c.get("/dossiers/sites/agenda.exemple.test").status_code == 404 and "agenda" not in c.get("/dossiers/sites").text    # inventaire : administrateur
+    waf.app.dependency_overrides[D._est_admin] = lambda: True
+    assert "agenda.exemple.test" in c.get("/dossiers/sites").json()["calmes"]
     calme = c.get("/dossiers/sites/agenda.exemple.test").json()
-    assert calme["total"] == 0 and calme["serie"][-1] == 0 and calme["serie"][-2] is None
+    assert calme["total"] is None and calme["etat"] == "non_mesure"       # une minute couverte : rien ne dit « calme »
     assert c.get("/dossiers/sites/inconnu.exemple.test").status_code == 404
     assert c.get("/dossiers/sites/<script>").status_code == 422
     assert not IPV4.search(c.get("/dossiers/sites").text + c.get("/dossiers/sites/noms-inconnus").text)
@@ -380,3 +553,54 @@ def test_la_boucle_de_fond_est_branchee(waf):
     assert "asyncio.to_thread(_dossiers.rafraichir)" in src
     assert all(any(d.call is D.require_lecture for d in r.dependant.dependencies)
                for r in D.router.routes)
+
+
+def test_est_admin_suit_require_jwt(waf, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    req = SimpleNamespace(headers={"authorization": "Bearer x"}, cookies={})
+
+    async def passe(*a):
+        return {"sub": "a"}
+
+    async def refuse(*a):
+        raise D.HTTPException(403)
+
+    async def casse(*a):
+        raise RuntimeError("x")
+    monkeypatch.setattr(D, "_validate_token", lambda t: None)
+    for garde, attendu in ((passe, True), (refuse, False), (casse, False)):
+        monkeypatch.setattr(D, "require_jwt", garde)
+        assert asyncio.run(D._est_admin(req)) is attendu
+    monkeypatch.setattr(D, "require_jwt", passe)
+    monkeypatch.setattr(D, "_validate_token", lambda t: {"sub": "lecteur"})
+    monkeypatch.setattr(D, "est_admin_reel", lambda p: False)
+    assert asyncio.run(D._est_admin(req)) is False
+
+
+def test_reconstruction_concurrente_une_seule_fois(box, monkeypatch):
+    import threading
+    import time
+    box.ecrire(ligne())
+    box.passe(forcer=True)
+    D.vider()
+    vrai, appels = D.construire, []
+
+    def lent(*a):
+        appels.append(1)
+        time.sleep(.1)
+        return vrai(*a)
+    monkeypatch.setattr(D, "construire", lent)
+    fils = [threading.Thread(target=D._vues) for _ in range(6)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+    assert len(appels) == 1
+
+
+def test_etats_accessoires_hostiles(box):
+    box.c["campagnes"].write_text(json.dumps({"genere_le": int(T), "mode": "propose", "candidats": [{"ip": ["x"], "decision": "a_bannir"}, {"ip": "203.0.113.1", "decision": ["x"]}]}))
+    box.c["populations"].write_text(json.dumps({"populations": [{"nom_cible": ["x"], "famille": {}, "actives_24h": 3, "etat": "observee", "dernier": 5}]}))
+    box.ecrire(ligne())
+    assert box.passe()["liste"]["decisions"]["campagnes"]["a_bannir"] == 0

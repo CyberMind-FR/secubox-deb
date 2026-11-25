@@ -9,7 +9,8 @@ Sources, toutes déjà calculées ailleurs : WAF (`/dossiers/sites` pour les sit
 `health/status.json`). Les identifiants de l'appelant sont retransmis au WAF tels quels, comme la façade SADE.
 
 Une source injoignable, trop ancienne ou périmée est DITE dans `sources` et n'est jamais lue comme « rien à signaler » :
-les chiffres qui en dépendent valent null. Les phrases sont construites ici à partir de mesures ; aucune adresse ne sort."""
+les chiffres qui en dépendent valent null. Les noms de services et de
+sites relevés par la Santé sont un inventaire : administrateur réel seulement. Les phrases sont construites ici à partir de mesures ; aucune adresse ne sort."""
 import asyncio
 import hashlib
 import json
@@ -19,12 +20,14 @@ import stat
 import threading
 import time
 from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from secubox_core.auth import require_lecture
+from secubox_core.auth import ENTETE_LAN, SESSION_COOKIE, require_lecture
 
 from . import defense, defense_etat, substrat
 
@@ -33,6 +36,10 @@ router = APIRouter(tags=["situations"])
 TTL_S = 30.0
 CACHE_MAX = 64
 DELAI_S = 4.0
+ECHEANCE_S = 12.0        # un calcul entier, toutes sources comprises
+ATTENTE_S = 14.0         # une requête n'attend pas plus ; au-delà, 503
+FILS, FILE_MAX = 2, 6    # fils dédiés (jamais ceux de to_thread) et calculs en cours ou en file, toutes clés comprises
+PARIS = ZoneInfo("Europe/Paris")
 SITES_MAX, POPULATIONS_MAX, VITAUX_MAX, LENTS_MAX = 6, 12, 8, 8
 SANTE_FRAICHE_S = 600
 TAILLE_MAX = 4 * 1024 * 1024
@@ -111,8 +118,8 @@ def _motif(r: Dict[str, Any]) -> str:
     return "injoignable"
 
 
-def _lire_waf(chemin: str, entetes: Dict[str, str]) -> Dict[str, Any]:
-    r = substrat.lire("waf", chemin, entetes=entetes, delai=DELAI_S)
+def _lire_waf(chemin: str, entetes: Dict[str, str], echeance: float) -> Dict[str, Any]:
+    r = substrat.lire("waf", chemin, entetes=entetes, delai=DELAI_S, echeance=echeance)
     if r["ok"] and not isinstance(r["donnees"], dict):
         return {"ok": False, "donnees": None, "erreur": "réponse inattendue"}
     return r
@@ -149,7 +156,7 @@ def _epoque(v: Any) -> Optional[int]:
 # ── fabrique ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _situation(ident: str, titre: str, sous: str, etiquettes: List[List[str]], urgence: int, phrase: str, **k: Any) -> Dict[str, Any]:
-    vide = {"serie": None, "serie_jours": None, "serie_note": None, "couches": None, "debut": None, "pas": 3600, "partielles": [],
+    vide = {"serie": None, "serie_jours": None, "serie_note": None, "jours_fin": None, "couches": None, "debut": None, "pas": 3600, "partielles": [],
             "attaque": False, "chaine": [], "categories": [], "origine": {"unite": "", "lignes": []}, "faits": [], "geste": None,
             "poids": 0}
     return {**vide, "id": ident, "titre": titre, "sous_titre": sous, "etiquettes": etiquettes, "urgence": urgence, "phrase": phrase, **k}
@@ -162,13 +169,22 @@ def _geste(libelle: str, href: str, note: str, genre: str = "") -> Dict[str, str
 _ACTOR = ("Voir ce qui serait banni", "/actor/", "Ouvre Actor. Rien n’est posé avant ta confirmation.", "r")
 
 
-def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose: bool) -> Optional[Dict[str, Any]]:
+def _cible(nom: Any, servies: Optional[set]) -> str:
+    """Nom d'un site que le WAF sert ; sinon un nom venu de l'attaquant, jamais recopié. Sans relevé du WAF, rien à dire."""
+    if not isinstance(nom, str) or not nom or servies is None:
+        return ""
+    return nom if nom in servies and _NOM.match(nom) else "un nom non servi"
+
+
+def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose: bool, servies: Optional[set], releve: Optional[int],
+                maintenant: float) -> Optional[Dict[str, Any]]:
     ident = p.get("id")
     if not isinstance(ident, str) or not _POP_ID.match(ident) or p.get("etat") == "inactive" or not _n(p.get("actives_24h")):
         return None
-    fam = p.get("famille") if p.get("famille") in FAMILLES else "autre"
-    cible = _texte(p.get("nom_cible"), 120)
-    nom = FAMILLES[fam] + (f" : {cible}" if cible and fam != "messagerie" else "")
+    fam = p.get("famille")
+    fam = fam if isinstance(fam, str) and fam in FAMILLES else "autre"
+    cible = _cible(p.get("nom_cible"), servies) if fam not in ("messagerie", "acces_distant") else ""     # là, la cible est un compte
+    nom = FAMILLES[fam] + (f" : {cible}" if cible else "")
     n, act, ban = _n(p.get("adresses")), _n(p.get("actives_24h")), _n(p.get("bannies_24h"))
     une, reseaux, tourne = _n(p.get("une")), _n(p.get("reseaux")), p.get("rotation") is True
     camp = rotation.get(ident)
@@ -178,7 +194,7 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
     jours = [_entier(v) for v in serie]
     etiq = ([["à décider", "r"]] if a_bannir else []) + ([["adresses tournantes", "o"]] if tourne else []) + \
         ([["bannie", "v"]] if bannie else [["observée", "o" if tourne else ""]])
-    ou = f" sur {cible}" if cible and fam != "messagerie" else ""
+    ou = f" sur {cible}" if cible else ""
     de = f" de {pl(reseaux, 'réseau', 'réseaux')}" if reseaux else ""
     phrase = [f"{GESTES_FAMILLE[fam]}{ou} depuis {pl(n, 'adresse', 'adresses')}{de} en sept jours."]
     if tourne and une:
@@ -189,7 +205,9 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
         phrase.append(f"{pl(act, 'est active', 'sont actives')} depuis 24 h, "
                       + ("aucune n’est bannie." if not ban else f"{nb(ban)} {'est bannie' if ban < 2 else 'sont bannies'}."))
     avant = [v for v in jours[:-2] if v is not None] if len(jours) == 7 else []
-    if len(jours) == 7 and jours[-2] is not None and avant:
+    # la dernière case est le jour du RELEVÉ : juste après minuit ce n'est pas aujourd'hui, et « hier » n'est pas encore complet
+    meme_jour = releve is not None and datetime.fromtimestamp(releve, PARIS).date() == datetime.fromtimestamp(maintenant, PARIS).date()
+    if meme_jour and len(jours) == 7 and jours[-2] is not None and avant:
         moy = round(sum(avant) / len(avant))
         phrase.append(f"Hier : {pl(jours[-2], 'tentative', 'tentatives')}, contre {nb(moy)} par jour en moyenne les jours d’avant.")
     if a_bannir:
@@ -211,8 +229,8 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
     return _situation(
         "population:" + ident, nom, f"{pl(act, 'adresse active', 'adresses actives')} en 24 h", etiq,
         100 if a_bannir else 35 if bannie else 70 if tourne else 50, " ".join(phrase),
-        serie_jours=jours if any(v is not None for v in jours) else None,
-        serie_note="Cette campagne est mesurée par jour, pas par heure ; la journée en cours est partielle.",
+        serie_jours=jours if any(v is not None for v in jours) else None, jours_fin=releve,
+        serie_note="Cette campagne est mesurée par jour, pas par heure ; la dernière journée du relevé est partielle.",
         chaineTitre="Les adresses, de la vue au blocage",
         chaine=[{"nom": "Vues en sept jours", "n": n, "cle": "recues", "def": "Adresses distinctes de la population."},
                 {"nom": "Actives depuis 24 h", "n": act, "cle": "hostiles", "def": "Adresses revues depuis 24 h."},
@@ -254,9 +272,10 @@ def _candidats(cle: str, d: Any) -> Optional[Dict[str, Any]]:
 
 def _rotation_seule(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Campagne à adresses tournantes qui propose des bans et n'a pas (encore) de population au relevé."""
-    n, hote = _n(c.get("a_bannir")), _texte(c.get("hote"), 253)
-    if not n or not hote:
+    n, hote = _n(c.get("a_bannir")), c.get("hote")
+    if not n:
         return None
+    hote = hote if isinstance(hote, str) and _NOM.match(hote) else "un nom non servi"
     return _situation(
         "rotation:" + _texte(c.get("id"), 32), "Adresses tournantes : " + hote, f"{pl(n, 'adresse proposée', 'adresses proposées')} au bannissement",
         [["à décider", "r"], ["adresses tournantes", "o"]], 100,
@@ -269,9 +288,9 @@ def _rotation_seule(c: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         poids=n, geste=_geste(*_ACTOR))
 
 
-def _sade(s: Sources) -> Optional[Dict[str, Any]]:
+def _sade(s: Sources, echeance: float) -> Optional[Dict[str, Any]]:
     """Propositions de SADE en attente (même règle que /defense/proposals : sans décision, ou à redécider)."""
-    r = defense._lire_propositions()
+    r = substrat.lire("actord", "/proposals", entetes={"X-Sbx-Vue": "complete"}, delai=DELAI_S, echeance=echeance)
     if not r["ok"]:
         s.dire("sade", "Propositions de SADE", _motif(r))
         return None
@@ -301,9 +320,11 @@ def _sade(s: Sources) -> Optional[Dict[str, Any]]:
         poids=n, geste=_geste("Ouvrir les propositions", "/soc/#tdef", "Chaque geste se décide un par un, dans Cyber Defense Live.", "r" if demande else ""))
 
 
-def _sante(s: Sources, maintenant: float) -> List[Dict[str, Any]]:
-    """Services vitaux en échec et sites lents ou muets : seulement ce qu'une mesure fraîche dit."""
+def _sante(s: Sources, maintenant: float, admin: bool) -> Tuple[List[Dict[str, Any]], int]:
+    """Services vitaux en échec et sites lents ou muets : seulement ce qu'une mesure fraîche dit. Leurs noms sont un
+    inventaire : administrateur réel seulement, les autres lecteurs reçoivent des comptes. Rend aussi ce qui est tu."""
     out: List[Dict[str, Any]] = []
+    tus = 0
     d, motif = _fichier("SECUBOX_SOC_SANTE")
     ts = _epoque(d.get("generated_at")) if isinstance(d, dict) else None
     if motif is None and (ts is None or not isinstance(d.get("checks"), dict)):
@@ -314,7 +335,14 @@ def _sante(s: Sources, maintenant: float) -> List[Dict[str, Any]]:
     if motif is None:
         pannes = [c for c, e in d["checks"].items() if isinstance(e, dict) and e.get("ok") is False and e.get("niveau") != "avertissement"
                   and isinstance(c, str) and _NOM.match(c)]
-        for c in pannes[:VITAUX_MAX]:
+        if pannes and not admin:
+            out.append(_situation(
+                "vitaux", "Services vitaux en échec", pl(len(pannes), "contrôle", "contrôles"), [["service en échec", "r"]], 85,
+                f"{pl(len(pannes), 'contrôle échoue', 'contrôles échouent')} au dernier passage. Les noms sont réservés à l’administrateur.",
+                faits=[{"ts": ts, "texte": pl(len(pannes), "contrôle en échec", "contrôles en échec"), "preuve": "contrôle de santé"}], poids=len(pannes),
+                geste=_geste("Ouvrir la Santé", "/health/", "Le détail vit dans la page Santé.", "r")))
+        tus = max(0, len(pannes) - VITAUX_MAX) if admin else 0
+        for c in pannes[:VITAUX_MAX] if admin else []:
             nom = VITAUX.get(c, c)
             out.append(_situation(
                 "vital:" + c, nom, "Contrôle en échec", [["service en échec", "r"]], 85,
@@ -331,25 +359,28 @@ def _sante(s: Sources, maintenant: float) -> List[Dict[str, Any]]:
     if motif is None:
         sites = [(n, v) for n, v in d["vhosts"].items() if isinstance(n, str) and _NOM.match(n) and isinstance(v, dict)]
         lents = sorted(((n, float(v["latency_ms"])) for n, v in sites if v.get("status") == "slow"
-                        and isinstance(v.get("latency_ms"), (int, float)) and not isinstance(v.get("latency_ms"), bool)), key=lambda x: -x[1])
+                        and isinstance(v.get("latency_ms"), (int, float)) and not isinstance(v.get("latency_ms"), bool) and 0 <= v["latency_ms"] < 1e7), key=lambda x: -x[1])
         # « down » compte aussi les refus voulus (401, 403, 404) : seuls un délai dépassé ou une erreur 5xx disent une panne
         muets = sorted(n for n, v in sites if v.get("status") == "down" and (v.get("error") == "timeout" or _n(v.get("status_code")) >= 500))
         if muets:
             out.append(_situation(
                 "sites-muets", "Sites sans réponse", pl(len(muets), "site", "sites"), [["service en échec", "r"]], 82,
-                f"{pl(len(muets), 'site ne répond', 'sites ne répondent')} pas ou {'rend' if len(muets) < 2 else 'rendent'} une erreur au dernier contrôle : "
-                + _liste_noms(muets) + ".",
-                faits=[{"ts": ts, "texte": n, "preuve": "contrôle de santé"} for n in muets[:LENTS_MAX]], poids=len(muets),
+                f"{pl(len(muets), 'site ne répond', 'sites ne répondent')} pas ou {'rend' if len(muets) < 2 else 'rendent'} une erreur au dernier contrôle"
+                + (f"\u00a0: {_liste_noms(muets)}." if admin else "."),
+                faits=[{"ts": ts, "texte": n, "preuve": "contrôle de santé"} for n in muets[:LENTS_MAX]] if admin else
+                [{"ts": ts, "texte": pl(len(muets), "site sans réponse", "sites sans réponse"), "preuve": "contrôle de santé"}], poids=len(muets),
                 geste=_geste("Ouvrir la Santé", "/health/", "Le détail par site vit dans la page Santé.", "r")))
         if lents:
             out.append(_situation(
                 "sites-lents", "Sites lents", pl(len(lents), "site", "sites"), [["service lent", "o"]], 55,
-                f"{pl(len(lents), 'site dépasse', 'sites dépassent')} le seuil de réponse au dernier contrôle. Le plus lent est {lents[0][0]}, "
-                f"à {nb(round(lents[0][1]))} ms.",
-                chaineTitre="Temps de réponse (ms)", chaine=[{"nom": n, "n": round(v), "cle": "passe"} for n, v in lents[:LENTS_MAX]],
-                faits=[{"ts": ts, "texte": f"{n} : {nb(round(v))} ms", "preuve": "contrôle de santé"} for n, v in lents[:LENTS_MAX]], poids=len(lents),
+                f"{pl(len(lents), 'site dépasse', 'sites dépassent')} le seuil de réponse au dernier contrôle. Le plus lent "
+                + (f"est {lents[0][0]}, à" if admin else "répond en") + f" {nb(round(lents[0][1]))} ms.",
+                chaineTitre="Temps de réponse (ms)" if admin else None,
+                chaine=[{"nom": n, "n": round(v), "cle": "passe"} for n, v in lents[:LENTS_MAX]] if admin else [],
+                faits=[{"ts": ts, "texte": f"{n} : {nb(round(v))} ms", "preuve": "contrôle de santé"} for n, v in lents[:LENTS_MAX]] if admin else
+                [{"ts": ts, "texte": f"Temps le plus long : {nb(round(lents[0][1]))} ms", "preuve": "contrôle de santé"}], poids=len(lents),
                 geste=_geste("Ouvrir la Santé", "/health/", "Le détail par site vit dans la page Santé.")))
-    return out
+    return out, tus
 
 
 def _liste_noms(noms: List[str], n: int = 3) -> str:
@@ -357,10 +388,12 @@ def _liste_noms(noms: List[str], n: int = 3) -> str:
     return vus if len(noms) <= n else f"{vus} et {pl(len(noms) - n, 'autre', 'autres')}"
 
 
-def calculer(entetes: Dict[str, str], maintenant: float) -> Dict[str, Any]:
+def calculer(entetes: Dict[str, str], maintenant: float, admin: bool = False, echeance: Optional[float] = None) -> Dict[str, Any]:
     s, out = Sources(), []
-    r = _lire_waf("/dossiers/sites", entetes)
+    fin = time.monotonic() + ECHEANCE_S if echeance is None else echeance
+    r = _lire_waf("/dossiers/sites", entetes, fin)
     sites = r["donnees"] if r["ok"] else None
+    chiffrable = False
     if sites is not None and sites.get("disponible") is not True:
         s.dire("waf_sites", "WAF, relevé par site", "premier relevé en cours")
         sites = None
@@ -368,14 +401,20 @@ def calculer(entetes: Dict[str, str], maintenant: float) -> Dict[str, Any]:
         s.dire("waf_sites", "WAF, relevé par site", _motif(r))
     elif sites.get("perime") is True or sites.get("journal") == "illisible":
         s.dire("waf_sites", "WAF, relevé par site", "relevé figé")
+        sites = None                    # un relevé figé n'est pas « les 24 dernières heures » ni « en ce moment »
+    elif sites.get("rattrapage") is True or sites.get("complet") is False:
+        s.dire("waf_sites", "WAF, relevé par site", "lecture en retard, chiffres suspendus")
     else:
         s.dire("waf_sites", "WAF, relevé par site")
+        chiffrable = True
     dec = sites.get("decisions") if sites and isinstance(sites.get("decisions"), dict) else {}
     rot = dec.get("rotation") if isinstance(dec.get("rotation"), dict) else {}
-    camps = {c["id"]: c for c in rot.get("campagnes", []) if isinstance(c, dict) and isinstance(c.get("id"), str)}
+    camps = {c["id"]: c for c in (rot.get("campagnes") if isinstance(rot.get("campagnes"), list) else [])
+             if isinstance(c, dict) and isinstance(c.get("id"), str)}
     propose = rot.get("mode") == "propose" and rot.get("etat") == "ok"
+    servies = {x for x in sites["cibles_servies"] if isinstance(x, str)} if sites and isinstance(sites.get("cibles_servies"), list) else None
 
-    r = _lire_waf("/populations", entetes)
+    r = _lire_waf("/populations", entetes, fin)
     pops: List[Dict[str, Any]] = []
     if not r["ok"]:
         s.dire("waf_populations", "WAF, campagnes", _motif(r))
@@ -383,8 +422,13 @@ def calculer(entetes: Dict[str, str], maintenant: float) -> Dict[str, Any]:
         s.dire("waf_populations", "WAF, campagnes", "aucun relevé")
     else:
         age = _entier(r["donnees"].get("age_s"))
-        s.dire("waf_populations", "WAF, campagnes", "relevé figé" if age is None or age > POPULATIONS_FRAICHES_S else None)
-        pops = [x for x in (_population(p, camps, propose) for p in r["donnees"]["populations"] if isinstance(p, dict)) if x]
+        if age is None or age > POPULATIONS_FRAICHES_S:
+            s.dire("waf_populations", "WAF, campagnes", "relevé figé")     # ni « depuis 24 h » ni « hier » sur un vieux relevé
+        else:
+            s.dire("waf_populations", "WAF, campagnes", "relevé partiel" if r["donnees"].get("complet") is False else None)
+            releve = int(maintenant) - age
+            pops = [x for x in (_population(p, camps, propose, servies, releve, maintenant) for p in r["donnees"]["populations"]
+                                if isinstance(p, dict)) if x]
     pops.sort(key=lambda x: (-x["urgence"], -x["poids"]))
     out += pops[:POPULATIONS_MAX]
     couvertes = {x["id"].split(":", 1)[1] for x in pops}
@@ -392,43 +436,52 @@ def calculer(entetes: Dict[str, str], maintenant: float) -> Dict[str, Any]:
         out += [x for x in (_rotation_seule(c) for i, c in camps.items() if i not in couvertes) if x]
     out += [x for x in (_candidats(k, dec.get(k)) for k in ("campagnes", "acteurs")) if x]
 
-    attaques = [x for x in (sites or {}).get("sites", []) if isinstance(x, dict) and x.get("attaque") is True
-                and isinstance(x.get("id"), str) and _NOM.match(x["id"]) and x["id"] != "noms-inconnus"]
+    attaques = [x for x in ((sites or {}).get("sites") or []) if isinstance(x, dict) and x.get("attaque") is True
+                and isinstance(x.get("id"), str) and _NOM.match(x["id"]) and x["id"] != "noms-inconnus"] if chiffrable else []
     muet = False
     for x in attaques[:SITES_MAX]:
-        d = {"ok": False} if muet else _lire_waf("/dossiers/sites/" + x["id"], entetes)
-        muet = muet or not d["ok"]     # un détail qui ne vient pas : les suivants ne sont pas attendus
+        d = {"ok": False, "erreur": "délai"} if muet else _lire_waf("/dossiers/sites/" + x["id"], entetes, fin)
+        # un WAF qui ne répond plus : les suivants ne sont pas attendus ; un 404 (site sorti du relevé) ne dit rien des autres
+        muet = muet or (not d["ok"] and not str(d.get("erreur") or "").startswith("http "))
         v = _site(d["donnees"] if d["ok"] and d["donnees"].get("disponible") is True else {**x, "phrase": "Site sous attaque. Le détail n’a pas pu être lu."})
         if v:
             out.append(v)
-    sade = _sade(s)
+    sade = _sade(s, fin)
     if sade:
         out.append(sade)
-    out += _sante(s, maintenant)
+    sante, vitaux_tus = _sante(s, maintenant, admin)
+    out += sante
     out.sort(key=lambda x: (-x["urgence"], -x["poids"], x["titre"]))
 
-    ch = sites.get("chiffres") if sites and isinstance(sites.get("chiffres"), dict) else {}
+    ch = sites.get("chiffres") if chiffrable and isinstance(sites.get("chiffres"), dict) else {}
     series = ch.get("series") if isinstance(ch.get("series"), dict) else {}
-    decideurs, a_decider = s.ok("waf_sites", "sade"), sum(1 for x in out if ["à décider", "r"] in x["etiquettes"])
+    decideurs = s.ok("waf_sites", "sade") and rot.get("tronque") is not True
+    a_decider = sum(1 for x in out if ["à décider", "r"] in x["etiquettes"])
     complet = all(x["ok"] for x in s.l.values())
+    autres = {"populations": max(0, len(pops) - POPULATIONS_MAX), "sites": max(0, len(attaques) - SITES_MAX), "vitaux": vitaux_tus}
+    partiel = not complet or any(autres.values()) or rot.get("tronque") is True
     return {
-        "genere_le": int(maintenant), "situations": out, "sources": list(s.l.values()),
-        "complet": complet, "autres_populations": max(0, len(pops) - POPULATIONS_MAX),
+        "genere_le": int(maintenant), "situations": out, "sources": list(s.l.values()), "complet": complet, "autres": autres,
         "chiffres": {
             # une source muette : le compte connu est un minimum annoncé ; sans rien de connu, null (jamais 0)
             "a_decider": a_decider if decideurs or a_decider else None, "a_decider_partiel": not decideurs,
-            "en_cours": len(out) if complet or out else None, "en_cours_partiel": not complet,
+            "en_cours": len(out) if not partiel or out else None, "en_cours_partiel": partiel,
             "ecartees_24h": _entier(ch.get("ecartees")), "passees_24h": _entier(ch.get("passees")),
             "series": {"ecartees": series.get("ecartees"), "passees": series.get("passees")},
             "heures_mesurees": _entier((sites or {}).get("heures_mesurees"))},
     }
 
 
-# ── service : cache court, un seul calcul à la fois par appelant ──────────────────────────────────────────────────
+# ── service : cache court par appelant, un calcul à la fois par clé, file bornée, échéance globale ───────────────
 
 _CACHE: "OrderedDict[str, Tuple[float, Dict[str, Any]]]" = OrderedDict()
+_EN_COURS: Dict[str, "Future[Dict[str, Any]]"] = {}
 _VERROU = threading.Lock()
-_CALCUL = threading.Lock()
+_FILS = ThreadPoolExecutor(max_workers=FILS, thread_name_prefix="situations")
+
+
+class Occupe(Exception):
+    """Trop de calculs en cours : la requête est refusée plutôt qu'empilée."""
 
 
 def vider() -> None:
@@ -436,31 +489,53 @@ def vider() -> None:
         _CACHE.clear()
 
 
-def _frais(cle: str) -> Optional[Dict[str, Any]]:
+def _entetes(request: Request, payload: Any) -> Dict[str, str]:
+    """Les seuls identifiants retransmis et mis en clé : porteur, cookie de SESSION (jamais les autres cookies), verdict LAN.
+    Un tableau de bord sans session valable n'est connu que par le réseau local : ses jetons refusés ne font pas de clé."""
+    e = defense._entetes_appelant(request)
+    if isinstance(payload, dict) and payload.get("tableau_de_bord") is True:
+        return {ENTETE_LAN: e[ENTETE_LAN]} if ENTETE_LAN in e else {}
+    e.pop("Cookie", None)
+    jeton = request.cookies.get(SESSION_COOKIE)
+    if jeton:
+        e["Cookie"] = f"{SESSION_COOKIE}={jeton}"
+    return e
+
+
+def _calcul(cle: str, entetes: Dict[str, str], admin: bool, depuis: float) -> Dict[str, Any]:
+    p = calculer(entetes, time.time(), admin, depuis + ECHEANCE_S)
     with _VERROU:
-        e = _CACHE.get(cle)
-        return e[1] if e is not None and 0 <= time.monotonic() - e[0] < TTL_S else None
-
-
-def servir(entetes: Dict[str, str]) -> Dict[str, Any]:
-    cle = hashlib.sha256("\0".join(f"{k}={v}" for k, v in sorted(entetes.items())).encode()).hexdigest()
-    p = _frais(cle)
-    if p is not None:
-        return p
-    with _CALCUL:
-        p = _frais(cle)
-        if p is None:
-            p = calculer(entetes, time.time())
-            with _VERROU:
-                _CACHE.pop(cle, None)
-                while len(_CACHE) >= CACHE_MAX:
-                    _CACHE.popitem(last=False)
-                _CACHE[cle] = (time.monotonic(), p)
+        _CACHE.pop(cle, None)
+        while len(_CACHE) >= CACHE_MAX:
+            _CACHE.popitem(last=False)
+        _CACHE[cle] = (time.monotonic(), p)
     return p
 
 
-@router.get("/situations", dependencies=[Depends(require_lecture)])
-async def situations(request: Request):
+def _obtenir(entetes: Dict[str, str], admin: bool) -> Any:
+    """Le résultat en cache, ou le calcul de cette clé (en cours, ou lancé ici). Lève `Occupe` si la file est pleine."""
+    cle = hashlib.sha256((f"admin={admin}\0" + "\0".join(f"{k}={v}" for k, v in sorted(entetes.items()))).encode()).hexdigest()
+    with _VERROU:
+        e = _CACHE.get(cle)
+        if e is not None and 0 <= time.monotonic() - e[0] < TTL_S:
+            return e[1]
+        for k in [k for k, f in _EN_COURS.items() if f.done()]:
+            del _EN_COURS[k]
+        f = _EN_COURS.get(cle)
+        if f is None:
+            if len(_EN_COURS) >= FILE_MAX:
+                raise Occupe
+            f = _EN_COURS[cle] = _FILS.submit(_calcul, cle, entetes, admin, time.monotonic())
+        return f
+
+
+@router.get("/situations")
+async def situations(request: Request, payload: Any = Depends(require_lecture), admin: bool = Depends(defense._est_admin)):
     """Les situations, de la plus urgente à la plus calme, et l'état de lecture de chaque source."""
-    p = await asyncio.to_thread(servir, defense._entetes_appelant(request))
+    try:
+        p = _obtenir(_entetes(request, payload), admin)
+        if isinstance(p, Future):
+            p = await asyncio.wait_for(asyncio.shield(asyncio.wrap_future(p)), ATTENTE_S)
+    except (Occupe, asyncio.TimeoutError):
+        raise HTTPException(503, detail={"motif": "occupe"}, headers={"Retry-After": "15"}) from None
     return {**p, "age_s": max(0, int(time.time() - p["genere_le"]))}

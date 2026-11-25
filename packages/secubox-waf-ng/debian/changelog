@@ -8,7 +8,10 @@ secubox-waf-ng (1.49.0-1~trixie1) trixie; urgency=medium
     adresse). Agrégat horaire tenu en tâche de fond par le curseur de
     veille_lecture : seuls les octets neufs du journal sont lus, une passe par
     minute, plafonds explicites, état atomique dans
-    /var/lib/secubox/waf/dossiers.json, reprise bornée à 24 Mio.
+    /var/lib/secubox/waf/dossiers.json, reprise bornée à 24 Mio. Couverture à
+    la minute, retard dit puis saut au plus récent, lot entier ou rien, aucun
+    double compte d'un journal recréé ou tronqué. Noms des sites sans
+    événement : administrateur réel seulement.
   * Couches : arrêté (banned), refusé (warning, page 403), détourné
     (leurre_redirige), laissé passer (detect) ; robots à part. Heure non
     mesurée = null. « Requêtes reçues » vaut « — » : le moteur n'a pas de

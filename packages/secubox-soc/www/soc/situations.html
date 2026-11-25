@@ -109,9 +109,13 @@ function pc(v){return nombre(v)?String(v).replace('.',',')+' %':'—';}
 function pl(n,s,p){return nb(n)+' '+(Math.abs(n)<2?s:p);}
 function court(n){return n>=1e6?String(Math.round(n/1e5)/10).replace('.',',')+'M':n>=1e4?Math.round(n/1e3)+'k':nb(n);}
 function tab(v){return Array.isArray(v)?v:[];}
-function hh(ts){return new Date(ts*1000).getHours()+' h';}
-function quand(ts){var d=new Date(ts*1000),m=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  return d.toDateString()===new Date().toDateString()?m:d.toLocaleDateString('fr-FR',{weekday:'short'})+' '+m;}
+// Heures de Paris, comme les phrases du serveur, quel que soit le fuseau du poste ; les deux « 2 h » du retour à l'heure d'hiver se distinguent.
+var TZ='Europe/Paris',FH=new Intl.DateTimeFormat('fr-FR',{timeZone:TZ,hour:'numeric',hourCycle:'h23'}),FJ=new Intl.DateTimeFormat('fr-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+function heure(ts){return parseInt(FH.format(new Date(ts*1000)),10);}
+function jour(ts){return FJ.format(new Date(ts*1000));}
+function hh(ts){var h=heure(ts);return h+'\u00a0h'+(heure(ts+3600)===h?' (été)':heure(ts-3600)===h?' (hiver)':'');}
+function quand(ts){var d=new Date(ts*1000),m=d.toLocaleTimeString('fr-FR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
+  return jour(ts)===jour(Date.now()/1000)?m:d.toLocaleDateString('fr-FR',{timeZone:TZ,weekday:'short'})+' '+m;}
 function age(s){return s<90?'à l’instant':s<5400?'il y a '+Math.round(s/60)+' min':'il y a '+Math.round(s/3600)+' h';}
 function genre(c){return c==='r'||c==='o'||c==='v'?c:'';}
 function lienSur(u){return typeof u==='string'&&/^\/(?!\/)[A-Za-z0-9\/._\-#:?=&]*$/.test(u)?u:null;}
@@ -182,7 +186,9 @@ function graphe(x){
   var W=Math.max(240,Math.floor($('dossier').clientWidth*(($('cadre').clientWidth>=1080)?.56:1)-32)),H=230,G=44,B=24,m=Math.max.apply(null,mesurees(T).concat([4])),p=Math.pow(10,Math.floor(Math.log10(m))),pas=[p/2,p,2*p,5*p].filter(function(q){return q>=1&&m/q<=4;})[0]||p,haut=Math.ceil(m/pas)*pas,larg=(W-G)/n;
   function Y(v){return H-B-v/haut*(H-B-10);}
   function debut(k){return x.debut?x.debut+k*(x.pas||3600):null;}
-  function nomCol(k){if(jours){var d=new Date();d.setDate(d.getDate()-(n-1-k));return k===n-1?'aujourd’hui (en cours)':d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'});}
+  // Jours du RELEVÉ (celui d'avant minuit finit hier) ; midi UTC évite tout glissement de fuseau ou de changement d'heure.
+  var finJ=nombre(x.jours_fin)?x.jours_fin:Date.now()/1000,finN=Date.parse(jour(finJ)+'T12:00:00Z'),ceJour=jour(finJ)===jour(Date.now()/1000);
+  function nomCol(k){if(jours){if(k===n-1&&ceJour)return 'aujourd’hui (en cours)';return new Date(finN-(n-1-k)*864e5).toLocaleDateString('fr-FR',{timeZone:'UTC',weekday:'long',day:'numeric'})+(k===n-1?' (relevé partiel)':'');}
     return debut(k)?hh(debut(k))+(k===n-1?' (en cours)':''):'heure '+(k+1);}
   function dit(k){return nomCol(k)+' : '+(T[k]===null?'pas mesuré':C.length===1?mes(T[k]):'total '+mes(T[k])+' — '+C.map(function(c){return c.nom.toLowerCase()+' '+mes(c.serie[k]);}).join(', '))+(tab(x.partielles).indexOf(k)>=0&&!jours&&k!==n-1?' (heure mesurée en partie)':'');}
   var pic=0;T.forEach(function(v,k){if(nombre(v)&&(T[pic]===null||v>T[pic]))pic=k;});
@@ -203,7 +209,7 @@ function graphe(x){
     z.addEventListener('pointerenter',function(){montre(k);});z.addEventListener('click',function(){montre(k);});
   });
   var pasT=jours?1:W<420?12:6;
-  for(i=0;i<n;i+=pasT){var lab=jours?nomCol(i).slice(0,3):debut(i)?hh(debut(i)):'';if(jours&&i===n-1)lab='auj.';sv('text',{x:G+(i+.5)*larg,y:H-5,'text-anchor':'middle'},g).textContent=lab;}
+  for(i=0;i<n;i+=pasT){var lab=jours?nomCol(i).slice(0,3):debut(i)?hh(debut(i)):'';if(jours&&i===n-1&&ceJour)lab='auj.';sv('text',{x:G+(i+.5)*larg,y:H-5,'text-anchor':'middle'},g).textContent=lab;}
   if(!jours)sv('text',{x:W,y:H-5,'text-anchor':'end'},g).textContent='en cours';
   var ici=-1;
   function montre(k){ici=k;cols.forEach(function(c,j){c.setAttribute('class','col'+(j===k?' on':''));});lec.textContent=k<0?resume:dit(k);}
@@ -293,7 +299,10 @@ function LISTE(c){
   var k=c.chiffres||{},s=k.series||{},src=tab(c.sources),ko=src.filter(function(x){return x.ok!==true;}),items=tab(c.situations);
   PAR_ID={};items.forEach(function(x){PAR_ID[x.id]=x;});
   var al=ko.map(function(x){return 'Source « '+x.nom+' » : '+x.erreur+'.';});
-  if(c.autres_populations>0)al.push('Et '+pl(c.autres_populations,'autre campagne active','autres campagnes actives')+', à lire dans le WAF.');
+  var au=c.autres||{};
+  if(au.populations>0)al.push('Au moins '+pl(au.populations+12,'campagne active','campagnes actives')+' : '+pl(au.populations,'autre à lire','autres à lire')+' dans le WAF.');
+  if(au.sites>0)al.push('Au moins '+pl(au.sites+6,'site sous attaque','sites sous attaque')+' : '+pl(au.sites,'autre à lire','autres à lire')+' dans le WAF.');
+  if(au.vitaux>0)al.push('Au moins '+pl(au.vitaux+8,'contrôle vital en échec','contrôles vitaux en échec')+' : '+pl(au.vitaux,'autre à lire','autres à lire')+' dans la Santé.');
   return {items:items,alertes:al,genere_le:c.genere_le,age_s:c.age_s,
     videTexte:ko.length?'Aucune situation visible, mais '+(ko.length<2?'une source ne répond pas.':pl(ko.length,'source','sources')+' ne répondent pas.'):'Aucune situation en cours.',
     chiffres:[{nom:TEXTES.chiffres[0],v:mes(k.a_decider),sous:k.a_decider_partiel?(nombre(k.a_decider)?'au moins : ':'')+'une source de décision ne répond pas':null,def:'Situations qui attendent une décision : bans proposés, gestes de SADE.'},
@@ -322,7 +331,7 @@ function DEMO_LISTE(){
       chaineTitre:'Les adresses, de la vue au blocage',chaine:[{nom:'Vues en sept jours',n:38,cle:'recues'},{nom:'Actives depuis 24 h',n:38,cle:'hostiles'},{nom:'Bannies depuis 24 h',n:38,cle:'arrete'}],origine:{unite:'%',lignes:[{nom:'Accès grand public',n:66},{nom:'Hébergeurs',n:34}]},faits:[f(5400,'Dernière tentative vue','relevé des populations')],geste:{libelle:'Ouvrir la campagne dans le WAF',href:'/waf/#campaigns',note:'Le détail de la population vit dans le WAF.',genre:''}},
     {id:'l1',titre:'Sites lents',sous_titre:'1 site',etiquettes:[['service lent','o']],phrase:'1 site dépasse le seuil de réponse au dernier contrôle. Le plus lent est depot.exemple.test, à 1 840 ms.',serie:null,serie_jours:null,couches:null,chaineTitre:'Temps de réponse (ms)',chaine:[{nom:'depot.exemple.test',n:1840,cle:'passe'}],origine:{unite:'',lignes:[]},
       faits:[f(60,'depot.exemple.test : 1 840 ms','contrôle de santé')],geste:{libelle:'Ouvrir la Santé',href:'/health/',note:'Le détail par site vit dans la page Santé.',genre:''}}];
-  return {genere_le:t,age_s:4,situations:l,autres_populations:0,sources:[{nom:'WAF, relevé par site',ok:true},{nom:'WAF, campagnes',ok:true},{nom:'Propositions de SADE',ok:false,erreur:'ne répond pas à temps'}],
+  return {genere_le:t,age_s:4,situations:l,autres:{},sources:[{nom:'WAF, relevé par site',ok:true},{nom:'WAF, campagnes',ok:true},{nom:'Propositions de SADE',ok:false,erreur:'ne répond pas à temps'}],
     chiffres:{a_decider:1,a_decider_partiel:true,en_cours:l.length,en_cours_partiel:true,ecartees_24h:n-T[3],passees_24h:T[3],heures_mesurees:24,series:{ecartees:a.map(function(_,i){return L[0][i]+L[1][i]+L[2][i];}),passees:L[3]}}};
 }
 demarrer();

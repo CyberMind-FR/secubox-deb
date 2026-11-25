@@ -95,10 +95,10 @@ def liste(n=3, **k):
 
 
 class Banc:
-    def __init__(self, nav, reps=None, taille=(1280, 900), url="?embed=1", reduit=False, hote=False):
+    def __init__(self, nav, reps=None, taille=(1280, 900), url="?embed=1", reduit=False, hote=False, fuseau="Europe/Paris"):
         self.reps, self.appels, self.erreurs, self.dehors = reps if reps is not None else {}, [], [], []
         self.ctx = nav.new_context(viewport={"width": taille[0], "height": taille[1]}, reduced_motion="reduce" if reduit else "no-preference",
-                                   timezone_id="Europe/Paris", locale="fr-FR")
+                                   timezone_id=fuseau, locale="fr-FR")
         self.p = self.ctx.new_page()
         self.p.on("pageerror", lambda e: self.erreurs.append(str(e)))
         self.p.on("request", lambda r: self.dehors.append(r.url) if not r.url.startswith("http://sbx.test/") else None)
@@ -227,9 +227,9 @@ def test_premier_releve_absent_et_mesure_partielle(nav):
     b = Banc(nav, {"/api/v1/waf/dossiers/sites": {"disponible": False, "genere_le": None, "couverture_depuis": None}})
     attends(b.p, "document.querySelector('#liste').textContent.includes('Premier relevé en cours')")
     b.fin()
-    b = Banc(nav, {"/api/v1/waf/dossiers/sites": liste(journal="illisible", perime=True, age_s=7200, heures_mesurees=3, hors_plafond=2, rattrapage=True)}).pret()
+    b = Banc(nav, {"/api/v1/waf/dossiers/sites": liste(journal="illisible", perime=True, age_s=7200, heures_mesurees=3, hors_plafond=2, rattrapage=True, sauts_24h=2, routes="illisible")}).pret()
     t = txt(b.p, "#alertes")
-    for x in ("Journal des menaces illisible", "Relevé figé", "Mesure sur 3 heures sur 24", "2 événements non comptés", "Rattrapage"):
+    for x in ("Journal des menaces illisible", "Relevé figé", "Mesure complète sur 3 heures sur 24", "2 événements non comptés", "Lecture du journal en retard", "2 passages ont été sautés", "Table des sites illisible"):
         assert x in t, x
     b.fin()
 
@@ -242,6 +242,22 @@ def test_dossier_muet_ou_lien_suspect(nav):
         b = Banc(nav, {"/api/v1/waf/dossiers/sites/s0.exemple.test": dossier(0, geste={"libelle": "x", "href": u, "note": "", "genre": "r"})}).pret()
         assert b.p.locator("#geste").count() == 0
         b.fin()
+
+
+def test_noms_des_sites_calmes_reserves(nav):
+    b = Banc(nav, {"/api/v1/waf/dossiers/sites": liste(calmes=[], calmes_total=12)}).pret()
+    assert "12 sites sans événement (noms réservés à l’administrateur)" in txt(b.p, "#liste") and b.p.locator("#liste details").count() == 0
+    b.fin()
+
+
+def test_heures_de_paris_et_les_deux_2_h(nav):
+    import datetime as dt
+    deb = int(dt.datetime(2026, 10, 24, 12, tzinfo=dt.timezone.utc).timestamp())
+    c = [{"cle": "arrete", "nom": "Arrêté", "serie": [1] * 24}]
+    b = Banc(nav, {"/api/v1/waf/dossiers/sites/s0.exemple.test": dossier(0, debut=deb, couches=c, partielles=[])}, fuseau="America/New_York").pret()
+    t = [x.replace("\u00a0", " ") for x in b.p.locator(".graphe .col title").all_text_contents()]
+    assert t[0].startswith("14 h :") and t[12].startswith("2 h (été)") and t[13].startswith("2 h (hiver)") and t[14].startswith("3 h :")
+    b.fin()
 
 
 @pytest.mark.parametrize("largeur", [1280, 820, 400, 320])

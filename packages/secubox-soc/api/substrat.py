@@ -13,6 +13,7 @@ import http.client
 import json
 import logging
 import socket
+import time
 from typing import Any, Dict, Optional
 
 # `actord` : l'API de lecture est actor.sock ; actord.sock est le socket d'ingestion des capteurs (voir RELEVE.md).
@@ -52,9 +53,15 @@ def _detail(corps: bytes) -> str:
     return "".join(c if c.isprintable() else " " for c in v)[:200]
 
 
-def lire(source: str, chemin: str, entetes: Optional[Dict[str, str]] = None, delai: float = 3.0) -> Dict[str, Any]:
-    """GET `chemin` sur le socket de `source`. Rend `{"ok", "donnees", "erreur"}`."""
-    return _requete("GET", source, chemin, None, entetes, delai)
+def lire(source: str, chemin: str, entetes: Optional[Dict[str, str]] = None, delai: float = 3.0,
+         echeance: Optional[float] = None) -> Dict[str, Any]:
+    """GET `chemin` sur le socket de `source`. Rend `{"ok", "donnees", "erreur"}`. `delai` borne chaque attente du socket ;
+    `echeance` (time.monotonic) borne la lecture ENTIÈRE, même d'un service qui répond au compte-gouttes (#3963)."""
+    if echeance is not None:
+        delai = min(delai, echeance - time.monotonic())
+        if delai <= 0.05:
+            return _ko("délai")
+    return _requete("GET", source, chemin, None, entetes, delai, echeance)
 
 
 def ecrire(source: str, chemin: str, corps: Any, entetes: Optional[Dict[str, str]] = None,
@@ -63,8 +70,25 @@ def ecrire(source: str, chemin: str, corps: Any, entetes: Optional[Dict[str, str
     return _requete("POST", source, chemin, corps, entetes, delai)
 
 
+def _lire_borne(conn: "_Connexion", rep: http.client.HTTPResponse, echeance: float) -> bytes:
+    """Corps (CORPS_MAX + 1 octets au plus) lu par morceaux, jamais au-delà de `echeance` (TimeoutError)."""
+    morceaux, total = [], 0
+    while total <= CORPS_MAX:
+        reste = echeance - time.monotonic()
+        if reste <= 0:
+            raise TimeoutError
+        if conn.sock is not None:
+            conn.sock.settimeout(reste)
+        bloc = rep.read1(65536)
+        if not bloc:
+            break
+        morceaux.append(bloc)
+        total += len(bloc)
+    return b"".join(morceaux)[:CORPS_MAX + 1]
+
+
 def _requete(methode: str, source: str, chemin: str, corps_json: Any, entetes: Optional[Dict[str, str]],
-             delai: float) -> Dict[str, Any]:
+             delai: float, echeance: Optional[float] = None) -> Dict[str, Any]:
     sock = SOURCES[source]  # KeyError si source inconnue
     conn = None
     try:
@@ -76,7 +100,7 @@ def _requete(methode: str, source: str, chemin: str, corps_json: Any, entetes: O
         conn = _Connexion(sock, delai)
         conn.request(methode, chemin, body=brut, headers=h)
         rep = conn.getresponse()
-        corps = rep.read(CORPS_MAX + 1)
+        corps = rep.read(CORPS_MAX + 1) if echeance is None else _lire_borne(conn, rep, echeance)
         if rep.status != 200:
             d = _detail(corps[:CORPS_MAX]) if methode == "POST" else ""
             return _ko(f"http {rep.status}" + (f" : {d}" if d else ""))
