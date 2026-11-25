@@ -47,16 +47,7 @@ case "$1" in
     ;;
 esac
 #DEBHELPER#
-# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
-for _s in /usr/lib/secubox/auth/maintscripts/*.postinst; do
-  [ -f "$_s" ] && { sh "$_s" "$@" || echo "auth : postinst de $(basename "$_s") en échec" >&2; }
-done
-
-# Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
-for _s in /usr/lib/secubox/auth/maintscripts/*.postinst; do
-  [ -f "$_s" ] && { sh "$_s" "$@" || echo "auth : postinst de $(basename "$_s") en échec" >&2; }
-done
-
+# UNE passe (#3708 : la boucle, recopiée trois fois, relançait l'agrégateur six fois par mise à jour).
 # Composants absorbés (#2050) : leurs scripts de maintenance, mêmes arguments.
 for _s in /usr/lib/secubox/auth/maintscripts/*.postinst; do
   [ -f "$_s" ] && { sh "$_s" "$@" || echo "auth : postinst de $(basename "$_s") en échec" >&2; }

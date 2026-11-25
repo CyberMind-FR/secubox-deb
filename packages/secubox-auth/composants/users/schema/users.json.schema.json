@@ -8,6 +8,7 @@
   "properties": {
     "$schema": {"type": "string"},
     "version": {"const": 2},
+    "admin_configure_le": {"type": "string", "format": "date-time"},
     "users": {
       "type": "array",
       "items": {"$ref": "#/definitions/user"}
@@ -34,7 +35,9 @@
         "services": {"type": "array", "items": {"type": "string"}},
         "created":  {"type": "string", "format": "date-time"},
         "last_login": {"type": ["string", "null"], "format": "date-time"},
-        "provision_results": {"type": "object"}
+        "provision_results": {"type": "object"},
+        "origine": {"enum": ["service"]},
+        "desactive_motif": {"type": "string"}
       }
     },
     "totp": {

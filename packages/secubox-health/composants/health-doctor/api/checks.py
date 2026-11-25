@@ -188,6 +188,33 @@ def check_clamav() -> tuple[bool, dict]:
                 "dernier_demarrage_s": d.get("dernier_demarrage_s")}
 
 
+def _comptes_admin():
+    """Règle partagée (secubox_core.comptes_admin) chargée par son chemin : le paquet tire FastAPI, la sonde tourne
+    chaque minute."""
+    import importlib.util
+    paquet = importlib.util.find_spec("secubox_core")
+    spec = importlib.util.spec_from_file_location(
+        "health_doctor_comptes_admin", Path(list(paquet.submodule_search_locations)[0]) / "comptes_admin.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def check_comptes_admin(users: Path | None = None) -> tuple[bool, dict]:
+    """Administrateur actif sans mot de passe (#3708). Un NOMBRE, jamais un nom : le relevé est lisible du LAN sans
+    session (mode tableau de bord) et son cache est public."""
+    try:
+        r = _comptes_admin().resume(users)
+    except (OSError, ImportError, AttributeError, TypeError) as e:
+        return True, {"skipped": True, "error": type(e).__name__}      # secubox-core antérieur : rien à dire
+    if not r["lisible"]:
+        return True, {"skipped": True, "lisible": False}
+    n = r["sans_mot_de_passe"]
+    return n == 0, {"sans_mot_de_passe": n, **({"message": (
+        f"{n} administrateur(s) actif(s) sans mot de passe : à configurer ou à désactiver "
+        "(page Utilisateurs).")} if n else {})}
+
+
 # ── Registry ──────────────────────────────────────────────────────────────
 
 # Vital — every entry here counts toward the "failing" tally in the doctor
@@ -217,3 +244,8 @@ REGISTRY: Dict[str, CheckFn] = {
 # check_act_runner_arm64 kept as a module-level function (cheap) so a
 # future REGISTRY_INFORMATIONAL tier can reuse it without duplication.
 # Not vital — a stopped CI runner doesn't break the board (#214).
+
+# Avertissements : montrés (page Santé, healthctl), jamais comptés parmi les services vitaux en échec.
+REGISTRY_AVERTISSEMENTS: Dict[str, CheckFn] = {
+    "comptes-admin":       check_comptes_admin,
+}

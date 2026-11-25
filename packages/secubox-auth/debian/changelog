@@ -1,3 +1,42 @@
+secubox-auth (1.8.22-1~trixie1) trixie; urgency=medium
+
+  * Comptes admin sans mot de passe, revendicables depuis la zone de confiance
+    (ref #3708). Le postinst ne sème plus de compte au nom de la machine dès
+    qu'un administrateur a un mot de passe, et désactive (jamais de suppression)
+    tout admin sans mot de passe dès qu'un autre admin actif en a choisi un ; une
+    ligne d'audit par compte. Retour : usersctl set-password NOM puis
+    usersctl enable NOM.
+  * POST /login : plus de première configuration d'un compte sans mot de passe
+    une fois un autre administrateur configuré ; POST /set-password le revérifie
+    à la pose (jeton émis avant, compte désactivé, mot de passe déjà posé).
+    Refus audités, même texte et même durée pour tous les comptes.
+  * POST /user (page Utilisateurs) : le mot de passe saisi est enregistré, à
+    changer à la première connexion (le compte restait sans mot de passe).
+  * usersctl : semer, desactiver-admins-sans-mot-de-passe,
+    renommer-compte-machine.
+  * postinst : composants configurés une fois, plus trois (l'agrégateur était
+    relancé six fois par mise à jour, il l'est deux fois).
+  * Seuls les admins JAMAIS SERVIS sont désactivés (second facteur, Google,
+    service, connexion, appareil rattaché ou session : gardés ; trace illisible :
+    gardés). « Configuré » exige un mot de passe choisi, pas « à changer ».
+  * Admin au mot de passe du premier démarrage : refusé (et désactivé s'il n'a
+    jamais servi) dès qu'un autre administrateur est configuré.
+  * Écritures de users.json sous un verrou commun, relues avant d'écrire ;
+    mot de passe posé sous ce verrou ; création avec mot de passe en une fois ;
+    import d'un admin sans mot de passe refusé.
+  * Connexion : une vérification argon2 par demande, derrière la porte commune ;
+    anciens comptes de console ou de délégation jamais comptés.
+  * Marque durable « box configurée » (users.json, admin_configure_le) : posée au
+    premier mot de passe choisi et par le postinst ; la première configuration ne
+    se rouvre que par usersctl rouvrir-premiere-configuration (root, audité).
+    Le mot de passe du premier démarrage ne se choisit plus ensuite.
+  * Registre occupé : 503 partout ; une connexion réussie n'échoue jamais pour
+    last_login ; verrou réparé (root:secubox 0640) ; second facteur hors de la
+    boucle, codes de secours derrière la porte argon2.
+  * Code TOTP lu, vérifié et consigné sous un verrou (plus de double acceptation).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-auth (1.8.21-1~trixie1) trixie; urgency=medium
 
   * Dépendance explicite à python-multipart (python3-python-multipart |

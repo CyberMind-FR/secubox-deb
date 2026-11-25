@@ -41,6 +41,12 @@ Configuration file: `/etc/secubox/users.toml`
 - `GET /api/v1/users/status` - Module status
 - `GET /api/v1/users/health` - Health check
 
+## `usersctl` et comptes sans mot de passe (#3708)
+
+`usersctl semer [--machine NOM]`, `usersctl desactiver-admins-sans-mot-de-passe`,
+`usersctl renommer-compte-machine ANCIEN NOUVEAU` : voir le README de secubox-auth. Retour arrière d'une désactivation :
+`usersctl set-password NOM` puis `usersctl enable NOM`.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

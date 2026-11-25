@@ -142,7 +142,7 @@ def test_unite_renommer_livree_root_et_bornee():
     # bac à sable : système en lecture seule sauf ce que l'outil écrit (/etc/hosts et /etc/secubox par renommage
     # atomique dans leur dossier, verrou dans /run, audit)
     for ligne in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/etc /run /var/log/secubox",
-                  "ProtectHome=yes", "PrivateTmp=yes"):
+                  "ReadWritePaths=-/var/lib/secubox/auth", "ProtectHome=yes", "PrivateTmp=yes"):
         assert ligne in actives, ligne
     regles = (SYSTEM / "debian" / "rules").read_text()
     assert "systemd/secubox-systeme-renommer@.service" in regles

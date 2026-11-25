@@ -1,3 +1,20 @@
+secubox-core (1.8.46-1~trixie1) trixie; urgency=medium
+
+  * Comptes admin sans mot de passe (ref #3708) : règle commune
+    secubox_core.comptes_admin (administrateur configuré, comptes de service,
+    première configuration permise), lue par la connexion, le postinst de
+    secubox-auth, le renommage et la santé.
+  * secubox-renommer : plus de compte admin sans mot de passe sous l'ancien nom
+    de la box (usersctl renommer-compte-machine : désactivé, ou renommé tant
+    qu'aucun administrateur n'est configuré ; audité ; non bloquant).
+  * Porte des vérifications de mot de passe (secubox_core.porte_argon2) : 3 à la
+    fois, dont 2 au plus hors de la zone de confiance, 2 par source, attente
+    bornée (429/503) ; connexion historique des modules hors de la boucle et au
+    même coût pour un compte inconnu. Verrou commun des écrivains de users.json.
+  * Connexion historique : rang pris avant tout fil, exécuteur propre à la porte.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-core (1.8.45-1~trixie1) trixie; urgency=medium
 
   * Depends : python3-fastapi, python3-uvicorn, python3-httpx et

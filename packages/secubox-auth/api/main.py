@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt, create_token, set_session_callback
 from secubox_core.config import get_config
 import json
+import logging
 import os
+import re
 import secrets
 import time
 import threading
@@ -129,6 +131,17 @@ _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "a
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
 
+
+
+@app.exception_handler(_users_engine_mod.EngineError)
+def _refus_moteur(_request, exc):
+    """Registre occupé : 503 ; toute autre règle du moteur : 400. Jamais un 500."""
+    from fastapi.responses import JSONResponse
+    occupe = isinstance(exc, _users_engine_mod.EngineBusy)
+    return JSONResponse({"detail": str(exc)}, status_code=503 if occupe else 400,
+                        headers={"Retry-After": "5"} if occupe else None)
+
+
 _pending      = PendingStore(_TOTP_PENDING_FILE, ttl_seconds=900)
 _users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
 
@@ -228,6 +241,8 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 # Absent (requête hors nginx) = pas LAN = OTP exigé : l'échec ferme.
 from secubox_core.auth import _requete_lan
 from secubox_core import mot_de_passe_defaut as _mdp_defaut
+from secubox_core import comptes_admin as _comptes_admin
+from secubox_core import porte_argon2 as _porte
 
 OTP_LAN_VALEURS = ("facultatif", "obligatoire")
 _REGLAGES = Path(os.environ.get("SECUBOX_AUTH_REGLAGES", str(_DATA_DIR / "reglages.json")))
@@ -325,39 +340,92 @@ def _client_meta(request: _Request) -> tuple:
     return adresse_client(request), request.headers.get("User-Agent", "")[:300]
 
 
+# ─── Première configuration fermée dès qu'un administrateur est configuré (#3708) ─────
+#: Préfixe du jti (signé) d'un jeton de PREMIÈRE configuration : il ne remplace jamais un mot de passe posé entre-temps.
+_JTI_PREMIERE = "premiere-"
+_comptes_admin_log = logging.getLogger("secubox.auth.comptes_admin")
+
+
+def _premiere_configuration_permise(compte: str) -> bool:
+    """Aucun AUTRE administrateur actif n'a choisi de mot de passe. Registre illisible : non."""
+    return _comptes_admin.premiere_configuration_permise(compte, user_store._load_users_json())
+
+
+def _refuser_premiere_configuration(compte: str, ip: str, etape: str) -> None:
+    try:
+        _comptes_admin.auditer("premiere_configuration_refusee", compte=compte, ip=ip, etape=etape)
+    except OSError as exc:
+        # Un refus tient même sans journal de sécurité : il reste au journal d'authentification ci-dessous.
+        _comptes_admin_log.warning("audit.log non écrit (%s)", exc.__class__.__name__)
+    _append_audit("premiere_configuration_refusee", compte, {"ip": ip, "etape": etape})
+
+
+def _passage(request: _Request, ip: str):
+    """Une place à la porte des vérifications argon2 (#3708) ; le refus ne dépend que de la charge et de l'adresse."""
+    return _porte.PORTE.passage(ip, _zone_de_confiance(request))
+
+
+def _saturee(exc: "_porte.Saturee") -> HTTPException:
+    return HTTPException(status_code=exc.statut, detail="Trop de connexions en cours, réessayez dans un instant",
+                         headers={"Retry-After": "5"})
+
+
+_IDENTIFIANTS = "Identifiants incorrects"
+
+
 @_login_router.post("/login")
 def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
     ip, ua = _client_meta(request)
+
+    def refus(motif: str) -> HTTPException:
+        _emit_session_event("login_failed", req.username, {"reason": motif, "ip": ip, "user_agent": ua})
+        return HTTPException(status_code=401, detail=_IDENTIFIANTS)
+
+    if len(req.username) > 128 or len(req.password) > _porte.LONGUEUR_MAX:
+        raise HTTPException(status_code=401, detail=_IDENTIFIANTS)
     user = user_store.get_user(req.username)
 
     # LE COMPTE DE LA CONSOLE N'ENTRE QUE PAR LE KIOSQUE (#1695) — jamais par
-    # mot de passe. Vérifié AVANT la branche de première configuration : un
-    # compte tout juste créé a encore un mot de passe vide à « définir », et
-    # quiconque connaissant son nom en aurait fait un administrateur.
-    # Un compte DÉLÉGUÉ par un autre nœud (#1720) n'entre que par délégation.
+    # mot de passe. Un compte DÉLÉGUÉ par un autre nœud (#1720) n'entre que par
+    # délégation. Jugés AVANT la première configuration : un compte tout juste
+    # créé a encore un mot de passe vide à « définir », et quiconque connaissant
+    # son nom en aurait fait un administrateur.
+    service = ""
     if req.username in _deleg.lire_registre(_DELEGUES):
-        _emit_session_event("login_failed", req.username, {
-            "reason": "compte_delegue", "ip": ip, "user_agent": ua,
-        })
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        service = "compte_delegue"
+    else:
+        try:
+            _cfg_console = get_config("console")
+        except Exception:  # noqa: BLE001 — config illisible : le nom par défaut, refus maintenu
+            _cfg_console = {}
+        if req.username == _console.reglages(_cfg_console)["compte"]:
+            service = "console_hors_kiosque"
 
+    # UNE vérification argon2 par demande, vraie ou leurre, derrière la porte commune (#3708) : tout ce qui suit ne fait
+    # que lire ce verdict. La règle de première configuration est jugée là aussi (elle peut lire des empreintes).
+    ouvrable = bool(user and user.get("enabled") and not service)
+    vide = bool(ouvrable and not user.get("password_hash") and not user.get("_fallback"))
     try:
-        _cfg_console = get_config("console")
-    except Exception:  # noqa: BLE001 — config illisible : le nom par défaut, refus maintenu
-        _cfg_console = {}
-    if req.username == _console.reglages(_cfg_console)["compte"]:
-        _emit_session_event("login_failed", req.username, {
-            "reason": "console_hors_kiosque", "ip": ip, "user_agent": ua,
-        })
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        with _passage(request, ip):
+            if ouvrable and not vide:
+                verifie = user_store.verify_password_uniforme(req.username, req.password)
+            else:
+                verifie = False
+                user_store.leurre(req.password)
+            # MOT DE PASSE PAR DÉFAUT (#3401) : actif, le CHANGEMENT est toujours demandé (setup_token).
+            defaut = verifie and _mdp_defaut.est_le_defaut(req.password)
+            # Un compte sans mot de passe, ou un admin au mot de passe du premier démarrage, ne s'ouvre plus dès qu'un
+            # AUTRE administrateur est configuré (#3708).
+            revendique = (vide and req.password == "") or (defaut and user.get("role") == "admin")
+            fermee = revendique and not _premiere_configuration_permise(req.username)
+    except _porte.Saturee as exc:
+        raise _saturee(exc) from None
 
-    if not user or not user.get("enabled"):
-        _emit_session_event("login_failed", req.username, {
-            "reason": "unknown_user" if not user else "disabled",
-            "ip": ip, "user_agent": ua,
-        })
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+    if service:
+        raise refus(service)
+    if not ouvrable:
+        raise refus("unknown_user" if not user else "disabled")
 
     # PREMIÈRE CONFIGURATION : UN ACTE LOCAL (#1707). Un compte « à changer »
     # sans mot de passe recevait un jeton « set-password » à quiconque donnait
@@ -369,38 +437,30 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # s'ouvre pas du tout.
     lan = _requete_lan(request)
     a_changer = bool(user.get("must_change_password"))
-    # MOT DE PASSE PAR DÉFAUT (#3401) : tant qu'il est actif, le CHANGEMENT est toujours demandé (setup_token), pour
-    # tout compte. Zone de confiance : le verdict LAN de nginx (LAN, loopback, kiosque) PLUS le maillage (wg-mesh,
-    # wg-autoload). Hors de cette zone : le MÊME 401 qu'un mauvais mot de passe (aucun oracle), la tentative auditée.
-    defaut = _mdp_defaut.est_le_defaut(req.password) and user_store.verify_password(req.username, req.password)
-    confiance = _zone_de_confiance(request)
-    if defaut and not confiance:
+    # Zone de confiance du mot de passe par défaut (#3401) : le verdict LAN de nginx (LAN, loopback, kiosque) PLUS le
+    # maillage (wg-mesh, wg-autoload). Hors de cette zone : le MÊME 401 qu'un mauvais mot de passe, la tentative auditée.
+    if defaut and not _zone_de_confiance(request):
         _mdp_defaut.audit("connexion_refusee_hors_lan", {"compte": req.username, "ip": ip})
-        _emit_session_event("login_failed", req.username, {
-            "reason": "invalid_credentials", "ip": ip, "user_agent": ua,
-        })
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        raise refus("invalid_credentials")
     if defaut:
         a_changer = True
         lan = True          # zone de confiance : la suite du flux « à changer » s'applique
     if a_changer and not lan:
-        _emit_session_event("login_failed", req.username, {
-            "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
-        })
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        raise refus("premiere_configuration_hors_lan")
+    if fermee:
+        _refuser_premiere_configuration(req.username, ip, "connexion")
+        raise refus("premiere_configuration_fermee")
 
-    if a_changer and req.password == "" and not user.get("password_hash"):
-        setup_tok = create_token(req.username, scope="set-password", expires_in=900)
+    if vide:
+        if not (a_changer and req.password == ""):
+            raise refus("no_local_password")
+        setup_tok = create_token(req.username, scope="set-password", expires_in=900,
+                                 jti=_JTI_PREMIERE + secrets.token_hex(8))
         _append_audit("setup_token_issued", req.username, {"ip": ip})
         return {"setup_required": True, "setup_token": setup_tok}
 
-    if not user.get("password_hash"):
-        _emit_session_event("login_failed", req.username, {"reason": "no_local_password", "ip": ip})
-        raise HTTPException(status_code=401, detail="Aucun mot de passe local")
-
-    if not user_store.verify_password(req.username, req.password):
-        _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
-        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+    if not verifie:
+        raise refus("invalid_credentials")
 
     if defaut:
         # Chaque connexion réussie avec le défaut est tracée (#3401) ; le clair n'y figure jamais.
@@ -467,10 +527,9 @@ def _console_compte(nom: str) -> None:
     pas admin — le désactiver est la façon de couper la console."""
     u = _users_engine.get_user(nom)
     if u is None:
-        _users_engine.create_user(nom, None, "admin")
-        # Un mot de passe aléatoire, jeté : `create_user` laisse un mot de
-        # passe vide « à définir », que /login ouvrirait à quiconque.
-        _users_engine.set_password(nom, secrets.token_urlsafe(48))
+        # Mot de passe aléatoire, jeté, posé dans la MÊME écriture : un compte créé sans mot de passe se « définirait »
+        # par /login. Marqué « service » : il ne prouve pas qu'un administrateur est configuré (#3708).
+        _users_engine.create_user(nom, None, "admin", password=secrets.token_urlsafe(48), origine="service")
         _append_audit("console_compte_cree", nom, {})
         u = _users_engine.get_user(nom) or {}
     if not u.get("enabled"):
@@ -525,9 +584,9 @@ _DELEGUES = Path(os.environ.get("SECUBOX_AUTH_DELEGUES", str(_DATA_DIR / "delegu
 def _compte_delegue(nom: str) -> None:
     u = _users_engine.get_user(nom)
     if u is None:
-        _users_engine.create_user(nom, None, "admin")
-        # Mot de passe aléatoire jeté : le compte n'entre que par délégation.
-        _users_engine.set_password(nom, secrets.token_urlsafe(48))
+        # Mot de passe aléatoire, jeté, posé dans la MÊME écriture : un compte créé sans mot de passe se « définirait »
+        # par /login. Marqué « service » : il ne prouve pas qu'un administrateur est configuré (#3708).
+        _users_engine.create_user(nom, None, "admin", password=secrets.token_urlsafe(48), origine="service")
         _append_audit("delegation_compte_cree", nom, {})
         u = _users_engine.get_user(nom) or {}
     if not u.get("enabled"):
@@ -605,13 +664,19 @@ async def _veille_delegations() -> None:
 
 
 @_login_router.post("/login/mfa")
-async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
+def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     payload = _check_scope(request.headers.get("Authorization"), "mfa-challenge")
     username = payload["sub"]
     if not user_store.is_enabled(username):
         raise HTTPException(status_code=401, detail="Compte désactivé")
-    ok = (_verify_totp_ntp_aware(username, req.code)
-          or _users_engine.consume_backup_code(username, req.code))
+    ok = _verify_totp_ntp_aware(username, req.code)
+    if not ok and re.fullmatch(r"[A-Z2-7]{10}", req.code):
+        # Code de secours : jusqu'à dix argon2, donc derrière la porte commune (#3708).
+        try:
+            with _passage(request, _client_meta(request)[0]):
+                ok = _users_engine.consume_backup_code(username, req.code)
+        except _porte.Saturee as exc:
+            raise _saturee(exc) from None
     if not ok:
         _append_audit("mfa_failed", username, {})
         raise HTTPException(status_code=401, detail="Code invalide")
@@ -676,19 +741,47 @@ def _set_password(req: _SetPasswordIn, request: _Request):
     payload = _jwt_decode(auth_h.split(" ", 1)[1])
     scope = payload.get("scope")
     username = payload["sub"]
+    ip = _client_meta(request)[0]
+    if len(req.new_password) > _porte.LONGUEUR_MAX or len(req.old_password or "") > _porte.LONGUEUR_MAX:
+        raise HTTPException(status_code=400, detail="Mot de passe trop long")
     if scope == "set-password":
-        if not _consommer_setup(payload):
-            raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
-        _users_engine.set_password(username, req.new_password)
+        premiere = str(payload.get("jti") or "").startswith(_JTI_PREMIERE)
+
+        def verifie(doc):
+            # Le jeton vaut 15 min : on revérifie À LA POSE, sous le verrou du registre (#3708). Compte désactivé depuis ;
+            # première configuration fermée depuis (un autre admin a été configuré) ou déjà faite (jamais un mot de passe
+            # écrasé) ; admin encore au mot de passe du premier démarrage, de même.
+            u = next((x for x in _comptes_admin.comptes(doc) if x["username"] == username), {})
+            vide = not u.get("password_hash")
+            revendique = vide or (u.get("role") == "admin" and _comptes_admin.au_mot_de_passe_defaut(u))
+            if (not u.get("enabled") or (premiere and not vide)
+                    or (revendique and not _comptes_admin.premiere_configuration_permise(username, doc))):
+                _refuser_premiere_configuration(username, ip, "pose")
+                raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
+            if not _consommer_setup(payload):
+                raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
+        try:
+            with _passage(request, ip):
+                avant = user_store._load_users_json()
+                if avant is None:
+                    raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
+                _comptes_admin.premiere_configuration_permise(username, avant)   # verdicts en cache avant le verrou
+                _users_engine.set_password(username, req.new_password, verifie=verifie)
+        except _porte.Saturee as exc:
+            raise _saturee(exc) from None
         _users_engine.revoke_sessions(username)
         return {"ok": True, "message": "Mot de passe défini, veuillez vous reconnecter"}
     if scope is None:
         # Change-my-password with full JWT
         if not req.old_password:
             raise HTTPException(status_code=400, detail="Ancien mot de passe requis")
-        if not user_store.verify_password(username, req.old_password):
-            raise HTTPException(status_code=401, detail="Ancien mot de passe incorrect")
-        _users_engine.set_password(username, req.new_password)
+        try:
+            with _passage(request, ip):
+                if not user_store.verify_password(username, req.old_password):
+                    raise HTTPException(status_code=401, detail="Ancien mot de passe incorrect")
+                _users_engine.set_password(username, req.new_password)
+        except _porte.Saturee as exc:
+            raise _saturee(exc) from None
         _coffre.changer(username, req.old_password, req.new_password)   # la serrure du Coffre suit (#1855)
         return {"ok": True, "message": "Mot de passe modifié"}
     raise HTTPException(status_code=403, detail="Token hors scope")
@@ -742,6 +835,9 @@ def _plus_tard(request: _Request, response: _Response):
     if username != _mdp_defaut.COMPTE or _mdp_defaut.verdict(username) != _mdp_defaut.ACTIF:
         _mdp_defaut.audit("mot_de_passe_defaut_report_refuse", {"compte": username, "ip": ip, "motif": "compte"})
         raise HTTPException(status_code=403, detail="« Plus tard » n'est permis que pour admin au mot de passe par défaut")
+    if not _premiere_configuration_permise(username):          # un autre admin est configuré depuis (#3708)
+        _refuser_premiere_configuration(username, ip, "plus_tard")
+        raise HTTPException(status_code=401, detail=_IDENTIFIANTS)
     if not _consommer_setup(payload):
         raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
     _mdp_defaut.audit("mot_de_passe_defaut_reporte", {"compte": username, "ip": ip})

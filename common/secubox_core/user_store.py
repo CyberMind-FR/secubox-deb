@@ -107,6 +107,29 @@ def verify_password(username: str, plaintext: str) -> bool:
         return False
 
 
+_leurre: Dict[str, str] = {}
+
+
+def leurre(plaintext: str) -> None:
+    """Même coût qu'une vérification, sans compte (#3708) : l'absence d'empreinte ne se mesure pas."""
+    if "h" not in _leurre:
+        _leurre["h"] = _HASHER.hash("leurre sans valeur")
+    try:
+        _HASHER.verify(_leurre["h"], plaintext)
+    except (VerifyMismatchError, InvalidHash):
+        return
+
+
+def verify_password_uniforme(username: str, plaintext: str) -> bool:
+    """`verify_password`, au même coût pour un compte inconnu, désactivé ou sans empreinte."""
+    u = get_user(username)
+    if not u or not u.get("enabled", False) or not u.get("password_hash"):
+        juste = verify_password(username, plaintext)          # repli auth.toml, sans argon2
+        leurre(plaintext)
+        return juste
+    return verify_password(username, plaintext)
+
+
 def list_users() -> list[str]:
     """Return all usernames from the canonical store (empty list on fallback/missing)."""
     doc = _load_users_json()
@@ -156,17 +179,31 @@ def set_password(username: str, plaintext: str, *, provision: bool = False,
     """
     if not username or not plaintext:
         raise ValueError("username and plaintext are required")
+    from . import comptes_admin, mot_de_passe_defaut
+
+    hash_ = _HASHER.hash(plaintext)            # hors du verrou : argon2 est lent
+    with comptes_admin.verrou(USERS_PATH):
+        return _set_password_verrouille(username, hash_, provision, role, email,
+                                        mot_de_passe_defaut.est_le_defaut(plaintext))
+
+
+def _set_password_verrouille(username: str, hash_: str, provision: bool, role: str,
+                             email: Optional[str], par_defaut: bool = False) -> Dict[str, Any]:
+    from . import comptes_admin
+
     doc = _load_users_json()
     if doc is None:
         raise RuntimeError("users.json missing/corrupt; refusing to write")
+    if par_defaut and comptes_admin.configure_un_jour(doc):
+        raise ValueError("le mot de passe du premier démarrage ne se choisit plus")
     doc.setdefault("users", [])
-    hash_ = _HASHER.hash(plaintext)
     for u in doc["users"]:
         if u.get("username") == username:
             u["password_hash"] = hash_
             u["must_change_password"] = False
             if email is not None:
                 u["email"] = email
+            comptes_admin.poser_marque(doc)
             _atomic_write_users(doc)
             log.info("user_store: password set for %s", username)
             return u
@@ -183,6 +220,7 @@ def set_password(username: str, plaintext: str, *, provision: bool = False,
         "google": None,
     }
     doc["users"].append(new_user)
+    comptes_admin.poser_marque(doc)
     _atomic_write_users(doc)
     log.info("user_store: provisioned new user %s (role=%s)", username, role)
     return new_user
