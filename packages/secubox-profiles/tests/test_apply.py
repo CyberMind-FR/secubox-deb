@@ -199,6 +199,56 @@ def test_start_of_condition_gated_native_module_is_not_a_failure(tmp_path):
     assert rep.changed == ["hexo"] and rep.failed == []
 
 
+def _run_type(type_, reste="no", condition="yes"):
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"]:
+            if "ConditionResult" in argv:
+                return 0, condition + "\n"
+            if "Type" in argv:
+                return 0, type_ + "\n"
+            if "RemainAfterExit" in argv:
+                return 0, reste + "\n"
+        return 0, ""
+    return run
+
+
+def _apply_jamais_actif(tmp_path, run):
+    return apply_plan([Change("ad-guard-auto", START, "", 50)], {"ad-guard-auto": _m("ad-guard-auto")},
+                      {"ad-guard-auto": Actual(enabled=False, active=False)}, run=run,
+                      observe=lambda m: Actual(enabled=True, active=False), now="t", routes={}, snap_root=tmp_path,
+                      audit_path=tmp_path / "audit.log", apply=True, wait_timeout=0)
+
+
+def test_un_oneshot_sans_etat_ne_fait_pas_annuler_l_apply(tmp_path):
+    """#3939 : un oneshot sans RemainAfterExit n'est jamais « actif » ; l'attendre annulait 50 modules."""
+    rep = _apply_jamais_actif(tmp_path, _run_type("oneshot"))
+    assert rep.status == "applied" and rep.failed == []
+
+
+def test_un_service_durable_ou_un_oneshot_qui_reste_est_toujours_attendu(tmp_path):
+    for run in (_run_type("simple"), _run_type("notify"), _run_type("oneshot", reste="yes")):
+        rep = _apply_jamais_actif(tmp_path, run)
+        assert rep.status == "rolled_back" and rep.failed == ["ad-guard-auto"]
+
+
+def test_retour_arriere_d_un_oneshot_compte_comme_atteint(tmp_path):
+    manifests = {"a": _m("a"), "b": _m("b")}
+    run0 = _run_type("oneshot")
+
+    def run(argv):
+        if argv[:2] == ["systemctl", "show"] and "Type" in argv:
+            return 0, ("oneshot\n" if any("secubox-a" in x for x in argv) else "simple\n")
+        return run0(argv)
+
+    audit = tmp_path / "audit.log"
+    rep = apply_plan([Change("a", STOP, "", 10), Change("b", START, "", 50)], manifests,
+                     {"a": Actual(enabled=True, active=True), "b": Actual(enabled=False, active=False)}, run=run,
+                     observe=lambda m: Actual(enabled=False, active=False), now="t", routes={}, snap_root=tmp_path,
+                     audit_path=audit, apply=True, wait_timeout=0)
+    assert rep.status == "rolled_back" and rep.failed == ["b"]
+    assert "rollback-timeout" not in audit.read_text()
+
+
 def test_slow_stop_that_reaches_state_within_derived_timeout_is_success(tmp_path):
     # metrics-like: its stop command "times out" (systemd TimeoutStopSec long),
     # but the observed state reaches OFF within the derived timeout -> success,

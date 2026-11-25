@@ -1,3 +1,11 @@
+secubox-profiles (0.29.2-1~trixie1) trixie; urgency=medium
+
+  * Apply : un module fait seulement de oneshots sans RemainAfterExit n'est plus
+    attendu « actif » ; il annulait toute une bascule, dont le retour en locale
+    d'une box pilotée (ref #3939).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 03:54:21 +0100
+
 secubox-profiles (0.29.1-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni

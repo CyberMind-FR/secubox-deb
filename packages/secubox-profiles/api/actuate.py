@@ -261,6 +261,22 @@ def condition_failed(m: Manifest, run) -> bool:
     return False
 
 
+def _propriete(run, unite: str, nom: str) -> str:
+    rc, out = run(["systemctl", "show", unite, "-p", nom, "--value"])
+    return out.strip() if rc == 0 else ""
+
+
+def jamais_actif(m: Manifest, run) -> bool:
+    """#3939 : True si attendre « actif » après un START n'a pas de sens : condition de démarrage non remplie, ou module natif
+    fait seulement de oneshots sans RemainAfterExit (il travaille puis redevient inactif : c'est son état normal). Un service
+    durable, ou un oneshot qui reste actif, est toujours attendu."""
+    if condition_failed(m, run):
+        return True
+    if m.runtime != "native" or not m.units:
+        return False
+    return all(_propriete(run, u, "Type") == "oneshot" and _propriete(run, u, "RemainAfterExit") == "no" for u in m.units)
+
+
 _TS_UNITS = {"us": 1e-6, "ms": 1e-3, "s": 1.0, "min": 60.0, "h": 3600.0, "d": 86400.0}
 # Longest-first alternation so "min"/"ms"/"us" win over "s" at the same position.
 _TS_TOKEN = re.compile(r"(\d+)\s*(us|ms|min|h|d|s)")
