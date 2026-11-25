@@ -401,6 +401,9 @@ portée administrateur sur les box du maillage, dans ces bornes.
 
 Le code de connexion au vhost d'une box (`GET /boxes/{box}/connexion-vhost`) n'est émis qu'en `Sec-Fetch-Site`
 `same-origin` ou `none` (403 sinon) ; sans cet en-tête (client non navigateur), la garde `require_jwt` seule s'applique.
+Une navigation de premier niveau venue d'un autre nom du domaine (`same-site`, par exemple une page de la box dont la session a
+expiré) reçoit une page de confirmation du maître, sans code, sans script et non encadrable ; le clic relance la demande en
+`same-origin` (#3934). `cross-site`, cadre, image ou `fetch` : 403.
 
 ## À vérifier au banc (T8)
 

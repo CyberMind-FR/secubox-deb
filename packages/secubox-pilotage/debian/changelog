@@ -1,3 +1,12 @@
+secubox-pilotage (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Ouverture d'une box par un lien du domaine : page de confirmation servie
+    par le maître (sans code, non encadrable) au lieu d'un 403 « hors de
+    l'origine du maître » ; tout autre appel hors origine reste refusé
+    (ref #3934). Un préchargement du navigateur n'émet plus de code.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 02:55:26 +0100
+
 secubox-pilotage (0.7.1-1~trixie1) trixie; urgency=medium
 
   * Menu : l'entrée « Console de pilotage » nomme www/pilotage/console ; le hub
