@@ -124,10 +124,10 @@ def _lire_journal() -> List[dict]:
     return [e for e in (_g._lire_fin_jsonl(JOURNAL_GARDE, _g._TAILLE_LECTURE) or []) if _entree_valide(e)]
 
 
-def _ecrire_journal(entree: dict) -> None:
+def _ecrire_journal(entree: dict, chemin: Path | None = None) -> None:
     """Une ligne ajoutée et synchronisée, jamais à travers un lien. Lève OSError."""
     ligne = (json.dumps(entree, ensure_ascii=False) + "\n").encode("utf-8")
-    fd = os.open(JOURNAL_GARDE, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o660)
+    fd = os.open(chemin or JOURNAL_GARDE, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o660)
     try:
         st = os.fstat(fd)
         if st.st_uid == os.geteuid() and st.st_mode & 0o060 != 0o060:

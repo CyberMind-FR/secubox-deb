@@ -2525,6 +2525,18 @@ _leurres.configurer(bans=_bans_chauds, audit=_audit,
 app.include_router(_leurres.router)
 
 
+# ── Bannir un acteur depuis sa fiche (#3960) : aperçu, geste de l'administrateur, levée ──
+try:
+    from api import acteurs as _acteurs
+except ImportError:  # standalone
+    import acteurs as _acteurs
+
+_acteurs.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True),
+                    liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","),
+                    apres=lambda: _vider_bans_chauds((True, "")))
+app.include_router(_acteurs.router)
+
+
 # ── Page Modes (#3741) : mode par catégorie, touches 7 j, leurres de service, hôtes PHP ──
 try:
     from api import modes as _modes

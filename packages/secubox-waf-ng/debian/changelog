@@ -1,3 +1,16 @@
+secubox-waf-ng (1.48.0-1~trixie1) trixie; urgency=medium
+
+  * Actor (ref #3960) : bannir un acteur depuis sa fiche. Aperçu obligatoire
+    (à bannir, déjà bannies, épargnées et pourquoi), geste de l'administrateur
+    sur la liste montrée, 200 adresses et 24 h au plus, dix gestes par heure,
+    audit avant et après, levée des seules adresses du geste. La fiche sépare
+    sanctions passées et blocage en cours. sbx-actord reste en lecture seule.
+  * wafctl ban-lot / unban-lot, waf-blocs verifier-lot : gardes root et
+    ensembles nft lus une fois, une transaction, jamais un ban d'un autre
+    raccourci, allongé ou levé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 18:00:00 +0100
+
 secubox-waf-ng (1.47.0-1~trixie1) trixie; urgency=medium
 
   * Graphiques vivants (ref #3945) : cartes d'Actor, vue, menaces, visites,

@@ -690,6 +690,96 @@ cmd_ban() {
     fi
 }
 
+# cmd_ban_lot <N>s / cmd_unban_lot <fin> — lot d'adresses d'un acteur (#3960), une par ligne sur l'entrée standard, 200 au
+# plus. Gardes root lues UNE fois (`waf-blocs verifier-lot`, protegees.env exigé), ensembles lus UNE fois, pose ou retrait
+# en UNE transaction nft. Une adresse déjà bannie n'est jamais touchée (ni raccourcie, ni allongée) ; la levée ne retire
+# que ce qui finit à <fin>, à 90 s près (le ban d'un autre, plus court ou plus long, reste). Sortie : une ligne JSON ; `refus:<motif>` sur stderr sinon.
+_lot_json() {
+    python3 -I -c '
+import json, sys, time
+mode, arg, f_verdict, f4, f6 = sys.argv[1:6]
+verdict = json.load(open(f_verdict))
+restes = {}
+for f in (f4, f6):
+    jeux = [b["set"] for b in json.load(open(f))["nftables"] if isinstance(b, dict) and "set" in b]
+    if len(jeux) != 1:
+        sys.exit(2)
+    for el in jeux[0].get("elem") or []:
+        e = el.get("elem") if isinstance(el, dict) else None
+        if isinstance(e, dict):
+            restes[e["val"]] = e.get("expires", e.get("timeout"))
+        else:
+            restes[el] = None
+out = {"poses": [], "presents": [], "refuses": {}, "leves": [], "couverts": [], "absents": []}
+for ip, motif in verdict.items():
+    if mode == "ban":
+        if motif:
+            out["refuses"][ip] = motif
+        else:
+            out["presents" if ip in restes else "poses"].append(ip)
+    elif ip not in restes:
+        out["absents"].append(ip)
+    else:
+        r = restes[ip]
+        libre = isinstance(r, int) and abs(time.time() + r - int(arg)) <= 90
+        out["leves" if libre else "couverts"].append(ip)
+print(json.dumps(out))
+' "$@"
+}
+
+# Aucun fichier temporaire : des tubes (bac à sable de l'API, AppArmor de waf-blocs).
+_lot() {
+    local mode="$1" arg="$2" ips verdict v4 v6 doc lignes
+    ips=$(head -c 20000)
+    if [ "$mode" = ban ]; then
+        verdict=$(printf '%s\n' "$ips" | /usr/sbin/waf-blocs verifier-lot 2>/dev/null) \
+            || { printf 'refus:garde_illisible\n' >&2; return 1; }
+    else
+        verdict=$(printf '%s\n' "$ips" | python3 -I -c '
+import ipaddress, json, sys
+l = sys.stdin.read().split()
+if not 0 < len(l) <= 200:
+    sys.exit(1)
+print(json.dumps({ip: None for ip in l if str(ipaddress.ip_address(ip)) == ip}))
+' 2>/dev/null) || { printf 'refus:forme\n' >&2; return 1; }
+    fi
+    if ! v4=$(nft -j list set inet "$NFT_TABLE" waf_ban 2>/dev/null) \
+        || ! v6=$(nft -j list set inet "$NFT_TABLE" waf_ban6 2>/dev/null) \
+        || ! doc=$(_lot_json "$mode" "$arg" <(printf '%s' "$verdict") <(printf '%s' "$v4") <(printf '%s' "$v6") 2>/dev/null); then
+        printf 'refus:etat\n' >&2
+        return 1
+    fi
+    if [ "$mode" = ban ]; then
+        lignes=$(printf '%s' "$doc" | jq -r --arg t "$NFT_TABLE" --arg s "$arg" \
+            '.poses[] | "add element inet \($t) " + (if contains(":") then "waf_ban6" else "waf_ban" end) + " { \(.) timeout \($s)s }"') || return 1
+    else
+        lignes=$(printf '%s' "$doc" | jq -r --arg t "$NFT_TABLE" \
+            '.leves[] | "delete element inet \($t) " + (if contains(":") then "waf_ban6" else "waf_ban" end) + " { \(.) }"') || return 1
+    fi
+    if [ -n "$lignes" ] && ! printf '%s\n' "$lignes" | nft -f - 2>/dev/null; then
+        printf 'refus:nft\n' >&2
+        return 1
+    fi
+    printf '%s\n' "$doc"
+}
+
+cmd_ban_lot() {
+    local secondes
+    if [ "$#" -ne 1 ] || ! secondes=$(_secondes "$1") || [ "$secondes" -lt 3600 ] || [ "$secondes" -gt 86400 ]; then
+        printf 'refus:duree\n' >&2
+        return 1
+    fi
+    _lot ban "$secondes"
+}
+
+cmd_unban_lot() {
+    if [ "$#" -ne 1 ] || ! _fin_max_valide "$1"; then
+        printf 'refus:fin\n' >&2
+        return 1
+    fi
+    _lot unban "$1"
+}
+
 # cmd_prolonger <ip> <durée> — prolonge le ban d'une adresse DÉJÀ dans waf_ban (#3723, geste `prolonger` du compte
 # ai-ban). `nft add element` d'un élément présent ne rafraîchit pas son délai de façon garantie : le retrait et le
 # nouvel ajout passent en UNE transaction (`nft -f`), sans instant où l'adresse serait libre. Absente de l'ensemble :
@@ -1512,6 +1602,8 @@ case "${1:-}" in
     php-hotes)  cmd_php_hotes "${2:-}" ;;
     ban)        [ "$#" -le 4 ] || { error "Usage : wafctl ban <ip> [durée] [--exiger-protegees]"; exit 1; }
                 cmd_ban "${2:-}" "${3:-}" "${4:-}" ;;
+    ban-lot)    shift; cmd_ban_lot "$@" ;;
+    unban-lot)  shift; cmd_unban_lot "$@" ;;
     prolonger)  shift; cmd_prolonger "$@" ;;
     limiter)    shift; cmd_limiter "$@" ;;
     limiter-lever) shift; cmd_limiter_lever "$@" ;;

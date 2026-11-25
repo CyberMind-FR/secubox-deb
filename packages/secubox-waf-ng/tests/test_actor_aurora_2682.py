@@ -31,7 +31,10 @@ def test_actor_lecture_seule_memes_routes():
     s = SRC["actor"]
     for r in ("/api/v1/actor/stats", "/api/v1/actor/actors", "/api/v1/actor/campaigns", "/api/v1/actor/overview"):
         assert r in s
-    assert "POST" not in s and "method:" not in s
+    # un seul chemin d'écriture, celui du geste « Bannir cet acteur » (#3960) : le WAF, jamais le moteur
+    assert s.count("POST") == 1 and "method:" not in s and s.count("o.method='POST'") == 1
+    i = s.index("function banAppel(")
+    assert i < s.index("o.method='POST'") < s.index("fetch('/api/v1/waf/acteurs/'+u,o)") < s.index("function banEtat(")
     assert "onglet:'actor'" in s and "/shared/sidebar.js" in s
 
 

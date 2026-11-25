@@ -146,6 +146,8 @@
   .gr{display:flex;flex-direction:column} .gr .t{font-size:.85rem;color:var(--doux);min-height:1.4em;overflow-wrap:anywhere} .gr svg.mini,.gr .mini0{margin-top:auto;height:22px;line-height:22px}
   .chg{animation:chg 1.2s ease-out} @keyframes chg{0%{background:rgba(41,182,246,.45)}100%{background:transparent}}
   .duo{display:grid;gap:10px;grid-template-columns:1fr}
+  .ban .piste{display:block;margin:8px 0} .ban .piste i{background:var(--rouge)} .bang{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:.85rem} .ban .btn{min-height:40px;font-size:.85rem} .ban .btn[disabled]{opacity:.55;cursor:wait}
+  .ban .btn.rouge{background:rgba(255,77,94,.22);border-color:var(--rouge)} .ban p.err{color:#ff8a96} .ban p.ok{color:var(--vert)} .ban .chip{margin:2px 4px 2px 0}
   .blo{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(18,40,78,.3);min-width:0}
   .blo h3{margin:0 0 6px;font-size:.95rem;font-weight:700} .blo p{margin:6px 0 0;font-size:.85rem;color:var(--doux)} .blo p:first-of-type{margin-top:2px}
   svg.actv{width:100%;height:92px;display:block} .duo svg.actv{height:132px}
@@ -813,7 +815,7 @@ function rendProfile(){
     grand(k+'pays','\u{1F30D}','Pays',src.countries,te.pays,['nouveau','nouveaux'],'Pays différents, déduits des adresses.',se.pays,'Pays nouveaux'),
     grand(k+'cibles','\u{1F3AF}','Cibles',nbCibles(a),te.nb_cibles,['nouvelle','nouvelles'],'Services différents visés.',se.nb_cibles,'Cibles nouvelles'),
     grand(k+'bans','\u{1F6D1}','Bans',a.bans,te.bans,null,'Nombre de fois où un capteur a sanctionné ce profil.',se.bans,'Bans'));
-  add(p,gr);
+  add(p,gr,blocBan(a));
   if(d&&d.totaux_depuis){var dep=' Comptés depuis le '+jourHeure(num(d.totaux_depuis))+'.';
     add(p,h('p','note totaux','Totaux comptés depuis le '+jourHeure(num(d.totaux_depuis))+' (relevé de départ du moteur).'));
     for(var q=0;q<gr.children.length;q++)gr.children[q].title=gr.children[q].title+dep.replace('Comptés','Totaux comptés');}
@@ -849,6 +851,59 @@ function rendProfile(){
     hy.length?hy.map(function(x){return ligneP(String(x[0]),num(x[1])*100,100,Math.round(num(x[1])*100)+' %');}):[h('p','note','Pas encore d’hypothèse : rien à départager.')]));
   add(box,p);volets(box);rendFocus(box,f);
   $('pver').textContent='algo v1 · poids v1';
+}
+// ── Bannir cet acteur (#3960) : aperçu d'abord, puis le geste de l'administrateur sur la liste montrée, levée en un geste ──
+var BAN={};   // id → {etat, le, apercu, occupe, msg, err}
+var BAN_MOTIFS={privee:'plage non publique',forme:'adresse illisible',liste_blanche:'liste blanche',sade:'liste blanche SADE',pair:'pair du maillage',session:'session ouverte',
+  robot:'robot vérifié',robot_inconnu:'robot non vérifiable (DNS)',protegee:'plage protégée',box:'adresse de la box',lan:'réseau local',invalide:'adresse refusée'};
+var BAN_ERREURS={apercu_perime:'L’aperçu a expiré : revois la liste.',plafond:'Dix gestes par heure au plus.',vide:'Plus aucune adresse à bannir.',protegee_inconnue:'Une protection ne peut pas être vérifiée : rien n’est banni.',
+  etat:'Le pare-feu ne répond pas : rien n’est banni.',wafctl:'Le pare-feu a refusé le lot : rien n’est gardé.',audit:'Le journal ne répond pas : rien n’est gardé.',journal:'Le journal est illisible.',actord:'Le moteur ne répond pas.',
+  inconnu:'Geste déjà levé, échu ou inconnu.',processus:'Service non désigné pour ce geste.',incoherent:'Résultat incertain : vérifie les bans du WAF.'};
+function banAppel(u,corps){
+  var hd={'Accept':'application/json'},t=jeton(),o={headers:hd,credentials:'same-origin',cache:'no-store'};if(t)hd.Authorization='Bearer '+t;
+  if(corps!==undefined){o.method='POST';hd['Content-Type']='application/json';o.body=JSON.stringify(corps);}
+  return fetch('/api/v1/waf/acteurs/'+u,o).then(function(r){return r.json().catch(function(){return null;}).then(function(j){
+    if(r.ok&&j)return j;
+    var m=j&&j.detail&&j.detail.motif;
+    throw new Error(r.status===401||r.status===403?'Session d’administrateur requise.':Object.prototype.hasOwnProperty.call(BAN_ERREURS,m)?BAN_ERREURS[m]:'Réponse inattendue ('+r.status+').');});});
+}
+function banEtat(id,force){
+  var b=BAN[id]=BAN[id]||{};if(DEMO||b.lit||!force&&Date.now()-(b.le||0)<55000)return;
+  b.lit=true;b.le=Date.now();
+  banAppel(encodeURIComponent(id)+'/etat').then(function(x){b.etat=typeof x.vues_48h==='number'?x:null;},function(){b.etat=null;}).then(function(){b.lit=false;if(CUR===id&&!lecture())rendProfile();});
+}
+function banGeste(id,u,corps,apres){
+  var b=BAN[id];if(b.occupe)return;b.occupe=true;b.err='';b.msg='';rendProfile();
+  banAppel(u,corps).then(function(x){apres(b,x);},function(e){b.err=e.message;b.apercu=null;}).then(function(){b.occupe=false;if(CUR===id)rendProfile();});
+}
+function bannissable(id){var b=BAN[id],x=b&&b.apercu;return !!x&&x.expire*1000>Date.now();}
+function blocBan(a){
+  var id=a.id,b=BAN[id]=BAN[id]||{},e=b.etat,s=h('section','blo ban'),u=encodeURIComponent(id),x=bannissable(id)?b.apercu:null;
+  function bouton(cle,cls,txt,fn){var t=h('button','btn '+cls,txt);t.type='button';t.disabled=!!b.occupe;t.setAttribute('data-cle','ban:'+cle);t.addEventListener('click',fn);return t;}
+  add(s,h('h3',null,'⛔ Blocage'));
+  if(DEMO){add(s,h('p',null,'Démonstration : aucun geste possible.'));return s;}
+  add(s,h('p',null,e?(e.vues_48h?'Bloqué maintenant : '+nb(e.bannies)+' sur '+pl(e.vues_48h,'adresse vue','adresses vues')+' en 48 h'+(e.partiel?' (mille derniers événements)':'')+'.':'Aucune adresse vue depuis 48 h.'):
+    b.lit||!b.le?'Lecture…':'— blocage non lu.'));
+  if(e&&e.vues_48h){var pi=h('span','piste'),i=h('i');i.style.width=100*e.bannies/e.vues_48h+'%';add(pi,i);pi.title='Part bloquée maintenant';add(s,pi);}
+  if(x){
+    var par={};x.epargnees.forEach(function(z){par[z.motif]=(par[z.motif]||0)+1;});
+    var l=h('div','banl');
+    add(l,h('p',null,x.a_bannir.length?'À bannir 24 h : '+pl(x.a_bannir.length,'adresse','adresses')+(x.reste?', puis '+nb(x.reste)+' au geste suivant':'')+'.':'Rien à bannir.'),
+      h('p',null,'Déjà bannies : '+nb(x.deja_bannies)+'. Épargnées : '+(x.epargnees.length?Object.keys(par).map(function(m){return nb(par[m])+' '+(Object.prototype.hasOwnProperty.call(BAN_MOTIFS,m)?BAN_MOTIFS[m]:m);}).join(', '):'aucune')+'.'));
+    if(x.a_bannir.length)add(l,pli('ban:liste','Adresses',pl(x.a_bannir.length,'adresse','adresses'),x.a_bannir.map(function(z){return h('span','chip',z.ip,'vue le '+jourHeure(z.vu));})));
+    add(s,l);var g=h('div','bang');
+    if(x.a_bannir.length)add(g,bouton('oui','rouge',b.occupe?'…':'Bannir '+(x.a_bannir.length>1?'ces '+nb(x.a_bannir.length)+' adresses':'cette adresse')+' 24 h',function(){
+      if(!bannissable(id)){b.apercu=null;b.err=BAN_ERREURS.apercu_perime;rendProfile();return;}
+      banGeste(id,u+'/bannir',{apercu:x.apercu},function(b,r){b.apercu=null;b.msg=pl(r.posees,'adresse bannie','adresses bannies')+' jusqu’au '+jourHeure(r.fin)+(r.refusees.length?' ; '+nb(r.refusees.length)+' refusées par la garde':'')+'.';banEtat(id,true);});}));
+    add(s,add(g,bouton('non','','Annuler',function(){b.apercu=null;rendProfile();})));
+  }else add(s,add(h('div','bang'),bouton('voir','',b.occupe?'Vérification…':'Voir ce qui serait banni',function(){
+    banGeste(id,u+'/apercu',undefined,function(b,r){b.apercu=r;setTimeout(function(){if(CUR===id)rendProfile();},Math.max(0,r.expire*1000-Date.now())+500);});})));
+  (e&&e.gestes||[]).forEach(function(z){var c=h('div','bang');
+    add(s,add(c,h('span',null,pl(z.nombre,'adresse bannie','adresses bannies')+(z.par?' par '+z.par:'')+' jusqu’au '+jourHeure(z.fin)),
+      bouton('lever:'+z.id,'','Lever ce ban',function(){banGeste(id,'gestes/'+z.id+'/lever',{},function(b,r){b.msg=pl(r.levees,'adresse levée','adresses levées')+(r.gardees?' ; '+nb(r.gardees)+' gardées (bannies aussi par un autre)':'')+'.';banEtat(id,true);});})));});
+  var m=h('p',b.err?'err':'ok',b.err||b.msg||'');m.setAttribute('role','status');add(s,m);
+  banEtat(id);
+  return s;
 }
 // Le détail d'UN acteur, celui qu'on regarde ; le serveur garde sa réponse 20 s.
 function chargeDetail(){
