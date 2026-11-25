@@ -45,6 +45,9 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 
 ## Historique
 
+`cartes_passe` (#3945) : `[{genere_le, attaques, visiteurs, tuiles}]`, du plus ancien au plus récent, hors relevé courant ; gardé dans
+`/var/cache/secubox/live/cartes-etat.json` (0600), relu avec validation (codes `[A-Z]{2}`, entiers), borné à 12 relevés et 130 min.
+
 Totaux par jour persistés dans `/var/cache/secubox/live/menaces-etat.json` (0600, 400 jours au plus) : une rotation ne
 les efface jamais. **Rattrapage** : au premier passage, ou si un journal présent commence avant le premier jour mesuré,
 toutes les rotations sont relues ; chaque jour garde le maximum de l'ancien total et du recompte (pas de double
@@ -56,13 +59,18 @@ du ban.
 
 ## Page
 
-Refonte #3933 (maquette validée) : `index.html`, `live.css`, `live.js`, `carte.js` et `polices/`, rien d'autre, rien
+Refonte #3933 (maquette validée) : `index.html`, `live.css`, `live.js`, `carte.js`, `pouls.js` (#3945) et `polices/`, rien d'autre, rien
 d'externe (CSP : `default-src 'none'`, `font-src 'self'`, aucun script ni style intégré). Nuit par défaut quel que soit
 le système ; le bouton passe au jour, choix gardé dans `localStorage` (`live-ambiance`).
 
 - Ville : une tour par boîtier publié. Hauteur = mémoire, fenêtres = processeur. Hors ligne (ou état inconnu) : tour
   éteinte, hauteur fixe, aucun chiffre — le dernier relevé d'une box muette n'est pas une mesure, le collecteur ne le publie
   plus (`cpu`, `memoire`, `marche` à `null`).
+- Mesures vivantes (#3945) : `pouls.js` est la copie **identique** de `secubox-hub/www/shared/pouls.js` (test) ; la page publique ne
+  peut pas charger `/shared`. Carte, « requêtes servies » et « mises au coin » reculent sur `cartes_passe` (un relevé réel toutes les
+  10 min, 2 h) ; « tentatives louches » sur les journées complètes de `histo` (24 h chacune) ; la dernière heure sur `waf_heure` ;
+  l'histoire sur `histo`. Le passé est toujours daté ; relevé ancien : « au relevé », jamais « maintenant ». Sans `cartes_passe`
+  (etat.json plus ancien) ou sans `/pouls.js` (vhost pas encore rendu) : page fixe, rien d'autre ne change.
 - Relevé toutes les 20 s (arrêté quand la page est cachée), appliqué **en place** (`accorder`) : focus, infobulle, carte
   choisie et défilement de l'historique survivent. Âge du relevé compté à l'horloge du serveur (en-tête `Date`) : au-delà
   de 5 min, ou si `/etat.json` ne répond pas, la page le dit et garde le dernier relevé.

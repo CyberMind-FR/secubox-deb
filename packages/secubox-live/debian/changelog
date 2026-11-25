@@ -1,3 +1,17 @@
+secubox-live (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Graphiques vivants (ref #3945, maquette validée) : la carte, trois billets,
+    la dernière heure et l'histoire battent au présent, reculent sur leurs
+    dernières mesures réelles (date écrite) et reviennent. Composant partagé
+    /pouls.js (copie identique de secubox-hub, location nginx exacte, CSP
+    inchangée) ; bouton « vivant / fixe » retenu ; rien ne bouge au survol,
+    hors écran, page cachée ou mouvement réduit, ni sans historique.
+  * Collecteur : cartes_passe, un relevé des pays et des compteurs toutes les
+    10 min, douze gardés (2 h), mêmes filtres, aucune adresse ; un etat.json
+    plus ancien, sans ce champ, reste lu (carte fixe).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-live (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Refonte de la page publique (ref #3933, maquette validée) : ville des

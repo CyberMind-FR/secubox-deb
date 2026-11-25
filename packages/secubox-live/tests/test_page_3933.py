@@ -503,6 +503,9 @@ def test_nav_mouvement_reduit(ouvrir):
 
 def test_nav_pluie_une_seule_boucle(ouvrir):
     pg, _ = ouvrir(etat())
+    # mesures vivantes (#3945) figées : leur boucle, bornée par ailleurs, n'est pas celle de la pluie
+    pg.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'sbx-pouls', newValue: 'fixe' }))")
+    pg.clock.run_for(200)
     pg.evaluate("""() => { window.file = new Map(); let n = 0;
         window.requestAnimationFrame = f => { window.file.set(++n, f); return n; };
         window.cancelAnimationFrame = i => window.file.delete(i);

@@ -42,6 +42,10 @@ EN_LIGNE_S = 300                 # un nœud vu il y a moins de 5 min est en lign
 GITHUB_DEPOT = "CyberMind-FR/secubox-deb"
 GITHUB_TTL = 600
 JOURS_MAX = 400                  # totaux par jour gardés (au-delà, les plus anciens tombent)
+PASSE_PAS_S = 600                # #3945 : un relevé de la carte et des compteurs toutes les 10 min…
+PASSE_MAX = 12                   # … douze gardés (2 h), plus rien au-delà de PASSE_AGE_S
+PASSE_AGE_S = PASSE_PAS_S * (PASSE_MAX + 1)
+PASSE_TUILES = ("requetes_24h", "menaces_24h", "bloquees_24h", "bans_actifs")
 ACTIONS_BLOQUANTES = {"block", "ban", "deny", "drop", "reject", "blocked", "banned"}
 
 _RE_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -63,6 +67,7 @@ class Sources:
                                                  Path("/var/lib/GeoIP/GeoLite2-Country.mmdb")])
     etat_menaces: Path = Path("/var/cache/secubox/live/menaces-etat.json")
     etat_visites: Path = Path("/var/cache/secubox/live/visites-etat.json")
+    etat_cartes: Path = Path("/var/cache/secubox/live/cartes-etat.json")
     local_nom: Optional[str] = None
 
 
@@ -471,6 +476,36 @@ def visites(src: Sources):
             "pays": [{"code": c, "n": n} for c, n in pays.most_common(30)]}
 
 
+# ---------------------------------------------------------------------------------------------------------------- passé récent
+
+def _pays_passe(v) -> Optional[list]:
+    """Liste de pays relue de notre état : codes à deux lettres et entiers seulement ; None = non mesuré (jamais un zéro)."""
+    if not isinstance(v, list):
+        return None
+    return [{"code": p["code"], "n": int(p["n"])} for p in v if isinstance(p, dict) and isinstance(p.get("n"), int)
+            and p["n"] >= 0 and re.fullmatch(r"[A-Z]{2}", str(p.get("code")))][:30]
+
+
+def cartes_passe(src: Sources, maintenant: float, cartes: dict, tuiles: dict) -> list:
+    """Derniers relevés RÉELS des cartes et des compteurs (#3945) : un toutes les PASSE_PAS_S, PASSE_MAX au plus, du plus
+    ancien au plus récent, hors relevé courant. Mêmes pays et mêmes compteurs que ceux déjà publiés, aucune adresse."""
+    brut = _json(src.etat_cartes)
+    gardes = []
+    for x in brut.get("releves") if isinstance(brut, dict) and isinstance(brut.get("releves"), list) else []:
+        t = x.get("genere_le") if isinstance(x, dict) else None
+        if isinstance(t, int) and not isinstance(t, bool) and maintenant - PASSE_AGE_S < t < maintenant:
+            tu = x.get("tuiles") if isinstance(x.get("tuiles"), dict) else {}
+            gardes.append({"genere_le": t, "attaques": _pays_passe(x.get("attaques")), "visiteurs": _pays_passe(x.get("visiteurs")),
+                           "tuiles": {k: tu[k] if isinstance(tu.get(k), int) and tu[k] >= 0 else None for k in PASSE_TUILES}})
+    gardes = sorted(gardes, key=lambda x: x["genere_le"])[-PASSE_MAX:]
+    # 30 s de marge : la minuterie n'est pas à la seconde près
+    if not gardes or maintenant - gardes[-1]["genere_le"] >= PASSE_PAS_S - 30:
+        neuf = {"genere_le": int(maintenant), "attaques": _pays_passe(cartes.get("attaques")),
+                "visiteurs": _pays_passe(cartes.get("visiteurs")), "tuiles": {k: tuiles.get(k) for k in PASSE_TUILES}}
+        ecrire(src.etat_cartes, {"version": 1, "releves": (gardes + [neuf])[-PASSE_MAX:]}, mode=0o600)
+    return gardes
+
+
 # ---------------------------------------------------------------------------------------------------------------- divers
 
 def sites_publies(src: Sources) -> Optional[int]:
@@ -542,7 +577,7 @@ def _sur(fn, *a):
 # Liste blanche des champs publiés (relecture #3351) : tout autre champ est retiré avant l'écriture.
 CHAMPS = {
     "": {"version", "genere_le", "production", "etat_global", "tuiles", "noeuds", "waf_heure", "menaces", "cartes",
-         "histo", "dev", "feuille_de_route"},
+         "cartes_passe", "histo", "dev", "feuille_de_route"},
     "production": {"depuis", "historique_depuis"},
     "tuiles": {"noeuds_en_ligne", "noeuds_total", "requetes_24h", "menaces_24h", "bloquees_24h", "bans_actifs",
                "disponibilite_30j", "sites_publies"},
@@ -551,6 +586,10 @@ CHAMPS = {
     "menaces": {"categorie", "n"},
     "cartes": {"attaques", "visiteurs"},
     "cartes.*": {"code", "n"},
+    "cartes_passe": {"genere_le", "attaques", "visiteurs", "tuiles"},
+    "cartes_passe.attaques": {"code", "n"},
+    "cartes_passe.visiteurs": {"code", "n"},
+    "cartes_passe.tuiles": set(PASSE_TUILES),
     "histo": {"jour", "visites", "attaques", "bans"},
     "dev": {"fusions_7j", "issues_ouvertes", "ci_master", "dernieres"},
     "dev.dernieres": {"num", "titre", "le"},
@@ -614,6 +653,7 @@ def collecter(src: Sources, maintenant: Optional[float] = None, reseau: bool = T
         "feuille_de_route": [{"nom": str(f.get("nom"))[:60], "etat": str(f.get("etat"))[:30]}
                              for f in (conf.get("feuille_de_route") or []) if isinstance(f, dict)] or None,
     }
+    etat["cartes_passe"] = _sur(cartes_passe, src, maintenant, etat["cartes"], etat["tuiles"])
     return nettoyer(filtrer(etat))
 
 
