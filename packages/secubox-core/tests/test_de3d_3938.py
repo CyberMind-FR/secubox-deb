@@ -240,7 +240,7 @@ def test_textes_lisibles_contraste_et_place(nav, lg, h):
         assert rects[1][3] <= rects[2][1] + 1                     # l'adresse au-dessus de la signature
         sortie = os.environ.get("SBX_NOEUD_CAPTURES")
         if sortie:
-            im.save(f"{sortie}/fond-{l}x{h}.png")
+            im.save(f"{sortie}/fond-{lg}x{h}.png")
 
 
 @pytest.mark.parametrize("lg,h", [(320, 568), (320, 320), (800, 360), (1280, 900)])
