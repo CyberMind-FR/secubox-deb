@@ -39,17 +39,19 @@ def b(monkeypatch, tmp_path):
     x.events = [(A, now - 50), (B6, now - 60), (PAIR, now - 70), (SESSION, now - 70), (ROBOT, now - 80), (DOUTE, now - 80),
                 (BANNIE, now - 90), ("192.168.1.9", now - 90), (C, now - 49 * 3600)]
     x.total = None
-    x.appels, x.ko, x.usager = [], set(), {"sub": "gk2"}
+    x.appels, x.ko, x.couverts, x.usager = [], {}, [], {"sub": "gk2"}
 
     def chrono(acteur):
         ev = [{"src_ip": ip, "ts": ts} for ip, ts in x.events]
         return {"events": ev, "total": len(ev) if x.total is None else x.total}
 
-    def executer(verbe, arg, ips):
-        x.appels.append((verbe, arg, list(ips)))
+    def executer(verbe, args, ips):
+        x.appels.append((verbe, " ".join(args), list(ips)))
         if verbe in x.ko:
-            raise m.HTTPException(503, detail={"motif": "wafctl"})
-        return {"poses": ips, "presents": [], "refuses": {}} if verbe == "ban-lot" else {"leves": ips, "couverts": []}
+            raise x.ko[verbe]
+        if verbe == "ban-lot":
+            return {"poses": ips, "presents": [], "refuses": {}, "fin": int(time.time()) + 86400}
+        return {"leves": [i for i in ips if i not in x.couverts], "couverts": [i for i in ips if i in x.couverts], "absents": []}
 
     def fcrdns(ip):
         if ip == DOUTE:
@@ -66,11 +68,12 @@ def b(monkeypatch, tmp_path):
     monkeypatch.setattr(m, "_apercus", {})
     monkeypatch.setattr(m._g, "lire_waf_ban", lambda e="waf_ban": {BANNIE} if e == "waf_ban" else set())
     monkeypatch.setattr(m._g, "lire_sade", lambda: None)
+    monkeypatch.setattr(m._g, "BANS_WAF", tmp_path / "bans.jsonl")
     monkeypatch.setattr(m._g, "pairs_wg_mesh", lambda: [ipaddress.ip_network(PAIR)])
     monkeypatch.setattr(m._g, "pairs_threatmesh", lambda: [])
     monkeypatch.setattr(m._g, "_fcrdns", fcrdns)
     waf.app.dependency_overrides[require_jwt] = lambda: dict(x.usager)
-    x.waf, x.c = waf, TestClient(waf.app)
+    x.waf, x.c = waf, TestClient(waf.app, headers={"X-Forwarded-For": "192.168.1.50"})
     x.audit = lambda: [json.loads(li)["action"] for li in (tmp_path / "audit.log").read_text().splitlines()]
     x.apercu = lambda **h: x.c.get("/acteurs/ACT-0001/apercu", headers=h)
     x.bannir = lambda a, acteur="ACT-0001": x.c.post(f"/acteurs/{acteur}/bannir", json={"apercu": a})
@@ -89,7 +92,7 @@ def test_apercu_trois_groupes_et_rien_d_applique(b):
 
 
 def test_le_demandeur_n_est_jamais_dans_la_liste(b):
-    d = b.apercu(**{"X-Real-IP": A}).json()
+    d = b.apercu(**{"X-Forwarded-For": f"203.0.113.1, {A}"}).json()
     assert A not in [x["ip"] for x in d["a_bannir"]]
 
 
@@ -128,7 +131,7 @@ def test_plafond_de_200_adresses(b):
     b.events = [(f"198.51.100.{i}", now - i) for i in range(1, 250)] + [(f"203.0.113.{i}", now - 300 - i) for i in range(1, 50)]
     d = b.apercu().json()
     retirees = {x["ip"] for x in d["epargnees"]}
-    assert len(d["a_bannir"]) + len([x for x in d["epargnees"] if x["motif"].startswith("robot")]) == 200
+    assert len(d["a_bannir"]) == 200                          # celles qu'on épargne sont remplacées par les suivantes
     assert d["reste"] > 0 and not retirees & {x["ip"] for x in d["a_bannir"]}
 
 
@@ -150,10 +153,93 @@ def test_sans_audit_rien_n_est_fait_ou_tout_est_retire(b, monkeypatch):
     assert b.c.get("/acteurs/ACT-0001/etat").json()["gestes"] == []
 
 
-def test_wafctl_muet_retire_ce_qui_a_pu_etre_pose(b):
-    b.ko = {"ban-lot"}
+def _gestes(b):
+    return b.c.get("/acteurs/ACT-0001/etat").json()["gestes"]
+
+
+def test_refus_net_ne_defait_rien(b):
+    b.ko = {"ban-lot": b.m.HTTPException(503, detail={"motif": "etat"})}
+    assert b.bannir(b.apercu().json()["apercu"]).json()["detail"]["motif"] == "etat"
+    assert [x[0] for x in b.appels] == ["ban-lot"] and _gestes(b) == []
+
+
+def test_pose_incertaine_retiree_ou_laissee_visible(b):
+    b.ko = {"ban-lot": b.m.Incertain("delai")}
     assert b.bannir(b.apercu().json()["apercu"]).json()["detail"]["motif"] == "wafctl"
-    assert [x[0] for x in b.appels] == ["ban-lot", "unban-lot"]
+    assert [x[0] for x in b.appels] == ["ban-lot", "unban-lot"] and b.appels[1][1].endswith(" incertain") and _gestes(b) == []
+    b.couverts = [A]
+    r = b.bannir(b.apercu().json()["apercu"])
+    assert r.status_code == 500 and r.json()["detail"]["motif"] == "incoherent"
+    g = _gestes(b)
+    assert g[0]["nombre"] == 2 and g[0]["incertain"] is True
+    b.couverts = []
+    assert b.c.post(f"/acteurs/gestes/{g[0]['id']}/lever").json()["levees"] == 2 and b.appels[-1][1].endswith(" incertain")
+
+
+def test_processus_tue_apres_la_pose_reste_levable(b, monkeypatch):
+    a = b.apercu().json()["apercu"]
+    ecrire, n = b.m._gb._ecrire_journal, []
+
+    class Tue(BaseException):
+        pass
+
+    def coupe(entree, chemin=None):
+        if entree["type"] == "ban":
+            raise Tue
+        n.append(entree["type"])
+        return ecrire(entree, chemin)
+    monkeypatch.setattr(b.m._gb, "_ecrire_journal", coupe)
+    with pytest.raises(BaseException):  # noqa: B017
+        b.bannir(a)
+    monkeypatch.setattr(b.m._gb, "_ecrire_journal", ecrire)
+    assert n == ["demande"] and _gestes(b)[0]["incertain"] is True
+
+
+def test_lever_garde_les_bans_des_autres(b):
+    g = b.bannir(b.apercu().json()["apercu"]).json()
+    (b.tmp / "bans.jsonl").write_text(json.dumps({"ip": A, "action": "ban", "at": 1, "exp": int(time.time()) + 9000}) + "\n")
+    b.couverts = [B6]
+    assert b.c.post(f"/acteurs/gestes/{g['id']}/lever").json() == {"id": g["id"], "levees": 0, "gardees": 2}
+    assert b.appels[-1][2] == [B6] and _gestes(b)[0]["nombre"] == 2        # second essai possible
+    b.couverts = []
+    assert b.c.post(f"/acteurs/gestes/{g['id']}/lever").json()["levees"] == 1 and _gestes(b)[0]["nombre"] == 1
+
+
+@pytest.mark.parametrize("cas", ["sessions_absentes", "blanche_illisible", "demandeur", "sade_absente", "sade_illisible"])
+def test_protection_illisible_refuse(b, monkeypatch, cas, tmp_path):
+    h = {}
+    if cas == "sessions_absentes":
+        (b.tmp / "sessions.json").unlink()
+    elif cas == "blanche_illisible":
+        monkeypatch.setitem(b.m._config, "liste_blanche", lambda: ["127.0.0.1", "pas-une-adresse"])
+    elif cas == "demandeur":
+        h = {"X-Forwarded-For": "inconnu"}
+    elif cas == "sade_absente":
+        monkeypatch.setattr(b.m._g, "FICHIER_SADE", tmp_path / "rien")
+        monkeypatch.setattr(b.m._g, "lire_sade", lambda: {"mode": "observe", "liste": []})
+    else:
+        monkeypatch.setattr(b.m._g, "lire_sade", lambda: {"mode": "active", "liste": None})
+    r = b.apercu(**h)
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "protegee_inconnue"
+
+
+def test_executer_distingue_refus_net_et_doute(b):
+    src = (COMPOSANT / "api/acteurs.py").read_text()
+    espace = dict(vars(b.m))
+    exec(src[src.index("def _executer("):src.index("def _liste(")], espace)  # noqa: S102 — la fonction réelle, hors du faux
+
+    def joue(code, out="", err=""):
+        espace["subprocess"] = type("S", (), {"run": staticmethod(lambda *a, **k: subprocess.CompletedProcess(a, code, out, err)),
+                                              "TimeoutExpired": subprocess.TimeoutExpired})
+        return espace["_executer"]("ban-lot", ["86400s"], [A])
+    assert joue(0, '{"poses": []}') == {"poses": []}
+    for err, motif in (("refus:etat", "etat"), ("refus:garde_illisible", "protegee_inconnue"), ("refus:nft", "wafctl")):
+        with pytest.raises(b.m.HTTPException) as e:
+            joue(1, "", err)
+        assert e.value.detail["motif"] == motif
+    for code, out, err in ((1, "", "refus:incertain"), (1, "", "sudo: boum"), (0, "pas du json", "")):
+        with pytest.raises(b.m.Incertain):
+            joue(code, out, err)
 
 
 def test_lever_une_fois(b):
@@ -183,7 +269,7 @@ def test_toutes_les_routes_exigent_l_administrateur(b):
 def w(tmp_path):
     bin_ = tmp_path / "bin"
     bin_.mkdir()
-    (bin_ / "nft").write_text(f'#!/bin/bash\nif [ "$1" = -f ]; then cat > {tmp_path}/lot.nft; [ ! -e {tmp_path}/ko ]; exit; fi\n'
+    (bin_ / "nft").write_text(f'#!/bin/bash\nif [ "$1" = -f ]; then cat > {tmp_path}/lot.nft; echo x >> {tmp_path}/essais; [ ! -e {tmp_path}/ko ]; exit; fi\n'
                               f'cat {tmp_path}/${{*: -1}}.json\n')
     (bin_ / "waf-blocs").write_text(f'#!/bin/bash\ncat > {tmp_path}/vu; cat {tmp_path}/verdict\n[ ! -e {tmp_path}/garde-ko ]\n')
     for f in bin_.iterdir():
@@ -210,11 +296,15 @@ def test_wafctl_ban_lot(w):
     r = lancer("ban-lot", "86400s", entree=f"{A}\n{B6}\n")
     d = json.loads(r.stdout)
     assert r.returncode == 0 and d["poses"] == [A, B6] and d["presents"] == [BANNIE, "198.51.100.61"] and d["refuses"] == {PAIR: "pair"}
-    assert (tmp / "lot.nft").read_text().splitlines() == [f"add element inet secubox waf_ban {{ {A} timeout 86400s }}",
-                                                         f"add element inet secubox waf_ban6 {{ {B6} timeout 86400s }}"]
+    lot = (tmp / "lot.nft").read_text().splitlines()
+    assert [x.split(" timeout")[0] for x in lot] == [f"create element inet secubox waf_ban {{ {A}",
+                                                     f"create element inet secubox waf_ban6 {{ {B6}"]
+    assert all(86390 <= int(x.split("timeout ")[1].split("s")[0]) <= 86400 for x in lot)
+    assert abs(d["fin"] - int(time.time()) - 86400) <= 10
 
 
-@pytest.mark.parametrize("args", [["ban-lot"], ["ban-lot", "30m"], ["ban-lot", "2d"], ["ban-lot", "x"], ["unban-lot", "a;b"]])
+@pytest.mark.parametrize("args", [["ban-lot"], ["ban-lot", "30m"], ["ban-lot", "2d"], ["ban-lot", "x"], ["unban-lot", "a;b"],
+                                  ["unban-lot", "1795000000", "autre"]])
 def test_wafctl_lot_arguments(w, args):
     lancer, _, tmp = w
     assert lancer(*args, entree=A).returncode != 0 and not (tmp / "lot.nft").exists()
@@ -234,16 +324,19 @@ def test_wafctl_ban_lot_garde_etat_ou_nft_en_echec(w):
     (tmp / "ko").touch()
     r = lancer("ban-lot", "86400s", entree=A)
     assert r.returncode != 0 and "refus:nft" in r.stderr and r.stdout == ""
+    assert len((tmp / "essais").read_text().split()) == 2                    # relu et rejoué une fois
 
 
 def test_wafctl_unban_lot_seulement_le_notre(w):
     lancer, ensemble, tmp = w
     fin = int(time.time()) + 80000
-    ensemble("waf_ban", (A, 80000), (C, 90000), (PAIR, 3000), (BANNIE, None))
+    ensemble("waf_ban", (A, 80000), (C, 80060), (PAIR, 79990), (BANNIE, None))
     r = lancer("unban-lot", str(fin), entree="\n".join([A, C, PAIR, BANNIE, B6]))
     d = json.loads(r.stdout)
     assert d["leves"] == [A] and d["couverts"] == [C, PAIR, BANNIE] and d["absents"] == [B6]
     assert (tmp / "lot.nft").read_text() == f"delete element inet secubox waf_ban {{ {A} }}\n"
+    assert json.loads(lancer("unban-lot", str(fin), "incertain", entree=C).stdout)["leves"] == [C]
+    assert lancer("unban-lot", str(fin), entree="2a01::1%a;").returncode != 0
 
 
 def test_waf_blocs_verifier_lot(monkeypatch, capsys):
@@ -260,10 +353,11 @@ def test_waf_blocs_verifier_lot(monkeypatch, capsys):
         vus.append(exiger)
         return [ipaddress.ip_network("203.0.113.0/24")], set(), {ipaddress.ip_address(PAIR)}, []
     monkeypatch.setattr(m, "_gardes", gardes)
-    monkeypatch.setattr(sys, "stdin", io.StringIO(f"{A}\n{C}\n{PAIR}\n198.51.100.0/24\n10.0.0.1\nrien\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(f"{A}\n{C}\n{PAIR}\n198.51.100.0/24\n10.0.0.1\nrien\n2a01::1%eth0;\n"))
     assert m.main(["verifier-lot"]) == 0
     assert json.loads(capsys.readouterr().out) == {A: None, C: "protegee", PAIR: "pair", "198.51.100.0/24": "invalide",
-                                                   "10.0.0.1": "privee", "rien": "invalide"}
+                                                   "10.0.0.1": "privee", "rien": "invalide",
+                                                   "2a01::1%eth0;": "invalide"}
     assert vus == [True]
     monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join(f"198.51.100.{i}" for i in range(201))))
     assert m.main(["verifier-lot"]) != 0

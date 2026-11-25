@@ -297,6 +297,20 @@ Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-
 | `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
 | `POST /garde/unban` | `{"geste": "unban", "cible": "<ip>"}` (champs en trop : 422) | 200 `{cible, ids, etat: "annule"}` ; 200 `etat: "deja_leve"` si l'élément n'est plus dans `waf_ban`/`waf_ban6` (journal `note: déjà levé`, sans wafctl) ; 409 `etranger` si l'échéance restante de l'élément (ou un élément permanent) dépasse la `fin` notée par la garde de plus de 120 s — ban repris par un autre, jamais levé ; 503 `etat` si l'ensemble ou une échéance est illisible ; 409 `pas_garde` (aucun ban de la garde actif pour cette adresse dans `garde-ban.jsonl` : ban étranger, inconnu, échu ou déjà levé — jamais de wafctl), `plafond` (60/h), ou motif de `wafctl` |
 
+### Bannir un acteur depuis sa fiche (#3960)
+
+Garde `require_jwt` sur les quatre routes ; détail dans `composants/waf/api/acteurs.py`.
+
+| Route | Effet | Réponse |
+|---|---|---|
+| `GET /acteurs/{id}/etat` | rien | `{vues_48h, bannies, partiel, gestes: [{id, at, fin, nombre, par, incertain}]}` |
+| `GET /acteurs/{id}/apercu` | rien | `{apercu, expire, a_bannir (200 au plus), deja_bannies, epargnees: [{ip, motif}], reste, partiel}` |
+| `POST /acteurs/{id}/bannir` `{"apercu"}` | ban 24 h de la liste montrée (5 min, usage unique, 10 par heure) | `{id, posees, presentes, refusees, fin}` ; 409 `apercu_perime`, `plafond`, `vide` ; 503 `protegee_inconnue`, `etat`, `wafctl`, `audit` ; 500 `incoherent` |
+| `POST /acteurs/gestes/{id}/lever` | retire les adresses de ce geste | `{levees, gardees}` |
+
+Verbes root : `wafctl ban-lot 86400s`, `wafctl unban-lot <fin> [incertain]` et `waf-blocs verifier-lot`, adresses sur
+l'entrée standard. Journal : `/var/lib/secubox/waf/acteur-ban.jsonl`.
+
 Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
 (`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`. Le champ `audit` de la réponse
 vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant

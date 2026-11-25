@@ -13,22 +13,27 @@ sbx-actord reste en lecture seule : il fournit la chronologie (adresse, date) ; 
 - `POST /acteurs/{id}/bannir` `{apercu}` : applique la liste montrée, jamais une adresse de plus. Aperçu de moins de
   5 minutes, du même administrateur, à usage unique ; les protections sont recontrôlées, puis de nouveau en root par
   `wafctl ban-lot` (plages protégées exigées). 24 h, jamais un bloc ;
-- `POST /acteurs/gestes/{id}/lever` : retire les seules adresses posées par ce geste (`wafctl unban-lot` refuse celles
-  dont un autre a allongé le ban).
+- `POST /acteurs/gestes/{id}/lever` : retire les seules adresses posées par ce geste. Reste bannie celle dont la fin
+  n'est plus celle du geste, ou que sbxwaf tient pour bannie (`bans.jsonl`). Limite connue : une adresse que quelqu'un
+  d'autre bannit pour 24 h dans les 20 s qui suivent le geste ne s'en distingue pas ; un ban plus court posé après lui
+  est déjà sans effet (elle est bannie) et ne revient pas à la levée, sauf ceux de sbxwaf.
 
 Épargnées : forme ou plage non publique, liste blanche, liste blanche SADE, pair du maillage, adresse d'une session
-ouverte ou du demandeur, robot vérifié, robot non vérifiable (DNS en doute). Une source de protection illisible refuse
-le geste (503). Audit avant et après ; sans journal ou audit, le lot posé est retiré.
+ouverte ou du demandeur, robot vérifié, robot non vérifiable (DNS en doute) ; les robots ne sont vérifiés qu'à l'aperçu
+(5 minutes au plus). Une source de protection illisible refuse le geste (503). Une ligne `demande` (adresses, fin prévue)
+est écrite AVANT la pose : un geste interrompu reste visible et levable. Audit avant et après ; sans journal ou audit, le
+lot posé est retiré. `partiel` : la chronologie d'actord est bornée (mille événements, parmi ceux qu'il relit).
 """
 from __future__ import annotations
 
 import concurrent.futures
 import http.client
-import ipaddress
 import json
 import logging
+import os
 import re
 import secrets
+import stat
 import subprocess
 import threading
 import time
@@ -38,7 +43,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from secubox_core.auth import require_jwt
+from secubox_core.auth import adresse_client, require_jwt
 
 try:
     from api import garde_ban as _gb
@@ -129,11 +134,9 @@ def _bannies() -> set:
 
 
 def _reseaux_sessions() -> List[Any]:
-    """Adresses des sessions ouvertes. Absent : aucune ; illisible : ProtectionInconnue."""
+    """Adresses des sessions ouvertes. Absent (l'administrateur en a pourtant une) ou illisible : ProtectionInconnue."""
     try:
         doc = json.loads(SESSIONS.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return []
     except (OSError, ValueError) as e:
         raise _g.ProtectionInconnue(f"sessions : {type(e).__name__}") from None
     if isinstance(doc, dict):
@@ -143,14 +146,35 @@ def _reseaux_sessions() -> List[Any]:
     return [n for s in doc if isinstance(s, dict) for n in [_g._reseau_pair(s.get("ip"))] if n is not None]
 
 
+def _reseau_sur(texte: str) -> Any:
+    n = _g._reseau_pair(texte)
+    if n is None:
+        raise _g.ProtectionInconnue(f"entrée illisible : {texte[:45]!r}")
+    return n
+
+
+def _sade_publiee() -> bool:
+    """Le fichier publié par le SOC existe, régulier, à root ou à son compte, fermé en écriture aux autres."""
+    try:
+        st = os.lstat(_g.FICHIER_SADE)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid in _g._uids_sade() and not st.st_mode & 0o022
+
+
 def _protections(demandeur: str) -> List[Tuple[str, List[Any]]]:
     """[(motif, réseaux)] ; toute source illisible refuse le geste."""
     try:
         sade = _g.lire_sade()
-        return [("liste_blanche", [n for n in map(_g._reseau_pair, _config["liste_blanche"]()) if n is not None]),
-                ("sade", list(sade["liste"]) if sade else []),
+        # fichier absent (SOC installé) ou non fiable : lire_sade rend « observe » et une liste vide, que rien ne garantit
+        if sade is not None and (sade["liste"] is None or sade["mode"] == "observe" and not sade["liste"]
+                                 and not _sade_publiee()):
+            raise _g.Illisible("liste blanche SADE")
+        blanche = [x.strip() for x in _config["liste_blanche"]() if x.strip()]
+        return [("liste_blanche", [_reseau_sur(x) for x in blanche]),
+                ("sade", sade["liste"] if sade else []),
                 ("pair", _g.pairs_wg_mesh() + _g.pairs_threatmesh()),
-                ("session", _reseaux_sessions() + [n for n in [_g._reseau_pair(demandeur)] if n is not None])]
+                ("session", _reseaux_sessions() + [_reseau_sur(demandeur)])]
     except (_g.ProtectionInconnue, _g.Illisible, OSError, KeyError, TypeError, AttributeError) as e:
         log.warning("acteurs : protection illisible : %s", e)
         raise HTTPException(503, detail={"motif": "protegee_inconnue"}) from None
@@ -164,10 +188,10 @@ def _motif_epargne(ip: str, protections: List[Tuple[str, List[Any]]]) -> Optiona
     return next((motif for motif, reseaux in protections if any(_g._touche(a, n) for n in reseaux)), None)
 
 
-def _robots(ips: List[str]) -> Dict[str, str]:
-    """{adresse: motif} des robots vérifiés et des adresses dont le DNS n'a pas répondu (le doute épargne)."""
+def _robots(ips: List[str], limite: float) -> Dict[str, str]:
+    """{adresse: motif} des robots vérifiés et des adresses dont le DNS n'a pas répondu à temps (le doute épargne)."""
     taches = {_dns.submit(_g._fcrdns, ip): ip for ip in ips}
-    finies, _ = concurrent.futures.wait(taches, timeout=_DELAI_DNS_LOT_S)
+    finies, _ = concurrent.futures.wait(taches, timeout=max(0.0, limite - time.monotonic()))
     out: Dict[str, str] = {}
     for t, ip in taches.items():
         if t not in finies:
@@ -178,11 +202,6 @@ def _robots(ips: List[str]) -> Dict[str, str]:
         elif t.result():
             out[ip] = "robot"
     return out
-
-
-def _demandeur(request: Request) -> str:
-    """Adresse du poste de l'administrateur, posée par nginx ; à défaut celle de la connexion."""
-    return request.headers.get("x-real-ip") or (request.client.host if request.client else "")
 
 
 def _qui(user: Any) -> str:
@@ -196,27 +215,47 @@ def _lire_journal() -> List[dict]:
         raise HTTPException(503, detail={"motif": "journal"}) from None
     return [e for e in lignes if isinstance(e, dict) and isinstance(e.get("id"), str) and _RE_ID.fullmatch(e["id"])
             and _g._entier(e.get("at"))
-            and (e.get("type") == "leve" or e.get("type") == "ban" and isinstance(e.get("cibles"), list)
+            and (e.get("type") == "leve" or e.get("type") in ("demande", "ban") and isinstance(e.get("cibles"), list)
                  and _g._entier(e.get("fin")) and isinstance(e.get("acteur"), str))]
 
 
 def _gestes_actifs(entrees: List[dict], maintenant: int) -> List[dict]:
-    leves = {e["id"] for e in entrees if e["type"] == "leve"}
-    return [e for e in entrees if e["type"] == "ban" and e["id"] not in leves and e["fin"] > maintenant]
+    """Gestes non échus et non levés, `cibles` réduites à ce qui reste. `demande` sans suite : pose interrompue
+    (`incertain`). Une ligne `leve` sans `cibles` clôt le geste."""
+    gestes: Dict[str, dict] = {}
+    for e in entrees:
+        if e["type"] != "leve":
+            gestes[e["id"]] = {**e, "incertain": e["type"] == "demande"}
+        elif e["id"] in gestes:
+            g, levees = gestes[e["id"]], e.get("cibles")
+            g["cibles"] = [ip for ip in g["cibles"] if ip not in levees] if isinstance(levees, list) else []
+    return [g for g in gestes.values() if g["cibles"] and g["fin"] > maintenant]
 
 
-def _executer(verbe: str, argument: str, ips: List[str]) -> dict:
-    """`sudo wafctl <verbe> <argument>`, adresses sur l'entrée standard. Le document JSON rendu, ou 503 `wafctl`."""
+class Incertain(Exception):
+    """wafctl n'a pas répondu clairement : des adresses sont peut-être posées."""
+
+
+_RE_REFUS = re.compile(r"refus:([a-z_]{1,32})")
+
+
+def _executer(verbe: str, arguments: List[str], ips: List[str]) -> dict:
+    """`sudo wafctl <verbe> <arguments>`, adresses sur l'entrée standard : le document JSON rendu. Refus net (wafctl dit
+    pourquoi, rien n'est posé) : HTTPException 503. Sinon `Incertain`."""
     try:
-        r = subprocess.run(["sudo", "-n", _g.WAFCTL, verbe, argument], input="\n".join(ips) + "\n", check=False,
+        r = subprocess.run(["sudo", "-n", _g.WAFCTL, verbe, *arguments], input="\n".join(ips) + "\n", check=False,
                            timeout=60, capture_output=True, text=True)
         doc = json.loads(r.stdout) if r.returncode == 0 else None
     except (OSError, ValueError, subprocess.TimeoutExpired) as e:
-        log.error("acteurs : wafctl %s : %s", verbe, type(e).__name__)
-        doc = None
-    if not isinstance(doc, dict):
-        raise HTTPException(503, detail={"motif": "wafctl"})
-    return doc
+        raise Incertain(type(e).__name__) from None
+    if isinstance(doc, dict):
+        return doc
+    motif = _RE_REFUS.search(r.stderr or "")
+    if r.returncode == 0 or motif is None or motif[1] == "incertain":
+        raise Incertain(f"code {r.returncode}")
+    log.error("acteurs : wafctl %s : refus %s", verbe, motif[1])
+    raise HTTPException(503, detail={"motif": "etat" if motif[1] == "etat" else
+                                     "protegee_inconnue" if motif[1] == "garde_illisible" else "wafctl"})
 
 
 def _liste(doc: dict, cle: str, permises: List[str]) -> List[str]:
@@ -224,13 +263,33 @@ def _liste(doc: dict, cle: str, permises: List[str]) -> List[str]:
     return [ip for ip in permises if isinstance(v, list) and ip in v]
 
 
-def _retirer(ips: List[str], fin: int) -> bool:
+def _retirer(ips: List[str], fin: int, incertain: bool = False) -> bool:
+    """Retour arrière d'une pose. True seulement si aucune des adresses ne reste bannie par ce geste."""
     try:
-        _executer("unban-lot", str(fin), ips)
-        return True
-    except HTTPException:
-        log.error("acteurs : retour arrière impossible (%d adresses)", len(ips))
-        return False
+        doc = _executer("unban-lot", [str(fin)] + (["incertain"] if incertain else []), ips)
+    except (HTTPException, Incertain):
+        doc = {"couverts": ips}
+    if doc.get("couverts"):
+        log.error("acteurs : retour arrière incomplet (%d adresses)", len(doc["couverts"]))
+    return doc.get("couverts") == []
+
+
+def _clore(ident: str, cause: str, maintenant: int, **champs: Any) -> None:
+    """Ligne `leve`. Lève OSError."""
+    _gb._ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "leve", "id": ident, "cause": cause, **champs}, JOURNAL)
+
+
+def _couvertes_par_le_waf(ips: List[str], maintenant: int) -> set:
+    """Celles dont le dernier enregistrement de sbxwaf est un ban non échu (une seule lecture de bans.jsonl)."""
+    voulues, dernier = set(ips), {}
+    try:
+        for r in _g._lire_fin_jsonl(_g.BANS_WAF, _g._TAILLE_LECTURE_BANS_WAF) or []:
+            if isinstance(r, dict) and r.get("ip") in voulues:
+                dernier[r["ip"]] = r
+    except OSError:
+        raise HTTPException(503, detail={"motif": "etat"}) from None
+    return {ip for ip, r in dernier.items() if r.get("action") == "ban"
+            and (not _g._entier(r.get("exp")) or r["exp"] == 0 or r["exp"] > maintenant)}
 
 
 @router.get("/{acteur}/etat")
@@ -241,14 +300,14 @@ def etat(acteur: str, _user: dict = Depends(require_jwt)) -> Dict[str, Any]:
     actifs = [g for g in _gestes_actifs(_lire_journal(), maintenant) if g["acteur"] == acteur]
     return {"acteur": acteur, "vues_48h": len(vues), "bannies": sum(ip in bannies for ip, _ in vues), "partiel": partiel,
             "gestes": [{"id": g["id"], "at": g["at"], "fin": g["fin"], "nombre": len(g["cibles"]),
-                        "par": str(g.get("par") or "")} for g in actifs]}
+                        "par": str(g.get("par") or ""), "incertain": g["incertain"]} for g in actifs]}
 
 
 @router.get("/{acteur}/apercu")
 def apercu(acteur: str, request: Request, user: dict = Depends(require_jwt)) -> Dict[str, Any]:
     maintenant = int(time.time())
     vues, partiel = _adresses(acteur, maintenant)
-    bannies, protections = _bannies(), _protections(_demandeur(request))
+    bannies, protections = _bannies(), _protections(adresse_client(request))
     deja, epargnees, candidates = [], [], []
     for ip, vu in vues:
         motif = _motif_epargne(ip, protections)
@@ -258,10 +317,15 @@ def apercu(acteur: str, request: Request, user: dict = Depends(require_jwt)) -> 
             deja.append(ip)
         else:
             candidates.append((ip, vu))
-    retenues, reste = candidates[:MAX_ADRESSES], max(0, len(candidates) - MAX_ADRESSES)
-    robots = _robots([ip for ip, _ in retenues])
-    epargnees += [{"ip": ip, "motif": m} for ip, m in robots.items()]
-    a_bannir = [{"ip": ip, "vu": vu} for ip, vu in retenues if ip not in robots]
+    # les adresses épargnées après coup (robots, DNS muet) sont remplacées par les suivantes, dans un délai unique
+    limite, a_bannir = time.monotonic() + _DELAI_DNS_LOT_S, []
+    while candidates and len(a_bannir) < MAX_ADRESSES and time.monotonic() < limite:
+        n = MAX_ADRESSES - len(a_bannir)
+        lot, candidates = candidates[:n], candidates[n:]
+        robots = _robots([ip for ip, _ in lot], limite)
+        epargnees += [{"ip": ip, "motif": m} for ip, m in robots.items()]
+        a_bannir += [{"ip": ip, "vu": vu} for ip, vu in lot if ip not in robots]
+    reste = len(candidates)
     ident = secrets.token_hex(16)
     with _verrou:
         for k in [k for k, v in _apercus.items() if maintenant - v["at"] > APERCU_S]:
@@ -280,42 +344,57 @@ def bannir(acteur: str, demande: DemandeBan, request: Request, user: dict = Depe
         ap = _apercus.get(demande.apercu)
         if ap is None or maintenant - ap["at"] > APERCU_S or ap["acteur"] != acteur or ap["par"] != _qui(user):
             raise HTTPException(409, detail={"motif": "apercu_perime"})
-        if sum(e["type"] == "ban" and maintenant - e["at"] < 3600 for e in _lire_journal()) >= PLAFOND_HEURE:
+        if sum(e["type"] == "demande" and maintenant - e["at"] < 3600 for e in _lire_journal()) >= PLAFOND_HEURE:
             raise HTTPException(409, detail={"motif": "plafond"})
-        protections = _protections(_demandeur(request))
+        protections = _protections(adresse_client(request))
         cibles = [ip for ip in ap["ips"] if _motif_epargne(ip, protections) is None]
         if not cibles:
             raise HTTPException(409, detail={"motif": "vide"})
         del _apercus[demande.apercu]                       # usage unique, quel que soit le résultat
         ident = secrets.token_hex(16)
+        ligne = {"ts": _g._horodatage(), "at": maintenant, "id": ident, "acteur": acteur, "par": _qui(user)}
+        prevue = maintenant + DUREE_S
+        try:
+            _gb._ecrire_journal({**ligne, "type": "demande", "cibles": cibles, "fin": prevue}, JOURNAL)
+        except OSError:
+            raise HTTPException(503, detail={"motif": "audit"}) from None
         try:
             _config["audit"]("acteur-ban-demande", f"id {ident} acteur {acteur} {len(cibles)} adresses {DUREE_S}s", user)
         except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
+            _abandonner(ident, "audit", maintenant)
             raise HTTPException(503, detail={"motif": "audit"}) from None
         try:
-            doc = _executer("ban-lot", f"{DUREE_S}s", cibles)
-        except HTTPException:
-            _retirer(cibles, int(time.time()) + DUREE_S)   # wafctl muet : peut-être posé
+            doc = _executer("ban-lot", [f"{DUREE_S}s"], cibles)
+        except HTTPException:                              # refus net : rien n'est posé, rien n'est à défaire
+            _abandonner(ident, "refus", maintenant)
             raise
-        fin = int(time.time()) + DUREE_S
+        except Incertain as e:
+            log.error("acteurs : ban-lot incertain : %s", e)
+            if _retirer(cibles, prevue, incertain=True):
+                _abandonner(ident, "incertain", maintenant)
+                raise HTTPException(503, detail={"motif": "wafctl"}) from None
+            raise HTTPException(500, detail={"motif": "incoherent"}) from None
         poses = _liste(doc, "poses", cibles)
         refuses = doc["refuses"] if isinstance(doc.get("refuses"), dict) else {}
-        if poses:
-            try:
-                _gb._ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "ban", "id": ident, "acteur": acteur,
-                                     "cibles": poses, "fin": fin, "par": _qui(user)}, JOURNAL)
-                _config["audit"]("acteur-ban", f"id {ident} acteur {acteur} posees {len(poses)} refusees {len(refuses)}", user)
-            except Exception:  # noqa: BLE001 — un ban hors journal ou non audité n'existe pas : il est retiré
-                defait = _retirer(poses, fin)
-                try:
-                    _gb._ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "leve", "id": ident,
-                                         "cause": "audit"}, JOURNAL)
-                except OSError:
-                    log.error("acteurs : annulation %s non journalisée", ident)
-                raise HTTPException(503 if defait else 500, detail={"motif": "audit" if defait else "incoherent"}) from None
+        fin = doc["fin"] if _g._entier(doc.get("fin")) else prevue
+        try:
+            _gb._ecrire_journal({**ligne, "type": "ban", "cibles": poses, "fin": fin}, JOURNAL)
+            _config["audit"]("acteur-ban", f"id {ident} acteur {acteur} posees {len(poses)} refusees {len(refuses)}", user)
+        except Exception:  # noqa: BLE001 — un ban hors journal ou non audité n'existe pas : il est retiré
+            if poses and not _retirer(poses, fin):
+                raise HTTPException(500, detail={"motif": "incoherent"}) from None    # reste visible et levable
+            _abandonner(ident, "audit", maintenant)
+            raise HTTPException(503, detail={"motif": "audit"}) from None
     _config["apres"]()
     return {"id": ident, "acteur": acteur, "posees": len(poses), "presentes": len(_liste(doc, "presents", cibles)),
             "refusees": [{"ip": ip, "motif": str(refuses[ip])[:32]} for ip in cibles if ip in refuses], "fin": fin}
+
+
+def _abandonner(ident: str, cause: str, maintenant: int) -> None:
+    try:
+        _clore(ident, cause, maintenant)
+    except OSError:
+        log.error("acteurs : abandon %s non journalisé", ident)
 
 
 @router.post("/gestes/{ident}/lever")
@@ -327,26 +406,26 @@ def lever(ident: str, user: dict = Depends(require_jwt)) -> Dict[str, Any]:
         geste = next((g for g in _gestes_actifs(_lire_journal(), maintenant) if g["id"] == ident), None)
         if geste is None:
             raise HTTPException(404, detail={"motif": "inconnu"})
-        cibles = [ip for ip in geste["cibles"] if isinstance(ip, str) and _adresse_ou_rien(ip)]
+        cibles = [ip for ip in geste["cibles"] if isinstance(ip, str)]
         try:
             _config["audit"]("acteur-lever-demande", f"id {ident} acteur {geste['acteur']} {len(cibles)} adresses", user)
         except Exception:  # noqa: BLE001
             raise HTTPException(503, detail={"motif": "audit"}) from None
-        doc = _executer("unban-lot", str(geste["fin"]), cibles)
-        leves, couverts = _liste(doc, "leves", cibles), _liste(doc, "couverts", cibles)
+        couvertes = _couvertes_par_le_waf(cibles, maintenant)
+        libres = [ip for ip in cibles if ip not in couvertes]
+        doc: dict = {}
+        if libres:
+            try:
+                doc = _executer("unban-lot", [str(geste["fin"])] + (["incertain"] if geste["incertain"] else []), libres)
+            except Incertain:
+                raise HTTPException(503, detail={"motif": "wafctl"}) from None
+        leves, absents = _liste(doc, "leves", libres), _liste(doc, "absents", libres)
+        restantes = [ip for ip in cibles if ip not in leves and ip not in absents]
         try:
-            _gb._ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "leve", "id": ident, "cause": "lever",
-                                 "par": _qui(user)}, JOURNAL)
-            _config["audit"]("acteur-lever", f"id {ident} levees {len(leves)} gardees {len(couverts)}", user)
-        except Exception as e:  # noqa: BLE001 — la levée est faite : elle est dite, pas défaite
+            _clore(ident, "lever", maintenant, cibles=leves + absents, par=_qui(user))
+            _config["audit"]("acteur-lever", f"id {ident} levees {len(leves)} gardees {len(restantes)}", user)
+        except Exception as e:  # noqa: BLE001 — la levée est faite : dite incertaine, pas défaite
             log.error("acteurs : levée %s mal tracée : %s", ident, e)
+            raise HTTPException(500, detail={"motif": "incoherent"}) from None
     _config["apres"]()
-    return {"id": ident, "levees": len(leves), "gardees": len(couverts)}
-
-
-def _adresse_ou_rien(ip: str) -> bool:
-    try:
-        ipaddress.ip_address(ip)
-        return True
-    except ValueError:
-        return False
+    return {"id": ident, "levees": len(leves), "gardees": len(restantes)}

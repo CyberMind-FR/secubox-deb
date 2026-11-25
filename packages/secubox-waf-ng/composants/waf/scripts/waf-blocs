@@ -308,6 +308,8 @@ def verifier_lot(textes):
     out = {}
     for t in textes:
         try:
+            if not re.fullmatch(r"[0-9a-f:.]{2,45}", t):      # ni bloc, ni zone IPv6 « %… »
+                raise ValueError("forme")
             cible = normaliser_cible(t)
         except ValueError:
             out[t] = "invalide"

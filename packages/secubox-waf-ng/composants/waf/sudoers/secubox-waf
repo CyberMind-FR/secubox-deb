@@ -46,7 +46,7 @@ Cmnd_Alias SBX_WAF_BANMANUEL = /usr/sbin/wafctl ban *, \
 
 # Bannir un acteur depuis sa fiche (#3960) : lot d'adresses sur l'entrée standard, 24 h, gardes root.
 Cmnd_Alias SBX_WAF_LOT = /usr/sbin/wafctl ban-lot 86400s, \
-                         /usr/sbin/wafctl unban-lot *
+                         /usr/sbin/wafctl ^unban-lot [0-9]{10}( incertain)?$
 
 # Prolonger le ban d'une adresse DÉJÀ bannie (#3723, geste `prolonger` du compte
 # ai-ban) : retrait et nouvel ajout en une transaction nft, garde d'office.

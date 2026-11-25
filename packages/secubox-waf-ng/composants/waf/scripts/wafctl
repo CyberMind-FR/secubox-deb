@@ -690,14 +690,21 @@ cmd_ban() {
     fi
 }
 
-# cmd_ban_lot <N>s / cmd_unban_lot <fin> — lot d'adresses d'un acteur (#3960), une par ligne sur l'entrée standard, 200 au
-# plus. Gardes root lues UNE fois (`waf-blocs verifier-lot`, protegees.env exigé), ensembles lus UNE fois, pose ou retrait
-# en UNE transaction nft. Une adresse déjà bannie n'est jamais touchée (ni raccourcie, ni allongée) ; la levée ne retire
-# que ce qui finit à <fin>, à 90 s près (le ban d'un autre, plus court ou plus long, reste). Sortie : une ligne JSON ; `refus:<motif>` sur stderr sinon.
+# cmd_ban_lot <N>s / cmd_unban_lot <fin> [incertain] — lot d'adresses d'un acteur (#3960), une par ligne sur l'entrée
+# standard, 200 au plus. Gardes root lues UNE fois (`waf-blocs verifier-lot`, protegees.env exigé), ensembles lus UNE
+# fois, une transaction nft. Pose par `create element` : si une adresse a été bannie entre-temps par un autre, RIEN n'est
+# posé (depuis le noyau 6.12, `add` changerait son délai) ; l'état est relu et le lot rejoué une fois. La levée ne retire
+# que ce qui finit à <fin> (LOT_MARGE_S après au plus ; `incertain` : pose interrompue, LOT_MARGE_INCERTAIN_S). Chaque
+# appel est borné ici : l'API ne peut pas tuer un enfant de sudo. Sortie : une ligne JSON (`fin` comprise pour une pose) ;
+# sinon `refus:<motif>` sur stderr, où seul `incertain` (nft interrompu) peut avoir laissé des adresses posées.
+# Aucun fichier temporaire : des tubes (bac à sable de l'API, AppArmor de waf-blocs).
+LOT_MARGE_S=20
+LOT_MARGE_INCERTAIN_S=75
 _lot_json() {
     python3 -I -c '
 import json, sys, time
-mode, arg, f_verdict, f4, f6 = sys.argv[1:6]
+mode, fin, marge, f_verdict, f4, f6 = sys.argv[1:7]
+fin, marge = int(fin), int(marge)
 verdict = json.load(open(f_verdict))
 restes = {}
 for f in (f4, f6):
@@ -710,7 +717,7 @@ for f in (f4, f6):
             restes[e["val"]] = e.get("expires", e.get("timeout"))
         else:
             restes[el] = None
-out = {"poses": [], "presents": [], "refuses": {}, "leves": [], "couverts": [], "absents": []}
+out = {"poses": [], "presents": [], "refuses": {}, "leves": [], "couverts": [], "absents": [], "fin": fin}
 for ip, motif in verdict.items():
     if mode == "ban":
         if motif:
@@ -721,46 +728,62 @@ for ip, motif in verdict.items():
         out["absents"].append(ip)
     else:
         r = restes[ip]
-        libre = isinstance(r, int) and abs(time.time() + r - int(arg)) <= 90
+        libre = isinstance(r, int) and -3 <= time.time() + r - fin <= marge
         out["leves" if libre else "couverts"].append(ip)
 print(json.dumps(out))
 ' "$@"
 }
 
-# Aucun fichier temporaire : des tubes (bac à sable de l'API, AppArmor de waf-blocs).
-_lot() {
-    local mode="$1" arg="$2" ips verdict v4 v6 doc lignes
-    ips=$(head -c 20000)
-    if [ "$mode" = ban ]; then
-        verdict=$(printf '%s\n' "$ips" | /usr/sbin/waf-blocs verifier-lot 2>/dev/null) \
-            || { printf 'refus:garde_illisible\n' >&2; return 1; }
-    else
-        verdict=$(printf '%s\n' "$ips" | python3 -I -c '
-import ipaddress, json, sys
-l = sys.stdin.read().split()
-if not 0 < len(l) <= 200:
-    sys.exit(1)
-print(json.dumps({ip: None for ip in l if str(ipaddress.ip_address(ip)) == ip}))
-' 2>/dev/null) || { printf 'refus:forme\n' >&2; return 1; }
-    fi
-    if ! v4=$(nft -j list set inet "$NFT_TABLE" waf_ban 2>/dev/null) \
-        || ! v6=$(nft -j list set inet "$NFT_TABLE" waf_ban6 2>/dev/null) \
-        || ! doc=$(_lot_json "$mode" "$arg" <(printf '%s' "$verdict") <(printf '%s' "$v4") <(printf '%s' "$v6") 2>/dev/null); then
+_lot_essai() {
+    local mode="$1" arg="$2" marge="$3" verdict="$4" v4 v6 doc lignes rc=0
+    if ! v4=$(timeout -k 1 6 nft -j list set inet "$NFT_TABLE" waf_ban 2>/dev/null) \
+        || ! v6=$(timeout -k 1 6 nft -j list set inet "$NFT_TABLE" waf_ban6 2>/dev/null) \
+        || ! doc=$(_lot_json "$mode" "$arg" "$marge" <(printf '%s' "$verdict") <(printf '%s' "$v4") <(printf '%s' "$v6") 2>/dev/null); then
         printf 'refus:etat\n' >&2
         return 1
     fi
     if [ "$mode" = ban ]; then
-        lignes=$(printf '%s' "$doc" | jq -r --arg t "$NFT_TABLE" --arg s "$arg" \
-            '.poses[] | "add element inet \($t) " + (if contains(":") then "waf_ban6" else "waf_ban" end) + " { \(.) timeout \($s)s }"') || return 1
+        lignes=$(printf '%s' "$doc" | jq -r --arg t "$NFT_TABLE" --arg s "$(( arg - $(date +%s) ))" \
+            '.poses[] | "create element inet \($t) " + (if contains(":") then "waf_ban6" else "waf_ban" end) + " { \(.) timeout \($s)s }"') || return 1
     else
         lignes=$(printf '%s' "$doc" | jq -r --arg t "$NFT_TABLE" \
             '.leves[] | "delete element inet \($t) " + (if contains(":") then "waf_ban6" else "waf_ban" end) + " { \(.) }"') || return 1
     fi
-    if [ -n "$lignes" ] && ! printf '%s\n' "$lignes" | nft -f - 2>/dev/null; then
-        printf 'refus:nft\n' >&2
-        return 1
+    if [ -n "$lignes" ]; then
+        printf '%s\n' "$lignes" | timeout -k 1 10 nft -f - 2>/dev/null || rc=$?
+        case "$rc" in
+            0) ;;
+            124|137) printf 'refus:incertain\n' >&2; return 1 ;;
+            *) return 2 ;;
+        esac
     fi
     printf '%s\n' "$doc"
+}
+
+_lot() {
+    local mode="$1" arg="$2" marge="$3" ips verdict rc
+    ips=$(head -c 20000)
+    if [ "$mode" = ban ]; then
+        verdict=$(printf '%s\n' "$ips" | timeout -k 1 10 /usr/sbin/waf-blocs verifier-lot 2>/dev/null) \
+            || { printf 'refus:garde_illisible\n' >&2; return 1; }
+        arg=$(( $(date +%s) + arg ))
+    else
+        verdict=$(printf '%s\n' "$ips" | python3 -I -c '
+import ipaddress, json, re, sys
+l = sys.stdin.read().split()
+if not 0 < len(l) <= 200 or not all(re.fullmatch(r"[0-9a-f:.]{2,45}", ip) for ip in l):
+    sys.exit(1)
+print(json.dumps({ip: None for ip in l if str(ipaddress.ip_address(ip)) == ip}))
+' 2>/dev/null) || { printf 'refus:forme\n' >&2; return 1; }
+    fi
+    rc=0
+    _lot_essai "$mode" "$arg" "$marge" "$verdict" || rc=$?
+    [ "$rc" -eq 2 ] || return "$rc"
+    # transaction refusée : un élément a changé entre la lecture et elle ; relu et rejoué une fois
+    rc=0
+    _lot_essai "$mode" "$arg" "$marge" "$verdict" || rc=$?
+    [ "$rc" -ne 2 ] || printf 'refus:nft\n' >&2
+    [ "$rc" -eq 0 ]
 }
 
 cmd_ban_lot() {
@@ -769,15 +792,17 @@ cmd_ban_lot() {
         printf 'refus:duree\n' >&2
         return 1
     fi
-    _lot ban "$secondes"
+    _lot ban "$secondes" 0
 }
 
 cmd_unban_lot() {
-    if [ "$#" -ne 1 ] || ! _fin_max_valide "$1"; then
+    local marge="$LOT_MARGE_S"
+    if [ "$#" -lt 1 ] || [ "$#" -gt 2 ] || ! _fin_max_valide "$1" || { [ "$#" -eq 2 ] && [ "$2" != incertain ]; }; then
         printf 'refus:fin\n' >&2
         return 1
     fi
-    _lot unban "$1"
+    [ "$#" -eq 1 ] || marge="$LOT_MARGE_INCERTAIN_S"
+    _lot unban "$1" "$marge"
 }
 
 # cmd_prolonger <ip> <durée> — prolonge le ban d'une adresse DÉJÀ dans waf_ban (#3723, geste `prolonger` du compte
