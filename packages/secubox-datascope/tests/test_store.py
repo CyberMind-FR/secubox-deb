@@ -45,7 +45,7 @@ def test_ouvrir_idempotent_et_pragmas(tmp_path):
         d = store.ouvrir(tmp_path / "x.db")
         assert d.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         assert d.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        assert d.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 1
+        assert d.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 2  # 0001 socle + 0002 paysage
         d.close()
 
 

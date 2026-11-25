@@ -4,7 +4,7 @@
 # Three-fold architecture: Components, Status, Access
 
 VERSION="1.5.0"
-CONFIG_FILE="/etc/secubox/gitea.toml"
+CONFIG_FILE="${GITEA_CONFIG_FILE:-/etc/secubox/gitea.toml}"
 LXC_PATH=""              # auto-detected below if blank, see resolve_lxc_path
 DATA_PATH="/data/gitea"
 CONTAINER="gitea"
@@ -125,6 +125,7 @@ lxc.cap.drop = sys_module mac_admin mac_override sys_time
 lxc.tty.max = 0
 lxc.pty.max = 256
 lxc.cgroup2.memory.max = 512M
+lxc.cgroup2.memory.swap.max = 256M
 lxc.init.cmd = /opt/start-gitea.sh
 
 # Bind mounts for persistent data
@@ -250,6 +251,10 @@ INTERNAL_TOKEN = $(openssl rand -hex 64)
 [service]
 DISABLE_REGISTRATION = true
 REQUIRE_SIGNIN_VIEW = false
+
+[git]
+MAX_GIT_DIFF_LINES = 500
+MAX_GIT_DIFF_FILES = 50
 
 [log]
 MODE = file
@@ -800,12 +805,14 @@ cmd_runner_add() {
     lxc-create -n "$lxc_name" -P "$LXC_PATH" -t download -- \
         -d debian -r "${SECUBOX_DEBIAN_SUITE:-$(suite_debian_hote)}" -a "$arch"
     # Static IP on br-lxc + memory limit (no DHCP on this bridge)
+    local octets=$(( ${memory%[GgMm]} * (1024**$( [ "${memory: -1}" = "G" ] && echo 3 || echo 2 )) ))
     cat >> "$LXC_PATH/$lxc_name/config" <<EOF
 
 # act-runner LXC — set via giteactl runner add (#190)
 lxc.net.0.ipv4.address = ${ip}/24
 lxc.net.0.ipv4.gateway = ${RUNNER_GATEWAY}
-lxc.cgroup2.memory.max = $((${memory%[GgMm]} * (1024**$( [ "${memory: -1}" = "G" ] && echo 3 || echo 2 ))))
+lxc.cgroup2.memory.max = ${octets}
+lxc.cgroup2.memory.swap.max = $((octets / 2))
 EOF
 
     log "starting $lxc_name for bootstrap"
@@ -1129,6 +1136,141 @@ cmd_migrate() {
 # Commands
 # ============================================================================
 
+# Budget mémoire (#3941) : sans GOMEMLIMIT, le ramasse-miettes de Go ne voit pas le plafond du conteneur (gk2 : ~730 Mo
+# sous un aspirateur pour un budget de 512 Mo). 70 % du budget effectif (dernière ligne memory.max de la config LXC) :
+# drop-in de gitea.service, ou export dans start-gitea.sh (conteneur Alpine). Idempotent, jamais de redémarrage.
+# Le rootfs appartient au conteneur : chaque dossier est ouvert sans suivre de lien symbolique.
+cmd_memoire() {
+    local issue
+    issue=$(python3 -I - "$LXC_PATH/$CONTAINER" <<'PY'
+import os, re, stat, sys
+
+PART = 70
+racine = sys.argv[1]
+NOFOLLOW = os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def budget():
+    val = None
+    try:
+        with open(f"{racine}/config", encoding="utf-8", errors="replace") as f:
+            for ligne in f:
+                # La dernière ligne gagne, comme pour LXC : « max », une valeur vide ou « lxc.cgroup2 = » effacent le budget.
+                if re.match(r"\s*lxc\.cgroup2(\.memory(\.max)?)?\s*=\s*$", ligne):
+                    val = None
+                elif re.match(r"\s*lxc\.cgroup2\.memory\.max\s*=", ligne):
+                    val = re.match(r"[^=]*=\s*(\d+)([KMG]?)\s*$", ligne, re.I)
+    except OSError:
+        return 0
+    return int(val.group(1)) << {"": 0, "K": 10, "M": 20, "G": 30}[val.group(2).upper()] if val else 0
+
+
+def dossier(chemin):
+    fd = os.open(f"{racine}/rootfs", os.O_RDONLY | os.O_DIRECTORY | NOFOLLOW)
+    for part in chemin.split("/"):
+        suivant = os.open(part, os.O_RDONLY | os.O_DIRECTORY | NOFOLLOW, dir_fd=fd)
+        os.close(fd)
+        fd = suivant
+    return fd
+
+
+def lire(dfd, nom):
+    fd = os.open(nom, os.O_RDONLY | os.O_NONBLOCK | NOFOLLOW, dir_fd=dfd)
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_size > 65536:
+            raise OSError("fichier ordinaire attendu")
+        return f.read().decode("utf-8"), st
+
+
+def ecrire(dfd, nom, texte, st, mode):
+    tmp = f".{nom}.{os.getpid()}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600, dir_fd=dfd)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(texte)
+        os.fchown(f.fileno(), st.st_uid, st.st_gid)
+        os.fchmod(f.fileno(), mode)
+    os.rename(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
+
+
+def unite_presente():
+    for d in ("etc/systemd/system", "usr/lib/systemd/system", "lib/systemd/system"):
+        try:
+            dfd = dossier(d)
+        except OSError:
+            continue
+        try:
+            st = os.stat("gitea.service", dir_fd=dfd, follow_symlinks=False)
+            if stat.S_ISREG(st.st_mode):
+                return True
+        except OSError:
+            pass
+        finally:
+            os.close(dfd)
+    return False
+
+
+limite = budget() * PART // 100 >> 20
+if not limite:
+    print("rien")
+    sys.exit(0)
+try:
+    if unite_presente():
+        d = dossier("etc/systemd/system")
+        st = os.fstat(d)
+        try:
+            os.mkdir("gitea.service.d", 0o755, dir_fd=d)
+            neuf = True
+        except FileExistsError:
+            neuf = False
+        dd = os.open("gitea.service.d", os.O_RDONLY | os.O_DIRECTORY | NOFOLLOW, dir_fd=d)
+        if neuf:
+            os.fchown(dd, st.st_uid, st.st_gid)
+            os.fchmod(dd, 0o755)
+        texte = ("# Écrit par giteactl (secubox-gitea, #3941) : 70 % du budget mémoire du conteneur.\n"
+                 "# Une valeur locale se pose dans un drop-in de nom supérieur (60-*.conf).\n"
+                 f"[Service]\nEnvironment=GOMEMLIMIT={limite}MiB\n")
+        try:
+            if lire(dd, "50-secubox-memoire.conf")[0] == texte:
+                print("inchange")
+                sys.exit(0)
+        except FileNotFoundError:
+            pass
+        ecrire(dd, "50-secubox-memoire.conf", texte, st, 0o644)
+        print(f"systemd {limite}MiB")
+    else:
+        try:
+            d = dossier("opt")
+            texte, st = lire(d, "start-gitea.sh")
+        except FileNotFoundError:
+            print("absent")
+            sys.exit(0)
+        ligne = f"export GOMEMLIMIT={limite}MiB  # secubox-gitea (#3941) : 70 % du budget du conteneur\n"
+        lignes = [x for x in texte.splitlines(keepends=True) if not re.match(r"export GOMEMLIMIT=.*secubox-gitea", x)]
+        lignes.insert(1 if lignes and lignes[0].startswith("#!") else 0, ligne)
+        if "".join(lignes) == texte:
+            print("inchange")
+            sys.exit(0)
+        ecrire(d, "start-gitea.sh", "".join(lignes), st, stat.S_IMODE(st.st_mode))
+        print(f"script {limite}MiB")
+except OSError as e:
+    print(f"refus {e}")
+PY
+) || issue="refus python3"
+    case "$issue" in
+        "systemd "*)
+            log "GOMEMLIMIT=${issue#* } posé (gitea.service.d) : effectif au prochain redémarrage du service"
+            if lxc_running; then
+                timeout 30 lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- systemctl daemon-reload </dev/null >/dev/null 2>&1 \
+                    || warn "daemon-reload du conteneur non fait : drop-in lu au prochain démarrage du conteneur"
+            fi ;;
+        "script "*) log "GOMEMLIMIT=${issue#* } posé (start-gitea.sh) : effectif au prochain démarrage du conteneur" ;;
+        absent)     warn "GOMEMLIMIT non posé : ni gitea.service ni start-gitea.sh dans le conteneur" ;;
+        refus*)     warn "GOMEMLIMIT non posé (${issue#refus })" ;;
+    esac
+    return 0
+}
+
 cmd_install() {
     require_root
     log "Installing Gitea LXC..."
@@ -1155,6 +1297,7 @@ cmd_install() {
         lxc-stop -n "$CONTAINER" -P "$LXC_PATH"
         sleep 2
         create_startup_script  # Switch to actual gitea init
+        cmd_memoire
 
         log "Gitea installed! Start with: giteactl start"
     else
@@ -1194,6 +1337,7 @@ cmd_start() {
     fi
 
     create_lxc_config
+    cmd_memoire
 
     log "Starting Gitea..."
     lxc-start -n "$CONTAINER" -P "$LXC_PATH" -d
@@ -1389,6 +1533,7 @@ Service:
   start                Start Gitea
   stop                 Stop Gitea
   restart              Restart Gitea
+  memoire              GOMEMLIMIT = 70 % du budget (effectif au prochain redémarrage du service)
 
 Users:
   user add <name> <pw> Add user
@@ -1447,6 +1592,7 @@ case "${1:-}" in
     start)       shift; cmd_start "$@" ;;
     stop)        shift; cmd_stop "$@" ;;
     restart)     shift; cmd_restart "$@" ;;
+    memoire)     shift; cmd_memoire ;;
     user)        shift; cmd_user "$@" ;;
     repo)        shift; cmd_repo "$@" ;;
     runner)      shift; cmd_runner "$@" ;;

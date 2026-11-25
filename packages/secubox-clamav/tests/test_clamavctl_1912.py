@@ -151,7 +151,7 @@ def test_le_conteneur_ne_demarre_pas_au_boot_et_clamd_n_ecoute_que_sur_son_ip():
     assert "clamav-daemon.socket.d/tcp.conf" in i and "ListenStream=$LXC_IP:$PORT" in i
     assert "ListenStream=0.0.0.0" not in i and "TCPAddr 0.0.0.0" not in i
     assert "TCPSocket" not in i.split("# secubox-clamav (#1912)")[1].split("CONF")[0]
-    assert "ConcurrentDatabaseReload no" in i and "lxc.cgroup2.memory.max = 1800M" in i
+    assert "ConcurrentDatabaseReload no" in i and "lxc.cgroup2.memory.max = 1800M" in i and "lxc.cgroup2.memory.swap.max = 900M" in i
 
 
 def test_mise_a_jour_hebdomadaire():

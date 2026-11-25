@@ -106,12 +106,24 @@ lxc_attach() {
 # ProtectSystem, PrivateDevices, PrivateTmp, ProtectHome et ReadWritePaths échouent (226/NAMESPACE) : redis-server n'a pas
 # démarré depuis la migration Trixie du 2026-10-05, et rspamd attendait 65 s par message (règle REPLIES_SET). dovecot, apache2
 # et clamav-daemon portent la même surcharge ; redis-server n'en avait pas.
+# Pose dans le conteneur une surcharge lue sur l'entrée standard, seulement si elle change (#3941 : chaque mise à jour du
+# paquet relançait dovecot et clamav-daemon pour des fichiers identiques). SURCHARGES_CHANGEES retient les services touchés.
+SURCHARGES_CHANGEES=" "
+_lxc_poser_surcharge() {
+    local svc="$1" nom="$2" cont="$3" d sortie
+    d="/etc/systemd/system/${svc}.service.d"
+    sortie="$(lxc_attach "$cont" sh -c "mkdir -p ${d} && cat > ${d}/.${nom}.nouveau && if cmp -s ${d}/.${nom}.nouveau ${d}/${nom}.conf; then rm -f ${d}/.${nom}.nouveau; else mv -f ${d}/.${nom}.nouveau ${d}/${nom}.conf && echo surcharge-changee; fi")" || return 1
+    case "$sortie" in *surcharge-changee*) SURCHARGES_CHANGEES="${SURCHARGES_CHANGEES}${svc}/${nom} " ;; esac
+    return 0
+}
+_surcharge_changee() { [[ "$SURCHARGES_CHANGEES" == *" $1/$2 "* ]]; }
+
 lxc_service_sans_sandbox() {
     local svc="${1:-}" cont="${2:-$CONTAINER}"
     case "$svc" in
         ""|*[!a-zA-Z0-9@._-]*) error "nom de service invalide : '$svc'"; return 1 ;;
     esac
-    lxc_attach "$cont" sh -c "mkdir -p /etc/systemd/system/${svc}.service.d && cat > /etc/systemd/system/${svc}.service.d/10-lxc-sans-sandbox.conf" <<'EOF_SANDBOX'
+    _lxc_poser_surcharge "$svc" 10-lxc-sans-sandbox "$cont" <<'EOF_SANDBOX' || return 1
 [Service]
 PrivateDevices=false
 PrivateTmp=false
@@ -546,8 +558,12 @@ cmd_services() {
     for svc in $SERVICES_SANS_SANDBOX; do
         lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue   # service absent du conteneur
         lxc_service_sans_sandbox "$svc" "$CONTAINER" || return 1
-        lxc_attach "$CONTAINER" sh -c "systemctl reset-failed ${svc} ${svc}.socket 2>/dev/null; systemctl restart ${svc}" >/dev/null 2>&1 \
-            || warn "${svc} n'a pas demarre dans '$CONTAINER'"
+        # Relance seulement si une surcharge prise au démarrage a changé (bac à sable, priorité OOM), ou service en échec.
+        if _surcharge_changee "$svc" 10-lxc-sans-sandbox || _surcharge_changee "$svc" 20-secubox-oom \
+           || lxc_attach "$CONTAINER" systemctl is-failed --quiet "$svc"; then
+            lxc_attach "$CONTAINER" sh -c "systemctl reset-failed ${svc} ${svc}.socket 2>/dev/null; systemctl restart ${svc}" >/dev/null 2>&1 \
+                || warn "${svc} n'a pas demarre dans '$CONTAINER'"
+        fi
     done
     log "services du conteneur sans bac a sable : $SERVICES_SANS_SANDBOX (redis-server : mailctl redis)"
 }
@@ -569,7 +585,7 @@ _lxc_surcharge() {
     case "$nom" in
         ""|*[!a-z0-9-]*) error "nom de surcharge invalide : '$nom'"; return 1 ;;
     esac
-    lxc_attach "$cont" sh -c "mkdir -p /etc/systemd/system/${svc}.service.d && cat > /etc/systemd/system/${svc}.service.d/${nom}.conf"
+    _lxc_poser_surcharge "$svc" "$nom" "$cont"
 }
 
 lxc_service_relance() {
@@ -588,9 +604,12 @@ EOF_RELANCE
 
 lxc_service_sacrifie() {
     local svc="${1:-}" cont="${2:-$CONTAINER}"
-    printf '%s\n' "# secubox-mail (#3842) : tué en premier quand la mémoire du conteneur manque, avant Postfix et Dovecot." \
-        "[Service]" "OOMScoreAdjust=$OOM_SACRIFIE" \
-        | _lxc_surcharge "$svc" 20-secubox-oom "$cont"
+    # Pas de tube : SURCHARGES_CHANGEES serait noté dans un sous-shell.
+    _lxc_surcharge "$svc" 20-secubox-oom "$cont" <<EOF_OOM
+# secubox-mail (#3842) : tué en premier quand la mémoire du conteneur manque, avant Postfix et Dovecot.
+[Service]
+OOMScoreAdjust=$OOM_SACRIFIE
+EOF_OOM
 }
 
 cmd_services_relance() {
@@ -606,8 +625,8 @@ cmd_services_relance() {
         lxc_service_sacrifie "$svc" "$CONTAINER" || return 1
     done
     lxc_attach "$CONTAINER" systemctl daemon-reload >/dev/null 2>&1 || warn "daemon-reload refuse dans '$CONTAINER'"
-    # La priorité OOM se prend au démarrage : rspamd repart (quelques secondes) ; clamav-daemon est relancé par cmd_services.
-    lxc_attach "$CONTAINER" sh -c "systemctl is-active --quiet rspamd && systemctl restart rspamd" >/dev/null 2>&1 || true
+    # La priorité OOM se prend au démarrage : rspamd repart si elle a changé ; clamav-daemon est relancé par cmd_services.
+    _surcharge_changee rspamd 20-secubox-oom && lxc_attach "$CONTAINER" sh -c "systemctl is-active --quiet rspamd && systemctl restart rspamd" >/dev/null 2>&1 || true
     log "relance automatique : $SERVICES_RELANCE ; premiers tués par l'OOM : $SERVICES_SACRIFIES"
 }
 

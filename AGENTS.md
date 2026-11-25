@@ -56,7 +56,7 @@ Code partagé : `common/secubox_core/`. Suivi de projet : `.claude/`.
   `systemctl enable --now`, `prerm` `systemctl stop`. Source modifiée et déployée = version montée.
 - Frontend `htdocs` porté de LuCI : ne pas modifier le JS/CSS/HTML porté (`scripts/rewrite-xhr.py`).
   Look & feel des webui de gestion : `.claude/WEBUI-PANEL-GUIDELINES.md`.
-- En-tête SPDX CMSD-1.0 sur tout fichier (`scripts/license-headers.py`).
+- En-tête SPDX CMSD-1.0 sur **tout** fichier créé, documents `.md` compris (`scripts/license-headers.py --fix <fichier>`). Avant un commit : `scripts/avant-commit.sh` (`RULES-CODE.md` § 11).
 - Ne pas utiliser `uci`/LuCI, ne pas écrire de secrets en clair, ne pas mentionner « CyberMind Produits SASU ».
 
 ## Flux de travail

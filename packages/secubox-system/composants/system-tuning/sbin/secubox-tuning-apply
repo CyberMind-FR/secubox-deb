@@ -14,8 +14,11 @@
 set -euo pipefail
 
 CONFIG_FILE="${SECUBOX_TUNING_CONFIG:-/etc/secubox/tuning/config.toml}"
-LXC_CAPS_FILE="/etc/secubox/tuning/lxc-memory-high.toml"
+LXC_CAPS_FILE="${SECUBOX_TUNING_LXC_CAPS:-/etc/secubox/tuning/lxc-memory-high.toml}"
 LXC_CPU_FILE="/etc/secubox/tuning/lxc-cpu.toml"
+CGROUP_RACINE="${SECUBOX_CGROUP_RACINE:-/sys/fs/cgroup}"
+# Règle de budget mémoire des conteneurs (#3941), livrée à côté de ce script.
+LXC_MEMOIRE="${SECUBOX_LXC_MEMOIRE:-/usr/sbin/secubox-lxc-memoire}"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -119,8 +122,9 @@ persiste_cle() {
   local motif; motif=$(printf '%s' "$cle" | sed 's/\./\\./g')
 
   # Ecriture par fichier temporaire puis renommage : une config LXC tronquee
-  # par une interruption laisse le conteneur non demarrable.
-  local tmp="${conf}.tuning-tmp"
+  # par une interruption laisse le conteneur non demarrable. Proprietaire et mode
+  # gardes, derniere ligne sans \n jamais prolongee, rien d'ecrit si identique (#3941).
+  local tmp; tmp=$(mktemp "${conf}.XXXXXX") || return 1
   if grep -qE "^${motif}[[:space:]]*=" "$conf"; then
     # On garde la PREMIERE occurrence a sa place — l'ordre du fichier reste
     # lisible — et on efface les suivantes.
@@ -129,10 +133,14 @@ persiste_cle() {
       { print }
     ' "$conf" > "$tmp"
   else
-    cp "$conf" "$tmp"
+    # awk 1 rend le fichier ligne a ligne : une derniere ligne sans \n est terminee.
+    awk 1 "$conf" > "$tmp"
     printf '%s = %s\n' "$cle" "$val" >> "$tmp"
   fi
-  mv "$tmp" "$conf"
+  if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; return 0; fi
+  chmod --reference="$conf" "$tmp"
+  chown --reference="$conf" "$tmp"
+  mv -f "$tmp" "$conf"
 }
 
 apply_swap() {
@@ -279,6 +287,11 @@ apply_cgroup() {
     return 0
   fi
 
+  if [[ ! -x "$LXC_MEMOIRE" ]]; then
+    err "$LXC_MEMOIRE absent : budget des conteneurs illisible, aucun frein posé"
+    return 0
+  fi
+
   # On SecuBox boards LXC containers are started by lxc-autostart at boot,
   # NOT by systemctl start lxc@<name>.service. So drop-ins under
   # /etc/systemd/system/lxc@<name>.service.d/ are ineffective. Apply the
@@ -294,52 +307,29 @@ apply_cgroup() {
   local applied=0 persisted=0 missed=0 skipped=0
   for ctn in $containers; do
     local cap cgrp lxc_conf
+    [[ "$ctn" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { warn "nom refusé : $ctn"; continue; }
     cap=$(toml_get "$LXC_CAPS_FILE" "caps.$ctn")
 
-      # RESPECTER LE BUDGET PROPRE DU CONTENEUR (#496) — ne pas le sur-freiner.
-      #
-      # `memory.high` est le seuil de FREINAGE ; `memory.max` la limite DURE.
-      # Certains conteneurs definissent deja leur PROPRE memory.max dans leur
-      # config LXC (budget #496 : max + swap.max=0). Si le cap tuning est
-      # SUPERIEUR OU EGAL a cette limite dure, il est au mieux redondant, au pire
-      # nuisible : l'ancien clamp le ramenait a 85 % de la max, posant un `high`
-      # SOUS le working-set du conteneur et l'etranglant en permanence.
-      #
-      # Constate le 2026-08-19 : nextcloud (max=512M, working-set ~508M, swap=0)
-      # portait high=435M et thrashait — timeouts amont nginx / 503 intermittents ;
-      # mail, matrix et horde clampes pareil. On laisse desormais le budget #496
-      # gouverner SEUL : on saute le conteneur et on retire tout `high` precedemment
-      # injecte (runtime -> max, config -> ligne supprimee), sinon un frein nuisible
-      # persisterait au prochain demarrage.
-      #
-      # NB : lecture de la max gardee par conf_lxc (teste l'existence) — un service
-      # hote peut laisser un /var/lib/lxc/<nom>/ sans fichier config (ex. mitmproxy) ;
-      # awk sur un fichier absent sort en code 2 et, sous `set -euo pipefail`, tuait
-      # toute la boucle (seul le 1er conteneur recevait son cap).
-      local dur maxconf; maxconf=$(conf_lxc "$ctn")
-      dur=""
-      [[ -n "$maxconf" ]] && dur=$(awk '/^lxc.cgroup2.memory.max/{print $3}' "$maxconf" 2>/dev/null | head -1)
-      if [[ -n "$dur" ]]; then
-        local dur_o cap_o
-        dur_o=$(numfmt --from=iec "$dur" 2>/dev/null || echo 0)
-        cap_o=$(numfmt --from=iec "$cap" 2>/dev/null || echo 0)
-        if [[ "$dur_o" -gt 0 && "$cap_o" -ge "$dur_o" ]]; then
-          printf "  %-12s budget propre max=%s <= cap=%s — cap tuning ignore (#496 gouverne)\n" \
-                 "$ctn" "$dur" "$cap" >&2
-          skipped=$((skipped+1))
-          if [[ $DRY_RUN -eq 0 ]]; then
-            local cgrp_r="/sys/fs/cgroup/lxc.payload.${ctn}"
-            [[ -w "$cgrp_r/memory.high" ]] && echo max > "$cgrp_r/memory.high" 2>/dev/null || true
-            for cf in "/data/lxc/${ctn}/config" "/var/lib/lxc/${ctn}/config"; do
-              [[ -f "$cf" ]] && sed -i '/^lxc\.cgroup2\.memory\.high\s*=/d' "$cf" 2>/dev/null || true
-            done
-          fi
-          continue
-        fi
-      fi
+    # UN CONTENEUR QUI A SON PROPRE memory.max NE REÇOIT JAMAIS DE FREIN (#3941).
+    #
+    # L'ancien test ne sautait le conteneur que si cap >= max : un cap INFÉRIEUR
+    # au plafond était donc posé (mail 500M < 1G, roundcube 200M < 256M), et avec
+    # l'échange interdit du budget #496 le noyau n'a que les pages de fichiers à
+    # évincer — relectures sans fin, jamais tué (gk2, gitea : 13 700/s, la box à
+    # 41 % de pression). Le 2026-08-19, nextcloud (cap ramené à 85 % de la max)
+    # thrashait déjà pour la même raison. L'outil retire aussi un frein hérité
+    # (config et cgroup) ; illisible = aucun frein.
+    local garde=0 options=()
+    [[ $DRY_RUN -eq 1 ]] && options=(--dry-run)
+    "$LXC_MEMOIRE" frein ${options[@]+"${options[@]}"} "$ctn" || garde=$?
+    if [[ $garde -ne 0 ]]; then
+      [[ $garde -eq 10 ]] || warn "$ctn : $LXC_MEMOIRE a rendu $garde, aucun frein posé"
+      skipped=$((skipped+1))
+      continue
+    fi
 
     # (1) immediate cgroup write
-    cgrp="/sys/fs/cgroup/lxc.payload.${ctn}"
+    cgrp="${CGROUP_RACINE}/lxc.payload.${ctn}"
     if [[ -d "$cgrp" ]]; then
       run "echo $cap > $cgrp/memory.high"
       applied=$((applied+1))
@@ -399,7 +389,7 @@ apply_cpu() {
     # (1) A CHAUD. Le cgroup v2 accepte l'ecriture sur un conteneur en marche :
     # redemarrer pour poser un plafond couperait le service, precisement ce que
     # le plafond protege.
-    cgrp="/sys/fs/cgroup/lxc.payload.${ctn}"
+    cgrp="${CGROUP_RACINE}/lxc.payload.${ctn}"
     if [[ -d "$cgrp" ]]; then
       run "echo '$cap' > $cgrp/cpu.max"
       applied=$((applied+1))

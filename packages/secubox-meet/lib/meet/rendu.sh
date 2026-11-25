@@ -212,6 +212,7 @@ lxc.idmap = u 0 100000 65536
 lxc.idmap = g 0 100000 65536
 lxc.apparmor.profile = generated
 lxc.cgroup2.memory.max = 2147483648
+lxc.cgroup2.memory.swap.max = 1073741824
 lxc.start.auto = 1
 lxc.start.delay = 5
 LXC

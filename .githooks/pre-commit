@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: avant commit (#3950) — ce qui casse la CI à chaque fois, vérifié en moins d'une seconde sur l'INDEX seul.
+# Activé par `git config core.hooksPath .githooks` (posé par scripts/agent-worktree.sh). Contourner une fois, en le disant :
+# git commit --no-verify. Contrôles plus larges : scripts/avant-commit.sh.
+set -eu
+racine=$(git rev-parse --show-toplevel)
+cd "$racine"
+[ -f scripts/license-headers.py ] && command -v python3 >/dev/null 2>&1 || exit 0
+if ! python3 scripts/license-headers.py --check --staged; then
+    echo "pre-commit : en-tête CMSD-1.0 manquant. « python3 scripts/license-headers.py --fix --staged », puis git add." >&2
+    exit 1
+fi

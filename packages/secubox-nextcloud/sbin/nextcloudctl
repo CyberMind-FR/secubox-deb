@@ -232,6 +232,7 @@ lxc.idmap = u 0 100000 65536
 lxc.idmap = g 0 100000 65536
 
 lxc.cgroup2.memory.max = 2G
+lxc.cgroup2.memory.swap.max = 1G
 lxc.init.cmd = /sbin/init
 lxc.start.auto = 1
 

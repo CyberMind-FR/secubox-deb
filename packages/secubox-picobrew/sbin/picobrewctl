@@ -94,6 +94,7 @@ lxc.net.0.ipv4.gateway = $LXC_GW
 lxc.start.auto = 1
 lxc.start.delay = 5
 lxc.cgroup2.memory.max = 1024M
+lxc.cgroup2.memory.swap.max = 512M
 EOF
 }
 

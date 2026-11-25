@@ -15,8 +15,16 @@ case "$1" in
     systemctl enable secubox-system.service
     systemctl start  secubox-system.service || true
     # Sur le vhost d'administration, /api/v1/system/ est servi EN MEMOIRE par l'agregateur (#3003) : sans
-    # relancement, il garde l'ancien code (routes absentes, apt lance sans privilege). Meme regle que le hub.
-    systemctl try-restart secubox-aggregator.service 2>/dev/null || true
+    # relancement, il garde l'ancien code (routes absentes, apt lance sans privilege). #3941 : seulement si ce code a
+    # change depuis le preinst (une relance = Hall hors ligne 4 a 8 min) ; empreinte absente ou vide = relance.
+    # >>> empreinte-agregateur
+    _empreinte=$(find /usr/lib/secubox/system /usr/lib/secubox/admin /usr/lib/secubox/ksm /usr/share/secubox/system-hub/api \
+        -name '*.py' -type f -exec sha256sum {} + 2>/dev/null | LC_ALL=C sort | sha256sum) || true
+    if [ ! -s /run/secubox-system.empreinte ] || [ "$(cat /run/secubox-system.empreinte)" != "$_empreinte" ]; then
+        systemctl try-restart secubox-aggregator.service 2>/dev/null || true
+    fi
+    rm -f /run/secubox-system.empreinte
+    # <<< empreinte-agregateur
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 

@@ -131,13 +131,13 @@ def test_control():
     assert "Architecture: all" in c
     assert "python3-fastapi" in c and "python3-uvicorn" in c and "secubox-core" in c
     assert _lire("debian/compat").strip() == "13"
-    assert _lire("debian/changelog").startswith("secubox-datascope (0.1.1-1~trixie1) trixie;")
+    assert _lire("debian/changelog").startswith("secubox-datascope (0.2.0-1~trixie1) trixie;")
 
 
 def test_health_sans_jeton():
     r = TestClient(main.app).get("/api/v1/datascope/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "module": "datascope", "version": "0.1.0"}
+    assert r.json() == {"status": "ok", "module": "datascope", "version": "0.2.0"}
 
 
 def _gardes(chemin):
@@ -174,3 +174,65 @@ def test_config_environnement_toml_defauts(tmp_path, monkeypatch):
     assert config.charger(f).base == tmp_path / "env.db"
     f.write_text("pas du toml [[[")
     assert config.charger(f).base == tmp_path / "env.db"
+
+
+def test_apparmor_lit_populations_sans_ecrire():
+    """#3921 : le relevé du WAF se lit (r seulement), et le profil le dit dans son en-tête."""
+    lignes = _lignes("apparmor/secubox-datascope")
+    assert "/var/lib/secubox/waf/populations.json r," in lignes
+    for ligne in lignes:
+        if ligne.startswith("/var/lib/secubox/waf"):
+            assert ligne == "/var/lib/secubox/waf/populations.json r,", ligne
+    assert "populations" in "".join(_lire("apparmor/secubox-datascope").splitlines()[:12])
+
+
+def test_postinst_acl_traversee_seule_du_dossier_waf():
+    """R2 : seule la traversée de /var/lib/secubox/waf est ouverte, à chaque configure, sans bruit si absente."""
+    p = _lire("debian/postinst")
+    assert "setfacl -m u:secubox-datascope:--x /var/lib/secubox/waf" in p
+    assert "command -v setfacl" in p and "[ -d /var/lib/secubox/waf ]" in p
+    assert "[ ! -L /var/lib/secubox/waf ]" in p
+    cmds = [x.strip() for x in p.splitlines() if x.strip().startswith("setfacl")]
+    assert len(cmds) == 1 and " -R" not in cmds[0]
+    pre = _lire("debian/prerm")
+    assert "setfacl -x u:secubox-datascope /var/lib/secubox/waf" in pre
+    assert pre.index("setfacl") > pre.index("remove")
+    c = _lire("debian/control")
+    assert re.search(r"^(Recommends|Depends):.*\bacl\b", c, re.M | re.S) or " acl" in c
+
+
+def test_unites_laissent_lire_populations():
+    """Le collecteur lit /var/lib/secubox/waf/populations.json : ProtectSystem=strict est en lecture seule, pas de cache."""
+    for u in ("debian/secubox-datascope-collect.service", "debian/secubox-datascope.service"):
+        t = _lire(u)
+        assert "ProtectSystem=strict" in t
+        assert "InaccessiblePaths" not in t and "TemporaryFileSystem" not in t
+        assert not re.search(r"^ReadWritePaths=.*var/lib/secubox/waf", t, re.M)
+
+
+def test_rules_installe_migration_paysage_et_reperes(tmp_path):
+    if not shutil.which("make") or not shutil.which("install"):
+        pytest.skip("make ou install absent")
+    dest = tmp_path / "pkg"
+    r = subprocess.run(["make", "-s", "-f", "debian/rules", "override_dh_auto_install", f"P={dest}"],
+                       cwd=RACINE, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert (dest / "usr/lib/secubox/datascope/migrations/0002-paysage.sql").is_file()
+    assert (dest / "usr/share/secubox/www/datascope/reperes.js").is_file()
+    assert (dest / "usr/share/secubox/www/datascope/index.html").is_file()
+
+
+def test_readme_documente_le_paysage():
+    r = _lire("README.md")
+    for attendu in ("Paysage", "paysage/chronologie", "paysage/instantane", "paysage/difference",
+                    "paysage/tendance", "differences=", "sans_precedent", "reference_partiel", "illisibles",
+                    "60 Mio", "30 jours", "48 h", "populations.json", "setfacl", "Enregistreur", "30 min"):
+        assert attendu in r, attendu
+
+
+def test_changelog_020():
+    c = _lire("debian/changelog")
+    tete = c.split("\n\nsecubox-datascope (0.1.1", 1)[0]
+    for attendu in ("#3921", "AppArmor", "setfacl", "0002-paysage", "instantané"):
+        assert attendu in tete, attendu
+    assert "closes" not in tete.lower() and "fixes #" not in tete.lower()

@@ -1,4 +1,4 @@
-secubox-core (1.8.45-1~trixie1) trixie; urgency=medium
+secubox-core (1.8.46-1~trixie1) trixie; urgency=medium
 
   * Comptes admin sans mot de passe (ref #3708) : règle commune
     secubox_core.comptes_admin (administrateur configuré, comptes de service,

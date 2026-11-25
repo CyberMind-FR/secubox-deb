@@ -153,3 +153,24 @@ def test_peertube_reste_borne_a_un_coeur():
     # 63 — c'est la raison d'etre de ce test.
     d = tomllib.loads(TOML_CPU.read_text())
     assert d["max"]["peertube"] == "100000 100000"
+
+
+def test_proprietaire_mode_et_fichier_identique_gardes(tmp_path):
+    # #3941 : mode conserve ; une seconde passe n'ecrit rien (meme inode).
+    r = prepare(tmp_path, {"gitea": CONFIG_NUE}, '[max]\ngitea = "200000 100000"\n')
+    cfg = tmp_path / "lxc" / "gitea" / "config"
+    cfg.chmod(0o640)
+    (tmp_path / "tuning" / "lxc-cpu.toml").write_text('[max]\ngitea = "90000 100000"\n')
+    for _ in range(2):
+        avant = cfg.stat().st_ino
+        r = subprocess.run(["bash", str(tmp_path / "outil"), "cpu"], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+    assert cfg.stat().st_ino == avant and cfg.stat().st_mode & 0o777 == 0o640
+    assert lignes(tmp_path, "gitea") == ["lxc.cgroup2.cpu.max = 90000 100000"]
+    assert sorted(p.name for p in cfg.parent.iterdir()) == ["config"]
+
+
+def test_derniere_ligne_sans_fin_de_ligne_jamais_prolongee(tmp_path):
+    prepare(tmp_path, {"gitea": CONFIG_NUE.rstrip("\n")}, '[max]\ngitea = "200000 100000"\n')
+    t = (tmp_path / "lxc" / "gitea" / "config").read_text()
+    assert t == CONFIG_NUE + "lxc.cgroup2.cpu.max = 200000 100000\n"

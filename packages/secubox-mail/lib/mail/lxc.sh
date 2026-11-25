@@ -60,6 +60,7 @@ lxc.mount.entry = $data/config etc/mail-config  none bind,create=dir 0 0
 lxc.mount.entry = $data/ssl    etc/ssl/mail     none bind,create=dir 0 0
 
 lxc.cgroup2.memory.max = 1G
+lxc.cgroup2.memory.swap.max = 256M
 lxc.start.auto = 1
 EOF
 }

@@ -86,6 +86,27 @@ Toute unité de service porte au minimum : `User=secubox-<module>` (jamais root,
 `RestrictSUIDSGID=yes`, `LockPersonality=yes`, `UMask=0027`. Modèle : `packages/secubox-vault/debian/secubox-vault.service`.
 Un `ReadWritePaths` n'est pas un lien symbolique vers un autre disque (le bac à sable le bloque en silence).
 
+## 11. Avant de commiter : les erreurs de CI qui reviennent
+
+Lancer `scripts/avant-commit.sh` (rejoue seulement les contrôles concernés). Le hook `.githooks/pre-commit` et le hook d'édition couvrent
+la licence ; le reste se fait **en écrivant le code**, pas après l'échec. Vocabulaire : un **worktree** est un bac à sable sur sa branche ;
+un **dossier de construction** (`debian/secubox-*`) est un produit jetable, jamais commité.
+
+| Quand on… | Faire tout de suite |
+|---|---|
+| crée un fichier (code, page, `.conf`, `.yml`, **et tout `.md`** : spec, plan, note) | en-tête CMSD-1.0 : `python3 scripts/license-headers.py --fix <fichier>` (Markdown : après le frontmatter) |
+| crée un paquet | une ligne dans `packages/secubox-meta/arbre.yaml`, `gen-meta.py`, la matrice CI si le paquet a des tests |
+| ajoute une entrée `menu.d` | catégorie de la charte (`.claude/WEBUI-PANEL-GUIDELINES.md`), id classé dans `packages/secubox-hub/espaces.json` |
+| écrit un profil AppArmor | `/var/log/secubox/audit.log` en `w` (jamais `a` : l'écriture y est refusée et l'audit se perd), puis `test_droits_reels_3126.py` |
+| écrit un module Python | aucun dossier ni base créé **à l'import** (la CI n'a pas `/var/lib/secubox`) : au démarrage, chemin par variable d'environnement |
+| ajoute une dépendance | aucune alternative `\| python3-pip` ; version minimale `(>= X~)` quand `common/` change (publier `secubox-core` d'abord) |
+| monte une version | changelog **et** chaque test ou `VERSION` qui la fige (`grep -rn "<ancienne version>" packages/<paquet>`) |
+| retire un fichier ou un lien d'une page | les tests statiques qui l'exigent, dans le même commit |
+| écrit un test | pas de date ni de seuil absolu de temps sensible à la charge, pas d'écriture hors `tmp_path`, pas d'attente fixe |
+| écrit un script de paquet | aucun redémarrage inconditionnel de l'agrégateur, jamais de rechargement d'Unbound hors `recharger_unbound`, rien de long ni de synchrone |
+| fusionne master | regarder chaque `.py` touché des deux côtés (`check-merge-overwrite.sh`) ; jamais « prendre le leur » |
+| écrit un message de commit ou de PR | `(ref #N)` ; aucun mot de fermeture suivi d'un numéro avant déploiement (`AGENTS.md`) |
+
 ## Exceptions (explicites, listées)
 
 Une exception n'existe que si elle est écrite ici avec sa raison et un test qui la fige.

@@ -1,3 +1,18 @@
+secubox-metrics (1.30.1-1~trixie1) trixie; urgency=medium
+
+  * Étouffement : propre limite atteinte exigée aussi pour la pression ; audit borné à dix lignes par passage
+    puis « et N autres » (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:33:22 +0100
+
+secubox-metrics (1.30.0-1~trixie1) trixie; urgency=medium
+
+  * Conteneur ou service « étouffé » par sa limite mémoire : relectures de pages/s, PSI et part de la limite relevés
+    toutes les 5 min (cgroups seulement) ; /memory/history (etouffes), alerte, santé et audit au-delà de 10 min.
+  * Unité : MemoryHigh retiré (frein sous MemoryMax avec MemorySwapMax=0) ; plafond 400M inchangé (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-metrics (1.29.14-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni

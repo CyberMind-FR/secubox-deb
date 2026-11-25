@@ -1,3 +1,9 @@
+secubox-meet (0.2.10-1~trixie1) trixie; urgency=medium
+
+  * Création du conteneur : échange borné (1G), jamais interdit ; conteneur existant inchangé (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-meet (0.2.9-1~trixie1) trixie; urgency=medium
 
   * activite-collecte : conteneur meet arrêté ou endormi = « rien à faire »,

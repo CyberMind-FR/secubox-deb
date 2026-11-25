@@ -27,6 +27,13 @@ case "$1" in
             chown root:secubox /etc/secubox/datascope.toml
             chmod 0640 /etc/secubox/datascope.toml
         fi
+        # Relevé des populations du WAF (#3921) : le dossier est 0770 secubox-waf ; le fichier est lisible par le groupe
+        # secubox, il ne manque que la TRAVERSÉE du dossier. Rien d'autre n'est ouvert (ACL nommée --x, comme
+        # secubox-mirrornet). Reposée à chaque configure ; silencieux si le dossier ou setfacl manque.
+        if [ -d /var/lib/secubox/waf ] && [ ! -L /var/lib/secubox/waf ] && command -v setfacl >/dev/null 2>&1; then
+            setfacl -m u:secubox-datascope:--x /var/lib/secubox/waf \
+              || echo "secubox-datascope : ACL de /var/lib/secubox/waf non posée (le paysage restera vide)" >&2
+        fi
         # Profil AppArmor AVANT tout démarrage (les unités le nomment ; « - » : ignoré là où AppArmor est absent).
         if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
            && command -v apparmor_parser >/dev/null 2>&1; then

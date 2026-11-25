@@ -19,7 +19,8 @@ from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 P = "/api/v1/datascope"
 TOPOLOGIE = ["/entities", "/entities/device:aa", "/entities/device:aa/context", "/entities/device:aa/neighbors",
-             "/graph"]
+             "/graph", "/paysage", "/paysage/chronologie", "/paysage/instantane/2026-11-24T10:00:00.000000Z",
+             "/paysage/difference", "/paysage/tendance/pop:x"]
 
 
 def _refuse():
@@ -50,7 +51,8 @@ def test_chaque_route_a_sa_garde():
     attendu = {"/health": None, "/status": require_lecture, "/overview": require_lecture,
                "/sources": require_lecture}
     for c in TOPOLOGIE:
-        attendu[c.replace("device:aa", "{id}")] = require_jwt
+        c = c.replace("device:aa", "{id}").replace("/2026-11-24T10:00:00.000000Z", "/{ts}")
+        attendu[c.replace("/tendance/pop:x", "/tendance/{id}")] = require_jwt
     vus = {}
     for r in main.app.routes:
         if isinstance(r, APIRoute):

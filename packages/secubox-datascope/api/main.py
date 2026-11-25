@@ -5,16 +5,20 @@
 """API de DataScope (#3853) sur /run/secubox/datascope.sock — lecture seule, aucune route mutante.
 
 Routes : /health (publique), /status, /overview, /sources (require_lecture), /entities, /entities/{id},
-/entities/{id}/context, /entities/{id}/neighbors, /graph (require_jwt). Base ouverte en lecture seule par requête.
+/entities/{id}/context, /entities/{id}/neighbors, /graph, /paysage, /paysage/chronologie, /paysage/instantane/{ts},
+/paysage/difference, /paysage/tendance/{id} (require_jwt). Base ouverte en lecture seule par requête.
 Les lectures de fichier passent par `asyncio.to_thread` : jamais d'E/S bloquante sur la boucle.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import math
 import re
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -25,10 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
-from secubox_datascope import VERSION, config, store  # noqa: E402
+from secubox_datascope import VERSION, config, paysage_store, store  # noqa: E402
+from secubox_datascope.difference import difference  # noqa: E402
 
 CFG = config.charger()
 router = APIRouter(prefix="/api/v1/datascope")
+_log = logging.getLogger("secubox.datascope")
 
 
 def _etat(cfg: config.Config) -> Dict[str, Any]:
@@ -88,6 +94,9 @@ def _lire_base(fn):
         return fn(db)
     except sqlite3.Error:
         raise HTTPException(status_code=503, detail="base DataScope illisible")
+    except paysage_store.InstantaneIllisible as e:
+        _log.warning("%s", e)
+        raise HTTPException(status_code=503, detail="instantané du paysage illisible")
     finally:
         db.close()
 
@@ -315,6 +324,187 @@ async def graph(type: Optional[str] = Query(None, max_length=16)) -> Dict[str, A
     if type is not None and type not in TYPES:
         raise HTTPException(status_code=400, detail="type inconnu")
     return await asyncio.to_thread(_graphe, type)
+
+
+# --- Paysage des menaces (#3921) : instantanés lus en base, jamais écrits ici ------------------------------------
+
+_TS = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", re.ASCII)  # format stocké (paysage_store._ts)
+_ID_NOEUD = re.compile(r"[a-z_]+:[A-Za-z0-9:._-]{1,160}")  # même forme que les ids du connecteur
+H24_S = 86400.0
+REFERENCE_MIN_S = 12 * 3600.0  # une référence « 24 h » doit avoir au moins 12 h de plus que le dernier instantané
+CHRONO_DEFAUT_S = 48 * 3600.0
+CHRONO_MAX_S = 31 * 86400.0
+CHRONO_MAX = 1500  # en-têtes renvoyés au plus (31 j éclaircis : ~800)
+DIFF_MAX = 300  # éléments par liste de différence
+TENDANCE_JOURS_MAX = 30
+FIL_MAX = 24  # différences stockées rendues au plus avec la chronologie
+PARAM_MAX = 40  # caractères : au-delà, 400 (la borne de Query rendrait 422)
+_LISTES_DIFF = ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee")
+
+
+def _maintenant() -> float:
+    return time.time()
+
+
+def _ts_valide(ts: Optional[str]) -> str:
+    if ts is None or not _TS.fullmatch(ts):
+        raise HTTPException(status_code=400, detail="horodatage invalide")
+    try:
+        datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="horodatage invalide")
+    return ts
+
+
+def _epoch_param(v: Optional[str], nom: str) -> Optional[float]:
+    if v is None:
+        return None
+    if len(v) > PARAM_MAX:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide")
+    try:
+        f = float(v)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide")
+    if not math.isfinite(f) or f < 0 or f > 253402300799:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide")
+    return f
+
+
+def _entier_param(v: str, nom: str, maxi: int) -> int:
+    if len(v) > 8 or not v.isascii() or not v.isdigit() or not 1 <= int(v) <= maxi:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide (1 à {maxi})")
+    return int(v)
+
+
+def _borner_diff(d: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(d)
+    tronque = False
+    for k in _LISTES_DIFF:
+        v = out.get(k)
+        if isinstance(v, list) and len(v) > DIFF_MAX:
+            out[k] = v[:DIFF_MAX]
+            tronque = True
+    out["tronque"] = tronque
+    return out
+
+
+def _instantane_ou_404(db: sqlite3.Connection, ts: str) -> Dict[str, Any]:
+    d = paysage_store.lire(db, ts)
+    if d is None:
+        raise HTTPException(status_code=404, detail="instantané inconnu")
+    return d
+
+
+def _paysage() -> Dict[str, Any]:
+    def lire(db):
+        dernier = paysage_store.dernier(db)
+        if dernier is None:
+            return {"disponible": False}
+        ref = paysage_store.proche(db, dernier["epoch"] - H24_S, dernier["epoch"] - REFERENCE_MIN_S)
+        out: Dict[str, Any] = {
+            "disponible": True, "epoch": dernier["epoch"],
+            "age_s": max(0.0, round(_maintenant() - dernier["epoch"], 3)),
+            "instantane": {k: dernier[k] for k in ("ts", "epoch", "partiel", "graphe", "compteurs")},
+            "difference_24h": None}
+        if ref is None:
+            out["motif_difference_24h"] = "aucun instantané antérieur d'au moins 12 h au dernier"
+            return out
+        try:
+            avant = paysage_store.lire(db, ref["ts"])
+        except paysage_store.InstantaneIllisible as e:
+            _log.warning("référence 24 h : %s", e)
+            out["motif_difference_24h"] = "instantané de référence illisible"
+            return out
+        if avant is None:  # évincé entre les deux lectures : comparer à rien ferait tout « apparaître »
+            out["motif_difference_24h"] = "instantané de référence retiré pendant la lecture"
+            return out
+        d = _borner_diff(difference(avant["graphe"], dernier["graphe"]))
+        d.update({"reference_ts": ref["ts"], "reference_epoch": ref["epoch"], "reference_partiel": ref["partiel"],
+                  "ecart_s": round(dernier["epoch"] - ref["epoch"], 3)})
+        out["difference_24h"] = d
+        return out
+    return _lire_base(lire)
+
+
+@router.get("/paysage", dependencies=[Depends(require_jwt)])
+async def paysage() -> Dict[str, Any]:
+    return await asyncio.to_thread(_paysage)
+
+
+@router.get("/paysage/chronologie", dependencies=[Depends(require_jwt)])
+async def paysage_chronologie(de: Optional[str] = Query(None), a: Optional[str] = Query(None),
+                              differences: Optional[str] = Query(None)) -> Dict[str, Any]:
+    fa, fde = _epoch_param(a, "a"), _epoch_param(de, "de")
+    nb = None if differences is None else _entier_param(differences, "differences", FIL_MAX)
+    if fa is None:
+        fa = _maintenant()
+    if fde is None:
+        fde = max(0.0, fa - CHRONO_DEFAUT_S)
+    if fde > fa or fa - fde > CHRONO_MAX_S:
+        raise HTTPException(status_code=400, detail="période invalide (de <= a, au plus 31 jours)")
+
+    def lire(db):
+        lignes = paysage_store.chronologie(db, fde, fa, CHRONO_MAX + 1)
+        out: Dict[str, Any] = {"instantanes": lignes[-CHRONO_MAX:], "tronque": len(lignes) > CHRONO_MAX}
+        if nb is not None:  # fil des changements : calculé à l'écriture, aucun graphe décodé ici
+            out["differences"] = [{**x, "difference": None if x["difference"] is None else _borner_diff(x["difference"])}
+                                  for x in paysage_store.differences(db, fde, fa, nb)]
+        return out
+    return await asyncio.to_thread(_lire_base, lire)
+
+
+@router.get("/paysage/instantane/{ts}", dependencies=[Depends(require_jwt)])
+async def paysage_instantane(ts: str) -> Dict[str, Any]:
+    ts = _ts_valide(ts)
+
+    def lire(db):
+        d = _instantane_ou_404(db, ts)
+        d.pop("octets", None)
+        return d
+    return await asyncio.to_thread(_lire_base, lire)
+
+
+@router.get("/paysage/difference", dependencies=[Depends(require_jwt)])
+async def paysage_difference(de: Optional[str] = Query(None), a: Optional[str] = Query(None)) -> Dict[str, Any]:
+    ts_de, ts_a = _ts_valide(de), _ts_valide(a)
+
+    def lire(db):
+        avant, apres = _instantane_ou_404(db, ts_de), _instantane_ou_404(db, ts_a)
+        return _borner_diff(difference(avant["graphe"], apres["graphe"]))
+    return await asyncio.to_thread(_lire_base, lire)
+
+
+def _entier(v: Any) -> Optional[int]:
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+@router.get("/paysage/tendance/{id}", dependencies=[Depends(require_jwt)])
+async def paysage_tendance(id: str, jours: str = Query("7")) -> Dict[str, Any]:
+    if not _ID_NOEUD.fullmatch(id):
+        raise HTTPException(status_code=400, detail="identifiant invalide")
+    nb = _entier_param(jours, "jours", TENDANCE_JOURS_MAX)
+
+    def lire(db):
+        dernier = db.execute("SELECT max(epoch) FROM paysage_instantanes").fetchone()[0]
+        if dernier is None:
+            return {"id": id, "points": [], "illisibles": 0}
+        points: List[Dict[str, Any]] = []
+        illisibles = 0
+        # Un graphe à la fois : décompressé, le nœud extrait, le reste oublié. Nœud absent : pas de point.
+        for ts, epoch, g in paysage_store.horaires(db, dernier - nb * 86400.0, dernier):
+            if g is None:
+                illisibles += 1
+                continue
+            noeud = next((n for n in g.get("noeuds", []) if isinstance(n, dict) and n.get("id") == id), None) \
+                if isinstance(g.get("noeuds"), list) else None
+            if noeud is None:
+                continue
+            m = noeud.get("metriques")
+            m = m if isinstance(m, dict) else {}
+            points.append({"ts": ts, "epoch": epoch, "adresses": _entier(m.get("adresses")),
+                           "bans": _entier(m.get("bans")), "reseaux": _entier(m.get("reseaux"))})
+        return {"id": id, "points": points, "illisibles": illisibles}
+    return await asyncio.to_thread(_lire_base, lire)
 
 
 app = FastAPI(title="SecuBox DataScope", docs_url=None, redoc_url=None, openapi_url=None)
