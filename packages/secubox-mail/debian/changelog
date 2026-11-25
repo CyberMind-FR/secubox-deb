@@ -1,3 +1,12 @@
+secubox-mail (2.17.2-1~trixie1) trixie; urgency=medium
+
+  * postinst : SRV Unbound posés seulement s'ils changent, checkconf puis fast_reload (secubox_unbound), plus de
+    reload-or-restart (coupure DNS à chaque mise à jour).
+  * mailctl services : dovecot, clamav-daemon et rspamd relancés seulement si leur surcharge a changé ou en échec
+    (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:33:22 +0100
+
 secubox-mail (2.17.1-1~trixie1) trixie; urgency=medium
 
   * Conteneur mail : plus de frein 900M sous le plafond 1G avec échange interdit ; plafond 1G inchangé (celui que compte
