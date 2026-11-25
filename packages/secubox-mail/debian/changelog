@@ -1,3 +1,10 @@
+secubox-mail (2.17.1-1~trixie1) trixie; urgency=medium
+
+  * Conteneur mail : plus de frein 900M sous le plafond 1G avec échange interdit ; plafond 1G inchangé (celui que compte
+    la fenêtre #3925), échange borné à 256M, copie config.avant-3941, appliqué à chaud sans redémarrage (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-mail (2.17.0-1~trixie1) trixie; urgency=medium
 
   * Fenêtre de relance planifiée (ref #3925) : mailctl fenetre éveille le
