@@ -1,3 +1,14 @@
+secubox-system (1.14.0-1~trixie1) trixie; urgency=medium
+
+  * Réglage mémoire : un conteneur LXC qui a son propre memory.max ne reçoit plus jamais de frein
+    (memory.high) de lxc-memory-high.toml ; un frein hérité est retiré (configuration et cgroup).
+  * secubox-lxc-memoire (nouveau) : au configure, les configurations LXC où un frein est sous le plafond avec
+    l'échange interdit (toute origine) et celles de l'ancien budget #496 sont corrigées : frein retiré, échange borné
+    à la moitié du plafond, copie config.avant-3941, limites à chaud ; aucun conteneur redémarré.
+    Garde du dépôt : aucun paquet ne livre cette combinaison (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-system (1.13.6-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni

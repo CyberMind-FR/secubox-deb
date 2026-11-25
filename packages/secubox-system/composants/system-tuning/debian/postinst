@@ -2,6 +2,13 @@
 set -e
 
 if [ "$1" = "configure" ]; then
+    # #3941 : configurations LXC existantes — plus de frein sous le plafond avec échange interdit (ancien budget #496,
+    # retouches à la main). Fichiers et cgroups seulement, aucun conteneur redémarré ; bloc de secubox-mail non touché.
+    if [ -x /usr/sbin/secubox-lxc-memoire ]; then
+        /usr/sbin/secubox-lxc-memoire migrer || \
+          echo "secubox-system-tuning: migration mémoire LXC incomplète (relancer /usr/sbin/secubox-lxc-memoire migrer)" >&2
+    fi
+
     # Apply tuning with safe defaults. Idempotent; if swap is already
     # active or caps are already applied, this is a no-op.
     if [ -x /usr/sbin/secubox-tuning-apply ]; then
