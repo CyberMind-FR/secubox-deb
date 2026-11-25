@@ -57,6 +57,10 @@ Garde `require_ai_ban` (jeton EdDSA par requête, usage unique, lié au corps), 
 - `POST /api/v1/waf/ai/unban` - `{geste: "unban", id}` → `{id, etat}` (`annule`, `echu`, `deja_annule`, `couvert`) ; seulement un ban posé par `ai-ban`, jamais un ban qu'une autre source couvre.
 - `GET /api/v1/waf/ai/etat` - sans corps → `{actifs, compteurs, plafonds}`.
 
+## Cartes vivantes (#3945)
+
+Voir « Graphiques vivants » du README de secubox-waf-ng : recul sur les relevés successifs de l'onglet, jamais inventé.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

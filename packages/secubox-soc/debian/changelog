@@ -1,3 +1,11 @@
+secubox-soc (1.14.0-1~trixie1) trixie; urgency=medium
+
+  * Vigie : la carte « D'où l'on frappe » est vivante (ref #3945) ; elle recule
+    sur les relevés successifs de l'onglet, date écrite. Composant
+    /shared/pouls.js de secubox-hub 1.13.0 ; absent, la carte reste fixe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-soc (1.13.3-1~trixie1) trixie; urgency=medium
 
   * Plus de dossier créé à l'import : la première écriture le crée.

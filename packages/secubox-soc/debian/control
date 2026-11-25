@@ -15,6 +15,7 @@ Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0),
  secubox-waf-ng (>= 1.43.0),
  secubox-webos (>= 1.9.7)
+Recommends: secubox-hub (>= 1.13.0~)
 Suggests: secubox-dpi (>= 1.11.2)
 Replaces: secubox-hub, secubox-soc-web
 # secubox-soc-web EST DECOMMISSIONNE (#1323) : son bundle React interrogeait

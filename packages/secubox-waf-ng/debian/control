@@ -45,7 +45,7 @@ Breaks: secubox-aggregator (<< 0.3.3~),
 Replaces: secubox-mitmproxy,
  secubox-crowdsec,
  secubox-waf (<< 1.10.44~)
-Recommends: secubox-haproxy
+Recommends: secubox-haproxy, secubox-hub (>= 1.13.0~)
 Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
  LE MOTEUR ET SON INTERFACE. sbxwaf inspecte, decide et bannit ; l'API Python (wafctl, tableau de bord) qui le montre est un composant
  de ce paquet depuis 1.19.0 (#2050) : deux processus, deux comptes, deux unites.

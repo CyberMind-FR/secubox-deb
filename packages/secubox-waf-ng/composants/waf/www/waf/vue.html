@@ -123,7 +123,11 @@
   function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
-  var IC={
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE=null;
+  function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
+    var IC={
     req:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(59,130,246,.16)"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
     bloc:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5a1.5 1.5 0 013 0v5M11 10V4a1.5 1.5 0 013 0v6M14 10V5.5a1.5 1.5 0 013 0V13c0 4-2.5 7-6 7-3 0-4.5-2-6-5l-1-2.5a1.5 1.5 0 012.6-1.4L8 14" fill="rgba(255,77,94,.14)"/></svg>',
     men:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#a78bfa"/></svg>',
@@ -206,11 +210,12 @@
     TERRE.split('|').forEach(function(l,j){var cur=l.charAt(0)==='1',x=0;
       l.slice(1).split(',').forEach(function(n){n=+n;if(cur){for(var i=0;i<n;i++)d+='M'+(x+i+.08)+','+(j+.5)+'a.42,.42 0 1 0 .84,0a.42,.42 0 1 0 -.84,0';}x+=n;cur=!cur;});});
     noeud('path',{d:d},terre);
+    var pts=noeud('g',{'class':'pts'},sv);
     var max=Math.max.apply(null,pays.map(function(p){return num(p.n);}).concat([1])),foc=etat.foc;
     pays.forEach(function(p){var c=CENTRE[String(p.code).toUpperCase()];if(!c)return;
       var cx=+((c[1]+180)/3).toFixed(1),cy=+((90-c[0])/3).toFixed(1),r=+(1.6+3.4*Math.sqrt(num(p.n)/max)).toFixed(1),ri=r*.52,rep=etat.cx.par[p.code],dom=dominant(rep),tt=resume(p).tt;
       var att=foc&&!(rep&&rep[foc]);
-      var g=noeud('g',{'class':'pt'+(att?' att':''),tabindex:'0',role:'img','aria-label':aria(p),'data-pays':p.code,'data-dom':dom||'','data-n':num(p.n)},sv);
+      var g=noeud('g',{'class':'pt'+(att?' att':''),tabindex:'0',role:'img','aria-label':aria(p),'data-pays':p.code,'data-dom':dom||'','data-n':num(p.n)},pts);
       noeud('circle',{'class':'hal',cx:cx,cy:cy,r:r+.5,fill:dom?TYPE_PAR_ID[dom].coul:'#9fb3d6','fill-opacity':.18},g);
       if(!dom){noeud('circle',{cx:cx,cy:cy,r:r*.78,fill:'none',stroke:'#9fb3d6','stroke-width':.35,'stroke-dasharray':'.9 .7'},g);}
       else{var a=0;TYPES.forEach(function(t){var k=rep[t.id]||0;if(!k)return;var da=2*Math.PI*k/tt;
@@ -236,7 +241,7 @@
       bt.title='Mettre « '+t.nom+' » en avant sur la carte (appuyer de nouveau pour annuler)';
       bt.appendChild(pastille(t));var s=document.createElement('span');s.textContent=t.nom;bt.appendChild(s);var b=document.createElement('b');b.textContent=fmt(cx.tot[t.id]);bt.appendChild(b);
       bt.addEventListener('click',function(){etat.foc=etat.foc===t.id?null:t.id;if(etat.d)rend(etat.d);else carte();});box.appendChild(bt);});}
-  function carte(){monde(etat.pays);liste(etat.pays);legende();}
+  function carte(){monde(etat.pays);liste(etat.pays);legende();vivre();}
   function courbe(j){
     var n=j.length;if(n<2) return '<div class="vide">Pas encore assez de jours mesurés.</div>';
     var W=520,H=170,L=38,R=8,T=8,B=20,max=Math.max.apply(null,j.map(function(d){return num(d.total);}).concat([1]));
@@ -272,8 +277,22 @@
      +tuile(IC.surf,surf?fmt(surf.length):'—','Surfaces observées',surf?surf.join(', '):'','Types de trafic ayant produit des événements aujourd’hui (http, smtp, ssh, leurres…).','');
     var pays=s&&s.top_countries||[];pays=pays.map(function(p){return {code:String(p.country||'').toUpperCase(),n:p.count};});
     etat.cx=croise(d.alerts);
-    if(!pays.length&&d.alerts){var cc={};d.alerts.forEach(function(a){var c=String(a.country||'').toUpperCase();if(/^[A-Z]{2}$/.test(c))cc[c]=(cc[c]||0)+1;});pays=Object.keys(cc).map(function(c){return {code:c,n:cc[c]};}).sort(function(x,y){return y.n-x.n;}).slice(0,25);}
+    var repli=!pays.length;
+    if(repli&&d.alerts){var cc={};d.alerts.forEach(function(a){var c=String(a.country||'').toUpperCase();if(/^[A-Z]{2}$/.test(c))cc[c]=(cc[c]||0)+1;});pays=Object.keys(cc).map(function(c){return {code:c,n:cc[c]};}).sort(function(x,y){return y.n-x.n;}).slice(0,25);}
     etat.pays=pays;if(etat.foc&&!etat.cx.tot[etat.foc])etat.foc=null;
+    var lu=d.lu||Date.now()/1000,jourDit=function(j){return 'le '+new Date(j+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});};
+    VIE=function(P){
+      var svg=el('monde'),pan=svg.closest('.pan'),L={};
+      [].forEach.call(el('pays').querySelectorAll('[data-pays]'),function(r){L[r.getAttribute('data-pays')]=r.querySelector('b');});
+      P.bouton(document.querySelector('.droite'));
+      var r={t:lu,pays:pays};
+      P.carte(svg,{cle:'monde',sujet:repli?'alertes':'stats',coul:'#ff2d6f',centres:CENTRE,format:fmt,liste:L,fond:svg.querySelector('.pts'),coeur:false,instantanes:!pays.length?[]:d.demo?[r]:P.memoire(repli?'waf-alertes':'waf-top',r),quand:pan.querySelector('h3'),zone:pan});
+      // Mini-séries par jour : le compteur affiché n'en est pas un point (jour ou 24 h), seule la date porte la valeur.
+      [['total','#3b82f6'],['bloc','#ff4d5e'],['menaces','#a78bfa']].forEach(function(x,i){
+        var t=el('tuiles').children[i],b=t&&t.querySelectorAll('svg.sp rect');if(!b||!b.length)return;
+        P.compteur(t.querySelector('.v'),{cle:x[0],total:true,valeurs:J.map(function(j){return j[x[0]];}),libelles:J.map(function(j){return jourDit(j.jour);}),format:fmt,coul:x[1],barres:b,quand:t,zone:t,maintenant:jourDit(J[J.length-1].jour)});
+      });
+    };
     carte();
     el('geoNote').textContent=pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle. Taille = événements du pays ; secteurs et couleur = type de menace, calculés sur les '+(etat.cx.n?fmt(etat.cx.n):'—')+' alertes récentes lues (500 au plus), pas sur tout le compteur.'+(d.demo?' Répartition fictive (démonstration).':''):'';
     el('courbe').innerHTML=J.length?courbe(J):'<div class="vide">Historique indisponible (session requise).</div>';
@@ -320,7 +339,7 @@
   function charge(){
     var b='/api/v1/waf/';
     Promise.all([jget(b+'stats'),jget(b+'status'),jget(b+'alerts?limit=500'),jget(b+'campaigns'),jget(b+'history'),jget(b+'detections')]).then(function(r){
-      rend({stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,campaigns:r[3],history:r[4],detections:r[5]});
+      rend({lu:Date.now()/1000,stats:r[0],status:r[1],alerts:r[2]&&r[2].alerts||null,campaigns:r[3],history:r[4],detections:r[5]});
     });
   }
   // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne

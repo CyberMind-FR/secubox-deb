@@ -72,10 +72,12 @@ CAMP = {"signature": "s1", "nb_acteurs": 3, "sources": 9, "pays": 2, "cibles": [
 
 
 class Banc:
-    def __init__(self, nav, n=3, det=None, taille=None, url="?embed=1", reduit=False):
+    def __init__(self, nav, n=3, det=None, taille=None, url="?embed=1", reduit=False, fige=False):
         self.acts, self.det, self.appels, self.erreurs = [acteur(i) for i in range(n)], det if det is not None else detail(), [], []
         self.ctx = nav.new_context(viewport=taille or {"width": 1280, "height": 900}, reduced_motion="reduce" if reduit else "no-preference", timezone_id="Europe/Paris", locale="fr-FR")
         self.p = self.ctx.new_page()
+        if fige:                                    # « il y a 4 min » ne dépend pas de la durée de la suite
+            self.p.clock.set_fixed_time(NOW)
         self.p.on("pageerror", lambda e: self.erreurs.append(str(e)))
         self.p.route("http://sbx.test/**", self._sert)
         self.p.goto("http://sbx.test/page/actor.html" + url)
@@ -115,7 +117,7 @@ class Banc:
 
 
 def test_profil_complet_en_clair(nav):
-    b = Banc(nav)
+    b = Banc(nav, fige=True)
     b.p.wait_for_selector("#profile .duo svg.actv")
     t = b.p.inner_text("#profile .resume").replace(" ", " ")
     assert t == ("Aspire forge depuis 15 jours, depuis 2 454 adresses de 88 pays ; actif maintenant (il y a 4 min) ; 4 bans, "
@@ -243,7 +245,8 @@ def test_aucun_debordement(nav, largeur):
 
 def test_demo_aucun_appel_et_donnees_fictives(nav):
     b = Banc(nav, url="?demo=1")
-    assert b.appels == [] and b.p.locator("#profile .gr").count() == 4
+    # le composant partagé (#3945) est un fichier statique, pas une lecture de la box
+    assert [a for a in b.appels if a.split("?")[0] != "/shared/pouls.js"] == [] and b.p.locator("#profile .gr").count() == 4
     demo = HTML[HTML.index("function demoActs("):HTML.index("function maj(")]
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", demo) and "Math.random" not in demo
     b.fin()

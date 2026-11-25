@@ -10,7 +10,7 @@
  --nuit:#0a0714;--nappe:rgba(20,14,40,.72);--trait:rgba(150,120,255,.26);--plan:rgba(120,220,255,.07);
  --texte:#f4f0ff;--doux:#b9b0da;--cyan:#2ee6ff;--rose:#ff3da6;--ambre:#ffb02e;--vert:#3dffa2;--violet:#9d6bff;
  --cyan-texte:#2ee6ff;--ambre-texte:#ffb02e;--sur-rose:#1a0210;
- --tour:#171030;--tour2:#231847;--eteint:#1d1638;--lueur:.55;--ciel1:#3a0f5e;--ciel2:#ff5a36;--pluie:rgba(61,255,162,.34);--terre:#4a3f86;
+ --tour:#171030;--tour2:#231847;--eteint:#1d1638;--lueur:.55;--ciel1:#3a0f5e;--ciel2:#ff5a36;--pluie:rgba(61,255,162,.34);--terre:#4a3f86;--sbxp-passe:var(--ambre-texte);--sbxp-direct:#3dffa2;--sbxp-baisse:var(--cyan-texte);
  --titre:"Unbounded","Arial Black",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
  --corps:system-ui,-apple-system,"Segoe UI",sans-serif}
 :root[data-ambiance="jour"]{
@@ -18,7 +18,7 @@
  --nuit:#f3f7ff;--nappe:rgba(255,255,255,.78);--trait:rgba(80,70,190,.22);--plan:rgba(60,90,220,.07);
  --texte:#1b1440;--doux:#544c7e;--cyan:#0083b8;--rose:#d6127c;--ambre:#b86a00;--vert:#0b8f55;--violet:#6a3be0;
  --cyan-texte:#006a96;--ambre-texte:#935400;--sur-rose:#ffffff;
- --tour:#d9d3ff;--tour2:#c5bbff;--eteint:#e6e2fb;--lueur:.16;--ciel1:#b8f3ff;--ciel2:#ffc6e6;--pluie:rgba(106,59,224,.2);--terre:#b9b0ea}
+ --tour:#d9d3ff;--tour2:#c5bbff;--eteint:#e6e2fb;--lueur:.16;--ciel1:#b8f3ff;--ciel2:#ffc6e6;--pluie:rgba(106,59,224,.2);--terre:#b9b0ea;--sbxp-direct:#06704a}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background-color:var(--nuit);color:var(--texte);font:16px/1.55 var(--corps);
@@ -37,7 +37,9 @@ h2{font-size:clamp(1.15rem,2.6vw,1.6rem);font-weight:700}
 .enseigne i{font-style:normal;color:var(--cyan-texte);text-shadow:0 0 14px color-mix(in srgb,var(--cyan) calc(var(--lueur)*100%),transparent)}
 .releve{font-family:var(--mono);font-size:.74rem;border:1px solid var(--trait);color:var(--doux);background:var(--nuit);padding:3px 9px;border-radius:6px}
 .releve.alerte{border:1px dashed var(--ambre);color:var(--ambre-texte)}
-#ambiance{margin-left:auto;font:600 .9rem var(--corps);color:var(--texte);background:var(--nappe);border:1px solid var(--trait);border-radius:999px;padding:9px 16px;cursor:pointer}
+#ambiance,.vie{font:600 .9rem var(--corps);color:var(--texte);background:var(--nappe);border:1px solid var(--trait);border-radius:999px;padding:9px 16px;cursor:pointer}
+#ambiance{margin-left:auto}
+.vie[aria-pressed="true"]{border-color:var(--cyan)}
 a{color:var(--cyan-texte)}
 :focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
 /* ville */
@@ -64,6 +66,9 @@ a{color:var(--cyan-texte)}
 .billet{background:var(--nappe);border:1px solid var(--trait);border-radius:18px;padding:15px 16px;min-width:0}
 .billet em{font-style:normal;font-size:1.7rem;line-height:1}
 .billet b{display:block;font-family:var(--titre);font-size:clamp(1.35rem,2.6vw,1.8rem);font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+/* Mini-série et date du passé (#3945) : la place de la date est réservée, rien ne saute. */
+.quand{min-height:1.5em;font-size:.85rem;overflow:hidden}#histo-quand{text-align:right}
+.billet .mini{display:block;width:100%;height:34px;margin-top:8px}
 .billet span{font-size:.92rem;color:var(--doux)}
 .bloc{display:grid;gap:14px;align-content:start;grid-template-columns:minmax(0,1fr)}
 .entete{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap}
@@ -82,6 +87,10 @@ a{color:var(--cyan-texte)}
 .point:focus-visible{outline:none}
 .point:focus-visible .rond{stroke:var(--texte);stroke-width:.6}
 .top{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}
+/* L'écart au présent, au recul : posé sur le bord de la pastille, sans déplacer la page. */
+.top li{position:relative}.top b{font-weight:inherit}
+.top em{position:absolute;right:8px;top:-.85em;font:600 .8rem var(--mono);line-height:1.3;background:var(--nuit);border-radius:6px;padding:0 4px}
+.top em:empty{display:none}
 .top:empty{display:none}
 .top li{border:1px solid var(--trait);border-radius:999px;padding:5px 12px;font-size:.92rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 @keyframes onde{from{transform:scale(.17);opacity:.9}to{transform:scale(1);opacity:0}}

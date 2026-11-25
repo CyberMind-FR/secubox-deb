@@ -62,7 +62,8 @@ type Server struct {
 	cleVue     []byte
 
 	// Aperçu de la vue d'ensemble, en double tampon (overview.go).
-	apercuT tampon[Apercu]
+	apercuT   tampon[Apercu]
+	paysPasse []PaysPasse // derniers relevés des pays (#3945), sous mu, jamais écrits
 
 	// Stats des 24 dernières heures, en double tampon (handleStats).
 	statsT tampon[store.Stats]

@@ -72,7 +72,7 @@ def _sources(tmp: Path) -> C.Sources:
     conf.write_text('mise_en_production = "2026-03-01"\nnoeuds_publics = ["gk2", "gk4", "gk5"]\n'
                     '[roles]\ngk2 = "maître"\ngk4 = "banc"\n'
                     '[[feuille_de_route]]\nnom = "Alpha 20"\netat = "bientôt"\n')
-    return C.Sources(pilotage_db=_pilotage(tmp), menaces=[_menaces(tmp)], vhost_stats=_vhosts(tmp),
+    return C.Sources(pilotage_db=_pilotage(tmp), menaces=[_menaces(tmp)], vhost_stats=_vhosts(tmp), etat_cartes=tmp / "cartes-etat.json",
                      bans=tmp / "absent-bans.jsonl", haproxy_toml=tmp / "absent.toml",
                      configuration=conf, github_cache=tmp / "github.json", geoip=[], local_nom="gk2",
                      etat_menaces=tmp / "menaces-etat.json", etat_visites=tmp / "visites-etat.json")
@@ -350,3 +350,48 @@ def test_sites_publies_sans_les_vhosts_hors_waf(tmp_path):
     src.haproxy_toml.write_text('[vhosts.a]\ndomain="a"\n[vhosts.b]\nwaf_bypass = true\n[vhosts.c]\nwaf_bypass = false\n'
                                 '[vhosts.d]\nenabled = false\n[vhosts.e]\nwaf_bypass = "true"\n')
     assert C.sites_publies(src) == 2
+
+
+# ------------------------------------------------------------------------------------------------ passé récent (#3945)
+
+def test_cartes_passe_un_releve_toutes_les_dix_minutes_borne(tmp_path):
+    src = _sources(tmp_path)
+    for i in range(200):                                     # une collecte par minute
+        e = C.collecter(src, MAINTENANT + 60 * i, reseau=False)
+        p = e["cartes_passe"]
+        assert len(p) <= C.PASSE_MAX
+        assert all(MAINTENANT + 60 * i - C.PASSE_AGE_S < x["genere_le"] < e["genere_le"] for x in p)
+        assert all(b["genere_le"] - a["genere_le"] >= C.PASSE_PAS_S - 30 for a, b in zip(p, p[1:]))
+    assert len(p) == C.PASSE_MAX
+    assert set(p[0]) == {"genere_le", "attaques", "visiteurs", "tuiles"} and set(p[0]["tuiles"]) == set(C.PASSE_TUILES)
+    assert p[0]["visiteurs"][0] == {"code": "FR", "n": 40} and p[0]["attaques"] is None      # pas de base GeoIP : non mesuré
+    assert len(json.dumps(p)) < 20_000
+    assert oct(src.etat_cartes.stat().st_mode & 0o777) == "0o600"
+
+
+def test_cartes_passe_sans_adresse_et_etat_douteux(tmp_path):
+    src = _sources(tmp_path)
+    src.etat_cartes.write_text(json.dumps({"version": 1, "releves": [
+        {"genere_le": MAINTENANT - 700, "attaques": [{"code": "FR", "n": 3, "ip": "203.0.113.7"}, {"code": "<b>", "n": 1}, {"code": "DE", "n": "9"}, 4],
+         "visiteurs": "203.0.113.9", "tuiles": {"bans_actifs": 5, "requetes_24h": "x", "ip": "203.0.113.8"}, "secret": "x"},
+        {"genere_le": MAINTENANT + 50, "attaques": []}, {"genere_le": MAINTENANT - 90000}, {"genere_le": True}, None, "x"]}))
+    e = C.collecter(src, MAINTENANT, reseau=False)
+    assert e["cartes_passe"] == [{"genere_le": MAINTENANT - 700, "attaques": [{"code": "FR", "n": 3}], "visiteurs": None,
+                                  "tuiles": {"requetes_24h": None, "menaces_24h": None, "bloquees_24h": None, "bans_actifs": 5}}]
+    assert "203.0.113" not in json.dumps(e)
+    for brut in ("{pas du json", "[]", '{"releves": 3}'):
+        src.etat_cartes.write_text(brut)
+        assert C.collecter(src, MAINTENANT, reseau=False)["cartes_passe"] == []
+
+
+def test_cartes_passe_booleens_refuses_et_ecriture_impossible(tmp_path, monkeypatch):
+    src = _sources(tmp_path)
+    src.etat_cartes.write_text(json.dumps({"releves": [{"genere_le": MAINTENANT - 700, "attaques": [{"code": "FR", "n": True}, {"code": "DE", "n": 2}],
+                                                        "visiteurs": [], "tuiles": {"bans_actifs": True}}]}))
+
+    def plein(*a, **k):
+        raise OSError(28, "plein")
+    monkeypatch.setattr(C, "ecrire", plein)
+    p = C.cartes_passe(src, MAINTENANT, {}, {})
+    assert [x["genere_le"] for x in p] == [MAINTENANT - 700]                       # le passé valide reste publié
+    assert p[0]["attaques"] == [{"code": "DE", "n": 2}] and p[0]["tuiles"]["bans_actifs"] is None

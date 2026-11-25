@@ -143,7 +143,11 @@
   function court(n){n=num(n);return n>=1e6?(n/1e6).toFixed(2).replace('.',',')+' M':n>=1e4?Math.round(n/1e3)+' k':fmt(n);}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
-  var PAL=['#3b82f6','#29b6f6','#a78bfa','#ff9f1c','#2ecc71','#ffd23f','#6f84a8'];
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE=null;
+  function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
+    var PAL=['#3b82f6','#29b6f6','#a78bfa','#ff9f1c','#2ecc71','#ffd23f','#6f84a8'];
   var CT={browser:['🌐','Navigateur','#3b82f6'],'mobile-app':['📱','Application mobile','#29b6f6'],bot:['🤖','Robot','#ff9f1c'],crawler:['🕷️','Crawler','#a78bfa'],other:['❔','Autre','#6f84a8']};
   var OS={Windows:['🪟','#3b82f6'],macOS:['🍎','#a78bfa'],Linux:['🐧','#ffd23f'],Android:['🤖','#2ecc71'],iOS:['📱','#29b6f6'],other:['❔','#6f84a8']};
   var CLS={'2xx':['Succès','#2ecc71'],'3xx':['Redirections','#3b82f6'],'4xx':['Erreurs client','#ff9f1c'],'5xx':['Erreurs serveur','#ff4d5e'],other:['Autres','#6f84a8']};
@@ -200,6 +204,15 @@
     el('monde').innerHTML=monde(pays);
     el('pays').innerHTML=pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+fmt(p.n)+'</b></div>';}).join(''):'<div class="vide">'+info+'</div>';
     el('geoNote').textContent=pays.length?'Pays déduit de l’adresse (base GeoLite2 locale) pour les adresses les plus actives ; un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    var lu=ok&&v.updated_unix?num(v.updated_unix):Date.now()/1000;
+    VIE=function(P){
+      var svg=el('monde'),pan=svg.closest('.pan'),L={},rangs=el('pays').querySelectorAll('b');
+      pays.slice(0,8).forEach(function(p,i){if(rangs[i])L[p.code]=rangs[i];});
+      P.bouton(document.querySelector('.droite'));
+      var r={t:lu,pays:pays};
+      P.carte(svg,{cle:'monde',coul:'#19f0ff',centres:CENTRE,format:fmt,liste:L,instantanes:!pays.length?[]:d.demo?[r]:P.memoire('waf-visites',r),quand:pan.querySelector('h3'),zone:pan});
+    };
+    vivre();
     el('statuts').innerHTML=st.length?['2xx','3xx','4xx','5xx','other'].filter(function(k){return gs(k)>0;}).map(function(k){var m=CLS[k],n=gs(k);
       return '<div class="classe" title="'+esc(m[0]+' ('+k+')')+'"><b style="color:'+m[1]+'">'+(k==='other'?'…':k)+'</b><div class="barre"><i style="width:'+Math.max(2,100*n/sumSt)+'%;background:'+m[1]+'"></i></div><span>'+fmt(n)+'</span><span>'+(100*n/sumSt<1?'<1':Math.round(100*n/sumSt))+' %</span></div>';}).join('')
       +st.filter(function(c){return !CLS[c[0]];}).map(function(c){return '<div class="classe"><b>'+esc(c[0])+'</b><div class="barre"><i style="width:'+Math.max(2,100*c[1]/sumSt)+'%;background:#6f84a8"></i></div><span>'+fmt(c[1])+'</span><span></span></div>';}).join(''):'<div class="vide">'+info+'</div>';

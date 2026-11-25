@@ -579,9 +579,24 @@
     }
   }
 
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE = null;
+  function vivre() { var P = window.SbxPouls; if (!P || !VIE) { return; } try { VIE(P); } catch (e) { console.warn("pouls", e); } }
+  (function () { var j = document.createElement("script"); j.src = "/shared/pouls.js?v=1.13.0"; j.onload = vivre; document.head.appendChild(j); })();
+  function vivreCarte(rangs) {
+    var r = { t: Date.now() / 1000, pays: rangs.slice(0, 60).map(function (x) { return { code: x[0], n: x[1] }; }) };
+    VIE = function (P) {
+      var g = $("carte-bulles"), svg = g.ownerSVGElement;
+      P.bouton(document.querySelector(".droite"), "btn");
+      P.carte(svg, { cle: "soc", coul: "#ff2d6f", echelle: 4.5, fond: g, coeur: false, centres: function (c) { var p = Object.prototype.hasOwnProperty.call(LATLON, c) ? projette(c) : null; return p && [p.x, p.y]; },
+        instantanes: !rangs.length ? [] : DEMO ? [r] : P.memoire("soc-alertes", r), quand: $("carte-pied").parentNode, zone: svg.closest(".pan") });
+    };
+    vivre();
+  }
+
   function carte(d) {
     var g = vide($("carte-bulles"));
-    if (d.__erreur) { $("carte-pied").textContent = "géo illisible : " + d.__erreur; return; }
+    if (d.__erreur) { vivreCarte([]); $("carte-pied").textContent = "géo illisible : " + d.__erreur; return; }
     var liste = d.alerts || [];
     var parPays = {}, ips = 0, coups = 0;
     liste.forEach(function (a) {
@@ -592,6 +607,7 @@
     });
     var rangs = Object.keys(parPays).map(function (k) { return [k, parPays[k]]; })
       .sort(function (a, b) { return b[1] - a[1]; });
+    vivreCarte(rangs);
     $("carte-pied").textContent = nb(ips) + " adresses · " + nb(coups) + " coups";
     if (!rangs.length) { $("carte-pied").textContent += " · aucun pays résolu"; return; }
     var max = rangs[0][1] || 1;

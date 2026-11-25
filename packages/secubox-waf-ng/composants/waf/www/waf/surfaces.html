@@ -90,7 +90,11 @@
   function fmt(n){return Math.round(num(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ');}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
-  var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE=null;
+  function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js?v=1.13.0';j.onload=vivre;document.head.appendChild(j);})();
+    var PAL=['#ff4d5e','#a78bfa','#3b82f6','#ff9f1c','#29b6f6','#2ecc71','#ffd23f'];
   function ic(c,corps){return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+corps+'</svg>';}
   var IC={
     surf:ic('#3b82f6','<circle cx="12" cy="5" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 7v5M12 12L6 17M12 12l6 5"/>'),
@@ -158,6 +162,15 @@
     el('monde').innerHTML=monde((pays||[]).map(function(p){return {code:p[0],n:p[1]};}));
     el('pays').innerHTML=pays&&pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p[0])+' '+esc(p[0])+'</span><b>'+fmt(p[1])+'</b></div>';}).join(''):'<div class="vide">'+(pays?'Aucune géolocalisation.':'Session requise.')+'</div>';
     el('geoNote').textContent=pays&&pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    var pp=(pays||[]).map(function(p){return {code:p[0],n:p[1]};}),lu=Date.now()/1000;
+    VIE=function(P){
+      var svg=el('monde'),pan=svg.closest('.pan'),L={},rangs=el('pays').querySelectorAll('b');
+      pp.slice(0,8).forEach(function(p,i){if(rangs[i])L[p.code]=rangs[i];});
+      P.bouton(document.querySelector('.droite'));
+      var r={t:lu,pays:pp};
+      P.carte(svg,{cle:'monde',coul:'#ff2d6f',centres:CENTRE,format:fmt,liste:L,instantanes:!pp.length?[]:d.demo?[r]:P.memoire('waf-pays',r),quand:pan.querySelector('h3'),zone:pan});
+    };
+    vivre();
     liste('comptes',cpt,['Compte','Tentatives'],'var(--rouge)','Aucune tentative d’authentification enregistrée pour l’instant.',true);
     liste('leurres',leu,['Service','Contacts'],'var(--violet)','Aucun leurre touché pour l’instant.',true);
     liste('nonservis',ns,['Nom demandé','Requêtes'],'var(--orange)','Aucun nom non servi.',true);

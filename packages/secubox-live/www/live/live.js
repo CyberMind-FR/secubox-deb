@@ -202,6 +202,36 @@
     dire($('t-noeuds'), on == null || tot == null ? '—' : f(on) + ' / ' + f(tot));
   }
 
+  // ---------------------------------------------------------------------------------------------- mesures vivantes (#3945)
+  // /pouls.js (copie du composant partagé) : la mesure recule sur ses relevés RÉELS puis revient. Absent : la page reste fixe.
+  function pouls(quoi, fn) { if (window.SbxPouls) essai('pouls ' + quoi, function () { fn(window.SbxPouls); }); }
+  function passe() { return (liste(dernieres.cartes_passe) || []).filter(function (x) { return nb(x.genere_le); }).slice(-12); }
+  function present() { return perime ? 'au relevé' : 'maintenant'; }
+  function avant(t) { return !perime ? t : t.indexOf('il y a ') ? t : t.slice(7) + ' avant le relevé'; }
+  function ilya(t) { return avant(window.SbxPouls.pur.ecart(t, nb(dernieres.genere_le) || t)); }
+  var minis = {}, perime = false;
+  function vivreTuile(id, valeurs, libelles, coul) {
+    pouls(id, function (P) {
+      var b = $(id), d = b.parentNode, z = minis[id];
+      if (!z) {
+        z = minis[id] = { date: el('div', 'quand'), svg: sv('svg', { 'class': 'mini', viewBox: '0 0 200 34', preserveAspectRatio: 'none', 'aria-hidden': 'true' }) };
+        d.appendChild(z.svg); d.appendChild(z.date);
+      }
+      P.compteur(b, { cle: id, valeurs: valeurs, libelles: libelles, format: f, coul: coul, svg: z.svg, quand: z.date, zone: d, maintenant: present() });
+    });
+  }
+  function vivreTuiles(t, H, cours) {
+    if (!window.SbxPouls) return;
+    var l = passe(), dates = l.map(function (x) { return ilya(x.genere_le); }).concat(['à l’instant']);
+    function suite(k) { return l.map(function (x) { return nb(objet(x.tuiles)[k]); }).concat([nb(t[k])]); }
+    vivreTuile('t-requetes', suite('requetes_24h'), dates, 'var(--cyan)');
+    vivreTuile('t-bans', suite('bans_actifs'), dates, 'var(--ambre)');
+    // Tentatives sur 24 h : les journées PASSÉES complètes (24 h chacune), puis la fenêtre en cours ; jamais la journée partielle.
+    var j = (liste(H) || []).filter(function (x) { return jourTs(x.jour) != null && (!cours || x.jour < cours); }).slice(-13);
+    vivreTuile('t-menaces', j.map(function (x) { return nb(x.attaques); }).concat([nb(t.menaces_24h)]),
+      j.map(function (x) { return 'le ' + dateJour(x.jour, { day: 'numeric', month: 'short' }); }).concat(['à l’instant']), 'var(--rose)');
+  }
+
   // ---------------------------------------------------------------------------------------------- carte
   var carte = 'attaques', mondeCalques = null, dernieres = {};
   function terre() {
@@ -228,7 +258,8 @@
     var max = Math.max(1, sommet(l, 'n'));
     var places = l.filter(function (p) { return typeof CENTRE === 'object' && propre(CENTRE, p.code); })
       .map(function (p) { var c = CENTRE[p.code]; return { code: p.code, n: p.n, x: (c[1] + 180) / 3, y: (90 - c[0]) / 3, r: .7 + 2.3 * Math.sqrt(p.n / max) }; });
-    accorder(mondeCalques.ondes, places.slice(0, 6), function (p) { return p.code; },
+    var vie = window.SbxPouls && passe().length > 0;                // les ondes du composant remplacent alors celles-ci
+    accorder(mondeCalques.ondes, vie ? [] : places.slice(0, 6), function (p) { return p.code; },
       function () { return sv('circle', { 'class': 'onde', r: 6 }); },
       function (o, p, i) { attrs(o, { cx: p.x, cy: p.y, stroke: coul }); o.style.animationDelay = (i * .4) + 's'; });
     accorder(mondeCalques.points, places, function (p) { return p.code; },
@@ -246,8 +277,16 @@
       });
     var pts = Array.from(mondeCalques.points.children), un = pts.indexOf(document.activeElement);
     pts.forEach(function (g, i) { attrs(g, { tabindex: i === Math.max(0, un) ? 0 : -1 }); });
-    accorder($('top'), l.slice(0, 6), function (p) { return p.code; }, function () { return el('li'); },
-      function (li, p) { dire(li, drap(p.code) + ' ' + pays(p.code) + ' · ' + f(p.n)); });
+    accorder($('top'), l.slice(0, 6), function (p) { return p.code; },
+      function () { var li = el('li'); [el('span'), el('b'), el('em')].forEach(function (x) { li.appendChild(x); }); li.lastChild.setAttribute('aria-hidden', 'true'); return li; },
+      function (li, p) { dire(li.children[0], drap(p.code) + ' ' + pays(p.code) + ' · '); dire(li.children[1], f(p.n)); });
+    pouls('carte', function (P) {
+      var L = {}, E = {}, N = ENFANTS.get($('top'));
+      N.forEach(function (li, c) { L[c] = li.children[1]; E[c] = li.children[2]; });
+      P.carte(svg, { cle: 'monde', sujet: carte, dit: avant, coul: coul, centres: typeof CENTRE === 'object' ? CENTRE : {}, format: f, liste: L, ecarts: E,
+        instantanes: brut ? passe().map(function (x) { return { t: x.genere_le, pays: liste(x[carte]) }; }).concat([{ t: dernieres.genere_le, pays: l }]) : [],
+        quand: $('monde-quand'), zone: svg.closest('.nappe'), maintenant: present() });
+    });
     phrase('monde-note', !brut ? faute('Source indisponible.') : l.length ? '' : att ? 'Aucune attaque géolocalisée.' : 'Aucune visite géolocalisée.');
   }
   function flecher(e) {
@@ -332,6 +371,10 @@
     var note = mes.length ? f(tot) + s(tot, ' bloquée', ' bloquées') + ' · pic ' + f(max) + '/min' : 'non mesurée';
     dire($('heure-note'), note);
     attrs(svg, { 'aria-label': 'Requêtes bloquées par minute sur la dernière heure : ' + note });
+    pouls('heure', function (P) {
+      P.barres(svg, { cle: 'heure', valeurs: W.map(function (p) { return nb(p.bloquees); }), coul: 'var(--rose)', format: f, barres: heureCalques.barres.children,
+        libelles: function (i) { return vieux ? (59 - dec - i) + ' min avant le relevé' : 'il y a ' + (59 - dec - i) + ' min'; }, quand: $('heure-quand'), zone: svg.parentNode, maintenant: present() });
+    });
   }
 
   // ---------------------------------------------------------------------------------------------- atelier
@@ -405,6 +448,11 @@
       });
     dire(histoCalques.g, dateJour(H[0].jour, bref)); dire(histoCalques.d, dateJour(H[H.length - 1].jour, bref));
     attrs(svg, { 'aria-label': 'Par jour : ' + BANDES.map(function (b) { return b[0] + ' ' + f(som(b[0])) + (som(b[0]) == null ? ' (non mesuré)' : ''); }).join(', ') });
+    pouls('histoire', function (P) {
+      P.barres(svg, { cle: 'histo', valeurs: H.map(function (x) { return nb(x.attaques); }), coul: 'var(--violet)', format: f, barres: histoCalques.jours.children,
+        libelles: H.map(function (x) { return dateJour(x.jour, { day: 'numeric', month: 'short' }) + ' · attaques'; }), quand: $('histo-quand'), zone: $('frise'),
+        maintenant: cours && H[H.length - 1].jour === cours ? 'aujourd’hui' : 'dernier jour' });
+    });
     if (!defile) { defile = true; $('frise').scrollLeft = $('frise').scrollWidth; }   // une seule fois : ensuite, le visiteur décide
     suivreTitres();
   }
@@ -436,9 +484,10 @@
   function duree(sec) { return sec < 7200 ? Math.round(sec / 60) + ' min' : sec < 172800 ? Math.round(sec / 3600) + ' h' : Math.round(sec / 86400) + ' jours'; }
   function rendre(brut, maintenant) {
     var e = objet(brut), t = objet(e.tuiles), g = instant(e), age = g ? (maintenant - g.getTime()) / 1000 : 0, vieux = g != null && age > VIEUX_S;
-    dernieres = e;
+    dernieres = e; perime = vieux || enEchec;
     essai('relevé', function () { etiquette(g, vieux, age); });
     essai('ouverture', function () { ouverture(e, t); });
+    essai('tuiles', function () { vivreTuiles(t, e.histo, g ? g.toISOString().slice(0, 10) : null); });
     essai('ville', function () { ville(e.noeuds); });
     essai('carte', monde);
     essai('portes', function () { portes(e.menaces); });
@@ -504,6 +553,8 @@
       col = [];
       for (var i = 0; i < c.width / PAS; i++) col.push({ y: (i * 197) % Math.max(1, c.height), v: 18 + (i * 31) % 46, m: i * 7 });
     }
+    var etait = null;
+    function figee() { return calme.matches || !!(window.SbxPouls && !window.SbxPouls.vivant()); }   // « fixe » : la pluie s'arrête aussi
     function teinte() { couleur = getComputedStyle(RACINE).getPropertyValue('--pluie'); }
     function trace(dt) {
       var n = pluie.mots.length;
@@ -516,7 +567,7 @@
     }
     function boucle() {
       image = 0;
-      if (document.hidden || calme.matches) return;
+      if (document.hidden || figee()) return;
       var t = Date.now();
       trace(Math.min(.2, (t - avant) / 1000)); avant = t;
       minuteur = setTimeout(function () { minuteur = 0; image = requestAnimationFrame(boucle); }, c.width < 600 ? 120 : 70);
@@ -526,10 +577,11 @@
       if (minuteur) { clearTimeout(minuteur); minuteur = 0; }
       if (image) { cancelAnimationFrame(image); image = 0; }
       if (document.hidden) return;
-      if (calme.matches) trace(0); else { avant = Date.now(); boucle(); }
+      etait = figee(); if (etait) trace(0); else { avant = Date.now(); boucle(); }
     }
-    pluie = { mots: FIXES.slice(), trace: trace, fixe: function () { return calme.matches; }, teinte: function () { teinte(); if (calme.matches) trace(0); } };
-    window.addEventListener('resize', function () { taille(); if (calme.matches) trace(0); });
+    pluie = { mots: FIXES.slice(), trace: trace, fixe: figee, teinte: function () { teinte(); if (figee()) trace(0); } };
+    window.addEventListener('sbx-pouls', function () { if (figee() !== etait) reprendre(); });
+    window.addEventListener('resize', function () { taille(); if (figee()) trace(0); });
     document.addEventListener('visibilitychange', reprendre);
     if (calme.addEventListener) calme.addEventListener('change', reprendre);
     taille(); teinte(); reprendre();
@@ -553,6 +605,7 @@
     $('m-att').addEventListener('click', function () { carte = 'attaques'; monde(); fermer(); });
     $('m-vis').addEventListener('click', function () { carte = 'visiteurs'; monde(); fermer(); });
     bulles();
+    pouls('bouton', function (P) { P.bouton(document.querySelector('.haut'), 'vie'); });
     essai('pluie', lancerPluie);
     essai('animations', pauserHorsEcran);
     charger();

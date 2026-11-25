@@ -29,6 +29,7 @@ server {
     location = /live.css     { limit_except GET HEAD { deny all; } try_files /live.css =404; }
     location = /live.js      { limit_except GET HEAD { deny all; } try_files /live.js =404; }
     location = /carte.js     { limit_except GET HEAD { deny all; } try_files /carte.js =404; }
+    location = /pouls.js     { limit_except GET HEAD { deny all; } try_files /pouls.js =404; }
     # Polices hébergées ici (OFL, #3933) : noms exacts, jamais le dossier ; `expires` ne touche pas aux add_header du server.
     location = /polices/unbounded-latin.woff2      { limit_except GET HEAD { deny all; } types { font/woff2 woff2; } expires 7d; try_files /polices/unbounded-latin.woff2 =404; }
     location = /polices/jetbrains-mono-latin.woff2 { limit_except GET HEAD { deny all; } types { font/woff2 woff2; } expires 7d; try_files /polices/jetbrains-mono-latin.woff2 =404; }

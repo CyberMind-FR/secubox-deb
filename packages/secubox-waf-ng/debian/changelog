@@ -1,3 +1,18 @@
+secubox-waf-ng (1.47.0-1~trixie1) trixie; urgency=medium
+
+  * Graphiques vivants (ref #3945) : cartes d'Actor, vue, menaces, visites,
+    surfaces et tableau ; mini-séries de la vue (par jour) et d'Actor (24 h).
+    Composant /shared/pouls.js de secubox-hub 1.13.0 ; absent, pages fixes.
+  * sbx-actord : /overview porte top_pays_passe, un relevé des pays toutes les
+    10 min, douze gardés en mémoire (2 h), rien sur disque, aucune adresse.
+  * L'API du WAF ne compte pas les pays par heure : ces cartes reculent sur les
+    relevés successifs de l'onglet (sessionStorage, 12, 3 h), aucun balayage
+    ajouté.
+  * secubox-waf-ng.service : populations.json (et ses temporaires) n'est plus
+    re-possédé à chaque démarrage ; il reste lisible par le groupe secubox.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.46.2-1~trixie1) trixie; urgency=medium
 
   * AppArmor secubox-waf-indices : audit.log en « w » ; « a » refusait chaque
