@@ -1,3 +1,10 @@
+secubox-hub (1.12.64-1~trixie1) trixie; urgency=medium
+
+  * espaces.json : ai (Services), datascope (Surveillance) et garde
+    (Protection), jusqu'ici dans « autre » (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
+
 secubox-hub (1.12.63-1~trixie1) trixie; urgency=medium
 
   * Dé du menu (copie de secubox-webos, ref #3938) : face verte redressée, fusée
