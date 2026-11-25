@@ -1,3 +1,30 @@
+secubox-datascope (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Vue « Paysage » (#3921) : graphe des menaces tiré du relevé des populations
+    du WAF (populations.json) : populations, réseaux, classes, cibles, CVE,
+    pays ; compteurs cumulés par population, part bannie, fiche, synthèse et
+    fil des changements, lisible à 1280 et 400 px, au clavier et au doigt.
+  * Connecteur « paysage », table des instantanés (migration 0002-paysage) :
+    un instantané compressé à chaque nouveau relevé (toutes les 30 min),
+    différentiel avec le précédent, éclaircissement à un par heure au-delà de
+    48 h, conservation 30 jours, budget de 60 Mio ; un instantané illisible ne
+    bloque plus l'écriture (sans_precedent).
+  * API : GET paysage, paysage/chronologie (differences=N), paysage/instantane/{ts},
+    paysage/difference, paysage/tendance/{id} ; champs reference_partiel,
+    sans_precedent, illisibles ; toutes gardées par require_jwt, lecture seule.
+  * Compteurs à histogrammes (24 h, 7 j), tendance par population, écarts
+    signalés partiels ou non mesurés ; repères partagés (reperes.js).
+  * Enregistreur à rembobinage : lecture, pause, pas, vitesses, fenêtre 48 h ou
+    30 j, comparaison 24 h, 7 j ou date, badges apparu, disparu, hausse et
+    baisse, fantômes ; pannes contournées, onglet caché = pause.
+  * AppArmor : lecture de /var/lib/secubox/waf/populations.json (r seulement).
+  * postinst : ACL setfacl u:secubox-datascope:--x sur /var/lib/secubox/waf à
+    chaque configure (traversée seule, silencieuse si absent) ; prerm remove
+    la retire. Recommends: acl.
+  * Limites : un instantané toutes les 30 min, historique court au début.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-datascope (0.1.1-1~trixie1) trixie; urgency=medium
 
   * AppArmor : verrou de lecture (rk) sur la base du NAC et ses -wal/-shm.
