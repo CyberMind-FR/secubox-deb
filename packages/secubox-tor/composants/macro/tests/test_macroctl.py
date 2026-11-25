@@ -72,3 +72,13 @@ def test_revoke_requires_src_ip(tmp_path):
 def test_activate_does_not_require_src_ip(tmp_path):
     r = _run(["echo", "activate", "--cred", "{}"], _env(tmp_path))
     assert r.returncode == 0  # activate needs no src-ip
+
+
+def test_un_audit_refuse_se_voit_sans_bloquer_ni_salir_stdout(tmp_path):
+    """#3861, #3946 : l'échec de l'audit passait en silence (profil AppArmor en « a »)."""
+    env = _env(tmp_path)
+    barrage = tmp_path / "fichier"; barrage.write_text("")
+    env["MACRO_AUDIT_LOG"] = str(barrage / "audit.log")
+    r = _run(["echo", "grant", "--src-ip", "10.10.0.2"], env)
+    assert r.returncode == 0 and json.loads(r.stdout)["ok"] is True
+    assert "audit non écrit" in r.stderr and '"verb": "grant"' in r.stderr

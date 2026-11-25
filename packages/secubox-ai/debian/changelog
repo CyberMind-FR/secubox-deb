@@ -1,3 +1,10 @@
+secubox-ai (2.3.3-1~trixie1) trixie; urgency=medium
+
+  * Menu : catégorie « mind », thème « ia » (charte ; « apps » n'apparaissait
+    dans aucun groupe) (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
+
 secubox-ai (2.3.2-1~trixie1) trixie; urgency=medium
 
   * Corrélateur, dossiers et riposte : un verdict de rotation de gk2

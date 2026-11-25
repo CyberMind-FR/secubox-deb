@@ -81,7 +81,7 @@ def test_appliquer_fait_upgrade_sans_dist_upgrade_ni_autoremove(env):
     e = etat(env)
     assert e["derniere"] == "appliquer" and e["ok"] is True and e["appliques"] == 2 and e["count"] == 0
     appels = Path(env["APT_JOURNAL"]).read_text()
-    assert "upgrade -y" in appels and "force-confold" in appels
+    assert "upgrade --with-new-pkgs -y" in appels and "force-confold" in appels
     assert "dist-upgrade" not in appels and "autoremove" not in appels and "full-upgrade" not in appels
     assert "Setting up secubox-hub" in Path(env["SECUBOX_MAJ_JOURNAL"]).read_text()
 
@@ -277,3 +277,12 @@ def test_verifier_donne_aussi_les_versions(env):
     ctl(env, "verifier")
     e = etat(env)
     assert e["details"][0] == {"name": "secubox-hub", "old_version": "1.10.2", "new_version": "1.11.0"}
+
+
+def test_simulation_et_application_tirent_les_nouvelles_dependances(env):
+    """#3946 : sans --with-new-pkgs, apt retient un paquet qui gagne une dépendance (secubox-core 1.8.45)."""
+    assert ctl(env, "verifier")[0] == 0 and ctl(env, "appliquer")[0] == 0
+    appels = Path(env["APT_JOURNAL"]).read_text().splitlines()
+    upgrades = [a for a in appels if " upgrade " in f" {a} "]
+    assert len(upgrades) >= 3 and all("upgrade --with-new-pkgs" in a for a in upgrades), upgrades
+    assert not any("dist-upgrade" in a or "full-upgrade" in a for a in appels)

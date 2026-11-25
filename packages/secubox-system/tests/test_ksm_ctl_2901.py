@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#2901 — Activer KSM : HTTP 500 parce que l'API, servie par l'agregateur sous secubox, ecrivait sysfs (root).
 Le module passe par secubox-ksmctl (root, via sudo) ; le ctl valide tout."""
+import importlib.util
 import os
 import subprocess
 import sys
@@ -15,7 +16,6 @@ import pytest
 ICI = Path(__file__).resolve().parents[1]
 CTL = ICI / "sbin" / "secubox-ksmctl"
 sys.path.insert(0, str(ICI.parents[1] / "common"))
-sys.path.insert(0, str(ICI / "composants" / "ksm"))
 
 
 def _sys(tmp_path):
@@ -60,8 +60,11 @@ def test_verbe_inconnu_refuse(tmp_path):
 @pytest.fixture
 def ksm():
     from secubox_core import auth  # noqa: F401
-    import api.main as M
-    return M
+    # Nom propre (#3946) : « api.main » est aussi celui de l'API système, déjà en mémoire quand toute la suite tourne.
+    spec = importlib.util.spec_from_file_location("api_ksm_2901", ICI / "composants" / "ksm" / "api" / "main.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
 
 
 def test_l_api_passe_par_sudo_ksmctl(ksm):

@@ -15,6 +15,18 @@ secubox-core (1.8.46-1~trixie1) trixie; urgency=medium
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 
+secubox-core (1.8.45-1~trixie1) trixie; urgency=medium
+
+  * Depends : python3-fastapi, python3-uvicorn, python3-httpx et
+    python-multipart sans repli « | python3-pip » — pip, déjà dans l'image,
+    satisfaisait l'alternative et rien n'était installé (ref #3621, #3946).
+  * unites : secubox-pilotage-agent ne s'arrête plus par une API, comme dans
+    le moteur de profils (ref #3946).
+  * mitm_ingest : rien n'est créé au montage des routes ; la base naît au
+    premier événement (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
+
 secubox-core (1.8.44-1~trixie1) trixie; urgency=medium
 
   * Accueil du nom de nœud (ref #3938) : dé holographique en 3D réelle (WebGL 2,

@@ -260,7 +260,12 @@ def test_profil_apparmor_enforce_installe_et_charge():
     prof = (RACINE / "apparmor" / "usr.sbin.freeboxctl").read_text()
     assert "profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnected)" in prof
     ecritures = [x.strip() for x in prof.splitlines() if x.strip().endswith((" rw,", " w,")) and not x.strip().startswith("deny")]
-    assert ecritures == ["/dev/null rw,", "/var/lib/secubox/freebox/** rw,"]   # /dev/null : seule autre écriture
+    # /dev/null et audit.log : seules autres écritures. « w », jamais « a » : write() y était refusé (#3861) ; l'ajout
+    # seul tient au code, qui n'ouvre ce fichier qu'en mode « a ».
+    assert ecritures == ["/dev/null rw,", "/var/lib/secubox/freebox/** rw,", "/var/log/secubox/audit.log w,"]
+    service = (RACINE / "api" / "service.py").read_text()
+    bloc = service[service.index("def _journal_fichier"):]
+    assert 'open(chemin, "a")' in bloc[:bloc.index("\n    def ", 1)] and service.count("/var/log/secubox/audit.log") == 1
     assert "/usr/bin/ip mrix," in prof and "network netlink raw," in prof and "deny /etc/secubox/secrets/** rw," in prof
     assert "etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "rules").read_text()
     assert "apparmor_parser -r /etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "postinst").read_text()

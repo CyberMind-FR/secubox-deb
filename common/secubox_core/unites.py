@@ -44,6 +44,8 @@ UNITES_PROTEGEES = frozenset({
     "secubox-profiles.service", "secubox-vault.service", "secubox-autoload-agent.service",
     "secubox-waf-ng.service", "secubox-hub.service", "secubox-system.service", "secubox-haproxy.service",
     "secubox-p2p.service", "secubox-wireguard.service", "secubox-hardening.service", "secubox-dns-guard.service",
+    # R-L5-34 : toute box reste télé-administrable par son maître (déjà dans PROTECTED_IDS, oublié ici, #3946).
+    "secubox-pilotage-agent.service",
 })
 
 # Ruling R2 du contrôleur (#3258) : /admin/ (root) liste TOUS les services systemd. Quatre unités Debian y restent

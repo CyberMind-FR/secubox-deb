@@ -16,7 +16,7 @@ Usage : secubox-pilotagectl [--acteur <login>] <verbe> …
 
 Verbes (liste fermée) :
   reboot                                   redémarrage (différé de 5 s : la réponse au maître part d'abord)
-  maj-paquets                              apt-get update + upgrade (jamais dist-upgrade ni autoremove), opération longue
+  maj-paquets                              apt-get update + upgrade --with-new-pkgs (jamais dist-upgrade ni autoremove), opération longue
   installer <secubox-…>                    apt-get install --no-remove d'un paquet du dépôt (#3338), opération longue
   service <demarrer|arreter|redemarrer> <unité>
                                            unité ^secubox-[a-z0-9][a-z0-9@.-]{0,62}\\.(service|timer)$, jamais celle de
@@ -1020,7 +1020,7 @@ def commande(ctx, verbe, p):
     if verbe == "maj-paquets":
         return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
                 ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y -o Dpkg::Options::=--force-confold "
-                                  "-o Dpkg::Options::=--force-confdef upgrade"])
+                                  "-o Dpkg::Options::=--force-confdef upgrade --with-new-pkgs"])
     if verbe == "installer":
         # Installation seulement : --no-remove arrête apt plutôt que de retirer un paquet au passage. Jamais de délai.
         return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
