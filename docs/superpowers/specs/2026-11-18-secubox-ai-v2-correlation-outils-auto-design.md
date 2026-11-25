@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SecuBox AI V2 — complément : corrélation multicouche, outils de l'attaquant, tout automatique (#3795)
 
 Date : 2026-11-18. Statut : conception, à valider par le propriétaire. Complète (ne remplace pas)
