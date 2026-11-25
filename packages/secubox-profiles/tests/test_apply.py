@@ -237,7 +237,7 @@ def test_retour_arriere_d_un_oneshot_compte_comme_atteint(tmp_path):
 
     def run(argv):
         if argv[:2] == ["systemctl", "show"] and "Type" in argv:
-            return 0, ("oneshot\n" if any("secubox-a" in x for x in argv) else "simple\n")
+            return 0, ("oneshot\n" if "a.service" in argv else "simple\n")
         return run0(argv)
 
     audit = tmp_path / "audit.log"
