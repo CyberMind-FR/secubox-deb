@@ -343,7 +343,7 @@ def test_paysage_demo(largeur):
     assert r["etat"].startswith("relevé de ") and "cumul par population" in r["barre"]
     assert r["legende_h"] <= 60 and r["part"] >= .6 and "repères" in r["replie"]
     assert "périmé" not in r["etat"] and "partiel" not in r["etat"]
-    assert r["pays"] == 0 and r["pays2"] == 3 and r["focus_case"] == "pt-pays"
+    assert r["pays"] == 0 and r["pays2"] == 10 and r["focus_case"] == "pt-pays"
     assert any("proxy loué" in p for p in r["puces"]) and any("rotation" in p for p in r["puces"])
     assert "620 adresses" in r["info"] and "Balayage des sites web : boutique.demo.test" in r["info"]
     assert "Hébergement Démonstration et Associés" in r["insp"] and "160 adresses" in r["insp"]
@@ -359,6 +359,7 @@ def test_paysage_taille_reelle(largeur):
         r = pg.evaluate(MESURES)
         r["deborde"] = _debordement(pg)
         _capture(pg, f"paysage-max-{largeur}.png")
+        pg.mouse.move(2, 2)  # aucun survol : l'infobulle est celle du focus
         pg.focus("#topo .nd[data-id='asn:64510']")
         pg.wait_for_timeout(200)
         r["info"] = pg.evaluate("[...document.querySelectorAll('#topo .infob tspan')].map(t => t.textContent).join(' ')")
@@ -1755,3 +1756,176 @@ def test_compteurs_visibles_avec_le_menu_lateral_a_1280x900(partiel):
         return r
     r = _navigateur(sc, query="", api=api, largeur=1280, hauteur=900)
     assert r[0] == "220px" and all(b <= 900 and y == 0 and h >= 260 for b, y, h in r[1:]), r
+
+
+# --- vue « Carte » (tâche 7b) --------------------------------------------------------------------------------
+
+def _avec_pays(nb=40, **k):
+    """Les enregistrements avec deux vrais pays (US partout, VN absent des indices impairs) et un pays sans position (XK)."""
+    d, api, ent = _enregistrements(nb=nb, **k)
+    graphes = [api[c][1]["graphe"] for c in api if c.startswith("paysage/instantane/")] + [d["instantane"]["graphe"]]
+    for rang, g in enumerate(graphes):
+        impair = rang % 2 and rang < len(graphes) - 1
+        for c, part in [("US", 50), ("XK", 10)] + ([] if impair else [("VN", 5)]):
+            g["noeuds"].append({"id": "pays:" + c, "type": "pays", "libelle": c, "metriques": {}})
+            g["aretes"] = g["aretes"] + [{"de": "pop:famille:p01", "vers": "pays:" + c, "type": "ORIGINE", "poids": part}]
+    return d, api, ent
+
+
+C_ETAT = """() => ({pouls: document.querySelectorAll('#topo svg[data-sbxp="carte"]').length, quand: document.querySelectorAll('#topo [data-sbxp="quand"]').length,
+  points: [...document.querySelectorAll('#topo .pt')].map(n => n.dataset.id).sort(), liste: [...document.querySelectorAll('#topo button.cP')].map(n => n.dataset.id)})"""
+
+
+@pytest.mark.parametrize("largeur", [1280, 400])
+def test_carte_demo(largeur):
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.mouse.move(2, 2)  # le survol de la carte fige le pouls
+        pg.wait_for_function("document.querySelectorAll('#topo [data-sbxp=\"quand\"]').length === 1")
+        r = {"etat": pg.evaluate(C_ETAT), "texte": pg.inner_text("#topo"), "deborde": _debordement(pg), "vie": pg.is_visible("#topo [data-sbxp='vie']")}
+        _capture(pg, f"paysage-t7b-demo-{largeur}-direct.png")
+        pg.wait_for_function("document.querySelector('#topo .cQuand').textContent.includes('il y a')", timeout=12000)
+        _capture(pg, f"paysage-t7b-demo-{largeur}-recul.png")
+        r["petit"] = pg.eval_on_selector_all("#topo *", "l => l.filter(e => e.offsetParent && [...e.childNodes].some(n => n.nodeType === 3 && n.data.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.5).map(e => e.className + ':' + e.textContent)")
+        r["haut"] = pg.eval_on_selector_all("#topo button.cP", "l => Math.min(...l.map(b => b.getBoundingClientRect().height))")
+        pg.focus("#topo .pt[tabindex='0']")
+        a = pg.evaluate("document.activeElement.dataset.id")
+        pg.keyboard.press("ArrowRight")
+        r["fleche"] = (a, pg.evaluate("document.activeElement.dataset.id"), pg.inner_text("#topo .cLit"))
+        pg.keyboard.press("Home")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(200)
+        r["insp"], r["choisi"] = pg.inner_text("#insp"), pg.evaluate(C_ETAT)
+        _capture(pg, f"paysage-t7b-demo-{largeur}-fiche.png")
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(150)
+        r["repos"] = pg.evaluate("document.querySelectorAll('#topo .pt.sel').length")
+        pg.click("#eDebut")
+        pg.wait_for_timeout(300)
+        r["lecture"], r["bandeau"] = pg.evaluate(C_ETAT), _bandeau(pg)
+        _capture(pg, f"paysage-t7b-demo-{largeur}-lecture.png")
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(150)
+        r["garde"] = _bandeau(pg), pg.locator("#topo svg.paysage").count()
+        pg.click("#vueCarte")
+        pg.click("#eDirect")
+        pg.wait_for_timeout(300)
+        r["fin"], r["deborde2"] = pg.evaluate(C_ETAT), _debordement(pg)
+        pg.click("#vueBulles")
+        r["bulles"] = pg.locator("#topo svg.bulles").count(), pg.locator("#topo .cMonde").count(), pg.is_visible("#pEnreg")
+        return r
+    r = _navigateur(sc, largeur=largeur)
+    assert not r["deborde"] and not r["deborde2"] and r["petit"] == [] and r["haut"] >= 40
+    assert r["etat"]["pouls"] == 1 and r["etat"]["quand"] == 1 and r["vie"]
+    assert "pays:US" in r["etat"]["points"] and "pays:XK" not in r["etat"]["points"] and "pays:XK" in r["etat"]["liste"]
+    for t in ("estimation incomplète", "en nombre inconnu", "hors carte", "origine non mesurée : 1 population", "2 populations repliées"):
+        assert t in r["texte"], t
+    assert r["fleche"][0] == "pays:US" and r["fleche"][1] != "pays:US" and "estimation" in r["fleche"][2]
+    for t in ("États-Unis", "Collecte : forge.demo.test", "Mandataires Exemple", "Tous pays confondus"):
+        assert t in r["insp"], t
+    assert r["choisi"]["pouls"] == 0 and r["repos"] == 0  # au repos seulement
+    assert r["lecture"]["pouls"] == 0 and r["lecture"]["quand"] == 0 and "relevé 1 sur" in r["bandeau"]
+    assert "pays:VN" not in r["lecture"]["liste"] and "pays:VN" in r["fin"]["liste"]  # chaque pas est son instantané
+    assert "relevé 1 sur" in r["garde"][0] and r["garde"][1] == 1 and r["fin"]["pouls"] == 1
+    assert r["bulles"] == (1, 0, False)
+
+
+def test_carte_pilotee_par_l_enregistreur_focus_et_requetes_bornees():
+    _, api, ent = _avec_pays()
+    vus = []
+
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.wait_for_function("__t.c.version > 0")
+        r = {"req": len(_instants(vus)), "doublons": len(_instants(vus)) - len(set(_instants(vus)))}
+        pg.click("#eDebut")
+        pg.wait_for_timeout(500)
+        pg.focus("#topo .pt[data-id='pays:US']")
+        r["pas"] = []
+        for _ in range(4):
+            pg.evaluate("__t.E.pas(1)")
+            pg.wait_for_timeout(120)
+            e = pg.evaluate(C_ETAT)
+            r["pas"].append((e["pouls"], "pays:VN" in e["liste"], pg.evaluate("document.activeElement.dataset.id"), pg.evaluate("__t.p.ts===__t.E.etat().ts")))
+        pg.click("#eV16")
+        pg.click("#eLire")
+        pg.wait_for_timeout(400)
+        r["lit"] = pg.evaluate(C_ETAT)["pouls"]
+        pg.click("#eDirect")
+        pg.wait_for_timeout(300)
+        n = len(_instants(vus))
+        pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        pg.wait_for_timeout(400)
+        r["encore"] = len(_instants(vus)) - n
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus, crochet="{E:Enregistreur,p:paysage,c:carte}", largeur=1280)
+    assert 0 < r["req"] <= 12 and r["doublons"] == 0 and r["encore"] == 0 and r["lit"] == 0
+    assert all(p == 0 and f == "pays:US" and juste for p, _, f, juste in r["pas"]) and {v for _, v, _, _ in r["pas"]} == {True, False}
+
+
+@pytest.mark.parametrize("cas", ["reduit", "sans_scripts", "sans_origine", "refus", "partiel"])
+def test_carte_degradee(cas):
+    d, api, ent = _avec_pays() if cas != "sans_origine" else _enregistrements()
+    if cas == "partiel":
+        d["instantane"]["partiel"] = True
+
+    def sc(pg):
+        if cas == "sans_scripts":
+            pg.route("**/pouls.js", lambda x: x.fulfill(status=404, body=""))
+            pg.route("**/carte-monde.js", lambda x: x.fulfill(status=404, body=""))
+        pg.click("#vueCarte")
+        pg.wait_for_timeout(900)
+        r = {"texte": pg.inner_text("#topo")}
+        if cas == "refus":
+            api["paysage"] = (401, {})
+            pg.click("#rafraichir")
+            pg.wait_for_timeout(500)
+            r["apres"], r["mem"] = pg.inner_text("#topo"), pg.evaluate("[Object.keys(__t.c.pays).length, __t.c.pouls]")
+        r["etat"] = pg.evaluate(C_ETAT)
+        if cas == "reduit":
+            a = pg.inner_text("#topo .cQuand")
+            pg.wait_for_timeout(3500)
+            r["fixe"] = a == pg.inner_text("#topo .cQuand")
+        return r
+    k = {"reduced_motion": "reduce"} if cas == "reduit" else {}
+    r = _navigateur(sc, query="", api=api, crochet="{c:carte}", **k)
+    if cas == "reduit":
+        assert r["fixe"]
+    elif cas == "sans_scripts":
+        assert "fond de carte non chargé" in r["texte"] and "pays:US" in r["etat"]["liste"] and r["etat"]["pouls"] == 0
+    elif cas == "sans_origine":
+        assert "Aucune origine dans ce relevé" in r["texte"] and r["etat"]["liste"] == []
+    elif cas == "refus":
+        assert "session requise" in r["apres"] and r["etat"]["liste"] == [] and r["mem"] == [0, None]
+    else:
+        assert r["etat"]["pouls"] == 0 and "pays:US" in r["etat"]["liste"]
+
+
+@pytest.mark.parametrize("largeur", [1280, 400])
+def test_carte_clic_sur_la_carte(largeur):
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.wait_for_timeout(600)
+        b = pg.locator("#topo .pt[data-id='pays:BR'] .r").bounding_box()
+        pg.mouse.click(b["x"] + b["width"] / 2 + 8, b["y"] + b["height"] / 2)
+        pg.wait_for_timeout(200)
+        return pg.inner_text("#insp"), pg.is_visible("#panInsp"), pg.locator("#topo .cP.sel").count()
+    t, vis, sel = _navigateur(sc, largeur=largeur)
+    assert "Brésil" in t and vis and sel == 1
+
+
+@pytest.mark.parametrize("partiel", [False, True])
+def test_carte_compteurs_visibles_avec_le_menu_lateral(partiel):
+    d, api, ent = _avec_pays(nb=60)
+    d["instantane"]["partiel"] = partiel
+
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.wait_for_timeout(700)
+        a = pg.evaluate("Math.ceil(document.getElementById('pBarre').getBoundingClientRect().bottom)")
+        y = pg.evaluate("document.getElementById('pEnreg').getBoundingClientRect().top")
+        pg.click("#ePrec")
+        pg.wait_for_timeout(400)
+        return a, pg.evaluate("Math.ceil(document.getElementById('pBarre').getBoundingClientRect().bottom)"), pg.evaluate("document.getElementById('pEnreg').getBoundingClientRect().top") - y
+    r = _navigateur(sc, query="", api=api, largeur=1280, hauteur=900)
+    assert r[0] <= 900 and r[1] <= 900, r
