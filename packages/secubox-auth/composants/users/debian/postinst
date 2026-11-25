@@ -49,11 +49,6 @@ PYEOF
             chown root:secubox /etc/secubox/users.json
             chmod 0640 /etc/secubox/users.json
         fi
-        # Verrou des écrivains (#3708) : illisible par le service, il fermerait toute écriture.
-        if [ -f /etc/secubox/.users.json.verrou ] && [ ! -L /etc/secubox/.users.json.verrou ]; then
-            chown root:secubox /etc/secubox/.users.json.verrou
-            chmod 0640 /etc/secubox/.users.json.verrou
-        fi
         if [ -f /etc/secubox/auth.toml ]; then
             chown root:secubox /etc/secubox/auth.toml
             chmod 0640 /etc/secubox/auth.toml

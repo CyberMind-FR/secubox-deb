@@ -100,7 +100,7 @@ Un import d'admin sans mot de passe est refusé. Un compte créé sans mot de pa
 
 **Marque durable** : `admin_configure_le` dans `users.json`, posée sous le verrou au premier mot de passe choisi d'un
 administrateur, ou par le postinst (`usersctl marquer-configure`) si un admin actif a un mot de passe autre que celui du
-premier démarrage. Ensuite, réinitialiser ou effacer le seul mot de passe ne rouvre aucune revendication (ni compte sans
+premier démarrage (« à changer », il doit avoir servi : connexion passée ou second facteur). Ensuite, réinitialiser ou effacer le seul mot de passe ne rouvre aucune revendication (ni compte sans
 mot de passe, ni admin au mot de passe du premier démarrage, qui ne se choisit plus). Accès perdu : en root,
 `usersctl set-password NOM`. Remise à zéro : en root, `usersctl rouvrir-premiere-configuration` (audité, refusé tant qu'un
 administrateur est configuré), puis définir le mot de passe depuis le LAN. Registre occupé : 503, réessayer.

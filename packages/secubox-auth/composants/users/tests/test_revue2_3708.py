@@ -57,7 +57,10 @@ def test_marque_posee_au_premier_mot_de_passe_choisi_et_durable(box):
 
 @pytest.mark.parametrize("u,attendu", [(compte("admin", DEFAUT), False), (compte("admin"), False),
                                        (compte("admin", CHOISI), True),
-                                       (compte("admin", CHOISI, must_change_password=True), True),
+                                       (compte("admin", CHOISI, must_change_password=True), False),
+                                       (compte("admin", CHOISI, must_change_password=True, totp={"enabled": False}), False),
+                                       (compte("admin", CHOISI, must_change_password=True, totp={"enabled": True}), True),
+                                       (compte("admin", CHOISI, must_change_password=True, last_login="x"), True),
                                        (compte("console", CHOISI), False), (compte("v", CHOISI, role="viewer"), False)])
 def test_marque_semee_par_le_postinst(box, u, attendu):
     box.pose(u)
@@ -140,11 +143,12 @@ def test_root_repare_le_verrou(box, monkeypatch):
     assert vus == [(0, 4242)] and v.stat().st_mode & 0o777 == 0o640
 
 
-def test_postinst_repare_le_verrou():
+def test_postinst_ne_touche_pas_le_verrou_par_chemin():
+    """/etc/secubox est au compte secubox : un chown par chemin s'y détourne. `usersctl semer` répare par descripteur."""
     from test_admins_sans_mot_de_passe_3708 import USERS
     t = (USERS / "debian" / "postinst").read_text()
-    assert "chown root:secubox /etc/secubox/.users.json.verrou" in t and "chmod 0640 /etc/secubox/.users.json.verrou" in t
-    assert t.index("usersctl marquer-configure") < t.index("usersctl desactiver-admins")
+    assert ".users.json.verrou" not in t
+    assert t.index("usersctl semer") < t.index("usersctl marquer-configure") < t.index("usersctl desactiver-admins")
 
 
 def test_verrou_illisible_devient_engineerror_et_la_connexion_tient(box):
@@ -193,3 +197,45 @@ def test_registre_occupe_503(box, api, monkeypatch, appel):
 def test_aucune_ecriture_sur_la_boucle(api):
     for n in ("disable_user_totp", "set_user_otp_mode", "regen_backup_codes", "update_user", "assign_user_roles"):
         assert not inspect.iscoroutinefunction(getattr(api, n)), n
+
+
+# ── N1 : le plancher anti-rejeu sous verrou ───────────────────────────────────────────────────────────────────────────
+
+def test_un_code_totp_n_est_accepte_qu_une_fois_en_parallele(box, monkeypatch):
+    import threading
+    import time
+
+    import pyotp
+    noms = [f"u{i}" for i in range(6)]
+    secret = pyotp.random_base32()
+    box.pose(*(compte(n, CHOISI, totp={"enabled": True, "secret": secret}) for n in noms))
+    monkeypatch.setenv("SECUBOX_TOTP_REPLAY_PATH", str(box.d / "plancher.json"))
+    e = box.e
+    vrai = e._replay_load
+    monkeypatch.setattr(e, "_replay_load", lambda: (vrai(), time.sleep(0.005))[0])      # élargit la fenêtre
+    code, depart = pyotp.TOTP(secret).now(), threading.Barrier(24)
+    oui, erreurs = [], []
+
+    def f(nom):
+        depart.wait()
+        try:
+            if e.verify_totp_for_user(nom, code):
+                oui.append(nom)
+        except Exception as x:  # noqa: BLE001 — c'est le constat du test
+            erreurs.append(x)
+    fils = [threading.Thread(target=f, args=(noms[i % 6],)) for i in range(24)]
+    [t.start() for t in fils]
+    [t.join() for t in fils]
+    assert erreurs == [] and sorted(oui) == noms
+    assert sorted(json.loads((box.d / "plancher.json").read_text())) == noms        # aucun plancher perdu
+
+
+def test_plancher_partage_avec_le_second_facteur_commun(box, monkeypatch):
+    import pyotp
+    from secubox_core import second_facteur, user_store
+    secret = pyotp.random_base32()
+    box.pose(compte("admin", CHOISI, totp={"enabled": True, "secret": secret}))
+    monkeypatch.setenv("SECUBOX_TOTP_REPLAY_PATH", str(box.d / "plancher.json"))
+    monkeypatch.setattr(user_store, "USERS_PATH", box.users)
+    code = pyotp.TOTP(secret).now()
+    assert box.e.verify_totp_for_user("admin", code) and not second_facteur.verifie_totp("admin", code)

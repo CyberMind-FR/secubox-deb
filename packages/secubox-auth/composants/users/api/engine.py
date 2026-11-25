@@ -11,6 +11,7 @@ Every API handler and the CLI call into this module. No code outside
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import functools
 import json
 import logging
@@ -511,7 +512,23 @@ class Engine:
         tmp.write_text(json.dumps(state))
         os.replace(tmp, self.replay_path)
 
+    @contextlib.contextmanager
+    def _verrou_plancher(self):
+        """Lire, vérifier, consigner d'un seul tenant, entre fils et processus (#3708) : le MÊME verrou que
+        secubox_core.second_facteur, qui tient le même fichier."""
+        self.replay_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(self.replay_path) + ".verrou", os.O_RDONLY | os.O_CREAT | os.O_CLOEXEC, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
+
     def verify_totp_for_user(self, username: str, code: str, window: int = 1) -> bool:
+        with self._verrou_plancher():
+            return self._verify_totp_verrouille(username, code, window)
+
+    def _verify_totp_verrouille(self, username: str, code: str, window: int) -> bool:
         import pyotp
         import time
 

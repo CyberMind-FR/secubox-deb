@@ -33,6 +33,7 @@ secubox-auth (1.8.22-1~trixie1) trixie; urgency=medium
   * Registre occupé : 503 partout ; une connexion réussie n'échoue jamais pour
     last_login ; verrou réparé (root:secubox 0640) ; second facteur hors de la
     boucle, codes de secours derrière la porte argon2.
+  * Code TOTP lu, vérifié et consigné sous un verrou (plus de double acceptation).
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
 

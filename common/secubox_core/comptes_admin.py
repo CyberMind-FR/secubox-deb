@@ -349,14 +349,20 @@ def configure_un_jour(doc: Any) -> bool:
     return isinstance(doc, dict) and bool(doc.get(CLE_MARQUE))
 
 
+def _a_servi(u: Dict[str, Any]) -> bool:
+    t = u.get("totp")
+    return bool(u.get("last_login") or (isinstance(t, dict) and t.get("enabled")))
+
+
 def poser_marque(doc: Dict[str, Any], provisoire_compte: bool = False) -> bool:
     """Pose la marque si un administrateur est configuré. `provisoire_compte` (postinst) : un mot de passe « à changer »
-    autre que celui du premier démarrage suffit, la box a déjà servi. Rend vrai si elle vient d'être posée."""
+    autre que celui du premier démarrage suffit si le compte a SERVI (connexion passée ou second facteur enrôlé) : un
+    provisoire jamais utilisé ne prouve rien. Rend vrai si elle vient d'être posée."""
     if configure_un_jour(doc):
         return False
     s = comptes_systeme() | _anciens_services() if provisoire_compte else frozenset()
     if not (admin_configure(doc) or (provisoire_compte and any(
-            est_admin_actif(u) and _humain(u, s) and _verdict(u) == "inactif" for u in comptes(doc)))):
+            est_admin_actif(u) and _humain(u, s) and _a_servi(u) and _verdict(u) == "inactif" for u in comptes(doc)))):
         return False
     doc[CLE_MARQUE] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return True
