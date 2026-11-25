@@ -9,6 +9,10 @@ case "$1" in
             systemctl stop secubox-datascope-collect.timer secubox-datascope-collect.service secubox-datascope.service || true
             systemctl disable secubox-datascope-collect.timer secubox-datascope.service >/dev/null 2>&1 || true
         fi
+        # Retire l'ACL de traversée posée par le postinst (seule entrée du compte, rien d'autre n'est touché).
+        if [ -d /var/lib/secubox/waf ] && [ ! -L /var/lib/secubox/waf ] && command -v setfacl >/dev/null 2>&1; then
+            setfacl -x u:secubox-datascope /var/lib/secubox/waf 2>/dev/null || true
+        fi
         ;;
 esac
 

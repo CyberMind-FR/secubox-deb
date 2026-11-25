@@ -21,11 +21,14 @@ Depends: ${misc:Depends},
  adduser,
  systemd
 Recommends: secubox-nac,
- secubox-health
+ secubox-health,
+ acl
 Description: SecuBox DataScope — cockpit réseau, graphe d'entités observées (lecture seule)
  Construit chaque minute, à partir des sources locales existantes (appareils
  du contrôle d'accès, débits des interfaces, santé des modules), un graphe
  d'entités (nœud, réseau, interface, appareil, IP, service) et de relations
  observées ou rapportées, jamais inférées. Aucun nom de domaine n'est stocké.
+ Vue « Paysage » des menaces (relevé des populations du WAF), instantanés
+ conservés 30 jours, tendances et enregistreur à rembobinage (#3921).
  Base SQLite, API locale gardée sur /run/secubox/datascope.sock, page
- « DataScope » dans l'administration. V0.1 (#3853).
+ « DataScope » dans l'administration.

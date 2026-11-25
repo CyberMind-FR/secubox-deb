@@ -44,3 +44,74 @@ Ordre de priorité : variables d'environnement (`SECUBOX_DATASCOPE_DB`, `_CACHE`
 `/var/lib/secubox-datascope/datascope.db`.
 
 Depends : `python3-fastapi`, `python3-uvicorn`, `secubox-core`. Compte `secubox-datascope`, groupe `secubox`.
+
+## Vue « Paysage » (0.2.0, #3921)
+
+Troisième vue de la page DataScope : le graphe des menaces tiré du relevé des populations du WAF
+(`/var/lib/secubox/waf/populations.json`, clé `populations`). Populations, réseaux, classes, cibles, CVE et pays
+sont posés en colonnes ; les compteurs (réseaux, adresses, bannies) sont des **cumuls par population** (une adresse
+dans deux populations compte deux fois). Une barre de compteurs à histogrammes (24 h ou 7 j), une fiche avec
+tendance par population, une synthèse et un fil des changements accompagnent le graphe. Le collecteur écrit un
+instantané à chaque **nouveau** relevé ; l'**Enregistreur** rejoue l'historique (lecture, pause, pas, vitesses
+×1/×4/×16, fenêtre 48 h ou 30 j, comparaison 24 h, 7 j ou date) avec badges apparu, disparu, hausse, baisse et
+fantômes. Toutes les routes sont en lecture seule, gardées par `require_jwt`, base ouverte en `mode=ro`.
+
+### Routes du paysage
+
+| Route | Réponse |
+|---|---|
+| `GET paysage` | dernier instantané : `{disponible, epoch, age_s, instantane, difference_24h, motif_difference_24h}` ; sans instantané `{"disponible": false}` |
+| `GET paysage/chronologie?de=&a=&differences=N` | en-têtes des instantanés (époques ; défaut 48 h, au plus 31 j, 1 500 lignes, `tronque`) ; `differences=N` (1 à 24) ajoute les N dernières différences stockées, sans graphe |
+| `GET paysage/instantane/{ts}` | un instantané complet (`ts` au format stocké `YYYY-MM-DDTHH:MM:SS.ffffffZ`) et sa différence |
+| `GET paysage/difference?de=<ts>&a=<ts>` | `{apparus, disparus, hausses, baisses, rotation_levee, rotation_tombee, tronque}` (listes à 300 au plus) |
+| `GET paysage/tendance/{id}?jours=7` | `{id, points: [{ts, epoch, adresses, bans, reseaux}], illisibles}` ; `jours` de 1 à 30 ; un point par heure |
+
+Champs à connaître :
+
+- `difference_24h.reference_partiel` : la référence de comparaison est un relevé partiel (à lire avec réserve) ;
+  sans référence assez ancienne (12 h), `difference_24h` est `null` et `motif_difference_24h` le dit.
+- `difference.sans_precedent` : `"premier"` (aucun instantané avant) ou `"illisible"` (le précédent est
+  indéchiffrable) ; la page n'affiche alors aucun badge « apparu » : tout paraîtrait nouveau.
+- `illisibles` (tendance) : instantanés dont le graphe stocké est illisible, omis de la courbe et comptés ;
+  un graphe illisible demandé seul rend 503, jamais un graphe vide.
+- Erreurs : 400 paramètre invalide, 404 instantané inconnu, 503 base absente ou illisible.
+
+### Instantanés, rétention, budget
+
+Un instantané (graphe compressé zlib + compteurs + différence avec le précédent) par nouveau relevé, soit toutes
+les **30 min** (période de `populations.json`). Au-delà de **48 h**, un seul par heure est gardé ; au-delà de
+**30 jours**, plus aucun ; le tout dans un budget de **60 Mio** (les plus anciens partent d'abord, le dernier jamais).
+Migration `migrations/0002-paysage.sql`, repères partagés `www/datascope/reperes.js`, tous deux installés par
+`debian/rules`. Un relevé absent, refusé, illisible, futur ou d'un mauvais type ne donne aucun instantané et jamais un graphe vide :
+le collecteur publie l'état et le motif (« relevé absent », « droit refusé », « relevé illisible », « relevé daté dans
+le futur »…) sous la source `paysage` des curseurs (`GET sources`, `overview.json`), hors de `complet` ; la page les
+affiche à la place du graphe, ou à côté du dernier instantané s'il y en a un. Un relevé simplement ancien n'est pas une
+panne de source : la page le marque « périmé » au-delà de 2 h. Le détail d'une erreur interne reste au journal.
+
+### Cibles et hébergement
+
+Une cible est un hôte, ou un compte masqué tel que le WAF l'écrit (`ger…`, identifiant `cible:compte:ger`) ; le nombre
+de cibles est celui du relevé. `HEBERGE` (cible → `infra:<box>`) n'est tracée que si le nom de la cible est exactement
+celui d'un service que la topologie de DataScope rattache à la box (`HOSTED_ON`) : le nom d'hôte visé vient de
+l'attaquant et ne prouve rien. La colonne « Infrastructure » peut donc être vide ; elle disparaît alors.
+
+### Droits de lecture (populations.json)
+
+Sur la box, `/var/lib/secubox/waf` est `0770 secubox-waf:secubox-waf` ; `populations.json` y est
+`secubox:secubox 0640`, et le groupe `secubox` est celui de `secubox-datascope` : seule la **traversée** du dossier
+manque. Le `postinst` pose à chaque configure `setfacl -m u:secubox-datascope:--x /var/lib/secubox/waf` (silencieux
+si le dossier ou `setfacl` est absent ; `Recommends: acl`), rien d'autre ; `prerm remove` la retire. Si `secubox-waf-ng`
+refait `chmod 0770` (tmpfiles), le masque ACL redevient `rwx` et l'entrée `--x` reste effective ; un `chmod 0700` la
+neutraliserait (le paysage resterait alors vide, « droit refusé » affiché). Côté confinement : `ProtectSystem=strict` laisse la
+lecture, aucun `InaccessiblePaths` ; le profil AppArmor n'autorise que `/var/lib/secubox/waf/populations.json r,`.
+
+### Limites connues
+
+Au démarrage de `secubox-waf-ng`, son `ExecStartPre` rend `/var/lib/secubox/waf` à `secubox-waf:secubox-waf`,
+`populations.json` compris : le fichier (`0640`) est alors illisible pour DataScope (« droit refusé », le dernier
+instantané reste affiché) jusqu'au relevé suivant, soit 30 min au plus ; il se rétablit seul. Correction prévue dans
+`secubox-waf-ng` (exclusion du fichier).
+
+Un instantané toutes les 30 min : la lecture d'un événement plus fin n'est pas possible. L'historique est court au
+début (rien avant la mise en place de 0.2.0) ; les compteurs et l'enregistreur disent « historique non chargé » ou
+« non mesuré » plutôt que d'inventer. La vue Carte arrive en 0.3.0.
