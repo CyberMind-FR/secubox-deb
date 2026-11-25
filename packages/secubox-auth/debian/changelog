@@ -1,3 +1,24 @@
+secubox-auth (1.8.22-1~trixie1) trixie; urgency=medium
+
+  * Comptes admin sans mot de passe, revendicables depuis la zone de confiance
+    (ref #3708). Le postinst ne sème plus de compte au nom de la machine dès
+    qu'un administrateur a un mot de passe, et désactive (jamais de suppression)
+    tout admin sans mot de passe dès qu'un autre admin actif en a choisi un ; une
+    ligne d'audit par compte. Retour : usersctl set-password NOM puis
+    usersctl enable NOM.
+  * POST /login : plus de première configuration d'un compte sans mot de passe
+    une fois un autre administrateur configuré ; POST /set-password le revérifie
+    à la pose (jeton émis avant, compte désactivé, mot de passe déjà posé).
+    Refus audités, même texte et même durée pour tous les comptes.
+  * POST /user (page Utilisateurs) : le mot de passe saisi est enregistré, à
+    changer à la première connexion (le compte restait sans mot de passe).
+  * usersctl : semer, desactiver-admins-sans-mot-de-passe,
+    renommer-compte-machine.
+  * postinst : composants configurés une fois, plus trois (l'agrégateur était
+    relancé six fois par mise à jour, il l'est deux fois).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-auth (1.8.21-1~trixie1) trixie; urgency=medium
 
   * Dépendance explicite à python-multipart (python3-python-multipart |

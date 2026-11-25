@@ -38,6 +38,30 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _comptes_admin():
+    """La règle des comptes admin sans mot de passe (#3708), par son CHEMIN si secubox_core n'est pas déjà chargé : le
+    paquet tire FastAPI, et le postinst comme le renommage (délai borné) n'en ont pas besoin."""
+    import importlib.util
+    import sys
+
+    nom = "secubox_core.comptes_admin"
+    if nom in sys.modules:
+        return sys.modules[nom]
+    if "secubox_core" in sys.modules:
+        return importlib.import_module(nom)
+    cle = "_sbx_comptes_admin"
+    if cle not in sys.modules:
+        paquet = importlib.util.find_spec("secubox_core")
+        if paquet is None or not paquet.submodule_search_locations:
+            raise EngineError("secubox_core introuvable (paquet secubox-core)")
+        spec = importlib.util.spec_from_file_location(
+            cle, Path(list(paquet.submodule_search_locations)[0]) / "comptes_admin.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        sys.modules[cle] = mod
+    return sys.modules[cle]
+
+
 class Engine:
     """Atomic, single-file mutation engine."""
 
@@ -197,6 +221,88 @@ class Engine:
         u["enabled"] = True
         self._save(doc)
         self._audit("user_enabled", username, {})
+
+    # ── Comptes admin sans mot de passe (#3708) ───────────────────────
+    #
+    # Une décision non auditée n'a pas lieu : la ligne d'audit part AVANT l'écriture, et une écriture qui échoue
+    # s'audite à son tour. Jamais de suppression : `usersctl set-password NOM` puis `usersctl enable NOM` défont.
+
+    def _auditer_securite(self, evenement: str, **champs: Any) -> None:
+        try:
+            _comptes_admin().auditer(evenement, **champs)
+        except OSError as exc:
+            raise EngineError(f"audit impossible ({exc.__class__.__name__}) : rien n'est changé") from None
+
+    def _save_audite(self, doc: Dict[str, Any], lignes: List[Dict[str, Any]]) -> None:
+        for ligne in lignes:
+            self._auditer_securite(**ligne)
+        try:
+            self._save(doc)
+        except OSError as exc:
+            self._auditer_securite("comptes_admin_echec", erreur=exc.__class__.__name__,
+                                   comptes=[x.get("compte") for x in lignes])
+            raise EngineError(f"users.json non écrit ({exc.__class__.__name__}) : rien n'est changé") from None
+
+    def semer_comptes(self, machine: str = "") -> List[str]:
+        """Sème `admin` s'il manque, et le compte au nom de la machine tant qu'AUCUN administrateur n'a de mot de passe.
+        Un `admin` semé sur une box configurée est refermé par la désactivation qui suit (il doit exister : premier-pas
+        et l'état du mot de passe par défaut le cherchent)."""
+        ca = _comptes_admin()
+        semes = []
+        if not self._find(self._load(), "admin"):
+            self.create_user("admin", email=None, role="admin")
+            semes.append("admin")
+        doc = self._load()
+        if (machine and not self._find(doc, machine) and machine not in ca.comptes_systeme()
+                and not ca.admin_avec_mot_de_passe(doc)):
+            self.create_user(machine, email=None, role="admin")
+            semes.append(machine)
+        return semes
+
+    def desactiver_admins_sans_mot_de_passe(self, origine: str = "") -> List[str]:
+        """Désactive tout admin actif sans mot de passe dès qu'un AUTRE admin actif en a choisi un. Idempotent ; ne
+        touche ni un compte à mot de passe, ni un compte de service, ni un non-admin, ni le dernier admin actif."""
+        ca = _comptes_admin()
+        doc = self._load()
+        noms = ca.admins_sans_mot_de_passe(doc)
+        if not noms or not ca.admin_configure(doc):
+            return []
+        for n in noms:
+            self._find(doc, n)["enabled"] = False
+        self._save_audite(doc, [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": n,
+                                 "origine": origine or None} for n in noms])
+        for n in noms:
+            self._audit("user_disabled", n, {"motif": "admin sans mot de passe"})
+        return noms
+
+    def renommer_compte_machine(self, ancien: str, nouveau: str, acteur: Optional[str] = None) -> str:
+        """Après un renommage de box : plus de compte admin semé sous l'ancien nom. Rend « aucun » (rien à faire, dont
+        un compte à mot de passe), « desactive » (un autre admin est configuré, ou le nouveau nom n'est pas disponible
+        et un autre admin reste), « renomme » (box pas encore configurée) ou « garde » (dernier admin actif)."""
+        ca = _comptes_admin()
+        doc = self._load()
+        u = self._find(doc, ancien)
+        systeme = ca.comptes_systeme()
+        if (ancien == nouveau or ancien == "admin" or not u or ancien in systeme or not ca.est_admin_actif(u)
+                or not ca.sans_mot_de_passe(u)):
+            return "aucun"
+        jamais_servi = not any(u.get(c) for c in ("last_login", "totp", "google", "services"))
+        libre = bool(USERNAME_RE.match(nouveau)) and nouveau not in systeme and not self._find(doc, nouveau)
+        autre = any(ca.est_admin_actif(x) and x["username"] != ancien and x["username"] not in systeme
+                    for x in ca.comptes(doc))
+        if not ca.admin_configure(doc) and libre and jamais_servi:
+            u["username"] = nouveau
+            self._save_audite(doc, [{"evenement": "compte_machine_renomme", "compte": ancien, "nouveau": nouveau,
+                                     "acteur": acteur}])
+            self._audit("user_renamed", ancien, {"nouveau": nouveau})
+            return "renomme"
+        if not autre:
+            return "garde"
+        u["enabled"] = False
+        self._save_audite(doc, [{"evenement": "admin_sans_mot_de_passe_desactive", "compte": ancien,
+                                 "origine": "renommage", "acteur": acteur}])
+        self._audit("user_disabled", ancien, {"motif": "box renommée"})
+        return "desactive"
 
     # ── Passwords ────────────────────────────────────────────────────
 

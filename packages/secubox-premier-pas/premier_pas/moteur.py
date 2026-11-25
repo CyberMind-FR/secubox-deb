@@ -190,6 +190,8 @@ def _pose_empreinte_admin(empreinte: str) -> None:
     u = e._find(doc, "admin")
     if not u:
         raise RuntimeError("compte admin absent de users.json")
+    if not u.get("password_hash"):
+        u["enabled"] = True     # refermé faute de mot de passe (#3708) : il en a un désormais, choisi ici
     u["password_hash"] = empreinte
     u["must_change_password"] = False
     e._save(doc)

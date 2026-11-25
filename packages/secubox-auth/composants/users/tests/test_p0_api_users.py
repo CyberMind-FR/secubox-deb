@@ -103,6 +103,8 @@ class _MoteurFactice:
     def create_user(self, name, email=None, role=None):
         self.rec = dict(json.loads(json.dumps(SECRET)), username=name, email=email, role=role)
         return json.loads(json.dumps(self.rec))
+    def set_password(self, name, plaintext):
+        pass
     def _load(self):
         return {"version": 2, "users": [self.rec], "groups": []}
     def _save(self, doc):

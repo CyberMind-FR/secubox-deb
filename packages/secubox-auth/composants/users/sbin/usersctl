@@ -159,6 +159,45 @@ def cmd_migrate(args):
     return 0
 
 
+def _purger_sessions(noms) -> None:
+    """Coupe les sessions des comptes désactivés (une réactivation ne doit pas les ressusciter). Au mieux : un compte
+    désactivé est déjà refusé à chaque requête."""
+    chemin = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/sessions.json"))
+    if not noms or not chemin.exists():
+        return
+    try:
+        from secubox_core import sessions
+        sessions.muter(lambda rows: [r for r in rows if r.get("username") not in noms], chemin)
+    except (ImportError, OSError) as exc:
+        print(f"sessions non coupées ({exc.__class__.__name__}) ; les comptes désactivés restent refusés",
+              file=sys.stderr)
+
+
+def cmd_semer(args):
+    for n in _engine().semer_comptes(args.machine):
+        print(f"compte semé : {n}")
+    return 0
+
+
+def cmd_desactiver_sans_mot_de_passe(args):
+    noms = _engine().desactiver_admins_sans_mot_de_passe(origine=args.origine)
+    _purger_sessions(noms)
+    for n in noms:
+        print(f"désactivé (administrateur sans mot de passe, #3708) : {n} — pour le rouvrir : "
+              f"usersctl set-password {n} puis usersctl enable {n}")
+    return 0
+
+
+def cmd_renommer_compte_machine(args):
+    etat = _engine().renommer_compte_machine(args.ancien, args.nouveau, acteur=args.acteur)
+    if etat == "desactive":
+        _purger_sessions([args.ancien])
+    print(etat)
+    if etat == "garde":
+        print(f"compte {args.ancien} gardé : c'est le dernier administrateur actif", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="usersctl", description="SecuBox user management CLI")
     sub = p.add_subparsers(dest="cmd")
@@ -211,6 +250,22 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("revoke", help="Force-logout (without disabling)")
     sp.add_argument("username")
     sp.set_defaults(func=cmd_revoke)
+
+    sp = sub.add_parser("semer", help="Seed admin (and the machine account while no admin has a password)")
+    sp.add_argument("--machine", default="")
+    sp.set_defaults(func=cmd_semer)
+
+    sp = sub.add_parser("desactiver-admins-sans-mot-de-passe",
+                        help="Disable passwordless admins once another active admin has a password (#3708)")
+    sp.add_argument("--origine", default="usersctl")
+    sp.set_defaults(func=cmd_desactiver_sans_mot_de_passe)
+
+    sp = sub.add_parser("renommer-compte-machine",
+                        help="After a box rename: no passwordless admin left under the old name (#3708)")
+    sp.add_argument("--acteur", default=None)
+    sp.add_argument("ancien")
+    sp.add_argument("nouveau")
+    sp.set_defaults(func=cmd_renommer_compte_machine)
 
     sub.add_parser("migrate-v1-to-v2", help="Migrate users.json + auth.toml to v2").set_defaults(func=cmd_migrate)
 

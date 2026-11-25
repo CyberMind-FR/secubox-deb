@@ -68,6 +68,47 @@ def test_garde_marque_a_changer_et_audite(tmp_path, monkeypatch):
     assert "premier_pas_plus_tard" in (tmp_path / "audit.log").read_text()
 
 
+def _moteur(monkeypatch, tmp_path, **admin):
+    import json
+    import sys
+    import types
+    users = tmp_path / "users.json"
+    users.write_text(json.dumps({"users": [{"username": "admin", **admin}]}))
+
+    class Engine:
+        def __init__(self, users_path):
+            self.p = Path(users_path)
+
+        def _load(self):
+            return json.loads(self.p.read_text())
+
+        def _find(self, doc, n):
+            return next((u for u in doc["users"] if u["username"] == n), None)
+
+        def _save(self, doc):
+            self.p.write_text(json.dumps(doc))
+
+        def _audit(self, *a):
+            pass
+    api = types.ModuleType("api")
+    api.engine = types.SimpleNamespace(Engine=Engine)
+    monkeypatch.setitem(sys.modules, "api", api)
+    monkeypatch.setattr(M, "USERS_FILE", users)
+    M._pose_empreinte_admin("$argon2id$neuf")
+    return json.loads(users.read_text())["users"][0]
+
+
+def test_admin_referme_faute_de_mot_de_passe_rouvre_quand_l_assistant_en_pose_un(tmp_path, monkeypatch):
+    """#3708 : sinon l'assistant annoncerait un mot de passe admin qui n'ouvre rien."""
+    u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash=None, must_change_password=True)
+    assert u["enabled"] is True and u["password_hash"] == "$argon2id$neuf"
+
+
+def test_admin_desactive_a_la_main_le_reste(tmp_path, monkeypatch):
+    u = _moteur(monkeypatch, tmp_path, enabled=False, password_hash="$argon2id$vieux", must_change_password=False)
+    assert u["enabled"] is False
+
+
 def test_page_offre_plus_tard_et_explique_l_encadrement():
     assert 'id="plustard"' in PAGE and "({plus_tard: true})" in PAGE
     assert "réseau local ou le maillage seulement" in PAGE and "redemandé à chaque connexion" in PAGE and "SSH par mot de passe refusé" in PAGE

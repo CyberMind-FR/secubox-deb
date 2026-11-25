@@ -24,31 +24,17 @@ from pathlib import Path
 migrate(Path('/etc/secubox/users.json'), auth_toml_path=Path('/etc/secubox/auth.toml'))
 PYEOF
 
-        # Seed default users (admin + <hostname>) if missing
+        # Comptes semés : admin, et le compte au nom de la machine SEULEMENT tant qu'aucun administrateur n'a de mot de
+        # passe (#3708 : un renommage en ajoutait un, sans mot de passe, revendicable depuis le LAN et le maillage).
         HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
         # Dans une construction d'image, ce nom est celui de la machine de CI : jamais un compte (#3518).
         if ischroot 2>/dev/null || [ -n "${SECUBOX_IMAGE_BUILD:-}" ]; then HOSTNAME_SHORT=""; fi
-        for U in admin "$HOSTNAME_SHORT"; do
-            [ -n "$U" ] || continue
-            SBX_SEED_USER="$U" python3 - <<'PYEOF' || echo "WARN: seed for $U failed"
-import json
-import os
-import sys
-from pathlib import Path
+        /usr/sbin/usersctl semer --machine="$HOSTNAME_SHORT" || echo "WARN: comptes non semés" >&2
 
-username = os.environ['SBX_SEED_USER']
-p = Path('/etc/secubox/users.json')
-if not p.exists():
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"version": 2, "users": [], "groups": []}))
-doc = json.loads(p.read_text())
-if not any(u['username'] == username for u in doc['users']):
-    sys.path.insert(0, '/usr/lib/secubox/users')
-    from api.engine import Engine
-    Engine(users_path=p).create_user(username, email=None, role='admin')
-    print('seeded user:', username)
-PYEOF
-        done
+        # Migration (#3708) : désactive (jamais de suppression) tout admin sans mot de passe dès qu'un AUTRE admin actif
+        # en a choisi un ; une ligne d'audit par compte. Retour : usersctl set-password NOM && usersctl enable NOM.
+        /usr/sbin/usersctl desactiver-admins-sans-mot-de-passe --origine=postinst \
+            || echo "WARN: comptes admin sans mot de passe non désactivés" >&2
 
         # Ownership + permissions on users.json + auth.toml (Phase 7 #498).
         # Both files are read by the aggregator (running as `secubox`) via

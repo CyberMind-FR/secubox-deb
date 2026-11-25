@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from secubox_core.auth import router as auth_router, require_jwt, create_token, set_session_callback
 from secubox_core.config import get_config
 import json
+import logging
 import os
 import secrets
 import time
@@ -228,6 +229,7 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 # Absent (requête hors nginx) = pas LAN = OTP exigé : l'échec ferme.
 from secubox_core.auth import _requete_lan
 from secubox_core import mot_de_passe_defaut as _mdp_defaut
+from secubox_core import comptes_admin as _comptes_admin
 
 OTP_LAN_VALEURS = ("facultatif", "obligatoire")
 _REGLAGES = Path(os.environ.get("SECUBOX_AUTH_REGLAGES", str(_DATA_DIR / "reglages.json")))
@@ -325,6 +327,38 @@ def _client_meta(request: _Request) -> tuple:
     return adresse_client(request), request.headers.get("User-Agent", "")[:300]
 
 
+# ─── Première configuration fermée dès qu'un administrateur est configuré (#3708) ─────
+#: Préfixe du jti (signé) d'un jeton de PREMIÈRE configuration : il ne remplace jamais un mot de passe posé entre-temps.
+_JTI_PREMIERE = "premiere-"
+_leurre: Dict[str, str] = {}
+_comptes_admin_log = logging.getLogger("secubox.auth.comptes_admin")
+
+
+def _premiere_configuration_permise(compte: str) -> bool:
+    """Aucun AUTRE administrateur actif n'a choisi de mot de passe. Registre illisible : non."""
+    return _comptes_admin.premiere_configuration_permise(compte, user_store._load_users_json())
+
+
+def _refuser_premiere_configuration(compte: str, ip: str, etape: str) -> None:
+    try:
+        _comptes_admin.auditer("premiere_configuration_refusee", compte=compte, ip=ip, etape=etape)
+    except OSError as exc:
+        # Un refus tient même sans journal de sécurité : il reste au journal d'authentification ci-dessous.
+        _comptes_admin_log.warning("audit.log non écrit (%s)", exc.__class__.__name__)
+    _append_audit("premiere_configuration_refusee", compte, {"ip": ip, "etape": etape})
+
+
+def _meme_duree(mot_de_passe: str) -> None:
+    """Un refus décidé sans lire d'empreinte coûte autant qu'un mauvais mot de passe : compte inconnu, désactivé, sans
+    mot de passe ou de service ne se distinguent ni par le texte ni par la durée (#3708)."""
+    try:
+        if "h" not in _leurre:
+            _leurre["h"] = user_store._HASHER.hash(secrets.token_urlsafe(16))
+        user_store._HASHER.verify(_leurre["h"], mot_de_passe)
+    except Exception:  # noqa: BLE001 — le résultat est sans objet, et l'appelant refuse de toute façon
+        return
+
+
 @_login_router.post("/login")
 def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
@@ -340,6 +374,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {
             "reason": "compte_delegue", "ip": ip, "user_agent": ua,
         })
+        _meme_duree(req.password)
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     try:
@@ -350,6 +385,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {
             "reason": "console_hors_kiosque", "ip": ip, "user_agent": ua,
         })
+        _meme_duree(req.password)
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     if not user or not user.get("enabled"):
@@ -357,6 +393,7 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
             "reason": "unknown_user" if not user else "disabled",
             "ip": ip, "user_agent": ua,
         })
+        _meme_duree(req.password)
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     # PREMIÈRE CONFIGURATION : UN ACTE LOCAL (#1707). Un compte « à changer »
@@ -387,16 +424,27 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {
             "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
         })
+        _meme_duree(req.password)
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     if a_changer and req.password == "" and not user.get("password_hash"):
-        setup_tok = create_token(req.username, scope="set-password", expires_in=900)
+        # Plus aucun compte sans mot de passe ne se revendique dès qu'un administrateur est configuré (#3708).
+        if not _premiere_configuration_permise(req.username):
+            _refuser_premiere_configuration(req.username, ip, "connexion")
+            _emit_session_event("login_failed", req.username, {
+                "reason": "premiere_configuration_fermee", "ip": ip, "user_agent": ua,
+            })
+            _meme_duree(req.password)
+            raise HTTPException(status_code=401, detail="Identifiants incorrects")
+        setup_tok = create_token(req.username, scope="set-password", expires_in=900,
+                                 jti=_JTI_PREMIERE + secrets.token_hex(8))
         _append_audit("setup_token_issued", req.username, {"ip": ip})
         return {"setup_required": True, "setup_token": setup_tok}
 
     if not user.get("password_hash"):
         _emit_session_event("login_failed", req.username, {"reason": "no_local_password", "ip": ip})
-        raise HTTPException(status_code=401, detail="Aucun mot de passe local")
+        _meme_duree(req.password)
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
     if not user_store.verify_password(req.username, req.password):
         _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
@@ -677,6 +725,14 @@ def _set_password(req: _SetPasswordIn, request: _Request):
     scope = payload.get("scope")
     username = payload["sub"]
     if scope == "set-password":
+        # Le jeton vaut 15 min : on revérifie À LA POSE (#3708). Compte désactivé depuis ; première configuration
+        # fermée depuis (un autre admin a été configuré) ou déjà faite (jamais un mot de passe écrasé).
+        u = user_store.get_user(username) or {}
+        premiere = str(payload.get("jti") or "").startswith(_JTI_PREMIERE)
+        vide = not u.get("password_hash")
+        if not u.get("enabled") or (premiere and not vide) or (vide and not _premiere_configuration_permise(username)):
+            _refuser_premiere_configuration(username, _client_meta(request)[0], "pose")
+            raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
         if not _consommer_setup(payload):
             raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
         _users_engine.set_password(username, req.new_password)

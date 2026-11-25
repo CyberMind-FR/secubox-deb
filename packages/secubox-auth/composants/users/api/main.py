@@ -564,7 +564,11 @@ def create_user(user: UserCreate):
             email=user.email,
             role=engine_role,
         )
-    except _engine_mod.EngineError as exc:
+        # Le mot de passe saisi vaut pour SecuBox (#3708) : sans empreinte, le compte ne s'ouvrait que par la première
+        # configuration, fermée dès qu'un administrateur est configuré. À changer à la première connexion.
+        if user.password:
+            _engine.set_password(user.username, user.password)
+    except ValueError as exc:                       # EngineError, PolicyError
         raise HTTPException(status_code=400, detail=str(exc))
 
     # COMPTES DANS LES SERVICES (#1375), par le helper root. Avant : des `ctl`
@@ -588,6 +592,7 @@ def create_user(user: UserCreate):
         if u.get("username") == user.username:
             u["services"] = [x for x in voulus if provision_results.get(x) is True]
             u["provision_results"] = provision_results
+            u["must_change_password"] = True
             if user.email_recuperation:
                 u["email_recuperation"] = user.email_recuperation.strip()
             break

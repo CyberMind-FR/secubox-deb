@@ -172,3 +172,96 @@ def test_etat_rendu_a_un_administrateur_reel(c):
         assert c.get("/mot-de-passe-defaut").json()["etat"] == "actif"
     finally:
         c.app.dependency_overrides.clear()
+
+
+# ── #3708 : la première configuration se ferme dès qu'un administrateur est configuré ─────────────────────────────────
+
+@pytest.fixture
+def configuree(c, tmp_path):
+    """Box configurée : « chef » a choisi son mot de passe ; deux orphelins et un usager n'en ont pas."""
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("chef", "une phrase longue et choisie", False), _compte("boite", None, True),
+        _compte("secubox-rpi", None, True), {**_compte("usager", None, True), "role": "viewer"},
+        {**_compte("coupe", None, True), "enabled": False}]}))
+    return c
+
+
+def _audit(tmp_path):
+    return [json.loads(x) for x in (tmp_path / "audit-secubox.log").read_text().splitlines()]
+
+
+@pytest.mark.parametrize("nom", ["boite", "secubox-rpi", "usager"])
+def test_box_configuree_plus_rien_a_revendiquer(configuree, tmp_path, nom):
+    r, inconnu = _login(configuree, nom, "", "1"), _login(configuree, "inconnu", "", "1")
+    assert r.status_code == inconnu.status_code == 401 and r.json() == inconnu.json()
+    assert "setup_token" not in r.text
+    ligne = _audit(tmp_path)[-1]
+    assert ligne["evenement"] == "premiere_configuration_refusee" and ligne["compte"] == nom
+
+
+def test_revendication_refusee_depuis_le_maillage(configuree):
+    r = configuree.post("/login", json={"username": "boite", "password": ""},
+                        headers={"X-SecuBox-LAN": "0", "X-Forwarded-For": "10.10.0.7"})
+    assert r.status_code == 401 and "setup_token" not in r.text
+
+
+@pytest.mark.parametrize("lan", ["0", "1"])
+@pytest.mark.parametrize("mdp", ["", "faux", "secubox"])
+def test_reponses_uniformes_quel_que_soit_le_compte(configuree, lan, mdp):
+    reponses = {(r.status_code, r.text) for r in (
+        _login(configuree, n, mdp, lan) for n in ("inconnu", "boite", "usager", "coupe", "chef", "console"))}
+    assert reponses == {(401, '{"detail":"Identifiants incorrects"}')}
+
+
+def test_un_refus_sans_empreinte_coute_une_verification(configuree, monkeypatch):
+    from api import main as m
+    appels = []
+    monkeypatch.setattr(m, "_meme_duree", appels.append)
+    for n in ("inconnu", "boite", "coupe", "console"):
+        _login(configuree, n, "", "1")
+    assert len(appels) == 4
+
+
+def test_un_compte_de_service_a_mot_de_passe_ne_ferme_pas_la_box_vierge(c, tmp_path):
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("admin", None, True), _compte("console", "jete-par-le-kiosque", False)]}))
+    assert _login(c, "admin", "", "1").json().get("setup_required") is True
+
+
+def _poser(c, jeton, mdp="une phrase longue et choisie"):
+    return c.post("/set-password", json={"new_password": mdp}, headers={"Authorization": "Bearer " + jeton})
+
+
+def test_box_vierge_le_premier_configure_les_suivants_sont_refuses(c, tmp_path):
+    (tmp_path / "users.json").write_text(json.dumps({"version": 2, "groups": [], "users": [
+        _compte("admin", None, True), _compte("boite", None, True)]}))
+    un = _login(c, "admin", "", "1").json()["setup_token"]
+    deux = _login(c, "boite", "", "1").json()["setup_token"]        # obtenu AVANT la configuration
+    assert _poser(c, un).status_code == 200
+    assert _poser(c, deux).status_code == 401
+    assert _login(c, "boite", "", "1").status_code == 401
+    assert _login(c, "admin", "une phrase longue et choisie", "1").json().get("access_token")
+    assert [x["etape"] for x in _audit(tmp_path)] == ["pose", "connexion"]
+
+
+def test_deux_jetons_du_meme_compte_le_second_n_ecrase_rien(c):
+    a, b = (_login(c, "gk3", "", "1").json()["setup_token"] for _ in range(2))
+    assert _poser(c, a).status_code == 200
+    assert _poser(c, b, "un mot de passe voleur").status_code == 401
+    assert _login(c, "gk3", "un mot de passe voleur", "1").status_code == 401
+
+
+def test_jeton_d_un_compte_desactive_entre_temps(c, tmp_path):
+    jeton = _login(c, "gk3", "", "1").json()["setup_token"]
+    d = json.loads((tmp_path / "users.json").read_text())
+    d["users"][0]["enabled"] = False
+    (tmp_path / "users.json").write_text(json.dumps(d))
+    assert _poser(c, jeton).status_code == 401
+
+
+def test_changement_impose_reste_ouvert_sur_une_box_configuree(configuree, tmp_path):
+    d = json.loads((tmp_path / "users.json").read_text())
+    d["users"].append(_compte("bob", "provisoire-tres-long", True))
+    (tmp_path / "users.json").write_text(json.dumps(d))
+    r = _login(configuree, "bob", "provisoire-tres-long", "1").json()
+    assert _poser(configuree, r["setup_token"], "ma phrase a moi, longue").status_code == 200
