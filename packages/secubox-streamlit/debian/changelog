@@ -1,3 +1,9 @@
+secubox-streamlit (1.7.7-1~trixie1) trixie; urgency=medium
+
+  * Création du conteneur : échange borné (512M), jamais interdit ; conteneur existant inchangé (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-streamlit (1.7.6-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
