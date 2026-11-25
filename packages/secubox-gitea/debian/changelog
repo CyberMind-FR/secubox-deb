@@ -1,3 +1,10 @@
+secubox-gitea (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * giteactl memoire : dernière ligne memory.max « max » ou vide = pas de budget ; lxc-attach sans entrée standard
+    (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:33:22 +0100
+
 secubox-gitea (1.9.0-1~trixie1) trixie; urgency=medium
 
   * Mémoire : échange borné à la moitié du budget (conteneur et runners), jamais de frein ; configuration existante

@@ -88,6 +88,18 @@ def test_sans_budget_ni_conteneur_rien(banc):
     assert banc().returncode == 0
 
 
+@pytest.mark.parametrize("fin", ["lxc.cgroup2.memory.max = max\n", "lxc.cgroup2.memory.max =\n", "lxc.cgroup2 =\n"])
+def test_derniere_ligne_sans_limite_gagne(banc, fin):
+    unite(banc)
+    banc.cfg.write_text(BUDGET + fin)
+    assert banc().returncode == 0 and not banc.dropin.exists()
+
+
+def test_lxc_attach_ne_lit_pas_l_entree_standard():
+    bloc = CTL.read_text().split("cmd_memoire() {")[1].split("\n}\n")[0]
+    assert "systemctl daemon-reload </dev/null" in bloc
+
+
 def test_lien_symbolique_du_conteneur_jamais_suivi(banc, tmp_path):
     unite(banc)
     dehors = tmp_path / "dehors"

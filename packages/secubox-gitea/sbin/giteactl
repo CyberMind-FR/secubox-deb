@@ -1151,12 +1151,15 @@ NOFOLLOW = os.O_NOFOLLOW | os.O_CLOEXEC
 
 
 def budget():
-    val = ""
+    val = None
     try:
         with open(f"{racine}/config", encoding="utf-8", errors="replace") as f:
             for ligne in f:
-                m = re.match(r"\s*lxc\.cgroup2\.memory\.max\s*=\s*(\d+)([KMG]?)\s*$", ligne, re.I)
-                val = m or val
+                # La dernière ligne gagne, comme pour LXC : « max », une valeur vide ou « lxc.cgroup2 = » effacent le budget.
+                if re.match(r"\s*lxc\.cgroup2(\.memory(\.max)?)?\s*=\s*$", ligne):
+                    val = None
+                elif re.match(r"\s*lxc\.cgroup2\.memory\.max\s*=", ligne):
+                    val = re.match(r"[^=]*=\s*(\d+)([KMG]?)\s*$", ligne, re.I)
     except OSError:
         return 0
     return int(val.group(1)) << {"": 0, "K": 10, "M": 20, "G": 30}[val.group(2).upper()] if val else 0
@@ -1258,7 +1261,7 @@ PY
         "systemd "*)
             log "GOMEMLIMIT=${issue#* } posé (gitea.service.d) : effectif au prochain redémarrage du service"
             if lxc_running; then
-                timeout 30 lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- systemctl daemon-reload >/dev/null 2>&1 \
+                timeout 30 lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- systemctl daemon-reload </dev/null >/dev/null 2>&1 \
                     || warn "daemon-reload du conteneur non fait : drop-in lu au prochain démarrage du conteneur"
             fi ;;
         "script "*) log "GOMEMLIMIT=${issue#* } posé (start-gitea.sh) : effectif au prochain démarrage du conteneur" ;;
