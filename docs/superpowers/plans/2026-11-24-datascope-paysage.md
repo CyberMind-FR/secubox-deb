@@ -249,6 +249,23 @@ infrastructure), le SVG à la main suffit, comme `rendreArbre`. Coût si c'est f
 - [ ] **Step 4 : vérifier** — suite → PASS (Playwright sauté s'il est absent) ; contrôle visuel `?demo=1`.
 - [ ] **Step 5 : commit** — `feat(datascope): mode évolution et enregistreur à rembobinage (ref #3921)`.
 
+### Task 7b : vue « Carte » (origine géographique, rejouée)
+
+Demande du propriétaire du 2026-11-25 : la carte du monde vivante (composant `pouls.js`, #3945) comme vue de DataScope.
+
+**Files :**
+- Modify : `DS/www/datascope/index.html` (bouton `#vueCarte`, `rendreCarte(box, instantane, difference)`, données de démo)
+- Create : `DS/www/datascope/pouls.js` (copie identique de la source partagée de #3945), `DS/www/datascope/carte-monde.js` (constantes `TERRE` et `CENTRE`, mêmes que `secubox-live`)
+- Test : `DS/tests/test_page_paysage.py`, `DS/tests/test_page_playwright.py` (ajouts)
+
+**Interfaces :**
+- Consumes : nœuds `pays:<code>` et arêtes `ORIGINE` (pop→pays, poids = part en %) d'un instantané ; `Enregistreur`, `rejouerPaysage` (tâche 7) ; `SbxPouls` (#3945).
+- Règles : poids d'un pays = somme, sur les populations, de `adresses × part` (« estimation : part de chaque population », écrit) ; pays non rendu par le
+  relevé = non mesuré, jamais 0 ; « + N autres pays » quand la liste est tronquée (`pays_top` : 3 pays par population, donc parts incomplètes : le dire) ;
+  un clic sur un pays = inspecteur (populations, réseaux de ce pays) ; l'enregistreur pilote la carte (un seul pouls à la fois, jamais pendant la lecture) ;
+  aucune adresse ; `prefers-reduced-motion`, 400 px, clavier, `textContent`.
+- [ ] Étapes TDD comme la tâche 5 ; captures `?demo=1` à 1280 et 400 px ; commit `feat(datascope): vue Carte rejouée par l'enregistreur (ref #3921, ref #3945)`.
+
 ### Task 8 : AppArmor, paquet, documentation
 
 **Files :**
