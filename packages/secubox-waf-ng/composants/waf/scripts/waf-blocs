@@ -26,10 +26,11 @@ import sys
 import time
 from pathlib import Path
 
-# Même liste que `_valide_ip` de wafctl : ni plus, ni moins (pas `is_private`).
+# Même liste que `_valide_ip` de wafctl pour un ban : ni plus, ni moins (pas `is_private`). 100.64.0.0/10 (#3932) : CGNAT,
+# derrière lequel vivent des abonnés de la box ; les levées, elles, ne passent pas par cette liste.
 INTERDITS = tuple(ipaddress.ip_network(r) for r in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-    "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+    "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8", "100.64.0.0/10",
     "::1/128", "fe80::/10", "fc00::/7", "::/128",
 ))
 

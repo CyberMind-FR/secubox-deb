@@ -538,9 +538,11 @@ NFT_TABLE="secubox"
 #
 # GARDE-FOU identique a celui du moteur : jamais une adresse privee. Le drop est
 # reel ; bannir 192.168.x.x couperait l'administration de la box depuis la box.
+# `_valide_ip <ip> ban` refuse aussi le CGNAT (100.64.0.0/10, #3932), comme sbxwaf et waf-blocs ; sans « ban » (levées), il
+# reste admis : un ban posé avant doit pouvoir être levé.
 _valide_ip() {
-    local ip="$1"
-    python3 - "$ip" <<'PY' 2>/dev/null
+    local ip="$1" geste="${2:-}"
+    python3 - "$ip" "$geste" <<'PY' 2>/dev/null
 import ipaddress, sys
 # On refuse EXACTEMENT ce qui couperait l'administration : le RFC 1918, le
 # loopback, le lien-local, l'adresse nulle, et les ULA IPv6. PAS `is_private`
@@ -554,6 +556,8 @@ INTERDITS = [ipaddress.ip_network(r) for r in (
     "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
     "::1/128", "fe80::/10", "fc00::/7", "::/128",
 )]
+if sys.argv[2] == "ban":
+    INTERDITS.append(ipaddress.ip_network("100.64.0.0/10"))
 try:
     a = ipaddress.ip_address(sys.argv[1])
 except ValueError:
@@ -649,7 +653,7 @@ cmd_ban() {
         --exiger-protegees) _garde "$ip" --exiger || return 1 ;;
         *) error "Option inconnue : $option"; return 1 ;;
     esac
-    version=$(_valide_ip "$ip") || {
+    version=$(_valide_ip "$ip" ban) || {
         case $? in
             2) error "Adresse privée refusée : $ip" ;;
             *) error "Adresse invalide : $ip" ;;
@@ -699,7 +703,7 @@ cmd_prolonger() {
     [ "$#" -eq 2 ] || { error "Usage : wafctl prolonger <ip> <durée>"; return 1; }
     local ip="$1" duree="$2" version secondes
     _garde "$ip" --exiger || return 1
-    version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    version=$(_valide_ip "$ip" ban) || { error "Adresse invalide ou privée : $ip"; return 1; }
     [ "$version" = "4" ] || { error "IPv4 seulement : $ip"; return 1; }
     if ! secondes=$(_secondes "$duree"); then
         error "Durée invalide : $duree"
