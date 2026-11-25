@@ -1,3 +1,11 @@
+secubox-waf-ng (1.48.1-1~trixie1) trixie; urgency=medium
+
+  * Actor (ref #3960) : un geste est rattaché à une fiche par ses adresses, plus
+    par le numéro d'acteur, que sbx-actord refait à chaque relance ; les autres
+    gestes en cours restent visibles et levables.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 18:20:00 +0100
+
 secubox-waf-ng (1.48.0-1~trixie1) trixie; urgency=medium
 
   * Actor (ref #3960) : bannir un acteur depuis sa fiche. Aperçu obligatoire

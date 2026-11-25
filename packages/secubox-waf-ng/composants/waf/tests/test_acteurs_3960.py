@@ -145,6 +145,15 @@ def test_plafond_de_200_adresses(b):
     assert d["reste"] > 0 and not retirees & {x["ip"] for x in d["a_bannir"]}
 
 
+def test_geste_rattache_par_ses_adresses_pas_par_le_numero(b):
+    """actord renumérote à sa relance : le même numéro ne désigne plus le même profil."""
+    b.bannir(b.apercu().json()["apercu"])
+    assert b.c.get("/acteurs/ACT-0777/etat").json()["gestes"][0]["ici"] is True
+    b.events = [("203.0.113.200", int(time.time()))]
+    g = b.c.get("/acteurs/ACT-0001/etat").json()["gestes"]
+    assert len(g) == 1 and g[0]["ici"] is False
+
+
 def test_plafond_de_gestes(b):
     for _ in range(10):
         assert b.bannir(b.apercu().json()["apercu"]).status_code == 200
