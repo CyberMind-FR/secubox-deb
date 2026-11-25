@@ -22,12 +22,39 @@ const (
 	apercuRecents     = 8
 	apercuPays        = 8
 	apercuTechniques  = 4
+	passePas          = 600 // #3945 : un relevé des pays toutes les 10 min, douze gardés en mémoire (2 h), rien sur disque
+	passeMax          = 12
+	passeAge          = passePas * (passeMax + 1)
 	apercuTTL         = 30 * time.Second // relire 5000 événements coûte ~1,7 s sur une box chargée : jamais à chaque appel
 )
 
 type PaysN struct {
 	Code string `json:"code"`
 	N    int    `json:"n"`
+}
+
+// PaysPasse est un relevé PASSÉ des pays, daté : la page recule dessus, rien n'est interpolé ici.
+type PaysPasse struct {
+	T    int64   `json:"t"`
+	Pays []PaysN `json:"pays"`
+}
+
+// passe rend les relevés passés à publier (avant now, 2 h au plus) et l'anneau à garder, relevé courant compris s'il a son tour.
+func passe(anneau []PaysPasse, now int64, pays []PaysN) (publies, garde []PaysPasse) {
+	publies = []PaysPasse{}
+	for _, p := range anneau {
+		if p.T < now && p.T > now-passeAge {
+			publies = append(publies, p)
+		}
+	}
+	garde = publies
+	if n := len(publies); n == 0 || now-publies[n-1].T >= passePas {
+		garde = append(append([]PaysPasse{}, publies...), PaysPasse{T: now, Pays: pays})
+	}
+	if len(garde) > passeMax {
+		garde = garde[len(garde)-passeMax:]
+	}
+	return publies, garde
 }
 
 type EvenementRecent struct {
@@ -45,12 +72,14 @@ type Technique struct {
 }
 
 type Apercu struct {
-	GenereLe    int64                  `json:"genere_le"`
-	Echantillon int                    `json:"echantillon"`
-	TopPays     []PaysN                `json:"top_pays"`
-	Recents     []EvenementRecent      `json:"recents"`
-	Activite24h []int                  `json:"activite_24h"` // 24 compartiments d'une heure ; le dernier est l'heure en cours
-	Techniques  map[string][]Technique `json:"techniques"`
+	GenereLe    int64   `json:"genere_le"`
+	Echantillon int     `json:"echantillon"`
+	TopPays     []PaysN `json:"top_pays"`
+	// TopPaysPasse : les mêmes comptes aux relevés précédents (#3945), du plus ancien au plus récent.
+	TopPaysPasse []PaysPasse            `json:"top_pays_passe"`
+	Recents      []EvenementRecent      `json:"recents"`
+	Activite24h  []int                  `json:"activite_24h"` // 24 compartiments d'une heure ; le dernier est l'heure en cours
+	Techniques   map[string][]Technique `json:"techniques"`
 	// ActiviteActeurs : même découpage que Activite24h, par acteur (seulement ceux qui ont de l'activité sur la période).
 	ActiviteActeurs map[string][]int `json:"activite_acteurs"`
 	// Robots : les robots connus, classés à part (#2201). Ils ne comptent ni dans les pays, ni dans les événements récents, ni dans l'activité.
@@ -77,7 +106,7 @@ func apercu(evs []envelope.Envelope, acteurs []*graph.Actor, now int64) Apercu {
 			parIP[ip] = a.ID
 		}
 	}
-	out := Apercu{GenereLe: now, Echantillon: len(evs), TopPays: []PaysN{}, Recents: []EvenementRecent{},
+	out := Apercu{GenereLe: now, Echantillon: len(evs), TopPays: []PaysN{}, TopPaysPasse: []PaysPasse{}, Recents: []EvenementRecent{},
 		Activite24h: make([]int, 24), Techniques: map[string][]Technique{}, ActiviteActeurs: map[string][]int{}, Robots: []RobotFamille{}}
 	pays := map[string]int{}
 	tech := map[string]map[string]int{}
@@ -155,6 +184,7 @@ func (s *Server) handleApercu(w http.ResponseWriter, _ *http.Request) {
 		s.mu.Unlock()
 		out := apercu(evs, acteurs, time.Now().Unix())
 		s.mu.Lock()
+		out.TopPaysPasse, s.paysPasse = passe(s.paysPasse, out.GenereLe, out.TopPays)
 		r := s.robots
 		s.mu.Unlock()
 		out.Robots = r.Snapshot()

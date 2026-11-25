@@ -243,7 +243,8 @@ def test_aucun_debordement(nav, largeur):
 
 def test_demo_aucun_appel_et_donnees_fictives(nav):
     b = Banc(nav, url="?demo=1")
-    assert b.appels == [] and b.p.locator("#profile .gr").count() == 4
+    # le composant partagé (#3945) est un fichier statique, pas une lecture de la box
+    assert [a for a in b.appels if a != "/shared/pouls.js"] == [] and b.p.locator("#profile .gr").count() == 4
     demo = HTML[HTML.index("function demoActs("):HTML.index("function maj(")]
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", demo) and "Math.random" not in demo
     b.fin()

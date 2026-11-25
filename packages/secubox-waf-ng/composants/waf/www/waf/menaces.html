@@ -132,7 +132,11 @@
   function etatPhp(ph){if(!ph)return 'Session requise.';if(!ph.familles)return 'Relevé indisponible : état inconnu.';var q=ph.calcule_a?new Date(ph.calcule_a*1000).toLocaleString('fr-FR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}):'à une heure inconnue';return ph.etat==='perime'?'Relevé périmé : la tâche de fond ne l’a pas recalculé depuis plus de 10 minutes (dernier calcul '+q+'). Signaux seulement : aucune requête n’est bloquée sur cette analyse.':'Signaux seulement : aucune requête n’est bloquée sur cette analyse. Relevé calculé '+q+'.';}
   var q=new URLSearchParams(location.search);
   if(q.get('embed')) document.body.classList.add('emb');
-  var PAL=['#29b6f6','#a78bfa','#3b82f6','#ff9f1c','#2ecc71','#ff4d5e','#ffd23f'];
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE=null;
+  function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+    var PAL=['#29b6f6','#a78bfa','#3b82f6','#ff9f1c','#2ecc71','#ff4d5e','#ffd23f'];
   var IC={
     men:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.7"><circle cx="12" cy="12" r="9" fill="rgba(167,139,250,.14)"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="#a78bfa"/></svg>',
     ban:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#ff4d5e" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9" fill="rgba(255,77,94,.14)"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
@@ -226,6 +230,15 @@
     el('monde').innerHTML=monde(pays);
     el('pays').innerHTML=pays.length?pays.slice(0,8).map(function(p){return '<div><span>'+drapeau(p.code)+' '+esc(p.code)+'</span><b>'+fmt(p.n)+'</b></div>';}).join(''):'<div class="vide">'+(s?'Pas de géolocalisation.':'Session requise.')+'</div>';
     el('geoNote').textContent=pays.length?'Cercle au centre du pays déduit de l’adresse (base GeoLite2 locale) : un VPN, un relais ou un nuage fausse l’origine réelle.':'';
+    var lu=Date.now()/1000;
+    VIE=function(P){
+      var svg=el('monde'),pan=svg.closest('.pan'),L={},rangs=el('pays').querySelectorAll('b');
+      pays.slice(0,8).forEach(function(p,i){if(rangs[i])L[p.code]=rangs[i];});
+      P.bouton(document.querySelector('.droite'));
+      var r={t:lu,pays:pays};
+      P.carte(svg,{cle:'monde',coul:'#ff2d6f',centres:CENTRE,format:fmt,liste:L,instantanes:!pays.length?[]:d.demo?[r]:P.memoire('waf-pays',r),quand:pan.querySelector('h3'),zone:pan});
+    };
+    vivre();
     // Sites
     tv=tv?tv.sort(function(x,y){return y[1]-x[1];}):null;var tmax=tv&&tv.length?tv[0][1]||1:1,ttot=tv?tv.reduce(function(t,v){return t+v[1];},0):0;
     el('sites').innerHTML=tv&&tv.length?tv.slice(0,7).map(function(v,i){return '<div class="ligne"><span class="n" title="'+esc(v[0])+'">'+esc(v[0])+'</span><span>'+fmt(v[1])+' <small class="x">'+(ttot?Math.round(100*v[1]/ttot):0)+'%</small></span><div class="barre"><i style="width:'+Math.max(4,100*v[1]/tmax)+'%;background:'+PAL[i%7]+'"></i></div></div>';}).join(''):'<div class="vide">'+(s?'Aucun site visé.':'Session requise.')+'</div>';

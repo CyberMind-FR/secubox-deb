@@ -507,6 +507,18 @@ sbxwaf --rotation-rejeu [--rotation-rejeu-adresses] [--rotation-rejeu-sans-grace
 Majorant (approximations dans le rapport). Ne pas donner `secubox-hosts.log` **et** les journaux par vhost : double compte.
 `suspects_faux_positifs` : seul `preuve_apres` informe ; `structurels` est nul par construction.
 
+## Graphiques vivants (#3945, 1.47.0)
+
+Cartes et mini-séries des pages Actor et WAF : au présent elles battent, puis reculent sur leurs mesures **réelles** (date écrite) et
+reviennent. Composant `/shared/pouls.js` (secubox-hub ≥ 1.13.0), chargé par la page ; absent, la page reste fixe.
+
+| Page | Donnée du recul |
+|---|---|
+| Actor, carte | `GET /overview` → `top_pays_passe` `[{t, pays:[{code,n}]}]` : un relevé toutes les 10 min tant que l'aperçu est lu, douze en mémoire d'actord (2 h), jamais écrits ; moteur plus ancien : relevés de l'onglet |
+| Actor, bloquées / tentatives / événements | séries horaires de 24 h déjà lues (`/activite`) ; le total affiché ne bouge pas, la date porte la valeur de l'heure |
+| WAF vue, menaces, surfaces, tableau, visites : cartes | relevés successifs de l'onglet (`sessionStorage`, pays et comptes seulement, 12 au plus, 3 h) : l'API ne compte pas les pays par heure et aucun balayage n'a été ajouté. Premier affichage : fixe, puis vivante dès le second relevé distant d'une minute |
+| WAF vue, trois tuiles | mini-série par jour de `/history` |
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;
