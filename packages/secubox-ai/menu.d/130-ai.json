@@ -1,9 +1,10 @@
 {
   "id": "ai",
   "name": "IA",
-  "category": "apps",
+  "category": "mind",
   "icon": "🧠",
   "path": "/ai/",
   "order": 130,
-  "description": "Assistant IA local et distant de la box"
+  "description": "Assistant IA local et distant de la box",
+  "theme": "ia"
 }

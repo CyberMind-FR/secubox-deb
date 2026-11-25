@@ -22,6 +22,8 @@ import subprocess
 import json
 import hashlib
 import hmac
+import logging
+import os
 import time
 import threading
 import socket
@@ -36,6 +38,8 @@ from secubox_core.config import get_config
 
 # P2P API socket path
 P2P_SOCKET = "/run/secubox/p2p.sock"
+
+log = logging.getLogger("secubox.soc")
 
 app = FastAPI(title="SecuBox SOC", version="2.0.0")
 
@@ -97,25 +101,25 @@ def _soc_enrich(event: dict) -> dict:
     return event
 
 
+# Dossier d'état : posé par le postinst (secubox, 0750). Rien n'est créé à l'import (#3946) : les tests le déplacent
+# par SECUBOX_SOC_DATA (sauf defense.db : SECUBOX_SOC_DEFENSE_DB), la première écriture le recrée s'il manque (_save_json, _init_db de mitm_ingest).
+DATA_DIR = Path(os.environ.get("SECUBOX_SOC_DATA", "/var/lib/secubox/soc"))
+MITM_DB = DATA_DIR / "mitm-ingest.db"
+
 mount_ingest_routes(
     app,
     endpoint_path="/event",
-    db_path="/var/lib/secubox/soc/mitm-ingest.db",
+    db_path=MITM_DB,
     kind="soc",
     enrich_hook=_soc_enrich,
 )
 
-# Data directories
-DATA_DIR = Path("/var/lib/secubox/soc")
 TICKETS_FILE = DATA_DIR / "tickets.json"
 INTEL_FILE = DATA_DIR / "intel.json"
 PEERS_FILE = DATA_DIR / "peers.json"
 ALERTS_FILE = DATA_DIR / "alerts.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 STATS_FILE = DATA_DIR / "stats_history.json"
-
-# Ensure directories exist
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # WebSocket connections for real-time updates
 active_connections: List[WebSocket] = []
@@ -203,10 +207,11 @@ def _load_json(path: Path) -> list:
 
 def _save_json(path: Path, data):
     try:
+        path.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
         with open(path, 'w') as f:
             json.dump(data, f, indent=2, default=str)
-    except:
-        pass
+    except (OSError, TypeError, ValueError):
+        log.exception("état SOC non écrit : %s", path.name)
 
 
 def _generate_id() -> str:

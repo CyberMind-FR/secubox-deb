@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # DataScope — paysage des menaces, tendances et enregistreur — conception
 
 Issue #3921 · 2026-11-24 · dépend de #3919 (populations, campagnes enrichies, réseaux typés) · lien #3920 (pilotage)

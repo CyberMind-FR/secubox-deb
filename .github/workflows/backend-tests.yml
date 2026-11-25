@@ -57,6 +57,9 @@ on:
       - 'packages/secubox-soc/**'
       - 'packages/secubox-health/**'
       - 'packages/secubox-hub/**'
+      - 'packages/secubox-system/**'
+      # Protégés du moteur de profils, comparés aux unités de secubox_core (system).
+      - 'packages/secubox-profiles/api/manifest.py'
       - 'packages/secubox-mqtt/**'
       - 'packages/secubox-metrics/sbin/**'
       - 'packages/secubox-metrics/tests/**'
@@ -74,6 +77,9 @@ on:
       - 'packages/secubox-annuaire/**'
       - 'secubox.conf.example'
       - 'packages/*/menu.d/**'
+      # Profils AppArmor : audit.log en « w » (pilotage, #3861).
+      - 'packages/*/apparmor/**'
+      - 'packages/*/composants/*/apparmor/**'
       # conftest.py et pytest.ini de la racine pèsent sur la collecte.
       - 'conftest.py'
       - 'pytest.ini'
@@ -147,6 +153,10 @@ jobs:
           # toute la suite depuis que test_cache_warm suit le contrat actuel.
           - suite: secubox-hub
             chemin: packages/secubox-hub/tests
+          # System Hub : unités qu'aucune API n'arrête, en accord avec les protégés
+          # du moteur de profils ; la suite n'était jouée nulle part (#3946).
+          - suite: secubox-system
+            chemin: packages/secubox-system/tests
           # zigbee : relevé partagé, plus de mosquitto par lecteur (#1835).
           - suite: secubox-zigbee
             chemin: packages/secubox-mqtt/composants/zigbee/tests
@@ -213,6 +223,7 @@ jobs:
         pyotp==2.6.0
         qrcode==8.2
         pillow==12.3.0
+        psutil==7.0.0
     steps:
       - name: Récupération du dépôt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

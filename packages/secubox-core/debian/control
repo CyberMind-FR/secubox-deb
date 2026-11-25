@@ -19,15 +19,17 @@ Architecture: all
 Replaces: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~), secubox-webos (<< 1.21.3~)
 Breaks: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~), secubox-webos (<< 1.21.3~)
 Depends: ${misc:Depends}, ${python3:Depends},
- python3-fastapi | python3-pip,
- python3-uvicorn | python3-pip,
+# Jamais « | python3-pip » ici (#3621, #3946) : pip, déjà dans l'image, satisfaisait l'alternative et rien n'était installé.
+# Ces quatre bibliothèques valent pour tous les paquets qui gardent ce repli (tests/test_depends_sans_pip_3946.py).
+ python3-fastapi,
+ python3-uvicorn,
  python3-jwt,
  python3-cryptography,
- python3-httpx | python3-pip,
+ python3-httpx,
 # Formulaires FastAPI (login, envois) : « python-multipart ». Debian 12 le nomme python3-multipart ; Debian 13 donne ce nom à une
 # AUTRE bibliothèque (multipart 1.2) et nomme la bonne python3-python-multipart (qui « Provides » python3-multipart, mais apt
 # préfère le vrai paquet de ce nom : on aurait installé la mauvaise, et chaque route à formulaire échouerait à l'exécution).
- python3-python-multipart | python3-multipart | python3-pip,
+ python3-python-multipart | python3-multipart,
  nginx,
  systemd-timesyncd | time-daemon,
  nftables,

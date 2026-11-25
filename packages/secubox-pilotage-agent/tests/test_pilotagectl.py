@@ -454,6 +454,7 @@ def test_ctl_une_operation_longue_a_la_fois(banc):
     assert "--collect" in lance[0] and f"--unit=secubox-pilotage-op-{job}" in lance[0]
     assert "RuntimeMaxSec" not in lance[0] and "--wait" not in lance[0] and "timeout" not in lance[0]
     assert "apt-get" in lance[0] and "dist-upgrade" not in lance[0] and "autoremove" not in lance[0]
+    assert "upgrade --with-new-pkgs" in lance[0]     # sinon un paquet qui gagne une dépendance est retenu (#3946)
     for argv in (["renouveler-secrets"], ["maj-paquets"], ["reboot"]):
         rc, sortie, _ = banc.run(*argv, agent=True)
         assert rc == 0 and sortie == {"ok": False, "refus": "opération en cours", "job": job}, argv

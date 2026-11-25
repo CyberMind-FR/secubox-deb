@@ -1,3 +1,12 @@
+secubox-tor (1.7.8-1~trixie1) trixie; urgency=medium
+
+  * AppArmor secubox-macroctl : audit.log en « w » ; « a » refusait chaque
+    write() (ref #3861, #3946).
+  * secubox-macroctl : un audit non écrit est dit sur stderr et au journal
+    système, plus jamais avalé (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:55:00 +0100
+
 secubox-tor (1.7.7-1~trixie1) trixie; urgency=medium
 
   * Diagnostic .onion : reconnaît la zone Unbound sous ses deux noms (secubox-onion-forward.conf posé

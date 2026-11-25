@@ -1,3 +1,13 @@
+secubox-system (1.14.2-1~trixie1) trixie; urgency=medium
+
+  * Arrêt de secubox-pilotage-agent refusé (secubox-core >= 1.8.45) : une box
+    reste administrable par son maître (ref #3946).
+  * API admin : /var/lib/secubox/admin n'est plus créé à l'import (inutilisé).
+  * secubox-majctl : upgrade --with-new-pkgs, simulation comprise ; une
+    nouvelle dépendance ne retient plus le paquet (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:55:00 +0100
+
 secubox-system (1.14.1-1~trixie1) trixie; urgency=medium
 
   * postinst : l'agrégateur n'est relancé que si le code Python qu'il sert a changé (empreinte prise au preinst).

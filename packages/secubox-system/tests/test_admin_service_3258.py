@@ -31,8 +31,8 @@ SORTIE = "SORTIE-DE-SYSTEMCTL-A-NE-PAS-AUDITER"
 def _charge(chemin: Path, nom: str):
     spec = importlib.util.spec_from_file_location(nom, chemin)
     m = importlib.util.module_from_spec(spec)
-    # /var/lib/secubox/admin est créé à l'import : rien à créer sur un poste de test.
-    with mock.patch.object(Path, "mkdir", lambda *a, **k: None):
+    # #3946 : l'import ne crée rien (il créait /var/lib/secubox/admin, refusé en CI).
+    with mock.patch.object(Path, "mkdir", side_effect=AssertionError("dossier créé à l'import")):
         spec.loader.exec_module(m)
     return m
 

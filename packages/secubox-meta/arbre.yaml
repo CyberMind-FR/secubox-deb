@@ -387,6 +387,7 @@ recommande:
   - secubox-threatmesh
   - secubox-ad-guard          # carte Guardian du Hall (#2288) : sbxos doit la poser (#3313)
 suggere:
+  - secubox-garde               # détecteur d'intrusion : décide seul (quarantaine, ban), jamais posé sans le demander (#3794)
   - secubox-cookies
   - secubox-toolbox
 
@@ -416,6 +417,7 @@ requiert:
 recommande:
   - secubox-courbes             # historique et système en direct, remplace Grafana et Glances
 suggere:
+  - secubox-datascope           # cockpit réseau, graphe d'entités observées, lecture seule (#3853)
 
 meta: secubox-service-ecrans
 niveau: service
@@ -555,6 +557,7 @@ requiert:
   - secubox-ai-gateway
 recommande:
 suggere:
+  - secubox-ai                  # assistant et Salle SOC (#3583) ; dépend de secubox-zia-llm, arm64
   - secubox-streamlit
 
 meta: secubox-service-provision
