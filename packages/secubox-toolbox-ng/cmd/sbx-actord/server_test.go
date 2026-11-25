@@ -124,8 +124,17 @@ func TestIngestionBoutEnBout(t *testing.T) {
 		t.Errorf("acteur projeté incomplet : %+v", acts[0])
 	}
 	// La preuve de l'événement est dans le ledger inviolable, et la chaîne est intègre.
-	if _, ok, _ := s.ledger.Get(valide.EventID); !ok {
-		t.Error("preuve de l'événement absente du ledger")
+	// La preuve part en lot, juste après le comptage de la corrélation : on l'attend.
+	var fige bool
+	var errPreuve error
+	for limite := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		_, fige, errPreuve = s.ledger.Get(valide.EventID)
+		if fige || errPreuve != nil || time.Now().After(limite) {
+			break
+		}
+	}
+	if !fige {
+		t.Errorf("preuve de l'événement absente du ledger (err=%v)", errPreuve)
 	}
 	if ok, idx, _ := s.ledger.Verify(); !ok {
 		t.Errorf("chaîne de preuves corrompue à l'index %d", idx)
