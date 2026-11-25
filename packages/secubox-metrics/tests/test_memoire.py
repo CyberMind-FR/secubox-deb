@@ -82,7 +82,7 @@ def test_une_croissance_soutenue_du_noyau_est_signalee_avant_le_seuil(tmp_path):
 def test_la_tache_planifiee_ecrit_un_releve_et_journalise_l_alerte(tmp_path, capsys):
     m, l = ecrire(tmp_path, su=4294000)
     f = tmp_path / "h" / "memoire.jsonl"
-    assert memoire.main(["--meminfo", m, "--loadavg", l, "--fichier", str(f)]) == 0
+    assert memoire.main(["--meminfo", m, "--loadavg", l, "--fichier", str(f), "--cgroups", str(tmp_path / "cg")]) == 0
     assert json.loads(f.read_text().splitlines()[-1])["slab_unrecl_mb"] > 4000
     assert "ALERTE" in capsys.readouterr().err
 
@@ -99,7 +99,7 @@ def test_la_vue_de_l_api_borne_les_heures_et_porte_alertes_et_croissance(tmp_pat
     assert any("croit" in a for a in v["alertes"])
     assert len(memoire.vue(10_000, f, maintenant=maintenant)["serie"]) == 13, "borne a 7 jours, jamais d'erreur"
     assert memoire.vue(1, tmp_path / "absent.jsonl", maintenant=maintenant) == {
-        "serie": [], "alertes": [], "croissance_noyau_mb_h": None, "pas_s": memoire.PAS_S}
+        "serie": [], "alertes": [], "croissance_noyau_mb_h": None, "pas_s": memoire.PAS_S, "etouffes": []}
 
 
 def test_la_route_et_le_timer_sont_cables():
