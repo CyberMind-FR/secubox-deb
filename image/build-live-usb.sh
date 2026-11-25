@@ -1857,12 +1857,6 @@ cat > "${ROOTFS}/etc/secubox/users.json" <<EOF
     "email": "admin@secubox.local",
     "role": "admin",
     "created": "$(date -Iseconds)"
-  },
-  "root": {
-    "password_hash": "${ADMIN_PASS_HASH}",
-    "email": "root@secubox.local",
-    "role": "admin",
-    "created": "$(date -Iseconds)"
   }
 }
 EOF
@@ -1882,12 +1876,12 @@ from argon2 import PasswordHasher
 from api import engine
 e = engine.Engine(users_path="/etc/secubox/users.json")
 doc = e._load()
-for nom in ("admin", "root"):
-    u = e._find(doc, nom)
-    if u is None:
-        sys.exit(f"compte {nom} absent après migration")
-    u["password_hash"] = PasswordHasher().hash("secubox")
-    u["must_change_password"] = True
+# #3708 : `admin` seul. Un second admin web (« root ») au même mot de passe restait ouvert après la configuration.
+u = e._find(doc, "admin")
+if u is None:
+    sys.exit("compte admin absent après migration")
+u["password_hash"] = PasswordHasher().hash("secubox")
+u["must_change_password"] = True
 e._save(doc)
 PYV2
   rm -f "${ROOTFS}"/etc/secubox/users.json.pre-migrate.*
@@ -1896,7 +1890,7 @@ PYV2
 else
   warn "usersctl absent (secubox-auth non installé) : users.json laissé au format v1"
 fi
-log "Created users.json (admin/secubox, root/secubox)"
+log "Created users.json (admin/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
 if [[ ${SYSTEMCTL_DIVERTED:-0} -eq 1 ]] && [[ -x "${ROOTFS}/bin/systemctl.real" ]]; then

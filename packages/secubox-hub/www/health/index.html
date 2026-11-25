@@ -110,6 +110,7 @@
             <h3>🛡️ WAF — test dynamique <i id="wafAge"></i><button class="btn sm" id="wafRun" type="button">▶ Rejouer</button> <span id="retour" role="status"></span></h3>
             <div class="liste" id="waf"></div>
         </div>
+        <div class="pan" id="avSection" hidden><h3>⚠️ Avertissements</h3><div class="liste" id="av"></div></div>
         <div class="pan"><h3>Services vitaux <span class="count" id="vitalCount"></span> <i>la colonne vertébrale de sécurité et de service</i></h3><div class="liste" id="vital"><div class="vide">Chargement…</div></div></div>
         <div class="pan"><h3>Autres services <span class="count" id="commonCount"></span></h3><div class="liste" id="common"><div class="vide">—</div></div></div>
     </div></div></main>
@@ -254,9 +255,19 @@
             $('wafAge').textContent = d.age_s != null ? 'il y a ' + d.age_s + ' s' : '';
             $('wafSection').hidden = false;
         }
+        // Avertissements du diagnostic (#3708 : administrateurs sans mot de passe). Le relevé porte un nombre, jamais un nom.
+        function rendAvertissements(checks) {
+            const zone = $('av'); zone.textContent = '';
+            Object.values(checks || {}).filter(c => c && c.niveau === 'avertissement' && c.ok === false).forEach(c => {
+                const x = el('div', 'svc att'), t = el('div', 'svc-tete'), m = (c.details || {}).message;
+                t.appendChild(el('span', 'pt')); t.appendChild(el('span', 'svc-nom', 'Comptes')); t.appendChild(el('span', 'svc-msg', typeof m === 'string' ? m : 'à vérifier'));
+                x.appendChild(t); zone.appendChild(x);
+            });
+            $('avSection').hidden = !zone.childElementCount;
+        }
         async function chargeWaf() {
             if (DEMO) { rendWaf({ ok: true, details: { age_s: 42, tests: [{ libelle: 'Injection SQL', attendu: '403', code: 403, ok: true }, { libelle: 'Page saine', attendu: '200', code: 200, ok: true }] } }); return; }
-            try { const s = await lire('/api/v1/health-doctor/checks'); const e = s && s.checks && s.checks['waf-selftest']; if (e) rendWaf(e); } catch (e) { /* illisible : section masquée */ }
+            try { const s = await lire('/api/v1/health-doctor/checks'); const e = s && s.checks && s.checks['waf-selftest']; if (e) rendWaf(e); rendAvertissements(s && s.checks); } catch (e) { /* illisible : section masquée */ }
         }
         async function rejouerWaf() {
             const b = $('wafRun'), r = $('retour'); b.disabled = true; r.className = ''; r.textContent = 'Test en cours…';

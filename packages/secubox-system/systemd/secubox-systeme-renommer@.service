@@ -20,5 +20,7 @@ TimeoutStartSec=90
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/etc /run /var/log/secubox
+# #3708 : usersctl coupe les sessions d'un compte de l'ancien nom qu'il désactive (absent sans secubox-auth).
+ReadWritePaths=-/var/lib/secubox/auth
 ProtectHome=yes
 PrivateTmp=yes

@@ -6,6 +6,7 @@
 """#1409 — l'API users ne rend plus de secret et ne se laisse plus muter par
 n'importe quel porteur de JWT ; les révocations de session marchent."""
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -100,9 +101,11 @@ class _MoteurFactice:
         self.rec = json.loads(json.dumps(SECRET))
     def get_user(self, name):
         return json.loads(json.dumps(self.rec)) if name == self.rec["username"] else None
-    def create_user(self, name, email=None, role=None):
+    def create_user(self, name, email=None, role=None, password=None, must_change=False):
         self.rec = dict(json.loads(json.dumps(SECRET)), username=name, email=email, role=role)
         return json.loads(json.dumps(self.rec))
+    def verrou(self):
+        return contextlib.nullcontext()
     def _load(self):
         return {"version": 2, "users": [self.rec], "groups": []}
     def _save(self, doc):
@@ -113,7 +116,7 @@ def test_modification_rend_une_fiche_expurgee(monkeypatch):
     """#1753 : `PUT /user/{u}` rendait l'enregistrement brut à tout porteur
     de `users.edit` — empreinte et secret TOTP de l'admin compris."""
     monkeypatch.setattr(main, "_engine", _MoteurFactice())
-    _sans_fuite(asyncio.run(main.update_user("gk2", main.UserUpdate())))
+    _sans_fuite(main.update_user("gk2", main.UserUpdate()))
 
 
 def test_creation_rend_une_fiche_expurgee(monkeypatch):
