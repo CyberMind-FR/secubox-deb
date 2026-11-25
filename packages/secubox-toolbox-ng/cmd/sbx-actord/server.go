@@ -51,6 +51,7 @@ type Server struct {
 	// #3936 : compteurs d'activité (activite.go), sous mu ; actChemin vide = aucun instantané.
 	act       activite
 	actChemin string
+	actEcrit  sync.Mutex
 	detailT   cacheDetail
 	campDetT  tampon[map[string][]*campagne]
 	robots    *Robots // robots connus classés à part (#2201) ; le registre est créé à la première observation

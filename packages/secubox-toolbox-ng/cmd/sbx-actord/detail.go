@@ -8,6 +8,7 @@ package main
 import (
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -85,6 +86,9 @@ type campagneDeActeur struct {
 type detailActeur struct {
 	GenereLe         int64 `json:"genere_le"`
 	CouvertureDepuis int64 `json:"couverture_depuis,omitempty"`
+	// TotauxDepuis : les totaux (adresses, pays, cibles, bans) sont ceux du graphe, qui ne connaît que
+	// son rejeu de démarrage et la suite.
+	TotauxDepuis int64 `json:"totaux_depuis,omitempty"`
 	// PremierBorne : le premier passage touche le début de la couverture ; l'acteur peut être plus ancien.
 	PremierBorne bool               `json:"premier_borne"`
 	Evenements   int                `json:"evenements"`
@@ -206,13 +210,13 @@ func (s *Server) calculerDetail(id string, reduite bool) *detailActeur {
 		return nil
 	}
 	t := &s.act
-	d := &detailActeur{GenereLe: now, CouvertureDepuis: t.depuis, Evenements: a.Events, Mesure: mesure,
-		PremierBorne: t.depuis > 0 && s.premierVu(a) < t.depuis+3600}
+	d := &detailActeur{GenereLe: now, CouvertureDepuis: t.depuisGraphe, TotauxDepuis: t.depuisGraphe, Evenements: a.Events, Mesure: mesure}
 	if x := t.acteurs[id]; x != nil {
-		h := t.serie(3600, 24, now, x.heureEvts)
-		j := t.serie(86400, joursGardes, now, x.jourEvts)
+		d.CouvertureDepuis = max(t.depuis, x.depuis)
+		h := t.serieDe(x, 3600, 24, now, x.heureEvts)
+		j := t.serieDe(x, 86400, joursGardes, now, x.jourEvts)
 		te := t.tendance(x, now)
-		sem := t.serie(3600, semaineGardee, now, x.semaineEvts)
+		sem := t.serieDe(x, 3600, semaineGardee, now, x.semaineEvts)
 		d.Heures, d.Jours, d.Semaine, d.Tendance, d.Series = &h, &j, &sem, &te, t.series(x, now)
 		d.Modules, d.Techniques = x.parModule(), t.techniques(x)
 		if x.dernierBan > 0 {
@@ -220,6 +224,7 @@ func (s *Server) calculerDetail(id string, reduite bool) *detailActeur {
 			d.DernierBan = &b
 		}
 	}
+	d.PremierBorne = d.CouvertureDepuis > 0 && s.premierVu(a) < d.CouvertureDepuis+3600
 	pas := max(1, (len(a.IPs)+detailAdresses-1)/detailAdresses)
 	adrs := make([]adresseVue, 0, len(a.IPs)/pas+1)
 	for i := 0; i < len(a.IPs); i += pas {
@@ -349,7 +354,10 @@ type lotActivite struct {
 	Evenements       []*uint32            `json:"evenements"` // tous capteurs, robots connus compris (comme /stats)
 	Bloques          []*uint32            `json:"bloques"`
 	Acteurs          map[string][]*uint32 `json:"acteurs"`
-	Campagnes        map[string][]*uint32 `json:"campagnes,omitempty"`
+	// Tranches partielles d'un acteur ou d'une campagne, quand elles diffèrent de `partielles`.
+	PartiellesActeurs   map[string][]int     `json:"partielles_acteurs,omitempty"`
+	Campagnes           map[string][]*uint32 `json:"campagnes,omitempty"`
+	PartiellesCampagnes map[string][]int     `json:"partielles_campagnes,omitempty"`
 }
 
 func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
@@ -378,12 +386,19 @@ func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
 	reduite := vueReduite(r)
 	s.mu.Lock()
 	t := &s.act
-	g := t.serie(3600, 24, now, t.global.heureEvts)
+	g := t.serieDe(&t.global, 3600, 24, now, t.global.heureEvts)
 	out := lotActivite{GenereLe: now, CouvertureDepuis: t.depuis, Debut: g.Debut, Pas: g.Pas, Partielles: g.Partielles,
-		Evenements: g.Valeurs, Bloques: t.serie(3600, 24, now, t.global.heureBans).Valeurs, Acteurs: map[string][]*uint32{}}
+		Evenements: g.Valeurs, Bloques: t.serieDe(&t.global, 3600, 24, now, t.global.heureBans).Valeurs, Acteurs: map[string][]*uint32{}}
 	for _, id := range ids {
 		if x := t.acteurs[id]; x != nil {
-			out.Acteurs[id] = t.serie(3600, 24, now, x.heureEvts).Valeurs
+			v := t.serieDe(x, 3600, 24, now, x.heureEvts)
+			out.Acteurs[id] = v.Valeurs
+			if !slices.Equal(v.Partielles, g.Partielles) {
+				if out.PartiellesActeurs == nil {
+					out.PartiellesActeurs = map[string][]int{}
+				}
+				out.PartiellesActeurs[id] = append([]int{}, v.Partielles...)
+			}
 		}
 	}
 	if len(camps) > 0 {
@@ -403,12 +418,31 @@ func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
 		if reduite {
 			sig = s.signatureOpaque(sig)
 		}
-		out.Campagnes[sig] = t.serie(3600, 24, now, func(r int64) (n uint32) {
+		// Une campagne vaut ce que vaut son acteur le moins bien couvert : mesurée si tous le sont,
+		// minorée (jamais un zéro) si certains manquent, absente si tous manquent.
+		v := t.serie(3600, 24, now, func(a, b int64) int {
+			pire, meilleure := couvPleine, couvNulle
+			for _, x := range xs {
+				c := t.couvertureDe(x, a, b, now)
+				pire, meilleure = min(pire, c), max(meilleure, c)
+			}
+			if pire == couvNulle && meilleure != couvNulle {
+				return couvIncertaine
+			}
+			return pire
+		}, func(r int64) (n uint32) {
 			for _, x := range xs {
 				n += x.heureEvts(r)
 			}
 			return n
-		}).Valeurs
+		})
+		out.Campagnes[sig] = v.Valeurs
+		if !slices.Equal(v.Partielles, g.Partielles) {
+			if out.PartiellesCampagnes == nil {
+				out.PartiellesCampagnes = map[string][]int{}
+			}
+			out.PartiellesCampagnes[sig] = append([]int{}, v.Partielles...)
+		}
 	}
 	s.mu.Unlock()
 	writeJSON(w, out)

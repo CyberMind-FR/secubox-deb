@@ -62,7 +62,7 @@ func TestActiviteNullAvantLaCouvertureZeroApres(t *testing.T) {
 	s.observe(evt(t36-30, "203.0.113.1", "a.exemple.test", envelope.ActionBlock))
 	a := seul(t, s)
 	x := s.act.acteurs[a.ID]
-	h := s.act.serie(3600, 24, t36, x.heureEvts)
+	h := s.act.serieDe(x, 3600, 24, t36, x.heureEvts)
 	if len(h.Valeurs) != 24 || h.Debut+23*3600 != t36-1800 {
 		t.Fatalf("série %+v", h)
 	}
@@ -82,14 +82,14 @@ func TestActiviteNullAvantLaCouvertureZeroApres(t *testing.T) {
 	if val(h.Valeurs[23]) != 2 {
 		t.Errorf("heure en cours : %d", val(h.Valeurs[23]))
 	}
-	j := s.act.serie(86400, joursGardes, t36, x.jourEvts)
+	j := s.act.serieDe(x, 86400, joursGardes, t36, x.jourEvts)
 	if val(j.Valeurs[14]) != 3 || j.Valeurs[13] != nil || len(j.Partielles) != 1 {
 		t.Errorf("jours %d / partielles %v", val(j.Valeurs[14]), j.Partielles)
 	}
 	if x.dernierBan != t36-30 {
 		t.Errorf("dernier ban %d", x.dernierBan)
 	}
-	if sem := s.act.serie(3600, semaineGardee, t36, x.semaineEvts); val(sem.Valeurs[167]) != 2 || val(sem.Valeurs[162]) != 1 || sem.Valeurs[161] != nil {
+	if sem := s.act.serieDe(x, 3600, semaineGardee, t36, x.semaineEvts); val(sem.Valeurs[167]) != 2 || val(sem.Valeurs[162]) != 1 || sem.Valeurs[161] != nil {
 		t.Errorf("semaine : %d %d", val(sem.Valeurs[167]), val(sem.Valeurs[162]))
 	}
 	se := s.act.series(x, t36)
@@ -113,7 +113,7 @@ func TestActiviteAnneauxEtHorlogeAbsurde(t *testing.T) {
 	}
 	*now = t36 + 3*86400
 	s.observe(evt(*now, "203.0.113.1", "a.exemple.test", envelope.ActionObserve))
-	if n := val(s.act.serie(3600, 24, *now, x.heureEvts).Valeurs[23]); n != 1 {
+	if n := val(s.act.serieDe(x, 3600, 24, *now, x.heureEvts).Valeurs[23]); n != 1 {
 		t.Errorf("après trois jours, heure en cours = %d", n)
 	}
 	total := uint32(0)
@@ -124,7 +124,7 @@ func TestActiviteAnneauxEtHorlogeAbsurde(t *testing.T) {
 		t.Errorf("anneau horaire non vidé : %d", total)
 	}
 	s.observe(evt(*now-60*86400, "203.0.113.1", "a.exemple.test", envelope.ActionObserve)) // trop ancien pour les anneaux
-	if j := s.act.serie(86400, joursGardes, *now, x.jourEvts); val(j.Valeurs[11]) != 1 || val(j.Valeurs[14]) != 1 || val(j.Valeurs[13]) != 0 {
+	if j := s.act.serieDe(x, 86400, joursGardes, *now, x.jourEvts); val(j.Valeurs[11]) != 1 || val(j.Valeurs[14]) != 1 || val(j.Valeurs[13]) != 0 {
 		t.Errorf("jours : %d %d %d", val(j.Valeurs[11]), val(j.Valeurs[13]), val(j.Valeurs[14]))
 	}
 }
@@ -160,7 +160,7 @@ func TestActiviteTendanceSurDeuxFenetresPleines(t *testing.T) {
 	if te = s.act.tendance(s.act.acteurs[a.ID], t36); te.Bans != nil {
 		t.Error("tendance annoncée à travers un trou")
 	}
-	h := s.act.serie(3600, heuresGardees, t36, s.act.acteurs[a.ID].heureEvts)
+	h := s.act.serieDe(s.act.acteurs[a.ID], 3600, heuresGardees, t36, s.act.acteurs[a.ID].heureEvts)
 	if h.Valeurs[10] != nil { // heure entièrement dans le trou
 		t.Errorf("heure dans un trou : %d", *h.Valeurs[10])
 	}
@@ -187,7 +187,7 @@ func TestActiviteSuitLesFusions(t *testing.T) {
 	s.act.suivreFusions(s.graph)
 	a := seul(t, s)
 	x := s.act.acteurs[a.ID]
-	h := s.act.serie(3600, 24, t36, x.heureEvts)
+	h := s.act.serieDe(x, 3600, 24, t36, x.heureEvts)
 	if len(s.act.acteurs) != 1 || val(h.Valeurs[23]) != 2 || val(h.Valeurs[22]) != 2 || x.premier != t36-3600 {
 		t.Errorf("fusion : %d entrées, %d/%d, premier %d", len(s.act.acteurs), val(h.Valeurs[22]), val(h.Valeurs[23]), x.premier)
 	}
@@ -277,7 +277,7 @@ func TestInstantaneReprendLesSeriesSansDoubleCompte(t *testing.T) {
 	r.rebuild()
 	a := seul(t, r)
 	x := r.act.acteurs[a.ID]
-	j := r.act.serie(86400, joursGardes, *now, x.jourEvts)
+	j := r.act.serieDe(x, 86400, joursGardes, *now, x.jourEvts)
 	got := []int{}
 	for _, p := range j.Valeurs[8:] {
 		got = append(got, val(p))
@@ -365,7 +365,7 @@ func TestDetailVueReduiteSansDonneeInterne(t *testing.T) {
 				t.Errorf("%s : fiche %+v", nom, o)
 			}
 			// Liste blanche figée : un champ nouveau se décide ici.
-			attendus := "campagnes couverture_depuis dernier_ban evenements genere_le heures jours mesure modules pays premier_borne reseaux semaine series techniques tendance"
+			attendus := "campagnes couverture_depuis dernier_ban evenements genere_le heures jours mesure modules pays premier_borne reseaux semaine series techniques tendance totaux_depuis"
 			if got := clesTriees(o.Detail); got != attendus {
 				t.Errorf("%s : clés %q", nom, got)
 			}

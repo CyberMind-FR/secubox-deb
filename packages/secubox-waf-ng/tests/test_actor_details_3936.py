@@ -145,7 +145,7 @@ def test_les_morceaux_sans_mesure_disparaissent(nav):
     b.p.wait_for_selector("#profile .duo")
     b.acts[0] = acteur(0, premier=0, dernier=0, bans=0, src={"ips": 1, "asns": 0, "countries": 0})
     b.p.click("#rafraichir")
-    b.p.wait_for_function("document.querySelector('#profile .resume').textContent==='Vu depuis 1 adresse\\u202F; jamais banni.'")
+    b.p.wait_for_function("document.querySelector('#profile .resume').textContent==='Vu depuis 1 adresse.'")
     t = b.p.inner_text("#profile")
     assert t.count("— pas mesurée") == 2 and "undefined" not in t and "NaN" not in t and "Dans aucune campagne" in t
     assert b.p.locator("#profile .vif").count() == 0 and b.p.locator("#profile .quand").count() == 0
@@ -246,4 +246,101 @@ def test_demo_aucun_appel_et_donnees_fictives(nav):
     assert b.appels == [] and b.p.locator("#profile .gr").count() == 4
     demo = HTML[HTML.index("function demoActs("):HTML.index("function maj(")]
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", demo) and "Math.random" not in demo
+    b.fin()
+
+
+# ── Revue ──
+
+def test_jamais_banni_n_est_pas_affirme(nav):
+    b = Banc(nav, det=detail(dernier_ban=NOW - 3 * 86400, totaux_depuis=NOW - 6 * 3600))
+    b.acts[0] = acteur(0, bans=0)
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_function("document.querySelector('#profile .resume').textContent.includes('dernier ban')")
+    t = b.p.inner_text("#profile .resume")
+    assert "jamais" not in t and "dernier ban il y a 3 jours" in t
+    assert "Adresses, pays, cibles et bans comptés depuis le" in t          # vu depuis 15 jours, totaux depuis 6 h : dit
+    assert "Totaux comptés depuis le" in b.p.inner_text("#profile .totaux")
+    assert "comptés depuis le" in b.p.locator("#profile .gr").first.get_attribute("title")
+    assert "jamais banni" not in HTML
+    b.fin()
+
+
+def test_aucun_ban_porte_sa_date_ou_se_tait(nav):
+    b = Banc(nav, det=detail(dernier_ban=None, mesure=None, totaux_depuis=NOW - 20 * 86400))
+    b.acts[0] = acteur(0, bans=0)
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_function("document.querySelector('#profile .resume').textContent.includes('aucun ban depuis le')")
+    assert "comptés depuis le" not in b.p.inner_text("#profile .resume")     # totaux plus anciens que le premier passage
+    b.det = detail(dernier_ban=None, mesure=None)
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_function("!document.querySelector('#profile .resume').textContent.includes('ban')")
+    b.fin()
+
+
+def test_lot_des_acteurs_ne_perd_pas_les_series_de_campagne(nav):
+    b = Banc(nav)
+    b.p.wait_for_selector("#list .camp svg.mini")
+    b.p.click("text=Tous")
+    b.p.wait_for_selector("#list .acteur svg.mini")
+    b.p.click(".fb >> text=Campagnes")
+    assert b.p.locator("#list .camp svg.mini").count() == 1
+    b.fin()
+
+
+def test_sans_campagne_pas_de_relecture_a_chaque_passage(nav):
+    b = Banc(nav)
+    origine = b.api
+    b.api = lambda u: {k: v for k, v in origine(u).items() if k != "campagnes"} if "/activite" in u else origine(u)
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_timeout(300)
+    n = len([u for u in b.appels if "/activite" in u])
+    for _ in range(3):
+        b.p.evaluate("tick()")
+        b.p.wait_for_timeout(200)
+    assert len([u for u in b.appels if "/activite" in u]) == n
+    b.fin()
+
+
+def test_300_lignes_au_plus(nav):
+    b = Banc(nav, n=400)
+    b.p.click("text=Tous")
+    for _ in range(4):
+        b.p.click("#list .plus")
+    assert b.p.locator("#list .acteur").count() == 300 and b.p.locator("#list .plus").count() == 0
+    assert "affine" in b.p.inner_text("#list .fin")
+    b.fin()
+
+
+def test_focus_garde_sur_campagne_et_volet(nav):
+    b = Banc(nav)
+    b.p.wait_for_selector("#list .camp")
+    for sel in ("#list .camp", "#list .cdet summary"):
+        b.p.locator(sel).first.focus()
+        cle = b.p.evaluate("document.activeElement.getAttribute('data-cle')")
+        assert cle
+        b.p.evaluate("rendList()")
+        assert b.p.evaluate("document.activeElement.getAttribute('data-cle')") == cle
+    b.fin()
+
+
+def test_liste_perimee_est_dite(nav):
+    b = Banc(nav)
+    origine = b.api
+    b.api = lambda u: None if u == "/api/v1/actor/actors" else origine(u)
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_function("document.getElementById('maj').textContent.includes('liste des acteurs de')")
+    assert b.p.locator("#profile .pid").inner_text() == "ACT-0000"
+    b.api = origine
+    b.p.evaluate("document.getElementById('rafraichir').click()")
+    b.p.wait_for_function("!document.getElementById('maj').textContent.includes('liste des acteurs')")
+    b.fin()
+
+
+def test_partielles_propres_a_un_acteur(nav):
+    b = Banc(nav)
+    origine = b.api
+    b.api = lambda u: dict(origine(u), partielles_acteurs={"ACT-0000": [22]}) if "/activite?ids=" in u else origine(u)
+    b.p.click("text=Tous")
+    b.p.wait_for_selector("#list .acteur svg.mini")
+    assert b.p.locator("#list .acteur").first.locator("rect.p").count() == 1
     b.fin()

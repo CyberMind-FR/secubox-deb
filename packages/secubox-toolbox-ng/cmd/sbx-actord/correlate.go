@@ -79,6 +79,7 @@ func (s *Server) rebuild() {
 	evs, err := s.store.Recent(n)
 	if err != nil {
 		log.Printf("actord: rebuild: %v", err)
+		s.actChemin = "" // #3936 : sans rejeu, on n'écrase pas l'instantané d'activité par un état vide
 		return
 	}
 	var ancien, recent int64

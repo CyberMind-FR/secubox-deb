@@ -275,7 +275,8 @@ var AXES=[['severity','⚠️','Gravité','le plus grave de ses gestes'],['conti
 var FLOW=['OBSERVE','DELAY','CHALLENGE','TARPIT','DENY','QUARANTINE'];
 var ACTS=[],CAMPS=[],CUR=null,CAMP=null,STATS=null,POPS=[],POPS_LE=0;
 // #3936 : séries par acteur (lot de 60 lignes), détail de l'acteur ouvert, sections ouvertes, dernières valeurs montrées.
-var ACTIV={},LOT=null,DET={},OUVERTS={},VUS={},LIM=60,ACTS_LE=0,CAMPS_LE=0;
+var LIM_MAX=300;   // au-delà, une liste ne se lit plus : on affine
+var ACTIV={},LOT=null,LOTC=null,LOTC_LE=0,DET={},OUVERTS={},VUS={},LIM=60,ACTS_LE=0,CAMPS_LE=0;
 // La campagne est l'unité de lecture : on ouvre sur les campagnes, les acteurs restent à un clic. Tri par défaut = score.
 var FILTRE='campagnes',TRI='score';
 
@@ -460,15 +461,15 @@ function cPopulation(sig){   // population du Radar rapprochée de cette campagn
 }
 // Activité sur 24 h de la campagne (somme de ses acteurs, 60 premières) ; pas de série : rien.
 function cMini(c){
-  if(typeof miniBarres!=='function'||typeof LOT==='undefined'||!LOT||!LOT.campagnes||!Object.prototype.hasOwnProperty.call(LOT.campagnes,c.signature))return null;
-  return miniBarres({debut:LOT.debut,pas:LOT.pas,valeurs:LOT.campagnes[c.signature],partielles:LOT.partielles},'Activité de la campagne');
+  if(typeof miniBarres!=='function'||typeof LOTC==='undefined'||!LOTC||!LOTC.campagnes||!Object.prototype.hasOwnProperty.call(LOTC.campagnes,c.signature))return null;
+  return miniBarres({debut:LOTC.debut,pas:LOTC.pas,valeurs:LOTC.campagnes[c.signature],partielles:propres(LOTC.partielles_campagnes,c.signature,LOTC.partielles)},'Activité de la campagne');
 }
 function anneauCampagne(c){
   var n=num(c.nb_acteurs),r=h('div','ring',String(n));r.style.setProperty('--v',String(Math.min(100,n*2)));r.style.setProperty('--c',num(c.cibles_inexistantes)>0?'var(--orange)':'var(--cyan)');return r;
 }
 // L'affichage d'avant #3919 : une ligne, la signature en titre.
 function ligneCampagne(c){
-  var dico=num(c.cibles_inexistantes)>0,d=ligne(c.signature===CAMP),sig=String(c.signature==null?'—':c.signature);
+  var dico=num(c.cibles_inexistantes)>0,d=ligne(c.signature===CAMP),sig=String(c.signature==null?'—':c.signature);d.setAttribute('data-cle','carte:'+sig);
   var nm=h('div','nm'),tg=h('div','tg'),nc=(Array.isArray(c.cibles)?c.cibles:[]).length;
   add(nm,h('b',null,sig,sig));
   add(tg,h('span','tag ips',num(c.sources)+' sources'),h('span','tag',nc+' cible'+(nc>1?'s':'')));
@@ -480,7 +481,7 @@ function ligneCampagne(c){
 }
 function carteCampagne(R,c){
   var fam=cCle(R.FAMILLES,c.famille,'autre'),noms=(Array.isArray(c.cibles_noms)?c.cibles_noms:Array.isArray(c.cibles)?c.cibles:[]).slice(0,3).map(String);
-  var d=ligne(c.signature===CAMP),cc=h('div','cc'),tete=h('header'),et=h('div','cpl');d.classList.add('camp');
+  var d=ligne(c.signature===CAMP),cc=h('div','cc'),tete=h('header'),et=h('div','cpl');d.classList.add('camp');d.setAttribute('data-cle','carte:'+String(c.signature));
   add(tete,h('h3',null,R.FAMILLES[fam][0]+' '+R.nomCarte(fam,noms)));
   if(c.rotation===true)add(et,cPuce(R,R.ETATS.rotation,'','etat rot','50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins'));
   if(cInactive(c))add(et,cPuce(R,R.ETATS.inactive,'','etat ina','aucune activité depuis plus de 24 h'));
@@ -505,7 +506,8 @@ function carteCampagne(R,c){
   // Détail : la signature (plus le titre), les acteurs, les compteurs bruts. Ouvrir le détail n'ouvre pas le profil.
   var det=h('details','cdet');det.setAttribute('data-cle','camp:'+String(c.signature));
   var ac=(Array.isArray(c.acteurs)?c.acteurs:[]).map(String);
-  add(det,h('summary',null,'Détail'),h('p','csig','Signature : '+String(c.signature==null?'—':c.signature)),
+  var som=h('summary',null,'Détail');som.setAttribute('data-cle','s:camp:'+String(c.signature));
+  add(det,som,h('p','csig','Signature : '+String(c.signature==null?'—':c.signature)),
     h('p',null,'Acteurs : '+(ac.length?ac.slice(0,6).join(', ')+(ac.length>6?' …':''):'—')),
     h('p',null,'Pays : '+mes(c.pays)+' · priorité '+mes(c.priorite)+' · continuité '+mes(c.continuite)));
   det.addEventListener('click',function(e){e.stopPropagation();});det.addEventListener('keydown',function(e){e.stopPropagation();});
@@ -526,7 +528,7 @@ function rendCampagnes(){
   vues.forEach(function(c){add(box,carte(c));});
   if(!vues.length)add(box,h('div','vide','Aucune campagne active dans les dernières 24 h avec plusieurs adresses.'));
   if(repliees.length){
-    var dt=h('details','campautres');dt.setAttribute('data-cle','campautres');add(dt,h('summary',null,'Autres campagnes ('+repliees.length+') : une seule adresse, ou rien depuis 24 h'));
+    var dt=h('details','campautres');dt.setAttribute('data-cle','campautres');var sd=h('summary',null,'Autres campagnes ('+repliees.length+') : une seule adresse, ou rien depuis 24 h');sd.setAttribute('data-cle','s:campautres');add(dt,sd);
     repliees.forEach(function(c){add(dt,carte(c));});add(box,dt);
   }
 }
@@ -565,8 +567,9 @@ function listeBrute(){
     d.addEventListener('click',function(){CUR=a.id;rendList();rendProfile();montreProfil();chargeDetail();});
     add(box,d);
   });
-  if(vus.length>LIM){var pl=h('button','fb plus','Afficher 60 acteurs de plus ('+nb(vus.length-LIM)+' restants)');pl.type='button';pl.setAttribute('data-cle','plus');
-    pl.addEventListener('click',function(){LIM+=60;rendList();activiteVisible();});add(box,pl);}
+  if(vus.length>LIM_MAX&&LIM>=LIM_MAX)add(box,h('div','vide fin','300 premiers sur '+nb(vus.length)+' : affine avec un filtre ou un autre tri.'));
+  else if(vus.length>LIM){var pl=h('button','fb plus','Afficher 60 acteurs de plus ('+nb(vus.length-LIM)+' restants)');pl.type='button';pl.setAttribute('data-cle','plus');
+    pl.addEventListener('click',function(){LIM=Math.min(LIM_MAX,LIM+60);rendList();activiteVisible();});add(box,pl);}
 }
 // Maître-détail en petit cadre : la CSS (container query) décide ; ces fonctions ne font que poser la classe.
 function montreProfil(){var c=$('cols');if(!c)return;c.classList.add('voit-profil');if(!$('colListe').offsetParent)c.scrollIntoView({block:'start'});}
@@ -683,10 +686,15 @@ function phrase(a,d,camps,now){
   if(src.ips)t+=(t==='Vu'?'':',')+' depuis '+pl(src.ips,'adresse','adresses')+(src.countries?(num(src.ips)>1?' de ':' · ')+pl(src.countries,'pays','pays'):'');
   else if(src.countries)t+=', '+pl(src.countries,'pays','pays');
   if(vieux!==null)t+=vieux<600?' ; actif maintenant (il y a '+duree(vieux)+')':vieux<86400?' ; actif il y a '+duree(vieux):' ; plus rien depuis '+duree(vieux);
-  if(a.bans!=null){t+=num(a.bans)?' ; '+pl(a.bans,'ban','bans'):' ; jamais banni';
-    if(num(a.bans)&&d&&d.dernier_ban)t+=', le dernier il y a '+duree(now-num(d.dernier_ban));}
+  // Les totaux viennent du graphe, qui ne connaît que son rejeu et la suite : zéro ban n'est jamais « jamais ».
+  var dep=d&&d.totaux_depuis?num(d.totaux_depuis):0;
+  if(num(a.bans)){t+='\u202F; '+pl(a.bans,'ban','bans');if(d&&d.dernier_ban)t+=', le dernier il y a '+duree(now-num(d.dernier_ban));}
+  else if(d&&d.dernier_ban)t+='\u202F; dernier ban il y a '+duree(now-num(d.dernier_ban));
+  else if(a.bans!=null&&dep)t+='\u202F; aucun ban depuis le '+jourHeure(dep);
   if(d&&d.mesure&&d.mesure.niveau)t+=' ; en ce moment '+(CRANS[d.mesure.niveau]||String(d.mesure.niveau).toLowerCase());
-  return t+'.';
+  t+='.';
+  if(dep&&a.premier&&num(a.premier)<dep-60)t+=' Adresses, pays, cibles et bans comptés depuis le '+jourHeure(dep)+'.';
+  return t;
 }
 function force(v){return v===null?['','—']:v<=0?['fa','aucun signe']:v<34?['fa','faible']:v<67?['mo','moyen']:['fo','fort'];}
 function change(e,cle,v){var k='v:'+cle;if(VUS[k]!==undefined&&VUS[k]!==v&&!CALME)e.classList.add('chg');VUS[k]=v;return e;}
@@ -782,6 +790,9 @@ function rendProfile(){
     grand(k+'cibles','\u{1F3AF}','Cibles',nbCibles(a),te.nb_cibles,['nouvelle','nouvelles'],'Services différents visés.',se.nb_cibles,'Cibles nouvelles'),
     grand(k+'bans','\u{1F6D1}','Bans',a.bans,te.bans,null,'Nombre de fois où un capteur a sanctionné ce profil.',se.bans,'Bans'));
   add(p,gr);
+  if(d&&d.totaux_depuis){var dep=' Comptés depuis le '+jourHeure(num(d.totaux_depuis))+'.';
+    add(p,h('p','note totaux','Totaux comptés depuis le '+jourHeure(num(d.totaux_depuis))+' (relevé de départ du moteur).'));
+    for(var q=0;q<gr.children.length;q++)gr.children[q].title=gr.children[q].title+dep.replace('Comptés','Totaux comptés');}
   if(!d){add(p,h('div','absent',DET[a.id]?'— détail indisponible pour le moment, nouvel essai automatique.':'Lecture du détail…'));}
   else{
     var duo=h('div','duo');
@@ -834,16 +845,19 @@ function lecture(){try{var s=window.getSelection();if(!s||s.isCollapsed||!s.anch
 var ACTIV_LE=0;
 function activiteVisible(){
   if(DEMO){ACTIV=demoActivite();return Promise.resolve();}
-  var ids=FILTRE==='campagnes'?[]:trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS).slice(0,LIM).map(function(a){return a.id;});
-  var camp=FILTRE==='campagnes',frais=Date.now()-ACTIV_LE<55000&&!(camp&&!(LOT&&LOT.campagnes));
-  if(!frais)ACTIV_LE=Date.now();else{if(camp)return Promise.resolve();ids=ids.filter(function(i){return !Object.prototype.hasOwnProperty.call(ACTIV,i);});if(!ids.length)return Promise.resolve();}
+  var camp=FILTRE==='campagnes',ids=camp?[]:trie(FILTRE==='recurrents'?ACTS.filter(multi):ACTS).slice(0,LIM).map(function(a){return a.id;});
+  if(camp){if(Date.now()-LOTC_LE<55000)return Promise.resolve();LOTC_LE=Date.now();}
+  else if(Date.now()-ACTIV_LE>=55000)ACTIV_LE=Date.now();
+  else{ids=ids.filter(function(i){return !Object.prototype.hasOwnProperty.call(ACTIV,i);});if(!ids.length)return Promise.resolve();}
   var lots=[];for(var i=0;i<ids.length;i+=60)lots.push(ids.slice(i,i+60));if(!lots.length)lots.push([]);
   return lots.reduce(function(pr,l){return pr.then(function(){
     return jget('/api/v1/actor/activite'+(l.length?'?ids='+l.map(encodeURIComponent).join(','):'?campagnes=1'),true).then(function(x){
-      if(!x||!x.acteurs)return;LOT=x;
-      l.forEach(function(id){ACTIV[id]=x.acteurs[id]?{debut:x.debut,pas:x.pas,valeurs:x.acteurs[id],partielles:x.partielles}:null;});
+      if(!x||!x.acteurs)return;LOT=x;if(camp)LOTC=x;
+      l.forEach(function(id){ACTIV[id]=x.acteurs[id]?{debut:x.debut,pas:x.pas,valeurs:x.acteurs[id],partielles:propres(x.partielles_acteurs,id,x.partielles)}:null;});
     });});},Promise.resolve()).then(function(){if(STATS)rendKPIs(STATS);if(!lecture())rendList();});
 }
+// Tranches partielles propres à une ligne, sinon celles du lot.
+function propres(table,cle,defaut){return table&&Object.prototype.hasOwnProperty.call(table,cle)?table[cle]:defaut;}
 
 // ── Aperçu (carte, événements, activité, techniques, robots) : coûteux côté serveur, une relecture par minute suffit ──
 var APERCU=null,APERCU_LE=0;
@@ -871,7 +885,7 @@ function demoActs(){
 var DEMO24=[14,9,22,31,18,12,40,62,95,71,55,38,27,44,83,120,97,61,36,28,19,47,58,33];
 function demoSerie(vals,pas,part){var f=Math.floor(Date.now()/1000/pas);return {debut:(f-vals.length+1)*pas,pas:pas,valeurs:vals,partielles:part||[]};}
 function demoActivite(){
-  LOT={debut:demoSerie(DEMO24,3600).debut,pas:3600,evenements:DEMO24.map(function(x){return x*13;}),bloques:DEMO24.map(function(x,i){return x*9+i;}),partielles:[],
+  LOT=LOTC={debut:demoSerie(DEMO24,3600).debut,pas:3600,evenements:DEMO24.map(function(x){return x*13;}),bloques:DEMO24.map(function(x,i){return x*9+i;}),partielles:[],
     campagnes:{'campagne-sqli-01':DEMO24.map(function(x,i){return i%3?Math.round(x/6):0;}),'collecte-git-02':DEMO24.map(function(x){return x*2;}),'enum-sous-domaines':DEMO24.map(function(){return 0;}),'mots-de-passe-03':DEMO24.map(function(x,i){return i>20?1:0;})}};
   return {'ACT-0A41':demoSerie(DEMO24,3600),'ACT-17C2':demoSerie([null,null,null,null,null,null,null,null,2,0,1,5,3,0,0,6,9,4,0,0,2,1,0,0],3600,[8]),
     'ACT-2B90':demoSerie([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0],3600),'ACT-3D17':demoSerie(DEMO24.map(function(){return 0;}),3600)};
@@ -881,7 +895,7 @@ function demoSeries(b,n){var nul=DEMO24.map(function(){return 0;});return {bans:
 // Détail fictif : opérateurs d'exemple, aucune adresse, aucun nom d'hôte réel.
 function demoDetail(id){
   var t=Math.floor(Date.now()/1000),a=demoActivite(),couv=t-15*86400;
-  var d={genere_le:t,couverture_depuis:couv,premier_borne:false,evenements:0,heures:a[id]||null,semaine:null,jours:null,series:null,tendance:null,modules:[],techniques:[],pays:null,reseaux:null,dernier_ban:null,mesure:null,campagnes:[]};
+  var d={genere_le:t,couverture_depuis:couv,totaux_depuis:couv,premier_borne:false,evenements:0,heures:a[id]||null,semaine:null,jours:null,series:null,tendance:null,modules:[],techniques:[],pays:null,reseaux:null,dernier_ban:null,mesure:null,campagnes:[]};
   if(id==='ACT-0A41')return Object.assign(d,{premier_borne:true,evenements:18420,semaine:demoSemaine(function(i){return i>=144?DEMO24[i-144]:Math.round(DEMO24[(i+3)%24]*[.7,.9,1.2,1.4,1.5,1.3][Math.floor(i/24)]);}),series:demoSeries(DEMO24.map(function(x){return Math.round(x/6);}),DEMO24.map(function(x){return Math.round(x/7);})),jours:demoSerie([310,420,515,640,900,1240,1510,1320,980,1105,1430,1610,1720,1490,1210],86400,[0]),
     tendance:{evenements:{dernieres_24h:1120,precedentes_24h:1490},bans:{dernieres_24h:186,precedentes_24h:204},adresses:{dernieres_24h:163,precedentes_24h:141},pays:{dernieres_24h:0,precedentes_24h:2},nb_cibles:{dernieres_24h:0,precedentes_24h:0}},
     modules:[{nom:'waf',n:17980},{nom:'firewall',n:440}],techniques:[{nom:'aspirateur_ua',n:15200},{nom:'scan.chemins',n:2410},{nom:'outil python-requests',n:810}],
@@ -918,7 +932,11 @@ function demoCampagnes(){
 function demoPopulations(){
   return [{id:'collecte:git',famille:'collecte',cibles:['git.example.test'],campagne_actord:'collecte-git-02',reseaux_top:[{asn:64500,org:'Opérateur exemple AS64500',classe:'proxy_loue',adresses:663}]}];
 }
-function maj(){var m=$('maj');try{m.textContent='relevé à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){m.textContent='—';}}
+// Une liste gardée parce que sa relecture a échoué est datée, jamais présentée comme fraîche.
+var VIEUX={};   // nom → {echec, le} : dernier succès de chaque liste
+function maj(){var m=$('maj'),t='—',hh=function(x){return new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});};
+  try{t='relevé à '+hh(Date.now());Object.keys(VIEUX).forEach(function(k){if(VIEUX[k].echec&&VIEUX[k].le)t+=' · '+k+' de '+hh(VIEUX[k].le);});}catch(e){t='—';}
+  m.textContent=t;m.style.color=Object.keys(VIEUX).some(function(k){return VIEUX[k].echec;})?'var(--orange)':'';}
 function rend(s,acts,camps){
   STATS=s;CAMPS=camps||[];ACTS=acts||[];
   rendKPIs(s);
@@ -930,9 +948,9 @@ function rend(s,acts,camps){
 }
 // Les listes pèsent plus d'un mégaoctet : une relecture par minute (« Rafraîchir » force). Les compteurs et le détail de
 // l'acteur ouvert, légers, suivent à chaque passage ; l'activité des lignes affichées, une fois par minute.
-function relire(u,quand,garde,pose){
+function relire(nom,u,quand,garde,pose){
   if(garde&&Date.now()-quand<55000)return Promise.resolve(garde);
-  return jget(u).then(function(x){if(x)pose(x);return x||garde;});
+  return jget(u).then(function(x){var v=VIEUX[nom]=VIEUX[nom]||{};v.echec=!x&&!!garde;if(x){v.le=Date.now();pose(x);}return x||garde;});
 }
 var EN_COURS=false;
 function tick(){
@@ -940,15 +958,15 @@ function tick(){
     rend({posture:'Protégée',mode:'observe',blocked_24h:136638,attempts_24h:5421,actors:4,campaigns:4,events_24h:18204},demoActs(),demoCampagnes());chargeDetail();return;}
   if(EN_COURS)return;EN_COURS=true;
   SESSION_REFUSEE=false;
-  Promise.all([jget('/api/v1/actor/stats'),relire('/api/v1/actor/actors',ACTS_LE,ACTS.length?ACTS:null,function(){ACTS_LE=Date.now();}),
-    relire('/api/v1/actor/campaigns',CAMPS_LE,CAMPS.length?CAMPS:null,function(){CAMPS_LE=Date.now();}),aperçu(),populations()]).then(function(r){
+  Promise.all([jget('/api/v1/actor/stats'),relire('liste des acteurs','/api/v1/actor/actors',ACTS_LE,ACTS_LE||ACTS.length?ACTS:null,function(){ACTS_LE=Date.now();}),
+    relire('campagnes','/api/v1/actor/campaigns',CAMPS_LE,CAMPS_LE||CAMPS.length?CAMPS:null,function(){CAMPS_LE=Date.now();}),aperçu(),populations()]).then(function(r){
     EN_COURS=false;
     CAMPS=r[2]||[];
     var ok=!!r[0];
     $('session').hidden=ok||!SESSION_REFUSEE;
     $('moteur').hidden=ok||SESSION_REFUSEE;
     if(!ok){
-      ACTS=[];CAMPS=[];STATS=null;LOT=null;ACTIV={};DET={};ACTS_LE=CAMPS_LE=ACTIV_LE=0;vide($('kpis'));rendTuiles();carteMonde();rendEven();rendBarre();
+      ACTS=[];CAMPS=[];STATS=null;LOT=LOTC=null;ACTIV={};DET={};ACTS_LE=CAMPS_LE=ACTIV_LE=LOTC_LE=0;VIEUX={};vide($('kpis'));rendTuiles();carteMonde();rendEven();rendBarre();
       var e=$('etat');e.className=SESSION_REFUSEE?'actif neutre':'actif hors';e.textContent=SESSION_REFUSEE?'SESSION REQUISE':'MOTEUR INJOIGNABLE';
       vide($('list'));add($('list'),h('div','vide',SESSION_REFUSEE?'Aucune mesure : session requise.':'Moteur Actor Intelligence en démarrage ou injoignable — il reconstruit son graphe après une mise à jour (jusqu’à quelques minutes) ; nouvel essai automatique.'));
       vide($('profile'));add($('profile'),h('div','vide','—'));maj();annoncer();return;
@@ -965,7 +983,7 @@ function annoncer(){
 }
 window.addEventListener('load',annoncer);window.addEventListener('resize',annoncer);
 if(window.ResizeObserver)new ResizeObserver(annoncer).observe(document.body);
-$('rafraichir').addEventListener('click',function(){ACTS_LE=CAMPS_LE=APERCU_LE=ACTIV_LE=0;tick();});
+$('rafraichir').addEventListener('click',function(){ACTS_LE=CAMPS_LE=APERCU_LE=ACTIV_LE=LOTC_LE=0;tick();});
 $('retour').addEventListener('click',montreListe);
 if(DEMO){$('demo').hidden=false;$('geoNote').textContent='';}
 rendFlow();tick();

@@ -82,6 +82,12 @@ type activiteActeur struct {
 	modules             [len(modulesConnus)]uint32
 	tech                []techniqueN
 	nIPs, nPays, nCible int
+	// Couverture PROPRE à l'acteur : avant `depuis`, rien n'est su de lui ; entre `depuis` et `plein`
+	// (fusion avec un acteur suivi depuis moins longtemps), un compte non nul est un minorant et un
+	// zéro n'en est pas un. 0 = la couverture commune (série d'ensemble).
+	depuis, plein int64
+	// apres : pendant le rejeu, ce qui est postérieur à l'instantané ; retiré à la fin du rejeu.
+	apres *activiteActeur
 }
 
 // activite : l'ensemble. Tout accès se fait sous Server.mu.
@@ -92,10 +98,19 @@ type activite struct {
 	// par rapport à lui (le rejeu de démarrage ne recharge pas les adresses plus anciennes).
 	depuisGraphe int64
 	trous        [][2]int64
-	seuil        int64 // pendant le rejeu : ce qui est antérieur est déjà dans l'instantané
-	noms         []string
-	parNom       map[string]uint16
-	global       activiteActeur // série de tous les événements (robots connus compris, comme /stats)
+	// attente : entrées de l'instantané dont aucun acteur du rejeu ne porte une adresse, par adresse ;
+	// reprises quand une de leurs adresses revient, réécrites dans l'instantané, oubliées à 15 jours.
+	attente  map[string]*entreeInstantane
+	nAttente int
+	// depuisTrous : fin du dernier trou abandonné au plafond ; la couverture ne remonte pas avant.
+	depuisTrous int64
+	// retard : dernier instant connu quand le démon démarre avec une horloge en retard ; 0 sinon.
+	retard  int64
+	enRejeu bool
+	seuil   int64 // pendant le rejeu : ce qui est antérieur est déjà dans l'instantané
+	noms    []string
+	parNom  map[string]uint16
+	global  activiteActeur // série de tous les événements (robots connus compris, comme /stats)
 }
 
 func avancer[T any](anneau []T, dernier *int64, rang int64) bool {
@@ -161,11 +176,39 @@ func estBlocage(e *envelope.Envelope) bool {
 	return e.Action == envelope.ActionBlock || e.Action == envelope.ActionQuarantps
 }
 
+// recaler remet la couverture dans le passé après une remise à l'heure vers l'arrière.
+func (t *activite) recaler(now int64) {
+	if t.depuis > now+futurTolere {
+		t.depuis = now
+	}
+	if t.depuisGraphe > now+futurTolere {
+		t.depuisGraphe = now
+	}
+	garde := t.trous[:0]
+	for _, tr := range t.trous {
+		if tr[0] <= now+futurTolere {
+			garde = append(garde, [2]int64{tr[0], min(tr[1], now)})
+		}
+	}
+	t.trous = garde
+}
+
+// remettre vide les anneaux qu'un saut d'horloge en avant a poussés dans le futur : sans cela, plus
+// aucun événement n'y entrerait. Ce qu'ils savaient est perdu, la couverture repart de maintenant.
+func (x *activiteActeur) remettre(now int64) {
+	if x.heure <= now/3600+1 && x.rangS <= now/3600+1 && x.jour <= now/86400+1 && x.depuis <= now+futurTolere && x.plein <= now+futurTolere {
+		return
+	}
+	*x = activiteActeur{premier: min(x.premier, now), dernierBan: min(x.dernierBan, now), temoin: x.temoin, modules: x.modules, tech: x.tech,
+		nIPs: x.nIPs, nPays: x.nPays, nCible: x.nCible, depuis: now, plein: now}
+}
+
 // noterGlobal compte un événement dans la série d'ensemble. Sous s.mu.
 func (t *activite) noterGlobal(e *envelope.Envelope) {
 	if !t.admis(e) || t.seuil > 0 && e.Timestamp <= t.seuil {
 		return
 	}
+	t.global.remettre(maintenant())
 	if h := t.global.tranche(e.Timestamp / 3600); h != nil {
 		h.evts++
 		if estBlocage(e) {
@@ -176,8 +219,21 @@ func (t *activite) noterGlobal(e *envelope.Envelope) {
 
 // admis ouvre la couverture au premier événement et écarte une horloge absurde.
 func (t *activite) admis(e *envelope.Envelope) bool {
-	if e.Timestamp <= 0 || e.Timestamp > maintenant()+futurTolere {
+	now := maintenant()
+	if t.retard > 0 && t.seuil == 0 && !t.enRejeu {
+		if now < t.retard {
+			return false // horloge encore en retard : la date de l'événement est fausse
+		}
+		if now-t.retard > trouMin {
+			t.ajouterTrou(t.retard, now)
+		}
+		t.retard = 0
+	}
+	if e.Timestamp <= 0 || e.Timestamp > max(now, t.retard)+futurTolere {
 		return false
+	}
+	if t.depuis > now+futurTolere && t.retard == 0 {
+		t.recaler(now)
 	}
 	if t.depuis == 0 || t.depuisGraphe == 0 {
 		t.ouvrir(e.Timestamp)
@@ -207,8 +263,17 @@ func (t *activite) noter(a *graph.Actor, e *envelope.Envelope) {
 		if t.acteurs == nil {
 			t.acteurs = map[string]*activiteActeur{}
 		}
-		x = &activiteActeur{premier: e.Timestamp}
+		x = &activiteActeur{premier: e.Timestamp, depuis: t.depuisGraphe, plein: t.depuisGraphe}
+		if a.Events > 1 { // déjà connu du graphe, pas de nous (plafond) : on ne sait rien d'avant
+			x.depuis, x.plein = e.Timestamp, e.Timestamp
+		}
 		t.acteurs[a.ID] = x
+		t.reprendre(x, e.SrcIP, true)
+	} else {
+		t.reprendre(x, e.SrcIP, false)
+	}
+	if t.retard == 0 {
+		x.remettre(maintenant())
 	}
 	x.temoin = e.SrcIP
 	dIP, dPays, dCible := len(a.IPs)-x.nIPs, len(a.Countries)-x.nPays, len(a.Targets)-x.nCible
@@ -220,22 +285,50 @@ func (t *activite) noter(a *graph.Actor, e *envelope.Envelope) {
 	if bloc && e.Timestamp > x.dernierBan {
 		x.dernierBan = e.Timestamp
 	}
-	if t.seuil > 0 && e.Timestamp <= t.seuil {
-		return // déjà compté dans l'instantané rechargé
-	}
-	if h := x.tranche(e.Timestamp / 3600); h != nil {
-		h.evts++
-		if bloc {
-			h.bans++
+	cpt := func(x *activiteActeur) {
+		if h := x.tranche(e.Timestamp / 3600); h != nil {
+			h.evts++
+			if bloc {
+				h.bans++
+			}
+			plus16(&h.ips, dIP)
+			plus16(&h.pays, dPays)
+			plus16(&h.cibles, dCible)
 		}
-		plus16(&h.ips, dIP)
-		plus16(&h.pays, dPays)
-		plus16(&h.cibles, dCible)
+		x.ajouterSemaine(e.Timestamp/3600, 1)
+		x.ajouterJour(e.Timestamp/86400, 1)
+		x.modules[indexModule(e.Sensor)]++
+		x.ajouterTech(t.nom(typeEvenement(*e)), 1)
 	}
-	x.ajouterSemaine(e.Timestamp/3600, 1)
-	x.ajouterJour(e.Timestamp/86400, 1)
-	x.modules[indexModule(e.Sensor)]++
-	x.ajouterTech(t.nom(typeEvenement(*e)), 1)
+	cpt(x)
+	if t.seuil > 0 && e.Timestamp > t.seuil { // rejeu : ce que l'instantané n'a pas
+		if x.apres == nil {
+			x.apres = &activiteActeur{}
+		}
+		cpt(x.apres)
+	}
+}
+
+// reprendre verse dans x l'entrée en attente qui porte cette adresse. Acteur tout neuf : c'est le
+// retour de l'ancien, avec sa couverture. Sinon, la règle des fusions (verser).
+func (t *activite) reprendre(x *activiteActeur, ip string, neuf bool) {
+	if t.enRejeu || len(t.attente) == 0 {
+		return
+	}
+	o := t.attente[ip]
+	if o == nil {
+		return
+	}
+	for _, i := range o.IPs {
+		if t.attente[i] == o {
+			delete(t.attente, i)
+		}
+	}
+	b := t.importer(*o, maintenant())
+	if neuf {
+		x.depuis, x.plein = b.depuis, b.plein
+	}
+	x.verser(b)
 }
 
 func (x *activiteActeur) ajouterTech(nom uint16, n uint32) {
@@ -281,6 +374,12 @@ func (x *activiteActeur) verser(b *activiteActeur) {
 		x.premier = b.premier
 	}
 	x.dernierBan = max(x.dernierBan, b.dernierBan)
+	if b.depuis > 0 {
+		if x.depuis == 0 || b.depuis < x.depuis {
+			x.depuis = b.depuis
+		}
+		x.plein = max(x.plein, b.plein)
+	}
 	for r := b.heure - heuresGardees + 1; b.heure > 0 && r <= b.heure; r++ {
 		src := lireRang(b.heures[:], b.heure, r)
 		if src == (trancheHeure{}) {
@@ -314,6 +413,10 @@ func (x *activiteActeur) verser(b *activiteActeur) {
 
 // suivreFusions rattache à l'absorbeur les compteurs d'un acteur que le graphe a fusionné : après
 // Consolider, l'adresse témoin de l'absorbé est une adresse de l'absorbeur. Sous s.mu.
+//
+// Une adresse PARTAGÉE par plusieurs acteurs ne survit pas à Consolider (c'est une preuve de fusion) ;
+// s'il en restait, le premier acteur par priorité reçoit les compteurs, une seule fois. Un absorbé dont
+// aucune adresse ne se retrouve (ne devrait pas arriver : Validate exige src_ip) est oublié.
 func (t *activite) suivreFusions(g *graph.Graph) {
 	orphelins := map[string][]*activiteActeur{}
 	for id, x := range t.acteurs {
@@ -347,10 +450,21 @@ func (t *activite) suivreFusions(g *graph.Graph) {
 	}
 }
 
+func (t *activite) ajouterTrou(a, b int64) {
+	t.trous = append(t.trous, [2]int64{a, b})
+	if n := len(t.trous); n > trousMax {
+		// Au-delà du plafond, la couverture repart après les plus anciens trous.
+		t.depuisTrous = max(t.depuisTrous, t.trous[n-trousMax-1][1])
+		t.depuis = max(t.depuis, t.depuisTrous)
+		t.trous = t.trous[n-trousMax:]
+	}
+}
+
 // ── Lecture ─────────────────────────────────────────────────────────────────────────────────────
 
 const (
-	couvNulle = iota
+	couvNulle      = iota
+	couvIncertaine // un compte non nul est un minorant, un zéro ne dit rien
 	couvPartielle
 	couvPleine
 )
@@ -376,6 +490,23 @@ func (t *activite) couverture(a, b, now int64) int {
 	return etat
 }
 
+// couvertureDe : la même, bornée par ce qu'on sait de CET acteur.
+func (t *activite) couvertureDe(x *activiteActeur, a, b, now int64) int {
+	c := t.couverture(a, b, now)
+	if x == nil || x.depuis == 0 || c == couvNulle {
+		return c
+	}
+	switch {
+	case b <= x.depuis:
+		return couvNulle
+	case a < x.plein && x.plein > x.depuis:
+		return couvIncertaine
+	case a < x.depuis:
+		return couvPartielle
+	}
+	return c
+}
+
 // serieVue : une série datée. null = tranche non couverte ; Partielles = rangs couverts en partie.
 // La dernière tranche est toujours en cours.
 type serieVue struct {
@@ -385,19 +516,26 @@ type serieVue struct {
 	Partielles []int     `json:"partielles,omitempty"`
 }
 
-func (t *activite) serie(pas int64, n int, now int64, val func(rang int64) uint32) serieVue {
+func (t *activite) serieDe(x *activiteActeur, pas int64, n int, now int64, val func(rang int64) uint32) serieVue {
+	return t.serie(pas, n, now, func(a, b int64) int { return t.couvertureDe(x, a, b, now) }, val)
+}
+
+func (t *activite) serie(pas int64, n int, now int64, couv func(a, b int64) int, val func(rang int64) uint32) serieVue {
 	fin := now / pas
 	s := serieVue{Debut: (fin - int64(n) + 1) * pas, Pas: pas, Valeurs: make([]*uint32, n)}
 	for i := range s.Valeurs {
 		r := fin - int64(n) + 1 + int64(i)
-		c := t.couverture(r*pas, (r+1)*pas, now)
+		c := couv(r*pas, (r+1)*pas)
 		if c == couvNulle {
 			continue
 		}
-		if c == couvPartielle {
+		v := val(r)
+		if c == couvIncertaine && v == 0 {
+			continue
+		}
+		if c != couvPleine {
 			s.Partielles = append(s.Partielles, i)
 		}
-		v := val(r)
 		s.Valeurs[i] = &v
 	}
 	return s
@@ -414,7 +552,7 @@ func (x *activiteActeur) semaineEvts(r int64) uint32 {
 // serieNouveaux : des adresses, pays ou cibles NOUVEAUX par heure ; null tant que le graphe n'a pas
 // regardé chauffeNouveau heures (tout y paraîtrait nouveau).
 func (t *activite) serieNouveaux(now int64, f func(tr trancheHeure) uint16, x *activiteActeur) serieVue {
-	s := t.serie(3600, 24, now, func(r int64) uint32 { return uint32(f(lireRang(x.heures[:], x.heure, r))) })
+	s := t.serieDe(x, 3600, 24, now, func(r int64) uint32 { return uint32(f(lireRang(x.heures[:], x.heure, r))) })
 	for i := range s.Valeurs {
 		if s.Debut+int64(i)*3600 < t.depuisGraphe+chauffeNouveau*3600 {
 			s.Valeurs[i] = nil
@@ -433,7 +571,7 @@ type seriesVue struct {
 
 func (t *activite) series(x *activiteActeur, now int64) *seriesVue {
 	return &seriesVue{
-		Bans:     t.serie(3600, 24, now, x.heureBans),
+		Bans:     t.serieDe(x, 3600, 24, now, x.heureBans),
 		Adresses: t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.ips }, x),
 		Pays:     t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.pays }, x),
 		Cibles:   t.serieNouveaux(now, func(tr trancheHeure) uint16 { return tr.cibles }, x),
@@ -459,7 +597,7 @@ func (t *activite) tendance(x *activiteActeur, now int64) tendanceVue {
 	h := now / 3600
 	debut := (h - 48) * 3600
 	for r := h - 48; r < h; r++ {
-		if t.couverture(r*3600, (r+1)*3600, now) != couvPleine {
+		if t.couvertureDe(x, r*3600, (r+1)*3600, now) != couvPleine {
 			return v
 		}
 	}
