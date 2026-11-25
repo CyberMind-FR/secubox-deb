@@ -12,6 +12,24 @@ lan_ip() { /usr/sbin/tor-lan-ip; }
 
 _reload() { [ "$DRYRUN" = "1" ] && return 0; "$@" || true; }
 
+# Recharge Unbound SANS couper le DNS (#3958) : bibliothèque commune, checkconf puis fast_reload. Jamais `restart` ni `reload`
+# d'ici (48 s sans DNS pour tout le LAN le 2026-11-25). À n'appeler que si NOTRE dropin a changé. Unbound arrêté : rien à
+# faire, il lira le fichier à son démarrage.
+_recharger_unbound() {
+  [ "$DRYRUN" = "1" ] && return 0
+  systemctl is-active --quiet unbound || return 0
+  python3 -I -c '
+from secubox_unbound import SystemeUnbound
+class S(SystemeUnbound):
+    MODULE = "tor"
+s = S()
+ok, sortie = s.verifier_unbound()
+if not ok:
+    raise SystemExit("unbound-checkconf refuse la configuration, pas de rechargement : " + sortie[:300])
+s.recharger_unbound()
+' || echo "tor : Unbound non rechargé" >&2
+}
+
 # Copie un template packagé ($SHARE) vers sa destination. En environnement de
 # test (TORCTL_DRYRUN=1), $SHARE n'existe pas (pas de paquet installé) : on
 # tolère l'absence de la source sans faire échouer le script — seule la
@@ -61,7 +79,9 @@ transparent_on() {
   else
     _install_tpl "$SHARE/60-secubox-transparent.conf" "$TORRC_D/60-secubox-transparent.conf"
   fi
-  _install_tpl "$SHARE/secubox-onion-forward.conf" "$UNBOUND_D/secubox-onion-forward.conf"
+  local dns_change=0
+  cmp -s "$SHARE/secubox-onion-forward.conf" "$UNBOUND_D/secubox-onion-forward.conf" || dns_change=1
+  [ "$dns_change" = "0" ] || _install_tpl "$SHARE/secubox-onion-forward.conf" "$UNBOUND_D/secubox-onion-forward.conf"
   _install_tpl "$SHARE/secubox-tor-transparent.nft" "$NFT_D/secubox-tor-transparent.nft"
   # DNAT vers 127.0.0.1 depuis une iface non-lo exige route_localnet=1 SUR
   # L'IFACE ENTRANTE : conf.all ne s'applique PAS rétroactivement aux ifaces
@@ -74,15 +94,17 @@ transparent_on() {
     [ -e "/sys/class/net/$i" ] && _reload sysctl -q -w "net.ipv4.conf.$i.route_localnet=1"
   done
   _reload systemctl reload tor@default
-  _reload systemctl restart unbound
+  [ "$dns_change" = "0" ] || _recharger_unbound
   _reload nft -f "$NFT_D/secubox-tor-transparent.nft"
   echo "transparent on"
 }
 
 transparent_off() {
+  local dns_change=0
+  [ ! -e "$UNBOUND_D/secubox-onion-forward.conf" ] || dns_change=1
   rm -f "$TORRC_D/60-secubox-transparent.conf" "$UNBOUND_D/secubox-onion-forward.conf" "$NFT_D/secubox-tor-transparent.nft"
   _reload systemctl reload tor@default
-  _reload systemctl restart unbound
+  [ "$dns_change" = "0" ] || _recharger_unbound
   _reload nft delete table inet secubox-tor-transparent 2>/dev/null
   echo "transparent off"
 }

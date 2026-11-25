@@ -43,14 +43,43 @@ PY
 }
 _reload(){ [ "$DRYRUN" = "1" ] && return 0; "$@" || true; }
 
+# Recharge Unbound SANS couper le DNS (#3958) : bibliothèque commune, checkconf puis fast_reload. Jamais `restart` ni `reload`
+# d'ici (48 s sans DNS pour tout le LAN le 2026-11-25). À n'appeler que si NOTRE dropin a changé. Unbound arrêté : rien à
+# faire, il lira le fichier à son démarrage.
+_recharger_unbound() {
+  [ "$DRYRUN" = "1" ] && return 0
+  systemctl is-active --quiet unbound || return 0
+  python3 -I -c '
+from secubox_unbound import SystemeUnbound
+class S(SystemeUnbound):
+    MODULE = "proxypac"
+s = S()
+ok, sortie = s.verifier_unbound()
+if not ok:
+    raise SystemExit("unbound-checkconf refuse la configuration, pas de rechargement : " + sortie[:300])
+s.recharger_unbound()
+' || echo "proxypac : Unbound non rechargé" >&2
+}
+
+# Pose (contenu non vide) ou retire (contenu vide) un dropin ; rend 0 seulement s'il a CHANGÉ.
+_poser() {
+  local chemin="$1" contenu="$2"
+  if [ -z "$contenu" ]; then
+    [ -e "$chemin" ] || return 1
+    rm -f "$chemin"
+    return 0
+  fi
+  if [ -f "$chemin" ] && [ "$(cat "$chemin")" = "$contenu" ]; then return 1; fi
+  printf '%s\n' "$contenu" > "$chemin"
+}
+
 apply() {
   local r; r="$(role)"
-  # nettoyage : on retire nos deux dropins puis on repose celui du tier courant
-  rm -f "$DNSMASQ_D/secubox-wpad.conf" "$UNBOUND_D/secubox-wpad.conf"
+  # contenu voulu des deux dropins ; vide = retiré (jamais ceux de deux échelons à la fois)
+  local dhcp="" dns=""
   case "$r" in
     master)
-      printf '# secubox-proxypac WPAD (auto)\ndhcp-option=252,"http://wpad.%s/wpad.dat"\n' "$DOMAIN" > "$DNSMASQ_D/secubox-wpad.conf"
-      _reload systemctl reload dnsmasq ;;
+      dhcp="$(printf '# secubox-proxypac WPAD (auto)\ndhcp-option=252,"http://wpad.%s/wpad.dat"' "$DOMAIN")" ;;
     slave-dns)
       # UN DOMAINE VIDE COUPE LE DNS DE TOUT LE LAN.
       #
@@ -66,14 +95,14 @@ apply() {
       # ne fonctionne.
       if [ -z "${DOMAIN:-}" ] || [ -z "${LAN_IP:-}" ]; then
         echo "wpad: domaine ou adresse absents — aucun dropin ecrit (un label vide empecherait unbound de demarrer)" >&2
-        rm -f "$UNBOUND_D/secubox-wpad.conf"
-        _reload unbound-control reload
-        exit 0
-      fi
-      printf '# secubox-proxypac WPAD via DNS (auto)\nserver:\n    local-data: "wpad.%s. A %s"\n' "$DOMAIN" "$LAN_IP" > "$UNBOUND_D/secubox-wpad.conf"
-      _reload unbound-control reload ;;
+      else
+        dns="$(printf '# secubox-proxypac WPAD via DNS (auto)\nserver:\n    local-data: "wpad.%s. A %s"' "$DOMAIN" "$LAN_IP")"
+      fi ;;
     *) : ;;  # slave (tier3) et off : no-op réseau (aucun dropin, garde-fou anti double-DHCP)
   esac
+  # rechargés seulement si leur dropin a changé (#3958)
+  if _poser "$DNSMASQ_D/secubox-wpad.conf" "$dhcp"; then _reload systemctl reload dnsmasq; fi
+  if _poser "$UNBOUND_D/secubox-wpad.conf" "$dns"; then _recharger_unbound; fi
   echo "wpad applied role=$r domain=$DOMAIN"
 }
 state() {
