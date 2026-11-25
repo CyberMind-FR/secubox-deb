@@ -14,6 +14,7 @@ Compared to v1 (plaintext `auth.toml` lookup), this module:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import inspect
@@ -1414,7 +1415,7 @@ async def require_lecture(
 # Password verification ─────────────────────────────────────────────────
 def _check_password(username: str, password: str) -> bool:
     """Delegate to user_store. Replaces the old plaintext auth.toml lookup."""
-    return user_store.verify_password(username, password)
+    return user_store.verify_password_uniforme(username, password)
 
 
 def _second_facteur_requis(username: str) -> str:
@@ -1450,7 +1451,21 @@ async def login(req: LoginRequest, request: Request, response: Response):
     """Plain login endpoint — secubox-auth overrides this with the full branching flow."""
     client_ip = adresse_client(request)   # depuis la droite (#1753)
     user_agent = request.headers.get("User-Agent", "")
-    if not _check_password(req.username, req.password):
+    # Même porte que secubox-auth (#3708), et hors de la boucle : argon2 y gelait tous les modules de l'agrégateur.
+    from . import mot_de_passe_defaut, porte_argon2
+
+    def _verifie() -> bool:
+        if len(req.password) > porte_argon2.LONGUEUR_MAX:
+            return False
+        zone = _requete_lan(request) or mot_de_passe_defaut.adresse_du_maillage(client_ip)
+        with porte_argon2.PORTE.passage(client_ip, zone):
+            return _check_password(req.username, req.password)
+    try:
+        juste = await asyncio.to_thread(_verifie)
+    except porte_argon2.Saturee as exc:
+        raise HTTPException(status_code=exc.statut, detail="Trop de connexions en cours, réessayez dans un instant",
+                            headers={"Retry-After": "5"}) from None
+    if not juste:
         _emit_session_event("login_failed", req.username, {
             "reason": "invalid_credentials",
             "ip": client_ip,
