@@ -189,6 +189,9 @@ class Effets:
     def rouvrir(self, ip, mac=None, motif=""):
         return self._r("rouvrir", ip)
 
+    def lever_mac(self, menace, mac, motif=""):
+        return self._r("lever_mac", menace, mac)
+
     def debannir(self, ip, motif=""):
         return self._r("debannir", ip)
 
@@ -217,7 +220,8 @@ def test_passage_execute_les_demandes(env):
     ef, nt = Effets(), Notifs()
     bilan = demandes.executer(db, ef, nt, env.now + 10)
     assert bilan == {"faites": 3, "echecs": 0}
-    assert ("liberer", "192.168.1.95") in ef.appels and ("liberer", "fd00::95") in ef.appels
+    # #3914 : d1 tient deux adresses d'une même MAC → un seul geste par MAC
+    assert [a for a in ef.appels if a[0] in ("liberer", "lever_mac")] == [("lever_mac", "infection", MAC)]
     assert ("debannir", "203.0.113.7") in ef.appels and nt.file[0][0] == "courriel"
     etats = dict(db.execute("SELECT id, etat FROM decisions").fetchall())
     assert etats["d1"] == "levee" and etats["d3"] == "levee"
