@@ -17,7 +17,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   (seul ajout : `admin_configure_le`), mot de passe vide refusé (401). Reste à essayer : connexion TOTP.
 - **#3945 (PR #3956, déployé gk2)** : metrics 1.31.0, live 0.3.0, soc 1.14.0. **#3921 (PR #3957, déployé gk2)** : datascope 0.3.0, vue Carte.
 - **#3946 (déployé gk2)** : freebox 0.8.6, garde 0.3.13, tor 1.7.8, métapaquets 0.1.56. pilotage-agent 0.8.2 arm64 publié, non installé sur gk2.
-- Incident : la mise à jour de tor a coupé le DNS deux fois (23 s et 25 s) ; issue #3958. Charge montée à 41 pendant le premier lot.
+- Incident : la mise à jour de tor a coupé le DNS deux fois (23 s et 25 s) ; corrigé le jour même par tor 1.7.9
+  (#3958, PR #3959, déployé gk2 : 1 454 requêtes DNS pendant l'installation, 0 échec). Charge montée à 41 pendant le premier lot.
 - Essai IA arm64 (gk6, gk1) : petits modèles et modèle partagé abandonnés, routage vers le meilleur moteur gardé.
 
 ## 2026-11-25 (10:00) — WAF 1.46.1, Actor détaillé, DataScope 0.2.0, freins mémoire, CI verte, dé 3D sur le parc
