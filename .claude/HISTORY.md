@@ -11,6 +11,15 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-25 (16:00) — comptes admin, graphiques vivants, DataScope Carte et métapaquets sur gk2
+
+- **#3708 (PR #3953, déployé gk2)** : core 1.8.46, auth 1.8.22, premier-pas 0.9.19, health 1.4.3, hub 1.13.0, system 1.14.3. Comptes inchangés
+  (seul ajout : `admin_configure_le`), mot de passe vide refusé (401). Reste à essayer : connexion TOTP.
+- **#3945 (PR #3956, déployé gk2)** : metrics 1.31.0, live 0.3.0, soc 1.14.0. **#3921 (PR #3957, déployé gk2)** : datascope 0.3.0, vue Carte.
+- **#3946 (déployé gk2)** : freebox 0.8.6, garde 0.3.13, tor 1.7.8, métapaquets 0.1.56. pilotage-agent 0.8.2 arm64 publié, non installé sur gk2.
+- Incident : la mise à jour de tor a coupé le DNS deux fois (23 s et 25 s) ; issue #3958. Charge montée à 41 pendant le premier lot.
+- Essai IA arm64 (gk6, gk1) : petits modèles et modèle partagé abandonnés, routage vers le meilleur moteur gardé.
+
 ## 2026-11-25 (10:00) — WAF 1.46.1, Actor détaillé, DataScope 0.2.0, freins mémoire, CI verte, dé 3D sur le parc
 
 - **#3932/#3936/#3939 (PR #3942, #3944, déployé gk2)** : waf-ng 1.46.1 (1.46.0 jamais installée : sa borne refusait les plages Meta de gk2). Une
