@@ -381,7 +381,8 @@ Depends: ${misc:Depends},
          secubox-threats
 Recommends: secubox-threatmesh,
          secubox-ad-guard
-Suggests: secubox-cookies,
+Suggests: secubox-garde,
+         secubox-cookies,
          secubox-toolbox
 Description: SecuBox — service « Détection »
  Posture de sécurité, menaces, CVE, renseignement partagé.
@@ -416,6 +417,7 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-metrics
 Recommends: secubox-courbes
+Suggests: secubox-datascope
 Description: SecuBox — service « Métriques »
  Métriques temps réel, tableaux et rapports.
  .
@@ -585,7 +587,8 @@ Package: secubox-service-ia
 Architecture: all
 Depends: ${misc:Depends},
          secubox-ai-gateway
-Suggests: secubox-streamlit
+Suggests: secubox-ai,
+         secubox-streamlit
 Description: SecuBox — service « IA »
  Passerelle souveraine, inférence locale, mémoire, MCP.
  .

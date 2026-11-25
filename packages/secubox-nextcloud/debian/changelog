@@ -1,3 +1,10 @@
+secubox-nextcloud (1.9.3-1~trixie1) trixie; urgency=medium
+
+  * Conteneur : échange borné à la moitié du plafond ; l'ancien budget (512M, échange interdit) est migré au configure
+    par secubox-lxc-memoire, sans redémarrage (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-nextcloud (1.9.2-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte

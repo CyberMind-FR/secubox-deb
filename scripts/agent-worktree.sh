@@ -101,6 +101,11 @@ cmd_start() {
   "$GIT_BIN" fetch -q origin master 2>/dev/null || true
   "$GIT_BIN" worktree add -b "$branch" "$dir" origin/master >/dev/null
 
+  # Hooks git du dépôt (#3950 : contrôle de licence avant commit). Jamais par-dessus un réglage déjà posé par la personne.
+  if [[ -d "$dir/.githooks" ]] && ! "$GIT_BIN" config --get core.hooksPath >/dev/null 2>&1; then
+    "$GIT_BIN" config core.hooksPath .githooks
+  fi
+
   # Copy local Claude settings, if present
   if [[ -f .claude/settings.local.json ]]; then
     mkdir -p "$dir/.claude"

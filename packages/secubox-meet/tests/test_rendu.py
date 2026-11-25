@@ -101,7 +101,7 @@ def test_rendu_unites_internes(tmp_path):
 def test_config_lxc_demarre_au_boot(tmp_path):
     c = rendu(tmp_path)["lxc-config"]
     assert "lxc.start.auto = 1" in c and "lxc.idmap = u 0 100000 65536" in c and "10.100.0.195/24" in c
-    assert "lxc.cgroup2.memory.max = 2147483648" in c and "lxc.net.0.link = br-lxc" in c
+    assert "lxc.cgroup2.memory.max = 2147483648\nlxc.cgroup2.memory.swap.max = 1073741824\n" in c and "lxc.net.0.link = br-lxc" in c
 
 
 def test_meetctl_install_delegue_au_script(tmp_path):

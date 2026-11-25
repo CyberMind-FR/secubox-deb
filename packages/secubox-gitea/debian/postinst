@@ -119,6 +119,15 @@ GITEASSH
     fi
     # --- end Gitea routing install ---
 
+    # #3941 : mémoire du conteneur — plus de frein sous le budget avec échange interdit (configuration et cgroup, outil
+    # de secubox-system), puis GOMEMLIMIT à 70 % du budget. Aucun redémarrage : GOMEMLIMIT vaut au prochain.
+    if [ -x /usr/sbin/secubox-lxc-memoire ]; then
+        /usr/sbin/secubox-lxc-memoire migrer gitea || true
+    fi
+    if [ -x /usr/sbin/giteactl ]; then
+        timeout 60 /usr/sbin/giteactl memoire || true
+    fi
+
     # #1791 : le SSH de gitea (2222) au LAN et au maillage seulement. La table
     # nft `inet secubox_gitea_ssh` jette, AVANT toute traduction, les paquets
     # vers 2222 d'une source ni locale, ni privée reliée, ni du maillage — que

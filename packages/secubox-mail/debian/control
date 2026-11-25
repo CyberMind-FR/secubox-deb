@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-mail
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.5.41~),
+ secubox-core (>= 1.8.38~),
  lxc,
  debootstrap,
  openssl,

@@ -16,7 +16,7 @@
 #
 # Verbes :
 #   verifier      apt-get update + simulation de mise a niveau -> etat JSON
-#   appliquer     apt-get upgrade -y (confold, non interactif) -> etat JSON + journal
+#   appliquer     apt-get upgrade --with-new-pkgs -y (confold, non interactif) -> etat JSON + journal
 #   process-ops   draine le dossier de demandes (un fichier = un verbe)
 #
 # Il ne fait JAMAIS dist-upgrade ni autoremove : une mise a niveau depuis une page
@@ -55,13 +55,13 @@ _journal() { mkdir -p "$(dirname "$JOURNAL")"; printf '%s %s\n' "$(date -Is)" "$
 
 # « Inst <paquet> [ancienne] (nouvelle ...) » : le NOM est le 2e mot (#2615).
 _simule() {
-    apt-get -s upgrade 2>/dev/null | awk '$1 == "Inst" { print $2 }' \
+    apt-get -s upgrade --with-new-pkgs 2>/dev/null | awk '$1 == "Inst" { print $2 }' \
         | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))'
 }
 
 # Meme simulation, avec les versions : « Inst <paquet> [ancienne] (nouvelle ...) ». Pour la page admin.
 _simule_detail() {
-    apt-get -s upgrade 2>/dev/null | python3 -c '
+    apt-get -s upgrade --with-new-pkgs 2>/dev/null | python3 -c '
 import json, re, sys
 out = []
 for l in sys.stdin:
@@ -104,12 +104,12 @@ cmd_appliquer() {   # [paquet ...] : vide = tout (upgrade), sinon install --only
     [ ${#cibles[@]} -gt 0 ] && n=${#cibles[@]}
     _ecrit_etat appliquer appliquer false "$debut" 0 "" "$avant" 0
     _journal "appliquer : debut, $n paquet(s)${cibles:+ (${cibles[*]})}"
-    # upgrade, JAMAIS dist-upgrade : rien n'est retire, aucun nouveau paquet n'est
-    # tire par ricochet. --force-confold garde la configuration de l'operateur.
+    # upgrade, JAMAIS dist-upgrade : rien n'est retire. --with-new-pkgs : une
+    # nouvelle dependance s'installe, sinon le paquet qui la gagne est retenu (#3946). --force-confold garde la configuration de l'operateur.
     if [ ${#cibles[@]} -gt 0 ]; then
         apt-get install -y -q --only-upgrade -o DPkg::Lock::Timeout=180 -o Dpkg::Options::=--force-confold -- "${cibles[@]}" >> "$JOURNAL" 2>&1; rc=$?
     else
-        apt-get upgrade -y -q -o DPkg::Lock::Timeout=180 -o Dpkg::Options::=--force-confold >> "$JOURNAL" 2>&1; rc=$?
+        apt-get upgrade --with-new-pkgs -y -q -o DPkg::Lock::Timeout=180 -o Dpkg::Options::=--force-confold >> "$JOURNAL" 2>&1; rc=$?
     fi
     restants=$(_simule)
     if [ $rc -ne 0 ]; then
@@ -154,7 +154,7 @@ cmd_help() {
 secubox-majctl — mises a jour apt pour la page systeme (#3002)
 
   verifier       apt-get update + simulation -> /var/lib/secubox/system/maj.json
-  appliquer [p…] apt-get upgrade -y (confold), ou install --only-upgrade des paquets nommes
+  appliquer [p…] apt-get upgrade --with-new-pkgs -y (confold), ou install --only-upgrade des paquets nommes
   process-ops    draine /run/secubox/system/maj/*.demande (unite .path, root)
   status         affiche l'etat JSON
 EOF

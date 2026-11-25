@@ -108,6 +108,8 @@ def test_un_fichier_disparu_ne_bloque_pas_le_demarrage_du_waf():
     waf = (PAQUET / "systemd" / "secubox-waf-ng.service").read_text(encoding="utf-8")
     lignes = [l for l in waf.splitlines() if l.startswith("ExecStartPre=") and "/usr/bin/find /var/lib/" in l]
     assert len(lignes) == 1 and lignes[0].startswith("ExecStartPre=-+/usr/bin/find /var/lib/secubox/waf ")
+    # #3945 : le relevé des populations garde son groupe secubox (DataScope) au démarrage du WAF.
+    assert " ! -name populations.json ! -name '.populations-*' -exec " in lignes[0]
     assert "ExecStartPre" not in (PAQUET / "conf" / "honeypot.conf").read_text(encoding="utf-8")   # rien à refléter
 
 

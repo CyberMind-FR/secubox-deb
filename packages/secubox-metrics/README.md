@@ -106,14 +106,22 @@ otherwise it falls back to the free DB-IP ASN lite database (no signup).
 
 | Methode | Route | Garde | Role |
 |---|---|---|---|
-| GET | `/api/v1/metrics/memory/history?heures=24` | `require_lecture` | serie des releves (5 min, 7 jours max), alertes, croissance de la memoire noyau en Mo/h |
+| GET | `/api/v1/metrics/memory/history?heures=24` | `require_lecture` | serie des releves (5 min, 7 jours max), alertes, croissance de la memoire noyau en Mo/h, conteneurs et services étouffés |
 
 Un timer (`secubox-metrics-memoire.timer`, 5 min) ecrit `/var/lib/secubox/metrics/memoire.jsonl`. Il surveille la memoire
 **noyau non recuperable** (`SUnreclaim`) — c'est elle qui avait atteint 4,2 Go sur gk2 sans que rien ne le releve — la
 memoire disponible et le swap, en part de la RAM, et signale une croissance soutenue du noyau avant le seuil. Les alertes
 (`ALERTE memoire : ...`) vont au journal du service.
 
-## Graphiques vivants (1.30.0, #3945)
+**Étouffement (#3941)** : le meme releve lit les cgroups (fichiers seulement, 400 au plus, aucun parcours de processus) des
+conteneurs LXC et des services bornes : relectures de pages par seconde, PSI memoire `some avg60`, courant contre limite
+(frein ou plafond). Étouffé = plus de 93 % de sa PROPRE limite ET (plus de 1 000 relectures/s OU PSI > 20) ; sans limite propre, jamais (une
+pression générale ne désigne pas chaque service). Audit : dix lignes par passage au plus, puis « et N autres ». La route rend
+`etouffes: [{cle, nom, genre, refaults_s, psi_some_avg60, courant_mb, limite_mb, part, depuis_s}]` ; au-dela de dix
+minutes : alerte (page et journal), `modules.memoire = warn` dans `/health/summary` (nombre seulement), une ligne
+`type: memoire` dans `audit.log` au debut (`etouffement`) et a la fin (`fin_etouffement`).
+
+## Graphiques vivants (1.31.0, #3945)
 
 Composant `/shared/pouls.js` (secubox-hub ≥ 1.13.0 ; absent, pages fixes). Vue d'ensemble : cartes attaques et visiteurs (relevés
 successifs de l'onglet, `sessionStorage`, 12 au plus, 3 h), mémoire et charge (un point réel par heure de `/memory/history`, puis la

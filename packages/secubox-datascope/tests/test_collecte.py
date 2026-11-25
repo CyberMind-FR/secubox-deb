@@ -54,7 +54,7 @@ def test_passe_complete_ecrit_caches(cfg):
     ov, g = _lire(cfg, "overview.json"), _lire(cfg, "graph.json")
     assert ov["complet"] is True and ov["genere_le"].endswith("Z")
     assert ov["entites"]["device"] == 5 and ov["relations"] > 0
-    assert {s["source"] for s in ov["sources"]} == {"network", "status"}
+    assert {s["source"] for s in ov["sources"]} == {"network", "paysage", "status"}
     # vue par défaut : jamais d'adresse ip (elles sont dans l'inspecteur) ; tout le reste tient sous les plafonds
     assert g["tronque"] is False and len(g["noeuds"]) == sum(v for k, v in ov["entites"].items() if k != "ip")
     assert not [x for x in g["noeuds"] if x["type"] == "ip"] and g["ip_hors_vue"] == ov["entites"]["ip"]

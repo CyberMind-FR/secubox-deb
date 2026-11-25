@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.17-1~trixie1) trixie; urgency=medium
+
+  * Création du conteneur : échange borné (256M), jamais interdit ; conteneur existant inchangé (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-haproxy (1.12.16-1~trixie1) trixie; urgency=medium
 
   * errorfile HAProxy (ref #3885) : 400, 403, 408, 500, 502, 503, 504 au

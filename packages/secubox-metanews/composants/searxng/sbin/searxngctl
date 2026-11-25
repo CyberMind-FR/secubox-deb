@@ -470,6 +470,11 @@ def suite_debian(os_release: str = "/etc/os-release") -> str:
     return code if ident == "debian" and re.fullmatch(r"[a-z]{3,20}", code or "") else "trixie"
 
 
+def moitie_memoire(valeur: str) -> str:
+    """« 384M » -> « 192M » (valeur déjà validée par la configuration : nombre + M ou G)."""
+    return f"{int(valeur[:-1]) * (1024 if valeur[-1] == 'G' else 1) // 2}M"
+
+
 def config_lxc(cfg: dict, existante: str = "") -> str:
     """Fichier de configuration du conteneur, RÉÉCRIT en entier (jamais d'ajout : un second lxc.net.0 casse le réseau).
     Seuls les plafonds CPU posés par secubox-tuning-apply (lxc.cgroup2.cpu.*) sont repris de l'ancien fichier."""
@@ -493,6 +498,8 @@ def config_lxc(cfg: dict, existante: str = "") -> str:
         "lxc.apparmor.profile = generated",
         f"lxc.cgroup2.memory.high = {lxc['memoire_haute']}",
         f"lxc.cgroup2.memory.max = {lxc['memoire_max']}",
+        # Échange borné (moitié du plafond), jamais interdit : high < max sans échange étouffe le conteneur (#3941).
+        f"lxc.cgroup2.memory.swap.max = {moitie_memoire(lxc['memoire_max'])}",
         "lxc.start.auto = 1",
         "lxc.start.delay = 5",
     ]

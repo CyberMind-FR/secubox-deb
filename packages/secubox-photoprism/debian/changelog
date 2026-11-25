@@ -1,3 +1,9 @@
+secubox-photoprism (1.5.4-1~trixie1) trixie; urgency=medium
+
+  * Conteneur : échange borné (1G) ; des lignes reprises de l'ancien budget #496 sont migrées, plus recopiées (ref #3941).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:17:44 +0100
+
 secubox-photoprism (1.5.3-1~trixie1) trixie; urgency=medium
 
   * /data rendu optionnel dans le bac a sable systemd : sans disque de

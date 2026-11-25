@@ -67,6 +67,10 @@
    "espace": "systeme",
    "objet": "BOX"
   },
+  "ai": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
   "ai-gateway": {
    "espace": "services",
    "objet": "SERVICE"
@@ -151,6 +155,10 @@
    "espace": "protection",
    "objet": null
   },
+  "datascope": {
+   "espace": "surveillance",
+   "objet": "DEVICE"
+  },
   "devwatch": {
    "espace": "surveillance",
    "objet": "SERVICE"
@@ -190,6 +198,10 @@
   "freebox": {
    "espace": "systeme",
    "objet": "BOX"
+  },
+  "garde": {
+   "espace": "protection",
+   "objet": "ALERT"
   },
   "gitea": {
    "espace": "services",

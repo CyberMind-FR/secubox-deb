@@ -8,8 +8,17 @@ secubox-waf-ng (1.47.0-1~trixie1) trixie; urgency=medium
   * L'API du WAF ne compte pas les pays par heure : ces cartes reculent sur les
     relevés successifs de l'onglet (sessionStorage, 12, 3 h), aucun balayage
     ajouté.
+  * secubox-waf-ng.service : populations.json (et ses temporaires) n'est plus
+    re-possédé à chaque démarrage ; il reste lisible par le groupe secubox.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
+secubox-waf-ng (1.46.2-1~trixie1) trixie; urgency=medium
+
+  * AppArmor secubox-waf-indices : audit.log en « w » ; « a » refusait chaque
+    write(), et un ban d'indice non audité n'est pas posé (ref #3861, #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
 
 secubox-waf-ng (1.46.1-1~trixie1) trixie; urgency=medium
 

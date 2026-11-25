@@ -20,7 +20,7 @@ from secubox_core.auth import require_jwt
 from api import (code, dialogue, documents, journal, medias, memoire, menaces, modeles, moteurs, radar, reglages,
                  reponses, taches)
 
-VERSION = "2.3.2"
+VERSION = "2.3.3"
 
 ROUTEUR = APIRouter(prefix="")
 

@@ -39,7 +39,9 @@ profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnec
 
   /var/lib/secubox/freebox/ r,
   /var/lib/secubox/freebox/** rw,
-  /var/log/secubox/audit.log a,
+  # #3861 : « w » et non « a » — le noyau revérifie chaque write() avec MAY_WRITE, « a » refusait toute ligne.
+  # Le code ouvre en O_APPEND, jamais en troncature : l'ajout seul tient au code.
+  /var/log/secubox/audit.log w,
 
   /usr/bin/ip mrix,
   /usr/sbin/ip mrix,

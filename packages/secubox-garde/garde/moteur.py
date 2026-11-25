@@ -80,8 +80,21 @@ def _lever(effets, menace: str, ip: str, mac, motif: str) -> dict:
     return effets.rouvrir(ip, mac, motif)
 
 
+def _mac_tenue_ailleurs(db, did: str, menace: str, mac: str) -> bool:
+    """Vrai si une autre décision ACTIVE de même menace porte cette MAC (le ctl lèverait aussi ses entrées)."""
+    return bool(db.execute("SELECT 1 FROM decisions WHERE id!=? AND etat='active' AND menace=? AND mac=?",
+                           (did, menace, mac)).fetchone())
+
+
 def _lever_tout(db, effets, did, menace, mac, motif) -> bool:
     """Lève chaque adresse ; seules les levées réussies quittent `adresses`. True si plus rien n'est posé."""
+    if mac and len(_adresses(db, did)) > 1 and not _mac_tenue_ailleurs(db, did, menace, mac):
+        # #3914 : plusieurs adresses d'une même MAC → un seul geste par MAC (un rendu Unbound + unbound-checkconf,
+        # ~50 s sur gk2, au lieu d'un par adresse : 13 adresses = 11 min). Échec : repli adresse par adresse.
+        if effets.lever_mac(menace, mac, motif).get("ok"):
+            db.execute("DELETE FROM adresses WHERE decision_id=?", (did,))
+            db.commit()
+            return True
     for ip in _adresses(db, did):
         if _tenue_ailleurs(db, did, menace, ip, mac):
             # Une décision ACTIVE de même menace tient cette adresse (le ctl lève par IP) : on ne la lève pas,

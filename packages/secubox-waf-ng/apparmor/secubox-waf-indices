@@ -49,7 +49,9 @@ profile secubox-waf-indices /usr/sbin/secubox-waf-indices {
   /var/lib/secubox-waf-indices/.etat.json.*.tmp rw,
   /run/secubox/waf-indices-etat.json rw,
   /run/secubox/.waf-indices-etat.json.*.tmp rw,
-  /var/log/secubox/audit.log a,
+  # #3861 : « w » et non « a » — le noyau revérifie chaque write() avec MAY_WRITE, « a » refusait toute ligne.
+  # Le code ouvre en O_APPEND, jamais en troncature : l'ajout seul tient au code.
+  /var/log/secubox/audit.log w,
 
   network unix stream,
   network inet dgram,

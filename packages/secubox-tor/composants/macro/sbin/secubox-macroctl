@@ -12,7 +12,7 @@ appends an audit line. Offers never supply code — only an allowlisted kind and
 typed params.
 """
 from __future__ import annotations
-import argparse, ipaddress, json, os, stat, subprocess, sys, time
+import argparse, ipaddress, json, os, stat, subprocess, sys, syslog, time
 
 PLUGIN_DIR = os.environ.get("MACRO_PLUGIN_DIR", "/usr/lib/secubox/macro/macros.d")
 AUDIT_LOG = os.environ.get("MACRO_AUDIT_LOG", "/var/log/secubox/audit.log")
@@ -31,8 +31,12 @@ def _audit(rec: dict):
         os.makedirs(os.path.dirname(AUDIT_LOG), exist_ok=True)
         with open(AUDIT_LOG, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec) + "\n")
-    except Exception:
-        pass  # audit best-effort; never block the operation on log failure
+    except OSError as e:
+        # Jamais bloquant, jamais silencieux (#3946) : stderr pour l'appelant, journal système pour l'administrateur
+        # (les API ne lisent stderr qu'en cas d'échec). La ligne perdue y est entière.
+        msg = f"secubox-macroctl : audit non écrit ({type(e).__name__}) : {json.dumps(rec, ensure_ascii=False)}"
+        sys.stderr.write(msg + "\n")
+        syslog.syslog(syslog.LOG_AUTH | syslog.LOG_ERR, msg)
 
 
 def _plugin_path(kind: str) -> str:

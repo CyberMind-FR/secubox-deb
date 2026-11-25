@@ -1,0 +1,346 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-lxc-memoire — règle de budget mémoire des conteneurs LXC (#3941).
+
+LA RÈGLE. Jamais `memory.high` (frein) sous `memory.max` (plafond) quand `memory.swap.max = 0` : dès que la mémoire
+anonyme approche le frein, le noyau n'a que les pages de fichiers à évincer, le conteneur relit son propre code sans
+fin et n'est jamais tué. gk2, gitea : 384M sous 512M, échange à 0, 393 Mo anonymes -> 13 700 relectures/s, 48 % de
+blocage, 41 % de pression sur la box. Le plafond reste ; l'échange est BORNÉ (moitié du plafond, zram d'abord).
+
+Usage :
+  secubox-lxc-memoire migrer [--dry-run] [conteneur...]   corrige les configurations et les limites à chaud
+  secubox-lxc-memoire frein [--dry-run] <conteneur>       pour secubox-tuning-apply : code 0 = un frein peut être posé ;
+                                                          10 = non (budget propre : le frein existant est retiré)
+
+Ne démarre, n'arrête et ne redémarre jamais un conteneur : fichiers de configuration et cgroup v2 seulement.
+"""
+import os
+import re
+import stat
+import sys
+import syslog
+import tempfile
+from pathlib import Path
+
+RACINES = [Path(p) for p in os.environ.get("SECUBOX_LXC_RACINES", "/data/lxc:/var/lib/lxc:/srv/lxc").split(":") if p]
+CGROUP = Path(os.environ.get("SECUBOX_CGROUP_RACINE", "/sys/fs/cgroup"))
+COPIE = ".avant-3941"
+RAZ = re.compile(r"^\s*lxc\.cgroup2(?:\.memory)?\s*=\s*$")
+INCLUSION = re.compile(r"^\s*lxc\.include\s*=\s*(/\S+)\s*$")
+CLE = re.compile(r"^\s*lxc\.cgroup2\.memory\.(max|high|swap\.max)\s*=\s*(\S*)\s*$")
+# Commentaire de l'ancien `secubox-apply-lxc-memory-budget` (#496, retiré) : signature de ses lignes ; il en ajoutait un
+# à chaque passage et ne les retirait jamais (gk2 : une douzaine).
+PHASE = re.compile(r"^\s*# Phase 6\.P \(#496\) : memory budget\s*$")
+BLOC_MAIL = re.compile(r"^# Mémoire du conteneur \(secubox-mail\)", re.M)
+NOM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+# Copies d'un conteneur laissées à côté de l'original : jamais un conteneur vivant.
+SAUVEGARDE = re.compile(r"[._-](bak|old|orig|avant|backup|sauvegarde|sauv|save|copie|copy)([._-].*|\d*)$|[._-]\d{8}", re.I)
+ECHANGE_PART = 2
+MAX_INCLUS, MAX_PROFONDEUR = 40, 6
+TAILLE_MAX = 256 * 1024
+
+
+def dire(msg: str) -> None:
+    print(f"[memoire-lxc] {msg}")
+    syslog.syslog(syslog.LOG_NOTICE, msg)
+
+
+def avertir(msg: str) -> None:
+    print(f"[memoire-lxc] {msg}", file=sys.stderr)
+    syslog.syslog(syslog.LOG_WARNING, msg)
+
+
+def octets(val):
+    """'512M' -> 536870912 ; 'max', vide, illisible ou absent -> None (pas de limite)."""
+    m = re.fullmatch(r"(\d+)([KMGT]?)", (val or "").strip().upper())
+    return int(m.group(1)) << {"": 0, "K": 10, "M": 20, "G": 30, "T": 40}[m.group(2)] if m else None
+
+
+def moitie(val: int) -> str:
+    n = val // ECHANGE_PART
+    return f"{n >> 20}M" if n % (1 << 20) == 0 else str(n - n % 4096)
+
+
+class Illisible(Exception):
+    pass
+
+
+def lire_config(chemin: Path) -> str:
+    """Fichier ordinaire seulement, sans suivre de lien, taille bornée."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        raise Illisible(str(e)) from e
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_MAX:
+            raise Illisible("fichier ordinaire de taille raisonnable attendu")
+        try:
+            return f.read(TAILLE_MAX).decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise Illisible("UTF-8 attendu") from e
+
+
+def ecrire_config(chemin: Path, ancien: str, nouveau: str) -> None:
+    """Copie unique à côté (jamais écrasée), puis remplacement atomique : propriétaire et mode gardés."""
+    st = os.stat(chemin, follow_symlinks=False)
+    copie = chemin.with_name(chemin.name + COPIE)
+    if not os.path.lexists(copie):
+        tmp = _fichier_complet(chemin, ancien, st)
+        try:
+            os.link(tmp, copie)         # nom posé d'un coup, sur un fichier déjà complet ; jamais par-dessus une copie
+        except FileExistsError:
+            pass
+        finally:
+            os.unlink(tmp)
+    tmp = _fichier_complet(chemin, nouveau, st)
+    try:
+        os.replace(tmp, chemin)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def _fichier_complet(chemin: Path, texte: str, st) -> str:
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".config.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texte)
+            os.fchown(f.fileno(), st.st_uid, st.st_gid)
+            os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        os.unlink(tmp)
+        raise
+    return tmp
+
+
+def _parcourir(texte: str, val: dict, inclus: set, profondeur: int, reste: list, dedans: bool) -> None:
+    for ligne in texte.splitlines():
+        if RAZ.match(ligne):
+            val.clear()
+            inclus.clear()
+            continue
+        m = INCLUSION.match(ligne)
+        if m and profondeur < MAX_PROFONDEUR:
+            cible = Path(m.group(1))
+            for f in sorted(cible.glob("*.conf")) if cible.is_dir() else [cible]:
+                if reste[0] <= 0:
+                    return
+                reste[0] -= 1
+                try:
+                    _parcourir(lire_config(f), val, inclus, profondeur + 1, reste, True)
+                except Illisible:
+                    pass                # LXC refuserait de démarrer ; ici, ce fichier ne dit simplement rien de la mémoire
+            continue
+        m = CLE.match(ligne)
+        if not m:
+            continue
+        cle = m.group(1)
+        inclus.discard(cle)
+        if not m.group(2):
+            val.pop(cle, None)          # « clé = » vide : LXC oublie la clé
+            continue
+        val[cle] = m.group(2)
+        if dedans:
+            inclus.add(cle)
+
+
+def valeurs_completes(texte: str):
+    """(valeurs effectives, clés qui viennent d'un fichier inclus). La DERNIÈRE ligne gagne, « lxc.cgroup2 = » efface tout."""
+    val, inclus = {}, set()
+    _parcourir(texte, val, inclus, 0, [MAX_INCLUS], False)
+    return val, inclus
+
+
+def valeurs(texte: str) -> dict:
+    return valeurs_completes(texte)[0]
+
+
+def recrire(texte: str, retirer: set, poser: dict) -> str:
+    """Une seule ligne par clé mémoire effective, à la place de la DERNIÈRE (une remise à zéro a pu précéder) ; commentaires
+    « Phase 6.P » retirés ; tout le reste à l'identique."""
+    effectif, inclus = valeurs_completes(texte)
+    effectif.update(poser)
+    lignes = texte.splitlines(keepends=True)
+    if lignes and not lignes[-1].endswith("\n"):
+        lignes[-1] += "\n"
+    dernier = {m.group(1): i for i, m in ((i, CLE.match(x)) for i, x in enumerate(lignes)) if m}
+    out = []
+    for i, ligne in enumerate(lignes):
+        if PHASE.match(ligne):
+            continue
+        m = CLE.match(ligne)
+        cle = m.group(1) if m else None
+        if cle is None or (cle not in retirer and (cle not in effectif or cle in inclus)):
+            out.append(ligne)
+        elif cle not in retirer and i == dernier[cle]:
+            out.append(f"lxc.cgroup2.memory.{cle} = {effectif[cle]}\n")
+    return "".join(out)
+
+
+def cgroup_lire(nom: str, cle: str):
+    try:
+        return (CGROUP / f"lxc.payload.{nom}" / f"memory.{cle}").read_text().strip()
+    except OSError:
+        return None
+
+
+def cgroup_ecrire(nom: str, cle: str, val: str) -> bool:
+    f = CGROUP / f"lxc.payload.{nom}" / f"memory.{cle}"
+    if not f.exists():
+        return False
+    try:
+        f.write_text(val)
+        return True
+    except OSError as e:
+        avertir(f"{nom} : écriture à chaud de memory.{cle} refusée ({e})")
+        return False
+
+
+def conteneurs(noms):
+    """(nom, chemin de config). Un nom = une config : la première racine gagne, un homonyme périmé ailleurs est ignoré
+    (/var/lib/lxc est souvent un montage ou un lien de /data/lxc) ; les copies de sauvegarde aussi."""
+    vus = set()
+    for racine in RACINES:
+        try:
+            dossiers = sorted(racine.iterdir())
+        except OSError:
+            continue
+        for d in dossiers:
+            cfg = d / "config"
+            if not NOM.match(d.name) or d.name in vus or not (cfg.is_file() or cfg.is_symlink()):
+                continue
+            if d.name not in noms if noms else SAUVEGARDE.search(d.name):
+                continue
+            vus.add(d.name)
+            yield d.name, cfg
+
+
+def corriger_vif(nom: str, voulu, echange_interdit_herite: bool, essai: bool) -> str:
+    """Limites du conteneur en marche, avec l'échange de SA configuration (`voulu`) pour que les deux restent d'accord ; à
+    défaut la moitié du plafond vif. L'échange est ouvert d'abord : refusé, le frein reste en place."""
+    dur, haut = octets(cgroup_lire(nom, "max")), octets(cgroup_lire(nom, "high"))
+    if dur is None or cgroup_lire(nom, "swap.max") != "0":
+        return ""
+    frein = haut is not None and haut < dur
+    if not (frein or echange_interdit_herite):
+        return ""
+    echange = voulu or moitie(dur)
+    if not essai:
+        if not cgroup_ecrire(nom, "swap.max", echange) or (frein and not cgroup_ecrire(nom, "high", "max")):
+            return " ; limites à chaud NON appliquées (au prochain démarrage du conteneur)"
+    return f" ; appliqué à chaud (échange {echange}{', frein retiré' if frein else ''})"
+
+
+def migrer_un(nom: str, cfg: Path, essai: bool) -> None:
+    try:
+        texte = lire_config(cfg)
+    except Illisible as e:
+        avertir(f"{nom} : {cfg} non traité ({e})")
+        return
+    if BLOC_MAIL.search(texte):
+        return          # bloc unique tenu par secubox-mail (lib/mail/memoire.sh)
+    v, inclus = valeurs_completes(texte)
+    dur, haut, echange = octets(v.get("max")), octets(v.get("high")), octets(v.get("swap.max"))
+    marque = any(PHASE.match(x) for x in texte.splitlines())
+    frein = dur is not None and haut is not None and haut < dur and echange == 0
+    herite = dur is not None and echange == 0 and marque
+    prefixe = "ESSAI, rien d'écrit : " if essai else ""
+    if (frein or herite) and inclus & ({"swap.max", "high"} if frein else {"swap.max"}):
+        dire(f"{nom} : frein ou échange interdit posé par un fichier inclus, à corriger à la main ({cfg})")
+        return
+    if frein or herite:
+        nouvel = moitie(dur)
+        if not essai:           # la configuration d'abord : si elle ne s'écrit pas, rien ne change à chaud
+            ecrire_config(cfg, texte, recrire(texte, {"high"} if frein else set(), {"swap.max": nouvel}))
+        vif = corriger_vif(nom, nouvel, herite, essai)
+        quoi = f"frein memory.high {v['high']} retiré (sous le budget {v['max']}, échange interdit)" if frein \
+            else f"budget {v['max']} avec échange interdit (ancien budget #496)"
+        dire(f"{prefixe}{nom} : {quoi} ; échange borné à {nouvel} — {cfg}, copie {cfg.name}{COPIE}{vif}")
+        return
+    if marque and texte != recrire(texte, set(), {}):
+        if not essai:
+            ecrire_config(cfg, texte, recrire(texte, set(), {}))
+        dire(f"{prefixe}{nom} : lignes de l'ancien budget #496 repliées, valeurs inchangées — {cfg}")
+    vif = corriger_vif(nom, v["swap.max"] if echange else None, False, essai)
+    if vif:
+        dire(f"{prefixe}{nom} : frein vif sous le plafond avec échange interdit, configuration sans ce défaut{vif}")
+    if dur is not None and echange == 0:
+        dire(f"{nom} : échange interdit sous un budget de {v['max']}, choix local non touché ({cfg})")
+    elif dur is None and haut is not None and echange == 0:
+        dire(f"{nom} : frein {v['high']} avec échange interdit et sans plafond, choix local non touché ({cfg})")
+
+
+def migrer(noms, essai: bool) -> int:
+    code = 0
+    for nom, cfg in conteneurs(noms):
+        try:
+            migrer_un(nom, cfg, essai)
+        except OSError as e:
+            avertir(f"{nom} : {cfg} non corrigé ({e})")
+            code = 1
+    return code
+
+
+def frein(nom: str, essai: bool) -> int:
+    """0 : aucun budget propre, le frein de secubox-tuning peut être posé. 10 : budget propre (ou échange interdit)."""
+    trouve = list(conteneurs({nom}))
+    v, propre, cfgs = {}, None, []
+    for _, cfg in trouve:
+        texte = lire_config(cfg)
+        v = valeurs(texte)
+        if BLOC_MAIL.search(texte):
+            dire(f"{nom} : budget propre tenu par secubox-mail, aucun frein de secubox-tuning")
+            return 10
+        if octets(v.get("max")) is not None:
+            propre = v["max"]
+        cfgs.append((cfg, texte))
+    if propre is None and octets(cgroup_lire(nom, "max")) is not None:
+        propre = cgroup_lire(nom, "max")
+    if propre is None:
+        if octets(v.get("swap.max")) == 0 or cgroup_lire(nom, "swap.max") == "0":
+            dire(f"{nom} : échange interdit, aucun frein de secubox-tuning posé")
+            return 10
+        return 0
+    retraits = []
+    for cfg, texte in cfgs:
+        complet, inclus = valeurs_completes(texte)
+        if "high" in complet and "high" not in inclus:
+            if not essai:
+                ecrire_config(cfg, texte, recrire(texte, {"high"}, {}))
+            retraits.append(f"frein {valeurs(texte)['high']} retiré de {cfg} (copie {cfg.name}{COPIE})")
+    if octets(cgroup_lire(nom, "high")) is not None:
+        if not essai:
+            cgroup_ecrire(nom, "high", "max")
+        retraits.append("frein à chaud retiré")
+    dire(f"{nom} : budget propre {propre}, aucun frein de secubox-tuning"
+         + (f" ; {'ESSAI : ' if essai else ''}{', '.join(retraits)}" if retraits else ""))
+    return 10
+
+
+def main(argv) -> int:
+    essai = "--dry-run" in argv
+    args = [a for a in argv if a != "--dry-run"]
+    if not args or args[0] not in ("migrer", "frein") or any(not NOM.match(a) for a in args[1:]):
+        print(__doc__, file=sys.stderr)
+        return 2
+    syslog.openlog("secubox-lxc-memoire")
+    if args[0] == "migrer":
+        return migrer(set(args[1:]), essai)
+    if len(args) != 2:
+        print(__doc__, file=sys.stderr)
+        return 2
+    try:
+        return frein(args[1], essai)
+    except (Illisible, OSError) as e:
+        avertir(f"{args[1]} : budget illisible ({e}), aucun frein posé")
+        return 10
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

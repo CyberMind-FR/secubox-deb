@@ -25,12 +25,24 @@ C
     run bash -c ". '$LIB'; mail_memoire_config '$CFG'"
     [ "$status" -eq 10 ]
     [ "$(grep -c '^lxc.cgroup2.memory.max = 1G$' "$CFG")" -eq 1 ]
-    [ "$(grep -c '^lxc.cgroup2.memory.high = 900M$' "$CFG")" -eq 1 ]
-    [ "$(grep -c '^lxc.cgroup2.memory.swap.max = 0$' "$CFG")" -eq 1 ]
+    ! grep -q 'memory.high' "$CFG"
+    [ "$(grep -c '^lxc.cgroup2.memory.swap.max = 256M$' "$CFG")" -eq 1 ]
     [ "$(grep -c 'memory.max' "$CFG")" -eq 1 ]
     ! grep -q '512M\|500M\|#496' "$CFG"
     grep -q '^lxc.cgroup2.cpu.weight = 300$' "$CFG"
     grep -q '^lxc.start.auto = 1$' "$CFG"
+}
+
+@test "#3941 : bloc 2.17 (frein 900M, échange interdit) migré, copie gardée, plafond de la fenêtre inchangé" {
+    printf '%s\n' 'lxc.uts.name = mail' '# Mémoire du conteneur (secubox-mail) — bloc unique, réécrit par le paquet' \
+        'lxc.cgroup2.memory.max = 1G' 'lxc.cgroup2.memory.high = 900M' 'lxc.cgroup2.memory.swap.max = 0' > "$CFG"
+    cp "$CFG" "$CFG.ref"
+    run bash -c ". '$LIB'; mail_memoire_config '$CFG'"
+    [ "$status" -eq 10 ]
+    ! grep -q 'memory.high' "$CFG"
+    grep -q '^lxc.cgroup2.memory.swap.max = 256M$' "$CFG"
+    grep -q '^lxc.cgroup2.memory.max = 1G$' "$CFG"
+    cmp -s "$CFG.ref" "$CFG.avant-3941"
 }
 
 @test "idempotent : un second passage ne change rien" {
@@ -43,10 +55,12 @@ C
 
 @test "applique les limites au cgroup vivant, sans redémarrage" {
     mkdir -p "$BATS_TEST_TMPDIR/cg/lxc.payload.mail"
+    echo 0 > "$BATS_TEST_TMPDIR/cg/lxc.payload.mail/memory.swap.max"
     run bash -c "MAIL_CGROUP_RACINE='$BATS_TEST_TMPDIR/cg'; . '$LIB'; mail_memoire_vive mail"
     [ "$status" -eq 0 ]
     [ "$(cat "$BATS_TEST_TMPDIR/cg/lxc.payload.mail/memory.max")" = "1G" ]
-    [ "$(cat "$BATS_TEST_TMPDIR/cg/lxc.payload.mail/memory.high")" = "900M" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/cg/lxc.payload.mail/memory.high")" = "max" ]
+    [ "$(cat "$BATS_TEST_TMPDIR/cg/lxc.payload.mail/memory.swap.max")" = "256M" ]
 }
 
 @test "conteneur absent : rien à faire" {
