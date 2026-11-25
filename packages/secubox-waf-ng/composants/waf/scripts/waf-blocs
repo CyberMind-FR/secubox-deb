@@ -298,6 +298,26 @@ def verifier(texte, exiger=False):
         return "garde_illisible"
 
 
+LOT_MAX = 200
+
+
+def verifier_lot(textes):
+    """{adresse: motif ou None} d'un lot (#3960), protections relues UNE fois, protegees.env exigé ; adresses seules.
+    GardeIllisible si une liste manque."""
+    gardes = _gardes(None, executer, True)
+    out = {}
+    for t in textes:
+        try:
+            if not re.fullmatch(r"[0-9a-f:.]{2,45}", t):      # ni bloc, ni zone IPv6 « %… »
+                raise ValueError("forme")
+            cible = normaliser_cible(t)
+        except ValueError:
+            out[t] = "invalide"
+            continue
+        out[t] = "invalide" if hasattr(cible, "num_addresses") else motif_refus(cible, *gardes)
+    return out
+
+
 # --- état root des blocs ----------------------------------------------------
 
 def _valider_etat(blocs):
@@ -706,7 +726,7 @@ def _imprimer(resultat):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     verbe, args = (argv[0], argv[1:]) if argv else ("", [])
-    attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0, "reparer": 0}
+    attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0, "reparer": 0, "verifier-lot": 0}
     # `verifier <cible> --exiger` (#3723) : geste d'office d'une adresse, protegees.env exigé comme pour un bloc
     exiger = verbe == "verifier" and len(args) == 2 and args[1] == "--exiger"
     if attendus.get(verbe) != len(args) - exiger:
@@ -714,6 +734,16 @@ def main(argv=None):
     if verbe == "verifier":
         motif = verifier(args[0], exiger)
         return _imprimer({"ok": motif is None, "motif": motif})
+    if verbe == "verifier-lot":
+        textes = sys.stdin.read(20000).split()
+        if not textes or len(textes) > LOT_MAX:
+            return _imprimer(_refus("usage"))
+        try:
+            print(json.dumps(verifier_lot(textes)))
+            return 0
+        except GardeIllisible as e:
+            print(f"waf-blocs : {e}", file=sys.stderr)
+            return _imprimer(_refus("garde_illisible"))
     if verbe == "ajouter":
         if not re.fullmatch(r"[0-9]{1,9}", args[1]):
             return _imprimer(_refus("duree"))
