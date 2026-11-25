@@ -43,6 +43,7 @@ SEUIL_PART = 0.93
 SEUIL_PSI = 20.0
 DUREE_DURABLE_S = 600
 MAX_CGROUPS = 400
+MAX_AUDIT = 10
 # Un débit ne se calcule qu'entre deux relevés proches ; au-delà, l'état n'est plus servi non plus.
 ECART_MIN_S, ECART_MAX_S = 30, 3 * PAS_S
 
@@ -188,18 +189,18 @@ def _dict(val) -> dict:
 def etouffement(racine: Path, precedent: dict, maintenant: float) -> dict:
     """Un releve : refaults/s (contre le releve precedent), PSI some avg60, courant contre limite (frein ou plafond).
 
-    Étouffé : (refaults > 1 000/s ET courant > 93 % de la limite) OU PSI some avg60 > 20."""
+    Étouffé : sa PROPRE limite atteinte (courant > 93 %) ET (refaults > 1 000/s OU PSI some avg60 > 20). Sans limite propre,
+    la pression vient de la box entière : l'alerte générale la porte, pas cent lignes par service."""
     avant, depuis = _dict(precedent.get("refaults")), _dict(precedent.get("depuis"))
     t0 = precedent.get("t")
     ecart = maintenant - t0 if isinstance(t0, (int, float)) else 0
     out = {"t": int(maintenant), "refaults": {}, "depuis": {}, "etouffes": [], "audites": precedent.get("audites", [])}
     for cle, nom, genre, d in _cgroups(Path(racine)):
-        psi = _psi_some60(_lire(d / "memory.pressure"))
         limites = [x for x in (_limite(_lire(d / "memory.max")), _limite(_lire(d / "memory.high"))) if x]
         limite = min(limites) if limites else None
-        presse = psi is not None and psi > SEUIL_PSI
-        if limite is None and genre == "service" and not presse:
+        if limite is None:
             continue
+        psi = _psi_some60(_lire(d / "memory.pressure"))
         courant = _limite(_lire(d / "memory.current")) or 0
         total = _refaults(_lire(d / "memory.stat"))
         debit = None
@@ -208,16 +209,16 @@ def etouffement(racine: Path, precedent: dict, maintenant: float) -> dict:
             prec = avant.get(cle)
             if isinstance(prec, int) and total >= prec and ECART_MIN_S <= ecart <= ECART_MAX_S:
                 debit = round((total - prec) / ecart)
-        part = courant / limite if limite else None
-        if not (presse or (debit is not None and debit > SEUIL_REFAULTS_S and part is not None and part > SEUIL_PART)):
+        part = courant / limite
+        relit, presse = debit is not None and debit > SEUIL_REFAULTS_S, psi is not None and psi > SEUIL_PSI
+        if part <= SEUIL_PART or not (relit or presse):
             continue
         debut = depuis.get(cle)
         if not isinstance(debut, (int, float)) or debut > maintenant or ecart > ECART_MAX_S:
             debut = int(maintenant)
         out["depuis"][cle] = debut
         out["etouffes"].append({"cle": cle, "nom": nom, "genre": genre, "refaults_s": debit, "psi_some_avg60": psi,
-                                "courant_mb": courant // 1048576, "limite_mb": limite // 1048576 if limite else None,
-                                "part": int(100 * part) if part is not None else None,
+                                "courant_mb": courant // 1048576, "limite_mb": limite // 1048576, "part": int(100 * part),
                                 "depuis_s": int(maintenant - debut)})
     return out
 
@@ -244,18 +245,25 @@ def _auditer(journal: Path, evenement: str, details: dict) -> None:
         print(f"audit.log non ecrit ({e.__class__.__name__}) : {ligne}", file=sys.stderr)
 
 
+def _auditer_lot(journal: Path, evenement: str, details: list) -> None:
+    """Au plus MAX_AUDIT lignes par passage, puis une ligne de synthese."""
+    for d in details[:MAX_AUDIT]:
+        _auditer(journal, evenement, d)
+    reste = len(details) - MAX_AUDIT
+    if reste > 0:
+        _auditer(journal, evenement, {"nombre": reste, "message": f"et {reste} autres"})
+
+
 def suivre_etouffement(chemin: Path, racine: Path, maintenant: float, journal: Path = AUDIT) -> dict:
     """Un releve enregistre ; une ligne d'audit quand l'episode passe dix minutes, une a sa fin."""
     chemin = Path(chemin)
     etat = etouffement(racine, lire_etouffement(chemin), maintenant)
     deja = {c for c in etat["audites"] if isinstance(c, str)} if isinstance(etat["audites"], list) else set()
     actuels = {e["cle"] for e in etat["etouffes"]}
-    for e in etat["etouffes"]:
-        if e["depuis_s"] >= DUREE_DURABLE_S and e["cle"] not in deja:
-            _auditer(journal, "etouffement", e)
-            deja.add(e["cle"])
-    for c in sorted(deja - actuels):
-        _auditer(journal, "fin_etouffement", {"cle": c})
+    debuts = [e for e in etat["etouffes"] if e["depuis_s"] >= DUREE_DURABLE_S and e["cle"] not in deja]
+    _auditer_lot(journal, "etouffement", debuts)
+    _auditer_lot(journal, "fin_etouffement", [{"cle": c} for c in sorted(deja - actuels)])
+    deja |= {e["cle"] for e in debuts}
     etat["audites"] = sorted(deja & actuels)
     chemin.parent.mkdir(parents=True, exist_ok=True)
     tmp = chemin.with_name(ETAT_ETOUFFEMENT + ".tmp")

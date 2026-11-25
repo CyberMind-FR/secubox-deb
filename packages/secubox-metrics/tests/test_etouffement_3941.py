@@ -20,7 +20,7 @@ class Cg:
         self.racine = racine
         (racine / "system.slice").mkdir(parents=True)
 
-    def pose(self, chemin, refaults=0, courant=100 * MO, dur="max", haut="max", psi=0.0):
+    def pose(self, chemin, refaults=0, courant=383 * MO, dur=384 * MO, haut="max", psi=0.0):
         d = self.racine / chemin
         d.mkdir(parents=True, exist_ok=True)
         (d / "memory.current").write_text(f"{courant}\n")
@@ -52,7 +52,8 @@ def test_gitea_etouffe_relectures_et_limite_atteinte(cg):
 
 
 @pytest.mark.parametrize("refaults_s,courant,psi,attendu", [
-    (2000, 383, 0, True), (2000, 300, 0, False), (900, 383, 0, False), (0, 100, 21, True), (0, 100, 20, False)])
+    (2000, 383, 0, True), (2000, 300, 0, False), (900, 383, 0, False), (0, 383, 21, True), (0, 383, 20, False),
+    (0, 100, 60, False)])
 def test_regle(cg, refaults_s, courant, psi, attendu):
     cg.pose("lxc.payload.x", 0, courant * MO, 384 * MO)
     e1 = passe(cg, {}, 0 + 1000)
@@ -81,7 +82,7 @@ def test_duree_puis_fin(cg):
 
 def test_services_bornes_seulement(cg):
     cg.pose("system.slice/secubox-aggregator.service", 0, 760 * MO, 1024 * MO, 768 * MO)
-    cg.pose("system.slice/libre.service", 0)
+    cg.pose("system.slice/libre.service", 0, dur="max", psi=80)
     e1 = passe(cg, {}, 1000)
     cg.pose("system.slice/secubox-aggregator.service", 5000 * 300, 760 * MO, 1024 * MO, 768 * MO)
     e = passe(cg, e1, 1300)
@@ -122,6 +123,31 @@ def test_audit_absent_ne_casse_pas_le_releve(cg, tmp_path, capsys):
     for t in (1000, 1300, 1600):
         memoire.suivre_etouffement(tmp_path / "memoire.jsonl", cg.racine, t, tmp_path / "non" / "audit.log")
     assert "audit" in capsys.readouterr().err
+
+
+def test_pression_generale_sans_limite_propre_rien(cg):
+    """I2 : la box entière sous pression ne désigne pas 120 services ; un étouffé a sa propre limite, atteinte."""
+    for i in range(120):
+        cg.pose(f"system.slice/s{i:03}.service", dur="max", psi=70)
+    cg.pose("lxc.payload.sans", dur="max", psi=70)
+    cg.pose("lxc.payload.loin", courant=100 * MO, psi=70)
+    assert passe(cg, {}, 1000)["etouffes"] == []
+
+
+def test_lignes_d_audit_bornees(cg, tmp_path):
+    f, journal = tmp_path / "memoire.jsonl", tmp_path / "audit.log"
+    journal.write_text("")
+    for i in range(25):
+        cg.pose(f"lxc.payload.c{i:02}", psi=50)
+    for t in (1000, 1300, 1600, 1900):
+        memoire.suivre_etouffement(f, cg.racine, t, journal)
+    lignes = [json.loads(x) for x in journal.read_text().splitlines()]
+    assert len(lignes) == 11 and lignes[-1]["nombre"] == 15 and "et 15 autres" in lignes[-1]["message"]
+    for i in range(25):
+        cg.pose(f"lxc.payload.c{i:02}", psi=0)
+    memoire.suivre_etouffement(f, cg.racine, 2200, journal)
+    fins = [json.loads(x) for x in journal.read_text().splitlines()][11:]
+    assert len(fins) == 11 and fins[-1]["nombre"] == 15
 
 
 def test_etat_casse_ignore(cg, tmp_path):

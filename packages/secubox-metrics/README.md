@@ -115,7 +115,8 @@ memoire disponible et le swap, en part de la RAM, et signale une croissance sout
 
 **Étouffement (#3941)** : le meme releve lit les cgroups (fichiers seulement, 400 au plus, aucun parcours de processus) des
 conteneurs LXC et des services bornes : relectures de pages par seconde, PSI memoire `some avg60`, courant contre limite
-(frein ou plafond). Étouffé = (plus de 1 000 relectures/s ET plus de 93 % de la limite) OU PSI > 20. La route rend
+(frein ou plafond). Étouffé = plus de 93 % de sa PROPRE limite ET (plus de 1 000 relectures/s OU PSI > 20) ; sans limite propre, jamais (une
+pression générale ne désigne pas chaque service). Audit : dix lignes par passage au plus, puis « et N autres ». La route rend
 `etouffes: [{cle, nom, genre, refaults_s, psi_some_avg60, courant_mb, limite_mb, part, depuis_s}]` ; au-dela de dix
 minutes : alerte (page et journal), `modules.memoire = warn` dans `/health/summary` (nombre seulement), une ligne
 `type: memoire` dans `audit.log` au debut (`etouffement`) et a la fin (`fin_etouffement`).
