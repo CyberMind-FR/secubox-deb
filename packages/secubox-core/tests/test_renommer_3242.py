@@ -269,3 +269,31 @@ def test_verrou_borne(banc):
         assert banc.etat() == avant and banc.appels() == []
     finally:
         os.close(fd)
+
+
+# ── #3708 : le compte au nom de l'ancienne box ────────────────────────────────────────────────────────────────────────
+
+def _faux_usersctl(banc, code=0):
+    f = banc.appels_f.parent / "faux" / "usersctl"
+    f.write_text("#!/bin/sh\nprintf 'usersctl %s\\n' \"$*\" >> \"$FAUX_APPELS\"\nexit " + str(code) + "\n")
+    f.chmod(0o755)
+
+
+def test_renommer_traite_le_compte_de_l_ancien_nom(banc):
+    _faux_usersctl(banc)
+    assert banc.run("--acteur", "gk2admin", "gk5")[0] == 0
+    assert banc.appels() == ["set-hostname gk5", "usersctl renommer-compte-machine --acteur gk2admin secubox-live gk5",
+                             "systemctl try-restart avahi-daemon.service"]
+    assert banc.run("gk5")[1]["inchange"] is True and len(banc.appels()) == 3       # rien à refaire
+
+
+def test_renommer_compte_non_traite_est_dit_sans_bloquer(banc):
+    _faux_usersctl(banc, code=1)
+    rc, sortie, p = banc.run("gk5")
+    assert rc == 0 and sortie["ok"] is True and "secubox-live" in p.stderr
+
+
+def test_renommer_echoue_ne_touche_aucun_compte(banc):
+    _faux_usersctl(banc)
+    assert banc.run("gk5", env={"FAUX_HN_ECHEC": "1"})[0] == 6
+    assert not any(a.startswith("usersctl") for a in banc.appels())

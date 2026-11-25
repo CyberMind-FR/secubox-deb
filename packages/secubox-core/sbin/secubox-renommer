@@ -19,7 +19,11 @@ restait sur la ligne 127.0.1.1 de /etc/hosts (« sudo: unable to resolve host gk
   3. hostnamectl set-hostname <nom> ;
   4. audit box_renommee {ancien, nouveau, acteur} dans /var/log/secubox/audit.log — une décision non auditée n'a pas
      lieu : audit impossible ⇒ tout est rétabli ;
-  5. systemctl try-restart avahi-daemon.service (Avahi absent ou en échec : dit sur stderr, sans bloquer).
+  5. comptes SecuBox (#3708) : usersctl renommer-compte-machine <ancien> <nouveau> — un compte admin sans mot de passe
+     au nom de l'ancienne box ne lui survit pas (désactivé, ou renommé si aucun admin n'est encore configuré ; audité
+     par usersctl ; un compte à mot de passe n'est jamais touché). Sans secubox-auth, rien à faire ; en échec, dit sur
+     stderr sans défaire le renommage (la mise à jour de secubox-auth repasse) ;
+  6. systemctl try-restart avahi-daemon.service (Avahi absent ou en échec : dit sur stderr, sans bloquer).
 Idempotent : un nom déjà posé partout ne change rien (« inchange ») et n'est pas audité ; le nom actuel est
 « inchange » même s'il est réservé (« secubox » de l'installeur, R-L2-36). Un renommage à la fois : verrou attendu
 15 s au plus, puis refus (code 1, « renommage déjà en cours »).
@@ -61,8 +65,9 @@ PATH_SUR = "/usr/sbin:/usr/bin:/sbin:/bin"
 TAILLE_MAX = 1 << 20
 DELAI_HOSTNAMECTL = 30
 DELAI_AVAHI = 30
-# M9 : attente du verrou bornée (LOCK_NB + réessai) ; 15 + 30 (hostnamectl) + 30 (retour arrière) < 90 s
-# (TimeoutStartSec de secubox-systeme-renommer@.service) : l'unité ne coupe jamais un retour arrière.
+DELAI_COMPTES = 14
+# M9 : attente du verrou bornée (LOCK_NB + réessai) ; 15 + 30 (hostnamectl) + 30 (retour arrière ou Avahi) + 14
+# (comptes, #3708 : jamais avec le retour arrière) < 90 s (TimeoutStartSec de secubox-systeme-renommer@.service) : l'unité ne coupe jamais un retour arrière.
 ATTENTE_VERROU = 15.0
 RE_BRUT = re.compile(r"[!-~]{1,253}")                     # nom actuel hors motif, rétabli tel quel (M6)
 
@@ -113,10 +118,12 @@ class Ctx:
         if self.substitue:
             self.hostnamectl = shutil.which("hostnamectl") or "hostnamectl"
             self.systemctl = shutil.which("systemctl") or "systemctl"
+            self.usersctl = shutil.which("usersctl")
             self.env = dict(os.environ)
         else:
             # Vraie box : l'environnement ne choisit jamais une commande lancée en root.
             self.hostnamectl, self.systemctl = "/usr/bin/hostnamectl", "/usr/bin/systemctl"
+            self.usersctl = "/usr/sbin/usersctl" if os.access("/usr/sbin/usersctl", os.X_OK) else None
             self.env = {"PATH": PATH_SUR, "LC_ALL": "C"}
         if acteur is None:
             sudo_user = os.environ.get("SUDO_USER", "")
@@ -425,10 +432,21 @@ def renommer(ctx, nouveau):
     finally:
         for f in fichiers:
             f.fermer()
+    compte_de_l_ancien_nom(ctx, ancien, nouveau)
     ok, detail = lancer(ctx, [ctx.systemctl, "try-restart", "avahi-daemon.service"], DELAI_AVAHI)
     if not ok:
         err(f"Avahi non relancé ({detail}) : le nom .local suivra au prochain démarrage d'avahi-daemon")
     return {"ok": True, "ancien": ancien, "nouveau": nouveau}
+
+
+def compte_de_l_ancien_nom(ctx, ancien, nouveau):
+    """#3708 : le compte admin sans mot de passe semé au nom de l'ancienne box ne reste pas revendicable."""
+    if not ancien or ancien == nouveau or not ctx.usersctl:
+        return
+    ok, detail = lancer(ctx, [ctx.usersctl, "renommer-compte-machine", "--acteur", ctx.acteur, ancien, nouveau],
+                        DELAI_COMPTES)
+    if not ok:
+        err(f"compte « {ancien} » non traité ({detail})")
 
 
 def retablir(ctx, ecrits, ancien):
