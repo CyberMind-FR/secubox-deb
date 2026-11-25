@@ -12,7 +12,11 @@ secubox-live (0.2.0-1~trixie1) trixie; urgency=medium
   * Mise à jour : un vhost déjà exposé est rendu de nouveau (nginx -t avant le
     rechargement, précédent remis en place en cas d échec) ; une box non
     exposée le reste. Relance manuelle de l exposeur : un vhost déjà servi n
-    est plus retiré si nginx refuse le nouveau.
+    est plus retiré si nginx refuse le nouveau. Rechargement en échec ou
+    interruption : précédent remis, jamais « déjà à jour » à tort ; un seul
+    exposeur à la fois ; un lien nginx qui n est pas le nôtre est respecté.
+  * Collecteur : CPU, mémoire et durée de marche d un nœud hors ligne à null ;
+    sites_publies ne compte plus les vhosts waf_bypass.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 06:00:00 +0100
 

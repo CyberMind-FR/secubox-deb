@@ -29,7 +29,7 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 | bans par jour, bans actifs | `/var/lib/secubox/waf/bans.jsonl` (journal ban/unban de sbxwaf, append-only, celui qu'il relit au démarrage ; incréments) | `null` |
 | pays des attaques | GeoLite2-Country (`python3-geoip2`) | `null` |
 | visites par jour et par pays, requêtes du jour | `/var/cache/secubox/metrics/vhost_stats.json` (secubox-metrics, 30 jours glissants), totaux par jour persistés dans `/var/cache/secubox/live/visites-etat.json` (0600, 400 jours) | `null` |
-| sites publiés | `/etc/secubox/haproxy.toml` (vhosts actifs) | `null` |
+| sites publiés | `/etc/secubox/haproxy.toml` (vhosts actifs, sans ceux en `waf_bypass = true` : la page dit « derrière le pare-feu ») | `null` |
 | développement | API publique GitHub, sans jeton, cache 10 min (`/var/cache/secubox/live/github.json`) | dernier relevé, sinon `null` |
 | disponibilité 30 j | aucune source à ce jour | toujours `null` |
 | mise en production | `mise_en_production` de `/etc/secubox/live.toml`, sinon naissance de `/etc/secubox` (`stat %W`) | `null` |
@@ -61,7 +61,8 @@ d'externe (CSP : `default-src 'none'`, `font-src 'self'`, aucun script ni style 
 le système ; le bouton passe au jour, choix gardé dans `localStorage` (`live-ambiance`).
 
 - Ville : une tour par boîtier publié. Hauteur = mémoire, fenêtres = processeur. Hors ligne (ou état inconnu) : tour
-  éteinte, hauteur fixe, aucun chiffre — le dernier relevé d'une box muette n'est pas une mesure.
+  éteinte, hauteur fixe, aucun chiffre — le dernier relevé d'une box muette n'est pas une mesure, le collecteur ne le publie
+  plus (`cpu`, `memoire`, `marche` à `null`).
 - Relevé toutes les 20 s (arrêté quand la page est cachée), appliqué **en place** (`accorder`) : focus, infobulle, carte
   choisie et défilement de l'historique survivent. Âge du relevé compté à l'horloge du serveur (en-tête `Date`) : au-delà
   de 5 min, ou si `/etat.json` ne répond pas, la page le dit et garde le dernier relevé.
@@ -100,7 +101,8 @@ sudo secubox-live-exposer           # AppArmor obligatoire, nginx -t, route sbxw
 
 À la mise à jour du paquet, `secubox-live-exposer --mise-a-jour` rend de nouveau le vhost d'une box **déjà** exposée
 (lien nginx actif et domaine retenu identique à celui de `live.toml`) : `nginx -t` avant le rechargement, vhost précédent
-remis en place en cas d'échec. Une box non exposée le reste.
+remis en place si la validation ou le rechargement échoue, ou en cas d'interruption. Une box non exposée le reste. Un seul
+exposeur à la fois (`flock`) ; un lien ou un fichier nginx qui n'est pas le nôtre n'est jamais remplacé.
 
 `[roles]` et `[materiels]` (nom = valeur) complètent l'inventaire ; `[[feuille_de_route]]` (nom, etat) s'affiche tel quel.
 

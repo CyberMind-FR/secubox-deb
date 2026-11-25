@@ -130,7 +130,7 @@ def test_contraste_du_texte(ambiance):
 
 # ------------------------------------------------------------------------------------------------ exposeur
 
-def _banc(tmp_path, domaine="live.secubox.in", retenu="live.secubox.in", expose=True, nginx_ok=True):
+def _banc(tmp_path, domaine="live.secubox.in", retenu="live.secubox.in", expose=True, nginx_ok=True, reload_ok=True, nginx_suite=""):
     """Copie de l'exposeur, chemins ramenés dans tmp_path ; nginx, systemctl… remplacés par des témoins."""
     b = tmp_path / "bin"
     for d in (b, tmp_path / "etc/nginx/sites-available", tmp_path / "etc/nginx/sites-enabled", tmp_path / "lib"):
@@ -147,12 +147,16 @@ def _banc(tmp_path, domaine="live.secubox.in", retenu="live.secubox.in", expose=
     for a, c in (("/etc/secubox/live.toml", tmp_path / "live.toml"), ("/etc/secubox/haproxy.toml", tmp_path / "absent"),
                  ("/usr/share/secubox/live/live.vhost.conf.in", ICI / "nginx/live.vhost.conf.in"),
                  ("/etc/nginx/", str(tmp_path / "etc/nginx") + "/"), ("/var/lib/secubox-live", tmp_path / "lib"),
+                 ("/run/secubox-live-exposer.lock", tmp_path / "verrou"),
                  ("/sys/kernel/security/apparmor/profiles", tmp_path / "profils"), ("/data/haproxy/certs", tmp_path / "certs")):
         assert a in s, a
         s = s.replace(a, str(c))
+    # pid du script, pour les essais d'interruption ($PPID désigne le sous-shell de la substitution de commande)
+    s = s.replace("set -euo pipefail\n", f"set -euo pipefail\necho $$ > {tmp_path}/pid\n", 1)
     (b / "exposer").write_text(s)
-    for nom, code in (("nginx", 0 if nginx_ok else 1), ("systemctl", 0), ("logger", 0), ("secubox-waf-route", 0), ("haproxyctl", 0), ("certbot", 1)):
-        (b / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> {tmp_path}/appels\nexit {code}\n')
+    for nom, code in (("nginx", 0 if nginx_ok else 1), ("systemctl", 0 if reload_ok else 1), ("logger", 0), ("secubox-waf-route", 0), ("haproxyctl", 0), ("certbot", 1)):
+        suite = nginx_suite if nom == "nginx" else ""
+        (b / nom).write_text(f'#!/bin/sh\necho "{nom} $*" >> {tmp_path}/appels\n{suite}\nexit {code}\n')
         (b / nom).chmod(0o755)
 
     def lancer(*args):
@@ -201,6 +205,71 @@ def test_maj_sans_apparmor_ne_touche_a_rien(tmp_path):
     (tmp_path / "profils").write_text("")
     r, appels = lancer("--mise-a-jour")
     assert r.returncode == 1 and appels == [] and site.read_text() == "ancien vhost\n"
+
+
+def test_rechargement_en_echec_remet_le_precedent(tmp_path):
+    lancer, site, lien = _banc(tmp_path, reload_ok=False)
+    for args in (("--mise-a-jour",), ("--mise-a-jour",), ()):              # jamais « déjà à jour » tant que nginx ne l'a pas pris
+        r, appels = lancer(*args)
+        assert r.returncode == 1 and "rechargement" in r.stderr and "déjà à jour" not in r.stdout
+        assert site.read_text() == "ancien vhost\n" and lien.is_symlink()
+        assert not any(a.startswith(("logger", "secubox-waf-route", "haproxyctl")) for a in appels)
+        assert [p.name for p in site.parent.iterdir()] == ["live.conf"]
+
+
+def test_premiere_exposition_rechargement_en_echec_rien_d_expose(tmp_path):
+    lancer, site, lien = _banc(tmp_path, expose=False, retenu="", reload_ok=False)
+    r, appels = lancer()
+    assert r.returncode == 1 and not lien.is_symlink() and not any(a.startswith("secubox-waf-route") for a in appels)
+    assert not (tmp_path / "lib/domaine").exists()
+
+
+@pytest.mark.parametrize("signal", ["TERM", "INT", "HUP"])
+def test_interruption_entre_la_pose_et_la_validation(tmp_path, signal):
+    coupe = 'kill -%s "$(cat %s/pid)"; sleep 0.3'
+    lancer, site, lien = _banc(tmp_path, nginx_suite=coupe % (signal, tmp_path))
+    r, appels = lancer("--mise-a-jour")
+    code = {"HUP": 129, "INT": 130, "TERM": 143}[signal]
+    assert r.returncode == code and site.read_text() == "ancien vhost\n" and lien.is_symlink()
+    assert not any("reload" in a for a in appels) and [p.name for p in site.parent.iterdir()] == ["live.conf"]
+    (tmp_path / "n").mkdir()
+    lancer, site, lien = _banc(tmp_path / "n", expose=False, retenu="", nginx_suite=coupe % (signal, tmp_path / "n"))
+    r, _ = lancer()
+    assert r.returncode == code and not lien.is_symlink() and not site.exists()
+
+
+def test_verrou_un_seul_exposeur_a_la_fois(tmp_path):
+    import fcntl
+    lancer, site, _ = _banc(tmp_path)
+    s = (tmp_path / "bin/exposer").read_text()
+    assert "flock -w 60 9" in s
+    (tmp_path / "bin/exposer").write_text(s.replace("flock -w 60 9", "flock -w 0 9"))
+    with open(tmp_path / "verrou", "w") as v:
+        fcntl.flock(v, fcntl.LOCK_EX)
+        r, appels = lancer("--mise-a-jour")
+        assert r.returncode == 1 and "déjà en cours" in r.stderr and appels == [] and site.read_text() == "ancien vhost\n"
+    r, _ = lancer("--mise-a-jour")
+    assert r.returncode == 0 and "font-src" in site.read_text()
+
+
+@pytest.mark.parametrize("retenu", ["", "live.secubox.in"])
+@pytest.mark.parametrize("forme", ["lien_ailleurs", "fichier", "site_lien"])
+def test_lien_qui_n_est_pas_le_notre_jamais_remplace(tmp_path, forme, retenu):
+    lancer, site, lien = _banc(tmp_path, expose=False, retenu=retenu)
+    autre = tmp_path / "etc/nginx/sites-available/autre.conf"
+    autre.write_text("autre vhost\n")
+    if forme == "lien_ailleurs":
+        os.symlink("../sites-available/autre.conf", lien)
+    elif forme == "fichier":
+        lien.write_text("posé à la main\n")
+    else:                                                                    # notre fichier est lui-même un lien vers ailleurs
+        os.symlink("autre.conf", site)
+        os.symlink("../sites-available/live.conf", lien)
+    for args, code in ((("--mise-a-jour",), 0), ((), 1)):
+        r, appels = lancer(*args)
+        assert r.returncode == code and appels == [], (args, r.stderr)
+        assert autre.read_text() == "autre vhost\n" and lien.read_text() == ("posé à la main\n" if forme == "fichier" else "autre vhost\n")
+        assert site.is_symlink() is (forme == "site_lien") and site.exists() is (forme == "site_lien")
 
 
 def test_exposition_manuelle_et_argument_inconnu(tmp_path):
@@ -430,3 +499,18 @@ def test_nav_mouvement_reduit(ouvrir):
                            p.clearRect = function () { window.n++; return o.apply(this, arguments); }; }""")
     pg.clock.run_for(2000)
     assert pg.evaluate("window.n") == 0
+
+
+def test_nav_pluie_une_seule_boucle(ouvrir):
+    pg, _ = ouvrir(etat())
+    pg.evaluate("""() => { window.file = new Map(); let n = 0;
+        window.requestAnimationFrame = f => { window.file.set(++n, f); return n; };
+        window.cancelAnimationFrame = i => window.file.delete(i);
+        window.vue = h => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }; }""")
+    pg.clock.run_for(300)                                                                             # images en attente
+    for _ in range(4):
+        pg.evaluate("() => { window.vue(true); window.vue(false); }")
+        pg.clock.run_for(300)
+        assert pg.evaluate("window.file.size") == 1
+    pg.evaluate("window.vue(true)")
+    assert pg.evaluate("window.file.size") == 0

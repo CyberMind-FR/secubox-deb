@@ -496,7 +496,7 @@
   function lancerPluie() {
     var c = $('pluie'), x = c.getContext && c.getContext('2d');
     if (!x) return;
-    var PAS = 26, col = [], avant = 0, minuteur = 0, couleur = '', calme = window.matchMedia ? matchMedia('(prefers-reduced-motion:reduce)') : { matches: false };
+    var PAS = 26, col = [], avant = 0, minuteur = 0, image = 0, couleur = '', calme = window.matchMedia ? matchMedia('(prefers-reduced-motion:reduce)') : { matches: false };
     function taille() {
       var memeLargeur = c.width === window.innerWidth;
       c.width = window.innerWidth; c.height = window.innerHeight;
@@ -515,14 +515,16 @@
       x.globalAlpha = 1;
     }
     function boucle() {
-      minuteur = 0;
+      image = 0;
       if (document.hidden || calme.matches) return;
       var t = Date.now();
       trace(Math.min(.2, (t - avant) / 1000)); avant = t;
-      minuteur = setTimeout(function () { requestAnimationFrame(boucle); }, c.width < 600 ? 120 : 70);
+      minuteur = setTimeout(function () { minuteur = 0; image = requestAnimationFrame(boucle); }, c.width < 600 ? 120 : 70);
     }
     function reprendre() {
+      // l'attente OU l'image déjà demandée : sans la seconde, chaque aller-retour d'onglet ajoutait une boucle
       if (minuteur) { clearTimeout(minuteur); minuteur = 0; }
+      if (image) { cancelAnimationFrame(image); image = 0; }
       if (document.hidden) return;
       if (calme.matches) trace(0); else { avant = Date.now(); boucle(); }
     }
