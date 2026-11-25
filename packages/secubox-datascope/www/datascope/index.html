@@ -196,6 +196,7 @@
   .cTete{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:.85rem;color:var(--doux);min-height:30px} .cTete b{color:var(--texte)} .cPied{display:flex;gap:8px;align-items:flex-start;min-height:42px} .cPied .cVie{flex:none}
   svg.cMonde{display:block;width:100%;height:auto;cursor:pointer;touch-action:manipulation} .cMonde .terre{fill:none;stroke:rgba(86,150,255,.36);stroke-width:.72;stroke-linecap:round}
   .cMonde .pt{outline:none} .cMonde .pt .r{fill:var(--rouge);fill-opacity:.8;stroke:#060d1b;stroke-width:1;vector-effect:non-scaling-stroke;transition:r .25s} .cMonde .pt .a{fill:none;stroke:none;stroke-width:2;vector-effect:non-scaling-stroke}
+  .topoPan.rejeu .cMonde .pt .r{transition:none}   /* relecture : le rayon est celui du relevé nommé, sans valeur intermédiaire */
   .cMonde .pt.entre .r{fill:var(--jaune)} .cMonde .pt.sorti .r{fill:none;stroke:var(--doux);stroke-dasharray:3 3} .cMonde .pt.sel .a{stroke:#fff} .cMonde .pt:focus-visible .a{stroke:var(--cyan)} .cMonde.foc .pt:not(.lie):not(.sel) .r{fill-opacity:.25}
   .cLit{flex:1;min-width:0;font-size:.85rem;color:var(--texte);min-height:2.6em;overflow-wrap:anywhere}
   .cP{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;width:100%;min-height:40px;text-align:left;font:inherit;font-size:.85rem;color:var(--texte);background:rgba(59,130,246,.08);border:1px solid var(--trait);border-radius:8px;padding:4px 8px;margin:0 0 4px;cursor:pointer;align-items:center}
@@ -1598,7 +1599,7 @@
     }else if(n.type==='reseau_source')puces.push('AS'+n.id.slice(4),texteRepere(repereClasse(n.classe)));
     else if(n.type==='classe_reseau')puces.push(texteRepere(repereClasse(n.classe)),'au-delà des huit plus gros réseaux');
     else if(n.type==='pays'){puces.push((window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+(nomPays(n.libelle)!==n.libelle?nomPays(n.libelle)+' · ':'')+'code '+texteSur(n.libelle));var le=estimerAffiche().pays.filter(function(x){return x.id===n.id;})[0];
-      if(le)puces.push(texteEstim(le)+(le.n===null?'':' adresses (estimation)'));}
+      if(le)puces.push(texteEstim(le)+(le.n===null||le.n<.5?'':' adresses (estimation)'));}
     else if(n.type==='campagne')puces.push(texteRepere(repereFamille(n.famille)));
     else if(n.type==='cve')puces.push('filtre lié déclenché : ne dit rien d’une faille ici');
     else if(n.type==='autres')puces.push(nombre(m.repliees)+' repliés');
@@ -1674,7 +1675,7 @@
   // douze tranches de deux heures avant celle de `epoch`, de la plus ancienne à la plus récente : le dernier relevé complet de chacune, ou null
   function tranchesCarte(instantanes,epoch){
     var t=Math.floor(epoch/7200),l=[],k;for(k=12;k>=1;k--)l.push(null);
-    instantanes.forEach(function(x){if(!x||typeof x.ts!=='string'||typeof x.epoch!=='number'||x.partiel===true||x.epoch>=epoch)return;
+    instantanes.forEach(function(x){if(!x||typeof x.ts!=='string'||typeof x.epoch!=='number'||x.partiel===true||x.epoch>=epoch||x.epoch<epoch-86400)return;
       var i=12-(t-Math.floor(x.epoch/7200));if(i>=0&&i<12&&(!l[i]||l[i].epoch<x.epoch))l[i]=x;});
     return l;
   }
@@ -1728,12 +1729,16 @@
   }
   function annulerCarte(){if(carte.ctl){var c=carte.ctl;carte.ctl=null;c.abort();}}
   function quitterCarte(){annulerCarte();accorderPouls(true);carte.L=null;}
+  // part arrondie à 0 partout : valeur inconnue (moins de 1 %), jamais un 0 dans une série
+  function traceSeule(p){return p.traces>0&&p.n<.5;}
   // null : aucune origine dans ce relevé (non mesuré)
-  function paysMesures(e){var l=e.pays.filter(function(p){return p.n!==null;});return l.length?l.map(function(p){return {code:p.code,n:p.n};}):null;}
+  function paysMesures(e){var l=e.pays.filter(function(p){return p.n!==null&&!traceSeule(p);});return l.length?l.map(function(p){return {code:p.code,n:p.n};}):null;}
   function histoCarte(){return tranchesDirect().map(function(x){return x?propre(carte.pays,x.ts,null):null;});}
   // le pouls (#3945) : direct, au repos (rien de choisi), relevé complet, et au moins une mesure réelle de plus ; sinon plus aucune trace de lui
+  // relevé affiché sûr d'être l'actuel : ni périmé, ni dernière lecture échouée, ni source en panne
+  function releveSain(){var g=ageReleve();return !paysage.echec&&!pannePaysage()&&(g===null||g<=P_PERIME_S);}
   function accorderPouls(non){
-    var P=window.SbxPouls,a=affichePaysage(),sv=document.querySelector('#topo svg.cMonde'),h=!non&&P&&sv&&carte.L&&a&&!selection.id&&directCarte()&&a.instantane.partiel!==true&&window.CENTRE?histoCarte().filter(function(x){return x;}):[],
+    var P=window.SbxPouls,a=affichePaysage(),sv=document.querySelector('#topo svg.cMonde'),h=!non&&P&&sv&&carte.L&&a&&!selection.id&&directCarte()&&releveSain()&&a.instantane.partiel!==true&&window.CENTRE?histoCarte().filter(function(x){return x;}):[],
       p=h.length?paysMesures(estimerAffiche()):null;
     if(!h.length||!p){
       if(carte.pouls){try{carte.pouls.repos();carte.pouls.maj({instantanes:[]});carte.pouls.fin();}catch(e){}carte.pouls=null;carte.poulsCle='';
@@ -1743,7 +1748,7 @@
     var cle=carte.dessin+'|'+carte.version+'|'+a.instantane.ts;if(carte.poulsCle===cle)return;carte.poulsCle=cle;
     try{
       carte.pouls=P.carte(sv,{cle:'datascope',sujet:'origine',coul:'#ff4d5e',centres:window.CENTRE,coeur:false,fond:sv.querySelector('.pts'),liste:carte.L,format:function(v){return v<.5?'moins d’une':'≈ '+nombre(Math.round(v));},
-        instantanes:h.concat([{t:a.instantane.epoch,pays:p}]),quand:document.querySelector('#topo .cQuand'),zone:document.querySelector('#topo .cCarte'),maintenant:'direct'});
+        instantanes:h.concat([{t:a.instantane.epoch,pays:p}]),quand:document.querySelector('#topo .cQuand'),zone:document.querySelector('#topo .cCarte'),maintenant:'relevé de '+heureReleve(a.instantane.epoch)});
       P.bouton(document.querySelector('#topo .cVie'),'bt');
     }catch(e){carte.pouls=null;}
   }
@@ -1759,7 +1764,7 @@
     var E=estimerAffiche(),K=echelleCarte(),direct=directCarte(),entres=evo.badges?idsPays(difference,'apparus'):[],sortis=evo.badges?idsPays(difference,'disparus').filter(function(i){return !paysage.noeuds[i];}):[],corps=box.querySelector('.cCorps'),sv;
     if(corps&&!corps.querySelector('.terre')&&window.TERRE)corps=null;   // le fond de carte vient d'arriver
     if(!corps){
-      quitterCarte();vider(box);
+      accorderPouls(true);vider(box);   // les lectures en cours continuent : seul le dessin est refait
       corps=h('div',{'class':'cCorps'},[h('div',{'class':'cCarte'},[h('div',{'class':'cTete'},[h('span',{'class':'cTitre'}),h('span',{'class':'cQuand'})]),h('div',{'class':'cFond'}),h('div',{'class':'cPied'},[h('div',{'class':'cLit','aria-live':'polite'}),h('span',{'class':'cVie'})])]),h('div',{'class':'cListe',role:'group','aria-label':'Pays d’origine, du plus grand au plus petit'})]);
       box.appendChild(corps);
       sv=s('svg',{'class':'cMonde',viewBox:'0 1 120 50',role:'group','aria-label':'Carte du monde : origine estimée des populations ; flèches pour passer d’un pays à l’autre, Entrée pour sa fiche'},corps.querySelector('.cFond'));
@@ -1786,7 +1791,7 @@
     marquerCarte();
     var notes=['Taille d’un cercle = adresses estimées (Σ sur les populations : adresses × part), même échelle sur tous les relevés de la fenêtre. Une adresse vue dans deux populations compte deux fois.',
       'Le relevé ne donne que les trois premiers pays de chaque population, en parts arrondies : un pays absent est non mesuré, jamais zéro, et il peut entrer ou sortir sans avoir changé.',
-      'En direct et au repos, la carte recule sur les relevés complets des 24 dernières heures (un par tranche de deux heures) puis revient ; en relecture, seul l’enregistreur la pilote.'];
+      'En direct et au repos, la carte recule sur les relevés complets des 24 dernières heures (un par tranche de deux heures) puis revient (valeurs intermédiaires interpolées par l’animation) ; en relecture, seul l’enregistreur la pilote.'];
     if(entres.length||sortis.length)notes.push('✚ jaune : pays entré dans le relevé ; ✖ tireté : pays sorti, par rapport au relevé de comparaison.');
     return notes;
   }
@@ -1860,7 +1865,7 @@
     function ligne(p){
       var v=h('span',{'class':'v',text:texteEstim(p)}),b=h('button',{type:'button','class':'cP','data-id':p.id,'data-k':p.id,title:carte.desc[p.id]},[
         h('span',{'class':'n',text:(entres.indexOf(p.id)>=0?'✚ ':'')+drapeauPays(p.code)+nomPays(p.code)+(H.indexOf(p.id)>=0&&window.CENTRE?' · hors carte':'')}),v,
-        h('span',{'class':'g'},[jauge(max?100*pNombre(p.n)/max:0),un?miniPays(p.code,histo,p.n):null])]);
+        h('span',{'class':'g'},[jauge(max?100*pNombre(p.n)/max:0),un?miniPays(p.code,histo,traceSeule(p)?null:p.n):null])]);
       if(p.n!==null&&p.n>=.5)carte.L[p.code]=v;
       b.addEventListener('click',function(){choisirPays(p.id);});
       ['focus','mouseenter'].forEach(function(x){b.addEventListener(x,function(){lireCarte(p.id);});});
@@ -1888,9 +1893,9 @@
   function reseauxPays(box,id){
     var pops=Object.create(null),R=Object.create(null);lies(id,'ORIGINE',false).forEach(function(a){pops[a.de]=1;});
     paysage.aretes.forEach(function(a){if(a.type==='SOURCE_DE'&&pops[a.vers]){var x=R[a.de]=R[a.de]||{de:a.de,vers:id,poids:0};x.poids+=pNombre(a.poids);}});
-    var l=Object.keys(R).map(function(k){return R[k];}).sort(function(a,b){return b.poids-a.poids||(a.de<b.de?-1:1);});if(!l.length)return;
+    var l=Object.keys(R).map(function(k){return R[k];}).sort(function(a,b){return b.poids-a.poids||(a.de<b.de?-1:1);});if(!l.length){box.appendChild(h('h4',{text:'Réseaux de ces populations'}));box.appendChild(h('div',{'class':'note',text:'aucun réseau rendu (non mesuré)'}));return;}
     listeParts(box,'Réseaux de ces populations',l,'de',' adresses');
-    box.appendChild(h('div',{'class':'note',text:'Tous pays confondus : le relevé ne dit pas de quel pays vient chaque réseau.'}));
+    box.appendChild(h('div',{'class':'note',text:'Tous pays confondus : le relevé ne dit pas de quel pays vient chaque réseau. Liste plafonnée : cinq réseaux au plus par population ; une adresse vue dans deux populations compte plusieurs fois, un réseau commun additionne leurs adresses.'}));
   }
 
   // --- enregistreur : rejoue les instantanés enregistrés, un pas = un instantané, par rejouerPaysage seulement. La liste est figée à

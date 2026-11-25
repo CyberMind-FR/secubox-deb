@@ -9,6 +9,8 @@ secubox-datascope (0.3.0-1~trixie1) trixie; urgency=medium
     recule sur les relevés complets des 24 dernières heures (12 lectures au plus).
   * Copies identiques testées : pouls.js (secubox-hub), carte-monde.js
     (carte.js de secubox-live).
+  * Relecture : rayon exact en relecture, pas de pouls sur un relevé périmé ou en
+    panne, traces jamais comptées 0, plafonds des réseaux dits.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 14:00:00 +0100
 

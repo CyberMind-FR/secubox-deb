@@ -623,9 +623,16 @@ def test_carte_arrondis_et_tranches():
     r = _carte("""
       var e=estimerCarte([{id:'pop:a',type:'population',metriques:{adresses:3}}].concat(['US','GB','CA'].map(c=>({id:'pays:'+c,type:'pays'}))),
         [['US',34],['GB',34],['CA',34]].map(x=>({de:'pop:a',vers:'pays:'+x[0],type:'ORIGINE',poids:x[1]})),null);
-      var E=7200*1000+60,l=tranchesCarte([{ts:'x',epoch:E-7200},{ts:'y',epoch:E-7300},{ts:'p',epoch:E-100,partiel:true},{ts:'z',epoch:E-90000},{ts:'f',epoch:E+5},null],E);
+      var E=7200*1000+60,l=tranchesCarte([{ts:'x',epoch:E-7200},{ts:'y',epoch:E-7300},{ts:'p',epoch:E-100,partiel:true},{ts:'z',epoch:E-90000},{ts:'w',epoch:E-86401},{ts:'f',epoch:E+5},null],E);
       process.stdout.write(JSON.stringify([e.reste,e.attribue,l.map(x=>x&&x.ts),placePays({FR:[0,0]},'constructor'),placePays({FR:[0,0]},'FR'),placePays(undefined,'FR')]));""")
     assert r[0] == 0 and r[1] == 3  # parts arrondies au-dessus de 100 : le reste n'est jamais négatif
     # x et le relevé partiel p ferment la tranche d'avant (x gardé, p écarté), y celle d'encore avant ; z a plus de 24 h
     assert r[2] == [None] * 10 + ["y", "x"]
     assert r[3] is None and r[4] == [60, 30] and r[5] is None
+
+
+def test_carte_textes_de_la_relecture():
+    s = _script()
+    for t in ("cinq réseaux au plus par population", "compte plusieurs fois", "valeurs intermédiaires interpolées"):
+        assert t in s, t
+    assert ".topoPan.rejeu .cMonde .pt .r{transition:none}" in _page()

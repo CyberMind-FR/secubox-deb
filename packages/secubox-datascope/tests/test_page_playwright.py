@@ -1929,3 +1929,92 @@ def test_carte_compteurs_visibles_avec_le_menu_lateral(partiel):
         return a, pg.evaluate("Math.ceil(document.getElementById('pBarre').getBoundingClientRect().bottom)"), pg.evaluate("document.getElementById('pEnreg').getBoundingClientRect().top") - y
     r = _navigateur(sc, query="", api=api, largeur=1280, hauteur=900)
     assert r[0] <= 900 and r[1] <= 900, r
+
+
+# --- relecture de la vue Carte (I1, I2, M1, M2, M3) ----------------------------------------------------------
+
+def test_carte_rayon_exact_a_x16():
+    """En relecture, le rayon calculé est tout de suite celui du relevé nommé : aucune valeur intermédiaire."""
+    _, api, ent = _avec_pays()
+
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.wait_for_function("window.TERRE && __t.c.version > 0")
+        pg.mouse.move(2, 2)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(400)
+        pg.evaluate("""() => { window.ecarts = []; const lire = () => { const x = document.querySelector("#topo .pt[data-id='pays:US'] .r");
+            if (x && __t.p.rejoue && __t.p.ts === __t.p.rejoue.instantane.ts) { const e = __t.est().pays.find(y => y.code === 'US');
+              ecarts.push([__t.p.ts, Math.abs(parseFloat(getComputedStyle(x).r) - __t.r(e.n, __t.k()))]); } requestAnimationFrame(lire); }; lire(); }""")
+        pg.click("#eV16")
+        pg.click("#eLire")
+        pg.wait_for_timeout(1500)
+        return pg.evaluate("ecarts")
+    l = _navigateur(sc, query="", api=api, largeur=1280, crochet="{E:Enregistreur,p:paysage,c:carte,est:estimerAffiche,r:rayonPays,k:echelleCarte}")
+    assert len({ts for ts, _ in l}) >= 3 and max(e for _, e in l) < .01, max(e for _, e in l)
+
+
+@pytest.mark.parametrize("cas", ["perime", "echec", "panne", "sain"])
+def test_carte_pouls_jamais_direct_sur_un_releve_douteux(cas):
+    d, api, ent = _avec_pays()
+    if cas == "perime":
+        d["age_s"] = 9000.0
+    if cas == "panne":
+        api["sources"] = (200, {"sources": [{"source": "paysage", "etat": "inaccessible", "motif": "droit refusé", "vu_le": None}]})
+
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.mouse.move(2, 2)
+        pg.wait_for_function("window.SbxPouls && __t.c.version > 0")
+        pg.wait_for_timeout(200)
+        if cas == "echec":
+            api["paysage"] = (500, {})
+            pg.click("#rafraichir")
+            pg.wait_for_timeout(500)
+        return pg.evaluate(C_ETAT), pg.inner_text("#topo .cQuand")
+    e, quand = _navigateur(sc, query="", api=api, crochet="{c:carte}")
+    if cas == "sain":
+        assert e["pouls"] == 1 and "relevé de " in quand and "direct" not in quand
+    else:
+        assert e["pouls"] == 0 and quand == ""
+
+
+def test_carte_premier_clic_depuis_le_paysage_garde_les_lectures():
+    _, api, ent = _avec_pays()
+
+    def sc(pg):
+        lents = []
+        pg.route("**/carte-monde.js", lents.append)
+        pg.click("#vuePaysage")
+        pg.wait_for_function("__t.p.chrono.rep")
+        pg.evaluate("window.avortes = 0; void (AbortController.prototype.abort = (f => function () { avortes++; return f.call(this); })(AbortController.prototype.abort))")
+        pg.route("**/paysage/instantane/**", lambda x: (time.sleep(.15), x.fallback())[1])
+        pg.click("#vueCarte")
+        pg.wait_for_function("__t.c.ctl")
+        lents[0].fulfill(path=str(PAGE.parent / "carte-monde.js"))
+        pg.wait_for_function("window.TERRE")
+        pg.wait_for_function("__t.c.version > 0", timeout=8000)
+        return pg.evaluate("[avortes, Object.keys(__t.c.pays).length, !!document.querySelector('#topo .terre')]")
+    a, n, terre = _navigateur(sc, query="", api=api, crochet="{p:paysage,c:carte}")
+    assert a == 0 and n > 3 and terre
+
+
+def test_carte_fiche_sans_reseau_et_trace():
+    d, api, ent = _avec_pays()
+    g = d["instantane"]["graphe"]
+    g["aretes"] = [x for x in g["aretes"] if x["type"] != "SOURCE_DE"]
+    for x in g["aretes"]:
+        if x["vers"] == "pays:VN":
+            x["poids"] = 0
+
+    def sc(pg):
+        pg.click("#vueCarte")
+        pg.mouse.move(2, 2)
+        pg.wait_for_function("window.SbxPouls && __t.c.version > 0")
+        v = pg.inner_text("#topo .cP[data-id='pays:VN'] .v"), pg.evaluate("(__t.m(__t.est()) || []).map(x => x.code)")
+        pg.click("#topo .cP[data-id='pays:VN']")
+        pg.wait_for_timeout(200)
+        return v, pg.inner_text("#insp"), pg.eval_on_selector("#topo .cP[data-id='pays:VN'] svg", "x => x.lastElementChild.getAttribute('class')")
+    (v, codes), insp, derniere = _navigateur(sc, query="", api=api, crochet="{c:carte,m:paysMesures,est:estimerAffiche}")
+    assert v == "moins de 1 %" and "VN" not in codes and "US" in codes and derniere == "t"
+    assert "aucun réseau rendu (non mesuré)" in insp and "moins de 1 % adresses" not in insp
