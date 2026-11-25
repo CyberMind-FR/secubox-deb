@@ -1,3 +1,19 @@
+secubox-datascope (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Vue « Carte » (#3921, #3945) : origine géographique estimée des populations
+    (adresses × part), liste des pays avec mini-série de 24 h, fiche d'un pays
+    (populations et leurs réseaux), au clavier et au doigt. Estimation
+    incomplète dite : trois pays au plus par population ; reste, populations
+    sans origine ou repliées comptés ; pays non rendu = non mesuré, jamais 0.
+  * L'enregistreur pilote la carte ; en direct et au repos, pouls.js (#3945)
+    recule sur les relevés complets des 24 dernières heures (12 lectures au plus).
+  * Copies identiques testées : pouls.js (secubox-hub), carte-monde.js
+    (carte.js de secubox-live).
+  * Relecture : rayon exact en relecture, pas de pouls sur un relevé périmé ou en
+    panne, traces jamais comptées 0, plafonds des réseaux dits.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 14:00:00 +0100
+
 secubox-datascope (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Vue « Paysage » (#3921) : graphe des menaces tiré du relevé des populations

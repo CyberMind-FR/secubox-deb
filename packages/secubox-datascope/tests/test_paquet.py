@@ -131,13 +131,13 @@ def test_control():
     assert "Architecture: all" in c
     assert "python3-fastapi" in c and "python3-uvicorn" in c and "secubox-core" in c
     assert _lire("debian/compat").strip() == "13"
-    assert _lire("debian/changelog").startswith("secubox-datascope (0.2.0-1~trixie1) trixie;")
+    assert _lire("debian/changelog").startswith("secubox-datascope (0.3.0-1~trixie1) trixie;")
 
 
 def test_health_sans_jeton():
     r = TestClient(main.app).get("/api/v1/datascope/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "module": "datascope", "version": "0.2.0"}
+    assert r.json() == {"status": "ok", "module": "datascope", "version": "0.3.0"}
 
 
 def _gardes(chemin):
@@ -218,7 +218,8 @@ def test_rules_installe_migration_paysage_et_reperes(tmp_path):
                        cwd=RACINE, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert (dest / "usr/lib/secubox/datascope/migrations/0002-paysage.sql").is_file()
-    assert (dest / "usr/share/secubox/www/datascope/reperes.js").is_file()
+    for f in ("reperes.js", "pouls.js", "carte-monde.js"):
+        assert (dest / "usr/share/secubox/www/datascope" / f).is_file(), f
     assert (dest / "usr/share/secubox/www/datascope/index.html").is_file()
 
 
@@ -232,7 +233,17 @@ def test_readme_documente_le_paysage():
 
 def test_changelog_020():
     c = _lire("debian/changelog")
-    tete = c.split("\n\nsecubox-datascope (0.1.1", 1)[0]
+    tete = c.split("\n\nsecubox-datascope (0.1.1", 1)[0].split("secubox-datascope (0.2.0", 1)[1]
     for attendu in ("#3921", "AppArmor", "setfacl", "0002-paysage", "instantané"):
         assert attendu in tete, attendu
     assert "closes" not in tete.lower() and "fixes #" not in tete.lower()
+
+
+def test_changelog_030_et_readme_carte():
+    tete = _lire("debian/changelog").split("secubox-datascope (0.2.0", 1)[0]
+    for attendu in ("Carte", "#3921", "#3945", "trois pays"):
+        assert attendu in tete, attendu
+    assert "closes" not in tete.lower() and "fixes #" not in tete.lower()
+    r = _lire("README.md")
+    for attendu in ("Vue « Carte »", "pouls.js", "carte-monde.js", "trois premiers pays", "jamais 0"):
+        assert attendu in r, attendu

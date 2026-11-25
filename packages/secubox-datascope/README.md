@@ -21,7 +21,7 @@ locales — appareils du NAC, débits des interfaces, santé des modules — et 
 
 | Route | Garde | Réponse |
 |---|---|---|
-| `GET health` | publique | `{"status": "ok", "module": "datascope", "version": "0.1.0"}` |
+| `GET health` | publique | `{"status": "ok", "module": "datascope", "version": "0.3.0"}` |
 | `GET status` | `require_lecture` | `{"module", "base": "ok"\|"absente", "derniere_passe"}` |
 | `GET overview` | `require_lecture` | `overview.json` + `perime` (`verifie_le`, à défaut `genere_le`, > 180 s) ; cache absent ou corrompu : `{"disponible": false, "motif"}` |
 | `GET sources` | `require_lecture` | état des curseurs (`source`, `etat`, `motif`, `vu_le` ; l'empreinte n'est jamais rendue) |
@@ -55,6 +55,23 @@ tendance par population, une synthèse et un fil des changements accompagnent le
 instantané à chaque **nouveau** relevé ; l'**Enregistreur** rejoue l'historique (lecture, pause, pas, vitesses
 ×1/×4/×16, fenêtre 48 h ou 30 j, comparaison 24 h, 7 j ou date) avec badges apparu, disparu, hausse, baisse et
 fantômes. Toutes les routes sont en lecture seule, gardées par `require_jwt`, base ouverte en `mode=ro`.
+
+### Vue « Carte » (0.3.0, #3921, #3945)
+
+Même instantané et même enregistreur que le Paysage, vus par pays. Valeur d'un pays = somme, sur les populations, de
+`adresses × part` (arêtes `ORIGINE`). C'est une **estimation incomplète**, et la page l'écrit :
+
+- le relevé ne donne que les **trois premiers pays** de chaque population, en parts entières ; le reste (autres pays, en
+  nombre inconnu, ou adresses non localisées) est compté à part ; une part arrondie à 0 s'affiche « moins de 1 % » ;
+- un pays non rendu est **non mesuré, jamais 0** ; il peut entrer (✚) ou sortir (✖) du relevé sans avoir changé ;
+- populations sans origine, populations repliées et pays sans position sur la carte sont comptés et nommés ;
+- le relevé ne relie aucun réseau à un pays : la fiche d'un pays liste ses populations, puis les réseaux de ces
+  populations, tous pays confondus.
+
+L'enregistreur pilote la carte. En direct et au repos seulement (rien de choisi, relevé complet), `pouls.js` la fait reculer sur
+les relevés complets des 24 dernières heures (un par tranche de 2 h, soit 12 `GET paysage/instantane/{ts}` au plus, un à la
+fois, une fois chacun) ; `prefers-reduced-motion` : rien ne bouge. `pouls.js` (secubox-hub) et `carte-monde.js` (`carte.js` de
+secubox-live) sont des copies identiques, vérifiées par test ; absents, la liste des pays reste complète.
 
 ### Routes du paysage
 
@@ -114,4 +131,4 @@ instantané reste affiché) jusqu'au relevé suivant, soit 30 min au plus ; il s
 
 Un instantané toutes les 30 min : la lecture d'un événement plus fin n'est pas possible. L'historique est court au
 début (rien avant la mise en place de 0.2.0) ; les compteurs et l'enregistreur disent « historique non chargé » ou
-« non mesuré » plutôt que d'inventer. La vue Carte arrive en 0.3.0.
+« non mesuré » plutôt que d'inventer.

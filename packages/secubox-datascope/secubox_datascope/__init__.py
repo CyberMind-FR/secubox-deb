@@ -4,4 +4,4 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox DataScope (#3853) : cockpit réseau en lecture seule, graphe d'entités et de relations observées."""
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"

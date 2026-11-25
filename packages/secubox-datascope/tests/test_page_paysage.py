@@ -418,7 +418,7 @@ def test_echap_limite_au_graphe_et_a_l_inspecteur():
 
 def test_requetes_bornees():
     c = _fonction("chargeChronologie")
-    assert "document.hidden" in c and "vue!=='paysage'" in c and "P_RELECTURE_MS" in c
+    assert "document.hidden" in c and "!menace()" in c and "P_RELECTURE_MS" in c
     t = _fonction("chargeTendance")
     assert "ficheVisible()" in t and "P_RELECTURE_MS" in t and "P_TENDANCES_MAX" in t
 
@@ -577,3 +577,62 @@ def test_noeud_deduit_d_un_compte_masque():
         "propre", "typeId", "noeudDeduit"))) + "\nprocess.stdout.write(JSON.stringify(['cible:compte:ger',"
               "'cible:compte:_b_.0a1b2c3d','cible:compte.test','cible:a.test'].map(function(i){return noeudDeduit(i).libelle;})));")
     assert r == ["ger…", "_b_…", "compte.test", "a.test"]
+
+
+# --- vue « Carte » (tâche 7b, #3921, #3945) ------------------------------------------------------------------
+
+CARTE_REF = {"pouls.js": DS.parent / "secubox-hub/www/shared/pouls.js", "carte-monde.js": DS.parent / "secubox-live/www/live/carte.js"}
+
+
+@pytest.mark.parametrize("nom", sorted(CARTE_REF))
+def test_carte_copies_identiques(nom):
+    assert (PAGE.parent / nom).read_bytes() == CARTE_REF[nom].read_bytes()
+
+
+def test_carte_presente_et_sans_html():
+    s, v = _script(), _entre("// --- vue Carte", "// --- enregistreur : rejoue")
+    assert 'id="vueCarte"' in _page() and "function rendreCarte(box,instantane,difference)" in v
+    for interdit in ("innerHTML", "outerHTML", "insertAdjacentHTML", "foreignObject", "setInterval", "fetch("):
+        assert interdit not in v, interdit
+    for dit in ("estimation incomplète : trois pays au plus par population", "en nombre inconnu", "jamais zéro", "non mesuré"):
+        assert dit in v, dit
+    assert "v==='carte'?'carte':" in s and "function menace()" in s
+
+
+def _carte(corps):
+    return _node("function nombre(v){return String(v);}" + _entre("// <carte-pure>", "// </carte-pure>") + corps)
+
+
+def test_carte_estimation_honnete():
+    r = _carte("""
+      var pop=(i,a)=>({id:'pop:'+i,type:'population',metriques:a===undefined?{}:{adresses:a}}),pays=c=>({id:'pays:'+c,type:'pays',libelle:c}),
+        o=(p,c,w)=>({de:'pop:'+p,vers:'pays:'+c,type:'ORIGINE',poids:w});
+      var N=[pop('a',1000),pop('b',200),pop('c',50),pop('d',0),pop('e',100),'US GB CA FR CH'.split(' ').map(pays)].flat().concat([{id:'autres:populations',type:'autres',metriques:{repliees:2}}]);
+      var A=[o('a','US',50),o('a','GB',10),o('a','CA',0),o('b','US',25),o('d','FR',80),o('e','CH',-3),o('e','US','9'),o('a','ZZ',10),{de:'pop:b',vers:'pays:us',type:'ORIGINE',poids:3}];
+      var r=estimerCarte(N,A,{adresses:1500});r.t=r.pays.map(texteEstim);process.stdout.write(JSON.stringify(r));""")
+    p = {x["code"]: x for x in r["pays"]}
+    assert [x["code"] for x in r["pays"]] == ["US", "GB", "CA", "FR"]  # ZZ n'a pas de nœud, CH n'a qu'une part aberrante
+    assert p["US"]["n"] == 550 and p["GB"]["n"] == 100 and p["FR"]["n"] is None  # adresses non mesurées : jamais 0
+    assert r["t"] == ["≈ 550", "≈ 100", "moins de 1 %", "non mesuré"]
+    assert r["base"] == 1350 and r["reste"] == 400 + 150 and r["attribue"] == 650
+    assert r["sans"] == 2 and r["sansAdresses"] == 150 and r["tronquees"] == 1
+    assert r["repliees"] == 2 and r["repliAdresses"] == 150
+
+
+def test_carte_arrondis_et_tranches():
+    r = _carte("""
+      var e=estimerCarte([{id:'pop:a',type:'population',metriques:{adresses:3}}].concat(['US','GB','CA'].map(c=>({id:'pays:'+c,type:'pays'}))),
+        [['US',34],['GB',34],['CA',34]].map(x=>({de:'pop:a',vers:'pays:'+x[0],type:'ORIGINE',poids:x[1]})),null);
+      var E=7200*1000+60,l=tranchesCarte([{ts:'x',epoch:E-7200},{ts:'y',epoch:E-7300},{ts:'p',epoch:E-100,partiel:true},{ts:'z',epoch:E-90000},{ts:'w',epoch:E-86401},{ts:'f',epoch:E+5},null],E);
+      process.stdout.write(JSON.stringify([e.reste,e.attribue,l.map(x=>x&&x.ts),placePays({FR:[0,0]},'constructor'),placePays({FR:[0,0]},'FR'),placePays(undefined,'FR')]));""")
+    assert r[0] == 0 and r[1] == 3  # parts arrondies au-dessus de 100 : le reste n'est jamais négatif
+    # x et le relevé partiel p ferment la tranche d'avant (x gardé, p écarté), y celle d'encore avant ; z a plus de 24 h
+    assert r[2] == [None] * 10 + ["y", "x"]
+    assert r[3] is None and r[4] == [60, 30] and r[5] is None
+
+
+def test_carte_textes_de_la_relecture():
+    s = _script()
+    for t in ("cinq réseaux au plus par population", "compte plusieurs fois", "valeurs intermédiaires interpolées"):
+        assert t in s, t
+    assert ".topoPan.rejeu .cMonde .pt .r{transition:none}" in _page()

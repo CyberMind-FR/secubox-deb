@@ -36,7 +36,7 @@ pertinent » ; **paysage** au centre ; état actuel **et** évolution ; historiq
 **Non-buts**
 - Aucune action depuis le graphe (DataScope reste en lecture seule : liens vers Actor, garde, WAF, NAC).
 - Pas de renseignement externe non relié à une observation locale (pas de base mondiale de groupes APT).
-- Pas de carte du monde (le Radar a déjà tranché : un classement se lit plus juste).
+- ~~Pas de carte du monde~~ (le Radar a déjà tranché : un classement se lit plus juste) — levé par R8 (demande du propriétaire du 2026-11-25) : vue Carte estimée, tâche 7b du plan.
 - Pas de nouvelle base de vulnérabilités : les CVE viennent du module existant `secubox-security-posture/composants/cve-triage`
   (CLI `secubox-cvectl`), via le champ `cves` des populations (#3919).
 - Pas de synthèse IA dans ce lot (elle recréerait la dépendance gk2 → gk3 écartée en §3) : synthèse déterministe seule.
@@ -146,7 +146,7 @@ Retenu parce que la donnée existe déjà et que le lien est observé :
 - **Leurres** (`leurre:*`) comme cibles distinctes : montrent ce que les scanners croient trouver.
 - **Bans** : épaisseur ou anneau sur la population = part bannie ; le verdict reste dans la page WAF.
 
-Écarté : pays en nœuds dépliés par défaut, groupes APT nommés, carte du monde, géolocalisation fine.
+Écarté : pays en nœuds dépliés par défaut, groupes APT nommés, géolocalisation fine. La carte du monde, d'abord écartée, est livrée en vue « Carte » (R8, tâche 7b du plan).
 
 ## 5. Contraintes
 
