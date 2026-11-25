@@ -137,18 +137,16 @@ def test_sources_des_bans_et_rotations_ouvertes_en_lecture():
     assert "/var/lib/secubox/waf/bans.jsonl" in acl and "waf-threats.log.*.gz" in acl
 
 
-def test_section_comprendre_et_infobulles():
+def test_section_en_clair_garde_toutes_les_nuances():
     html = lire("www/live/index.html")
-    sec = re.search(r'<details class="carte comprendre" id="comprendre" open>(.*?)</details>', html, re.S)
-    assert sec and "Comprendre ces chiffres" in sec.group(1)
-    for terme in ("Requêtes", "Menaces", "Bloquées", "Bans", "Bans actifs", "Pourquoi ces chiffres diffèrent",
-                  "Vie privée", "Historique"):
-        assert "<dt>" + terme + "</dt>" in sec.group(1), terme
-    assert "4 h (le cas le plus courant)" in sec.group(1) and "levé automatiquement" in sec.group(1)
-    assert html.index('id="comprendre"') < html.index('class="rangee"') and html.index('class="tuiles"') < html.index('id="comprendre"')
-    tuiles = re.findall(r'<div class="tuile"( title="[^"]+")?>', html)
-    assert len(tuiles) == 5 and all(tuiles), "une tuile sans infobulle"
-    legende = re.search(r'<p class="legende">(.*?)</p>', html, re.S).group(1)
-    assert legende.count("title=") >= 5 and "non mesuré" in legende
-    js = lire("www/live/live.js")
-    assert "innerHTML" not in js and "outerHTML" not in js and "insertAdjacentHTML" not in js
+    sec = html[html.index("En clair</h2>"):html.index("</main>")]
+    for nuance in ("notées sans être bloquées", "bruit de fond normal d’Internet", "n’atteint jamais le site",
+                   "1 h, 4 h (le cas le plus courant), 24 h, et 7 jours", "relâchée toute seule", "Aucune liste noire définitive",
+                   "pas pénalisée durablement", "des centaines de fois avant d’être bannie", "même plus comptée",
+                   "Aucune adresse IP n’est publiée", "Les pays sont déduits des adresses", "se limitent à leur état technique",
+                   "ne sont pas mesurés", "n’ont pas été conservés", "Ce n’est pas un zéro"):
+        assert nuance in sec, nuance
+    tuiles = re.findall(r'<div class="billet"( data-b="[^"]+")?>', html)
+    assert len(tuiles) == 5 and all(tuiles), "un billet sans infobulle"
+    assert "jour non mesuré, ce n'est pas un zéro" in html
+    assert html.count("<h1>") == 1
