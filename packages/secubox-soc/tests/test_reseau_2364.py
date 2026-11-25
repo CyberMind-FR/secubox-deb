@@ -24,5 +24,5 @@ def test_demo_annoncee_et_hauteur_postee():
 
 def test_l_onglet_est_juste_apres_guardian():
     i0, i1 = SOC.index('id="t0"'), SOC.index('id="tn"')
-    assert i0 < i1 < SOC.index('id="tm"'), "Réseau en direct vient avant le groupe Pare-feu"
+    assert i0 < i1 < SOC.index('id="twaf"'), "Réseau en direct vient avant le groupe Pare-feu"
     assert 'data-vue="reseau.html?embed=1"' in SOC

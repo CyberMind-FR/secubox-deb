@@ -83,6 +83,9 @@ func agentDe(c Capture) string {
 // Dialogue tient l'échange propre au service et rend la capture. Les services
 // sans dialogue connu retombent sur Echange (une bannière, une trame).
 func Dialogue(conn net.Conn, service string) (c Capture) {
+	if servicesMessagerie[service] {
+		return Capture{} // #3924 : jamais de capture sur un service de messagerie
+	}
 	_ = conn.SetDeadline(time.Now().Add(premierOctetEcheance))
 	defer func() { c.Agent = agentDe(c) }()
 	switch service {

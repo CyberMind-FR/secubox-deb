@@ -259,6 +259,6 @@ def test_exception_rules_code_ecrite():
 
 
 def test_depend_de_security_posture_270():
-    # La route appelle `secubox-cvectl filtres-ia` (et son sudoers) apparus dans secubox-security-posture 2.7.0.
+    # `secubox-cvectl filtres-ia` (et son sudoers) date de secubox-security-posture 2.7.0 ; la borne a monté depuis.
     control = (COMPOSANT.parents[1] / "debian" / "control").read_text()
-    assert "secubox-security-posture (>= 2.7.0~)" in control
+    assert "secubox-security-posture (>= 2.8.1~)" in control

@@ -1,3 +1,114 @@
+secubox-waf-ng (1.45.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : détecteur de campagnes à rotation web (ref #3919), actif en
+    « propose » (--rotation propose --rotation-verdict differe) : campagnes
+    établies, comptées et écrites dans rotation-etat.json et l'audit, aucun
+    ban ni ligne de menace. « auto » : décision du propriétaire. Un seul
+    processus le porte (verrou rotation-etat.json.verrou).
+  * sbxwaf --rotation-rejeu : rejeu hors ligne sur des journaux nginx.
+  * Une vue de code de la forge (/x/y/src/branch/…/a.js) est une page, pas
+    une preuve de navigateur.
+  * AppArmor : verrou du détecteur, liste des sorties Tor de secubox-ipblock.
+  * Indices partagés : famille « rotation » neutre, jamais envoyée aux pairs.
+  * Un verdict de rotation ne remplace pas au journal un ban au moins aussi
+    long d'une autre famille (réévaluation, gradation).
+  * Bans (ref #3930) : « nft create element » d'abord, l'ensemble n'est lu
+    que si l'élément existe (0,7 s par ban à 60 000 éléments, sous le verrou
+    de pose) ; une adresse n'attend qu'une fois.
+  * wafctl unban <ip> <fin_max> n'écrit plus d'unban au journal de sbxwaf :
+    un retour arrière (ai-ban, indices, garde) ne lève que son propre ban.
+    Les retours arrière de la garde passent fin_max ; « Débannir » reste une
+    levée entière.
+  * Fin de repose : seul un unban écrit au journal retire un élément posé par
+    la passe, jamais une échéance ni un journal illisible.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 20:00:00 +0100
+
+secubox-waf-ng (1.44.3-1~trixie1) trixie; urgency=medium
+
+  * Page Modes : leurres de messagerie d'authwatch (ref #3924). submission,
+    imap et pop3 réglables, « observer » tant que « bannir » n'est pas
+    écrit ; smtp, smtps, imaps et pop3s toujours en observation. Les autres
+    leurres ne changent pas (absent = bannir).
+  * Populations : auth_imap* rejoint la famille « messagerie », comme dans
+    reseau.Famille (agrégats gardés recalculés). sbx-actord : service pop3
+    connu. Les lignes de gravité audit des leurres de messagerie (compte
+    réel, mode observer) ne comptent pas comme attaquants.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 18:00:00 +0100
+
+secubox-waf-ng (1.44.2-1~trixie1) trixie; urgency=high
+
+  * Repose des bans (ref #3930) : à 10 000 bans, un « nft add element » et un
+    DNS inverse par adresse duraient des heures ; l'état n'était plus publié
+    (page « waf_arrete ») et la table n'était plus réparée. Désormais par lots
+    de 1 000 (nft -f -), sans DNS, et seulement les bans manquants (un ajout
+    sur un élément présent change son échéance depuis le noyau 6.12). Un lot
+    refusé est recoupé jusqu'à l'élément fautif. 50 000 bans : 52 exécutions.
+  * Veille : état écrit toutes les 30 s quoi que fasse nft, table recréée même
+    pendant une repose. Champs ajoutés à nft-etat.json : repose_en_cours,
+    derniere_repose, bans_attendus, bans_poses.
+  * Démarrage : l'écoute n'attend pas la repose plus de 3 s ; le contrôle des
+    compteurs ne lit plus les éléments ; un seul « list set » à la fois.
+  * Robots vérifiés : libérés en arrière-plan à 5 vérifications/s et 20 min par
+    passe (démarrage, puis chaque heure), réseaux des moteurs d'abord ; une
+    panne DNS est retentée à chaque passe, un robot connu n'est plus chassé de la mémoire.
+  * wafctl unban : écrit l'unban au journal de sbxwaf avant le retrait nft
+    (la ré-affirmation remettait le ban en 2 min) ; nouveau verbe
+    unban-liste <fichier> (root seul). Un ban levé pendant une repose est
+    retiré en fin de passe ; le compactage garde les lignes écrites pendant
+    le rename ; une adresse n'a qu'une clé au journal.
+  * Un nouveau ban ne raccourcit plus un ban en place (échéance la plus
+    tardive). Ensemble nft illisible : second essai, puis famille sautée,
+    jamais de repose à l'aveugle. nft-etat.json : nft_fige.
+  * Journal des bans : index suivi au fil du fichier au lieu d'une relecture
+    complète toutes les 30 s.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 17:30:00 +0100
+
+secubox-waf-ng (1.44.1-1~trixie1) trixie; urgency=medium
+
+  * Relevé des populations (ref #3919) : toutes les 30 min au lieu de 10
+    (68 à 107 s de processeur par passe sur gk2), agrégats des journaux
+    tournés et recherches GeoIP gardés dans
+    /var/lib/secubox/waf/populations-agregats, lignes hors sujet écartées
+    sans décodage ; une rotation pendant la passe ne compte plus deux fois
+    un journal. Réserve 2770 au groupe secubox-waf, fichiers 0640,
+    contenu contrôlé à la lecture. La classe d'un réseau est celle du catalogue du jour.
+  * secubox-actord : MemoryHigh=450M, MemoryMax=512M (cache de pages des
+    bases) ; liste des pages libres écrite à l'arrêt propre, l'ouverture ne
+    parcourt plus les bases (3 Go lus, API fermée 10 min sur gk2).
+  * secubox-waf-ng.service : un fichier qui disparaît pendant la remise des
+    droits de /var/lib/secubox/waf n'empêche plus le WAF de démarrer.
+  * Catalogue : 33 fournisseurs d'accès, 6 hébergeurs de plus.
+  * Campagnes d'actord : « ports (balayage) » au lieu de « ports:N », à
+    défaut d'hôte seulement.
+  * Page Campagnes : celles sans alerte récente en lignes repliées ; âge du
+    relevé, légende de rotation et conclusion du recouvrement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 15:10:00 +0100
+
+secubox-waf-ng (1.44.0-1~trixie1) trixie; urgency=medium
+
+  * Populations d'attaquants, lot 1 (ref #3919), sans détecteur de rotation.
+  * sbxwaf : asn, asn_org et reseau_classe sur chaque alerte et dans
+    l'enveloppe d'actord (--geoip-asn, --reseaux-classes) ; catalogue des
+    classes de réseau reseaux-classes.toml, surcharge de l'opérateur dans
+    /etc/secubox/waf. Le profil AppArmor lit ces deux fichiers, et le
+    postinst le recharge même sans apparmor-utils.
+  * API : relevé des populations sur 7 jours, calculé toutes les 10 min par
+    un processus à part, servi par GET /api/v1/waf/populations (dépendance
+    python3-maxminddb).
+  * sbx-actord : campagnes enrichies (famille, cibles, classes, pays,
+    rotation) ; parts calculées sur les seules adresses vues depuis 48 h,
+    absentes si aucune ne l'est. ExecReload (SIGHUP) recharge la base ASN.
+    ACL de traversée de /etc/secubox/waf pour secubox-actord (acl). L'ASN
+    ne sert qu'aux vues : il n'entre pas dans la corrélation, donc aucune
+    mesure ni aucun ban automatique ne change.
+  * Page Actor : liste des campagnes en cartes lisibles.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:15:00 +0100
+
 secubox-waf-ng (1.43.7-1~trixie1) trixie; urgency=medium
 
   * waf-rules 1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h. Environ

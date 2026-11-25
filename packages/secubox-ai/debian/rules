@@ -42,6 +42,7 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/secubox-ai-demandes.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-demandes.service
 	# Page /ai/ (racine statique du vhost d'administration) et entrée de menu.
 	install -D -m 0644 www/ai/index.html debian/secubox-ai/usr/share/secubox/www/ai/index.html
+	install -D -m 0644 www/ai/reperes.js debian/secubox-ai/usr/share/secubox/www/ai/reperes.js
 	install -d debian/secubox-ai/usr/share/secubox/menu.d
 	cp -r menu.d/. debian/secubox-ai/usr/share/secubox/menu.d/
 	# Modèle de configuration, copié dans /etc/secubox/ai.toml au premier passage seulement (postinst).

@@ -235,7 +235,8 @@ def test_critere_indisponible_jamais_zero(client, tmp_path):
         _menace(3000, category="leurre_redirige", action="leurre_redirige", servies=30),
         _menace(200, category="leurre_redirige", action="leurre_redirige", servies=7),
         _menace(100, action="detect"), _menace(90, action="detect", client_ip="local"),
-        _menace(80, action="warning"), _menace(JOUR + 5, action="detect")])
+        _menace(80, action="warning"), _menace(JOUR + 5, action="detect"),
+        _menace(70, category="rotation:0a1b2c3d", action="detect"), _menace(60, category=None, action="warning")])
     phases.vider()
     assert _status(client)["phases"]["p3"]["critere"] == {"rediriges_24h": 37, "tentatives_valides_24h": 1}
     # résumé des indices douteux (écriture de groupe), périmé ou du futur : indisponible

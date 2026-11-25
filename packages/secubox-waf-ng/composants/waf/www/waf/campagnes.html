@@ -11,7 +11,8 @@
   DONNÉES RÉELLES UNIQUEMENT (API du WAF, lues en session) :
     /campaigns  → signature, outil, attaquants[], nb_attaquants, sondes, haute_valeur, exemple_sequence[] ;
     /alerts     → recoupées par adresse pour dater, situer (cible, pays, catégories, gravité) chaque campagne ;
-    /bans       → adresses effectivement bannies (nft).
+    /bans       → adresses effectivement bannies (nft) ;
+    /populations → populations d'attaquants sur 7 jours (#3919), en tête de page : cartes de cartes-campagnes.js, repères de reperes.js.
   Le corrélateur ne date ni ne situe ses campagnes : ces champs viennent du recoupement avec les alertes récentes et
   se disent « — » quand le recoupement ne trouve rien. Une mesure absente s'affiche « — », jamais 0.
   `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
@@ -83,6 +84,35 @@
   @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}svg.donut{width:100px;height:100px}}
   @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.5fr 1fr} .g2{grid-template-columns:1fr 1fr} .cartes{grid-template-columns:repeat(3,1fr)}}
   @container a (max-width:599px){svg.frise text{font-size:15px}svg.frise text.nom{font-size:16px}}
+  /* Campagnes et populations (#3919) : une carte par population, maquette validée le 24/11, jetons de la page ; pas de panneau autour, la carte prend la largeur. */
+  .pops{display:grid;gap:8px;min-width:0}
+  .rcamp{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start;font-size:.82rem;min-width:0}
+  .popc{border:1px solid var(--trait);border-radius:12px;padding:12px 14px;background:rgba(10,22,46,.6);display:flex;flex-direction:column;gap:8px;min-width:0}
+  .popc header{display:flex;justify-content:space-between;align-items:baseline;gap:6px 10px;flex-wrap:wrap} .popc h3{margin:0;font-size:.98rem;font-weight:700;overflow-wrap:anywhere;min-width:0}
+  .popl{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+  .rcamp .puce{background:rgba(86,150,255,.12);border:0;border-radius:999px;padding:2px 10px;font-size:.76rem;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .rcamp .puce.etat{font-weight:600;background:transparent;border:1px solid currentColor} .rcamp .puce.rot{color:var(--orange)} .rcamp .puce.ban{color:var(--rouge)} .rcamp .puce.obs{color:var(--cyan)} .rcamp .puce.ina{color:var(--faible)}
+  .rcamp p{margin:0} .popchif{color:var(--texte)} .popchif span{color:var(--doux)}
+  .popbarre{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;background:var(--trait)} .popbarre span{display:block;height:100%;background:var(--faible)}
+  .popbarre .c-proxy_loue{background:var(--orange)} .popbarre .c-hebergeur{background:var(--bleu)} .popbarre .c-acces{background:var(--vert)} .popbarre .c-mobile_partage{background:var(--violet)}
+  .popbarre .c-cdn{background:var(--jaune)} .popbarre .c-relais_vie_privee{background:var(--doux)} .popbarre .c-scanner_recherche{background:var(--cyan)}
+  .poppied{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+  .popcible{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.76rem;color:var(--doux);min-width:0;overflow-wrap:anywhere}
+  .popserie{width:84px;height:32px;fill:var(--bleu);flex:none}
+  .rcamp summary{cursor:pointer;color:var(--doux);font-size:.78rem;padding:2px 0} .rcamp summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .popdet table{border-collapse:collapse;width:100%;font-size:.76rem;margin-top:6px}
+  .popdet th,.popdet td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(86,150,255,.15);vertical-align:top} .popdet td.o{overflow-wrap:anywhere} .popdet th{color:var(--doux);font-weight:500}
+  .popdet .n{text-align:right;font-variant-numeric:tabular-nums}
+  .popautres,.popautres[open]{min-width:0} .popautres .popc{margin-top:10px}
+  .poprec,.poprep,.popnr{font-size:.74rem;color:var(--doux)} .poprec{border-top:1px solid var(--trait);padding-top:8px}
+  .poppartiel{color:var(--orange);border:1px dashed currentColor;border-radius:8px;padding:6px 10px}
+  @container a (max-width:599px){.app{padding:8px} .popc{padding:10px} .popdet th,.popdet td{padding:4px 5px}}
+  @container a (min-width:1000px){.rcamp{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .rcamp>:not(article){grid-column:1/-1}}
+  .campsans{grid-column:1/-1;min-width:0} .campsans summary{cursor:pointer;color:var(--doux);font-size:.82rem;padding:6px 0} .campsans summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .campsans ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+  .campsans li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;border-bottom:1px solid var(--trait);padding-bottom:6px;font-size:.78rem;min-width:0}
+  .campsans .seq{flex:1 1 260px;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,"IBM Plex Mono",monospace} .campsans .inf{color:var(--doux);font-variant-numeric:tabular-nums} .campsans code{color:var(--faible)}
+  body.emb .cadre{padding:2px}
   body.emb .cartes{grid-template-columns:1fr !important}
   body.emb .tuiles{grid-template-columns:repeat(2,1fr) !important}
   body.emb .grille{grid-template-columns:1fr !important}
@@ -95,6 +125,7 @@
   </div>
   <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <section class="pops"><div><h2>Campagnes et populations</h2><div class="sous">7 derniers jours · triées par activité des dernières 24 h · lecture seule</div></div><div id="populations" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
   <div><h2>Campagnes d’attaque</h2><div class="sous">Des adresses différentes, un même mode opératoire : mêmes sondes, même outil, corrélés à travers le temps.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="grille g1">
@@ -108,6 +139,8 @@
   </div>
   <div class="note" id="noteBas">Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.</div>
 </div></div>
+<script src="reperes.js"></script>
+<script src="cartes-campagnes.js"></script>
 <script>
 (function(){
   "use strict";
@@ -206,6 +239,15 @@
       +'<div class="ln"><span>Adresses</span><span class="puces">'+(ips||'—')+'</span></div>'
       +(c.seq.length?'<div class="ln"><span>Séquence</span><span class="seq">'+seq+'</span></div>':'')+'</div>';
   }
+  // Une campagne sans cible NI date (aucune alerte récente ne la recoupe) tient sur une ligne : ce que le corrélateur en
+  // sait, rien d'inventé. Les cartes complètes restent aux autres.
+  function sansAlerte(c){return c.first==null&&c.last==null&&!Object.keys(c.hosts).length;}
+  function ligneSansAlerte(c){
+    var s=c.seq.slice(0,3).join(' → ')+(c.seq.length>3?' → …':'');
+    return '<li><span class="seq" title="'+esc(c.seq.join(' → '))+'">'+(s?esc(s):'séquence non relevée')+'</span>'
+      +'<span class="inf">'+(c.outil?esc(c.outil)+' · ':'')+fmt(c.n)+' adresse'+(c.n>1?'s':'')+' · bannies '+(c.bansConnus?fmt(c.nban)+'/'+fmt(c.n):'—')+'</span>'
+      +'<code title="Empreinte du mode opératoire">'+esc(c.sig.slice(0,8))+'</code></li>';
+  }
   var dernier=null;
   function rend(d){
     var now=d.now||Date.now();
@@ -245,9 +287,11 @@
     el('cibles').innerHTML=hl.length?barres(hl,'var(--rouge)'):'<div class="vide">'+(ok?'Aucune cible recoupée.':'Session requise.')+'</div>';
     // cartes
     el('cNote').textContent=ok&&L.length?L.length+' campagne'+(L.length>1?'s':'')+', par volume de sondes':'';
-    el('cartes').innerHTML=ok&&L.length?L.map(function(c){return carte(c,now);}).join(''):'<div class="vide">'+(!ok?'Session requise.':d.campaigns.available===false?'Le corrélateur n’est pas encore passé : aucune campagne à afficher.':'Aucune campagne détectée.')+'</div>';
+    var pleines=L.filter(function(c){return !sansAlerte(c);}),autres=L.filter(sansAlerte),ouvert=!!document.querySelector('#cartes .campsans[open]');
+    el('cartes').innerHTML=ok&&L.length?pleines.map(function(c){return carte(c,now);}).join('')
+      +(autres.length?'<details class="campsans"'+(ouvert?' open':'')+'><summary>Campagnes sans alerte récente ('+autres.length+')</summary><ul>'+autres.map(ligneSansAlerte).join('')+'</ul></details>':''):'<div class="vide">'+(!ok?'Session requise.':d.campaigns.available===false?'Le corrélateur n’est pas encore passé : aucune campagne à afficher.':'Aucune campagne détectée.')+'</div>';
     var nr=L.filter(function(c){return !c.evts;}).length;
-    el('noteBas').textContent='Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.'+(ok&&nr?' · '+nr+' campagne(s) sans alerte récente correspondante : dates, cible et pays « — ».':'')+(ok&&!d.bans?' · Bannissements indisponibles : état « bannie » non évalué.':'');
+    el('noteBas').textContent='Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.'+(ok&&nr?' · '+nr+' campagne(s) sans alerte récente correspondante : ni date, ni cible, ni pays.':'')+(ok&&!d.bans?' · Bannissements indisponibles : état « bannie » non évalué.':'');
     dernier=Date.now();
     el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   }
@@ -259,15 +303,33 @@
     ['103.27.8.2','103.27.8.19'].forEach(function(ip,i){mk(ip,(30+i*5)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');mk(ip,(44+i*4)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');});
     ['91.92.241.7','91.92.241.8','91.92.242.1'].forEach(function(ip,i){mk(ip,(2+i*2)*h,'rce.exec','api.secubox.in','RU','critical','banned');mk(ip,(9+i)*h,'unauthorized','api.secubox.in','RU','high','blocked');});
     return {demo:true,now:n,alerts:al,bans:[{ip:'57.141.0.17'},{ip:'57.141.0.57'},{ip:'91.92.241.7'}],
-      campaigns:{available:true,attaquants:12,campagnes:[
+      campaigns:{available:true,attaquants:17,campagnes:[
         {signature:'089b4a5e1234',outil:'sqlmap',attaquants:['57.141.0.17','57.141.0.57','57.141.3.58','57.141.3.42'],nb_attaquants:4,sondes:5273,haute_valeur:312,exemple_sequence:['GET /index.php?id=#','GET /login','POST /login','GET /.env','GET /admin']},
         {signature:'1392fa1c9876',outil:'nuclei',attaquants:['185.220.101.3','185.220.101.9','45.155.205.4'],nb_attaquants:3,sondes:2987,haute_valeur:40,exemple_sequence:['GET /','GET /.git/config','GET /wp-login.php','GET /phpmyadmin/']},
         {signature:'7be0c4d2aa10',outil:'webshell-dropper',attaquants:['91.92.241.7','91.92.241.8','91.92.242.1'],nb_attaquants:3,sondes:864,haute_valeur:211,exemple_sequence:['POST /upload.php','GET /shell.php?cmd=id','GET /cgi-bin/']},
-        {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']}]}};
+        {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']},
+        {signature:'5ad07c118b21',outil:'client-automatise?',attaquants:['203.0.113.4','203.0.113.5','203.0.113.6'],nb_attaquants:3,sondes:96,haute_valeur:0,exemple_sequence:['GET /wp-json/','GET /xmlrpc.php','GET /feed/','GET /sitemap.xml']},
+        {signature:'e0b1f4439d70',outil:'client-automatise?',attaquants:['198.51.100.8','198.51.100.9'],nb_attaquants:2,sondes:41,haute_valeur:0,exemple_sequence:['GET /api/status']}]}};
   }
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+  // ---- Populations (#3919) : lecture accessoire et discrète du relevé de fond (refait toutes les 30 min). Route absente ou refusée : « Relevé indisponible »,
+  // jamais le bandeau de session ; une relecture par minute au plus, toutes les deux minutes après un échec. Le rendu ne pose que du texte (cartes-campagnes.js).
+  var POP_LE=0,POP_PAUSE=55000,POP_CLE=null;
+  function rendPops(r){
+    var z=el('populations'),C=window.SbxCartes,R=window.SbxReperes;
+    if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
+    var k=C.cle(r);if(k===POP_CLE){C.majAge(z,r);return;}
+    POP_CLE=k;C.populations(document,R,z,r);
+  }
+  function chargePops(force){
+    if(q.get('demo')){if(window.SbxCartes) rendPops(window.SbxCartes.exemple(Math.floor(Date.now()/1000)-300));else rendPops(null);return;}
+    if(!force&&Date.now()-POP_LE<POP_PAUSE) return;
+    POP_LE=Date.now();
+    jget('/api/v1/waf/populations').then(function(r){POP_PAUSE=r?55000:115000;rendPops(r);});
+  }
+  // ---- Fin des populations
   function charge(){
     if(q.get('demo')){rend(demo());return;}
     var b='/api/v1/waf/';
@@ -280,8 +342,8 @@
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'campagnes'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);
   if(window.ResizeObserver) new ResizeObserver(hauteur).observe(el('cadre'));
-  el('rafraichir').addEventListener('click',charge);
-  charge();
-  if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible') charge();},30000);
+  el('rafraichir').addEventListener('click',function(){charge();chargePops(true);});
+  charge();chargePops(true);
+  if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible'){charge();chargePops(false);}},30000);
 })();
 </script>

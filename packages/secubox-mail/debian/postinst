@@ -102,8 +102,8 @@ if [ "$1" = "configure" ]; then
         systemctl enable --now secubox-mail-ssl-renew.timer >/dev/null 2>&1 || true
         # Autocrypt sortant (#1852) : table des clés PUBLIQUES de l'annuaire -> rspamd, toutes les heures.
         systemctl enable --now secubox-mail-autocrypt.timer >/dev/null 2>&1 || true
-        # Rapatriement des boîtes IMAP distantes (#3033) : sans boîte déclarée, la minuterie ne fait rien.
-        systemctl enable --now secubox-mail-imap-sync.timer >/dev/null 2>&1 || true
+        # Minuteries secubox-mail-imap-sync.timer (#3033) et secubox-mail-fenetre.timer (#3925) : laissées à dh_installsystemd (deb-systemd-helper), qui active
+        # à la première installation et respecte une désactivation voulue par l'administrateur lors des mises à jour.
         # Veille des services de courrier (#3842) : relance un Postfix/Dovecot/rspamd en échec, sinon unité en échec.
         systemctl enable --now secubox-mail-veille.timer >/dev/null 2>&1 || true
     fi

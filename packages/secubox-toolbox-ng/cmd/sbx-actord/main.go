@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/evidence"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/graph"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/store"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 func main() {
@@ -54,6 +56,11 @@ func main() {
 		propsPath  = flag.String("propositions", "", "fichier où publier les propositions de blocage (acteurs en DENY/QUARANTINE) ; vide = désactivé")
 		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
 		sinceDur   = flag.Duration("since", 0, "avec --replay : ne rejoue que les événements plus récents que cette durée")
+		geoipASN   = flag.String("geoip-asn", "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+			"base MaxMind des ASN, lue LOCALEMENT (\"\" = désactivée) : ASN des sources dont l'enveloppe n'en porte pas (#3919)")
+		reseauxClasses = flag.String("reseaux-classes",
+			"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
+			"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
 	)
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.LUTC)
@@ -63,6 +70,12 @@ func main() {
 		// une phase ultérieure et séparée (RFC-0013 §18) — refus explicite ici.
 		log.Fatal("actord: --shadow=false non supporté en Phase 0/1 (aucun enforcement livré)")
 	}
+
+	// #3919 : SIGHUP (ExecReload) est capté AVANT le rejeu, qui dure des dizaines de
+	// secondes : non capté, il arrête le démon, et systemd tient cet arrêt pour une
+	// sortie propre (Restart=on-failure ne relance pas). Le signal reste en file.
+	hupReseau := make(chan os.Signal, 1)
+	signal.Notify(hupReseau, syscall.SIGHUP)
 
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o750); err != nil {
 		log.Fatalf("actord: création du répertoire du store : %v", err)
@@ -79,6 +92,24 @@ func main() {
 	}
 	defer led.Close()
 
+	// #3919 : arrêt propre capté dès les bases ouvertes. Un SIGTERM pendant le rejeu
+	// attend sa fin puis sort par les `defer` : la liste des pages libres est écrite,
+	// et l'ouverture suivante ne parcourt pas toutes les bases.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// #3919 : annuaire de réseaux, ouvert AVANT le rejeu (qui remplit les
+	// fiches par source). Toujours ouvert : sans base ASN, le catalogue classe
+	// encore les ASN portés par les enveloppes.
+	var catalogues []string
+	for _, c := range strings.Split(*reseauxClasses, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			catalogues = append(catalogues, c)
+		}
+	}
+	ann := reseau.Ouvrir(*geoipASN, catalogues...)
+	defer ann.Close()
+
 	srv := &Server{
 		store:      st,
 		shadow:     *shadow,
@@ -86,8 +117,13 @@ func main() {
 		ledger:     led,
 		accum:      map[string]*actorSignals{},
 		rebuildMax: *rebuildMax,
+		annuaire:   ann,
 	}
 	srv.rebuild() // reconstruit le graphe en mémoire depuis les événements persistés
+	if ctx.Err() != nil {
+		log.Printf("actord: arrêt demandé pendant le rejeu")
+		return
+	}
 
 	// Mode calibration (RFC-0013 §13) : rejoue un journal puis quitte, sans
 	// ouvrir de socket ni décider quoi que ce soit.
@@ -131,9 +167,20 @@ func main() {
 	go srv.pruneLoop(*retention)
 	go srv.consolidationLoop()
 
-	// Arrêt propre.
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	// #3919 : annuaire rechargé au SIGHUP (capté dès le démarrage) et toutes les 24 h.
+	go func() {
+		tic := time.NewTicker(24 * time.Hour)
+		defer tic.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hupReseau:
+			case <-tic.C:
+			}
+			ann.Recharger()
+		}
+	}()
 	log.Printf("actord: démarré (db=%s, retention=%s, rejeu max=%d)", *dbPath, *retention, *rebuildMax)
 	<-ctx.Done()
 	log.Printf("actord: arrêt")
@@ -154,6 +201,7 @@ func (s *Server) pruneLoop(retention time.Duration) {
 	defer t.Stop()
 	for range t.C {
 		before := time.Now().Add(-retention).Unix()
+		s.purgerSources() // #3919 : rétention propre aux fiches par source (48 h)
 		if n := s.purgerMemoire(before); n > 0 {
 			log.Printf("actord: graphe — %d acteur(s) non vus depuis la retention retire(s)", n)
 		}

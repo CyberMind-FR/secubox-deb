@@ -1,3 +1,29 @@
+secubox-ai (2.3.2-1~trixie1) trixie; urgency=medium
+
+  * Corrélateur, dossiers et riposte : un verdict de rotation de gk2
+    (rotation:<8 hex>) n'est ni tentative, ni preuve, ni récidive ; un ban de
+    rotation échu n'est pas une sanction (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 17:30:00 +0100
+
+secubox-ai (2.3.1-1~trixie1) trixie; urgency=medium
+
+  * Radar, populations : âge du relevé (refait toutes les 30 min sur gk2),
+    pivot annoncé seulement là où il est vérifié, conclusion du recouvrement
+    au-delà de 1 % (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 15:10:00 +0100
+
+secubox-ai (2.3.0-1~trixie1) trixie; urgency=medium
+
+  * Radar : la liste « Campagnes » montre les populations d'attaquants
+    relevées sur gk2 (/waf/populations, secubox-waf-ng 1.44.0) : famille,
+    classes de réseau, pays, cible, série sur 7 jours, recouvrement. Relevé
+    absent : « relevé indisponible ». Ces données ne vont jamais au modèle
+    (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:15:00 +0100
+
 secubox-ai (2.2.1-1~trixie1) trixie; urgency=medium
 
   * Menaces : une source de gk2 en erreur (bans, campagnes, alertes) se lit

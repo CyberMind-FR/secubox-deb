@@ -39,6 +39,8 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --propositions /run/secubox/actord-propositions.json \
   --mesures /run/secubox/actord-mesures.json \
   --workers 1
+# #3919 : recharge la base ASN et les catalogues de classes de réseau (sans redémarrer ni rejouer).
+ExecReload=/bin/kill -HUP $MAINPID
 # --workers 1 (#3320) : bbolt n'admet qu'un ecrivain ; un second worker ne
 # faisait qu'attendre le verrou. Le worker unique ecrit par lots.
 # INGESTION : la socket /run/secubox/actord.sock doit appartenir au groupe
@@ -86,9 +88,14 @@ ReadWritePaths=/run/secubox
 # #3320 : le ramasse-miettes de Go se declenche avant le plafond (GOMEMLIMIT)
 # au lieu de laisser le noyau reprendre la memoire sous pression ; MemoryHigh
 # ralentit le service avant MemoryMax.
+# #3919 : CES PLAFONDS COMPTENT AUSSI LE CACHE DE PAGES des bases bbolt (projetees
+# en memoire, 1,28 Go sur gk2), reprenable par le noyau ; la memoire propre du
+# demon est de 7 Mo au repos. A 200M, l'ouverture relisait sans fin des pages
+# aussitot evincees : 3 Go lus, API fermee 10 min (a 900M : 1 min). 450M laisse de
+# quoi travailler ; la memoire propre reste bornee par GOMEMLIMIT, inchange.
 Environment=GOMEMLIMIT=180MiB GOGC=50
-MemoryHigh=200M
-MemoryMax=256M
+MemoryHigh=450M
+MemoryMax=512M
 TasksMax=64
 
 [Install]

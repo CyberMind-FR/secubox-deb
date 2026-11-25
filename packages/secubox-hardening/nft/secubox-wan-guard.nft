@@ -18,6 +18,10 @@
 # `nfproto ipv6` ci-dessous les ferment en IPv6. L'ouverture suppose eth2 déclarée de confiance (nft-input-trust.d,
 # cas de gk2) : sous la base en `policy drop` sans cette déclaration, ces ports restent fermés quoi qu'il arrive.
 #
+# #3924 : 110, 143 (leurres de messagerie permanents) et 18025, 18465, 18587, 18993, 18995 (ports locaux des leurres qui
+# remplacent le conteneur de courrier pendant son arrêt) sont fermés en IPv6 de même ; en IPv4, l'accès direct à ces
+# ports locaux est refusé par la table d'authwatch, qui n'accepte que sa redirection (secubox-leurres-mail.nft).
+#
 # Chargement idempotent : créer, vider, redéfinir.
 table inet secubox_wan_guard { }
 delete table inet secubox_wan_guard
@@ -35,7 +39,7 @@ table inet secubox_wan_guard {
 		type filter hook input priority filter - 10; policy accept;
 		iifname "eth2" tcp dport { 8088, 8404, 8880, 8900, 8910, 9080 } counter drop \
 			comment "backends fermes cote eth2 (#1306)"
-		iifname "eth2" meta nfproto ipv6 tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 } counter drop \
+		iifname "eth2" meta nfproto ipv6 tcp dport { 23, 110, 143, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 18025, 18465, 18587, 18993, 18995, 27017 } counter drop \
 			comment "leurres : IPv4 seulement (#3728)"
 		# SYN porteur de données (#3735) : une ouverture n'en porte pas (TCP Fast Open mis à part, inusité par les
 		# navigateurs) ; c'est la signature des réflexions par équipements intermédiaires et de floods de botnets.
@@ -60,7 +64,7 @@ table inet secubox_wan_guard {
 		# du maillage (7331, adresses privées) y reste ouverte : c'est ainsi qu'un nœud du LAN routé rejoint le maillage.
 		iifname "br-lan" tcp dport { 8088, 8404, 8880, 8900, 8910, 9080 } counter drop \
 			comment "backends fermes cote LAN route (#3206)"
-		iifname "br-lan" meta nfproto ipv6 tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 } counter drop \
+		iifname "br-lan" meta nfproto ipv6 tcp dport { 23, 110, 143, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 18025, 18465, 18587, 18993, 18995, 27017 } counter drop \
 			comment "leurres : IPv4 seulement (#3728)"
 		# SYN porteur de données (#3735) : une ouverture n'en porte pas (TCP Fast Open mis à part, inusité par les
 		# navigateurs) ; c'est la signature des réflexions par équipements intermédiaires et de floods de botnets.

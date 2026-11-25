@@ -26,11 +26,20 @@ type fauxNft struct {
 func (f *fauxNft) run(_ context.Context, args ...string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if j := joint(args); strings.HasPrefix(j, "get element") {
+		return []byte("Error: No such file or directory"), errors.New("absent") // pas compté : lecture
+	} else if strings.HasPrefix(j, "-j -s list set") {
+		return []byte(`{"nftables":[{"set":{"name":"x"}}]}`), nil
+	}
 	f.cmds = append(f.cmds, args)
 	if f.fail {
 		return []byte("Operation not permitted"), errors.New("nft fail")
 	}
 	return nil, nil
+}
+
+func (f *fauxNft) script(ctx context.Context, script []byte) ([]byte, error) {
+	return f.run(ctx, "-f", "-", string(script))
 }
 
 func (f *fauxNft) dernier() []string {
@@ -48,7 +57,7 @@ func banneurTest(t *testing.T, fx *fauxNft) *NftBanner {
 	t.Helper()
 	store := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
 	b := NewNftBanner("nft", "secubox", time.Hour, store)
-	b.runner = fx.run
+	b.runner, b.scripts = fx.run, fx.script
 	b.cooldown = time.Hour // fige le cooldown pour les tests
 	return b
 }
@@ -84,7 +93,7 @@ func TestNftBanner_EnsurePuisBan(t *testing.T) {
 
 	b.Ban("203.0.113.7", "host_anomaly:ip_literal", "high")
 	got := joint(fx.dernier())
-	if !strings.Contains(got, "add element inet secubox waf_ban") ||
+	if !strings.Contains(got, "create element inet secubox waf_ban") ||
 		!strings.Contains(got, "203.0.113.7 timeout 3600s") {
 		t.Fatalf("commande de ban inattendue: %q", got)
 	}
@@ -137,7 +146,7 @@ func TestNftBanner_ReloadReinjecte(t *testing.T) {
 	// nouveau banneur, même journal → Reload doit ré-injecter 2 éléments.
 	fx2 := &fauxNft{}
 	b2 := NewNftBanner("nft", "secubox", time.Hour, b.store)
-	b2.runner = fx2.run
+	b2.runner, b2.scripts = fx2.run, fx2.script
 	if n := b2.Reload(); n != 2 {
 		t.Fatalf("Reload attendait 2 ré-injections, obtenu %d", n)
 	}
@@ -243,11 +252,33 @@ func (k *noyauNft) run(_ context.Context, args ...string) ([]byte, error) {
 			return []byte("chain waf_drop {\n ip saddr @waf_ban counter drop\n}"), nil
 		}
 		return []byte("chain waf_drop {\n}"), nil
-	case strings.HasPrefix(j, "add element"):
+	case strings.HasPrefix(j, "get element"):
+		return []byte("Error: No such file or directory"), errors.New("exit status 1")
+	case strings.HasPrefix(j, "-j -s list set"):
 		if !k.table {
 			return k.absente, errors.New("exit status 1")
 		}
-		k.elems[args[5]] = true
+		return []byte(`{"nftables":[{"set":{"name":"x"}}]}`), nil
+	case strings.HasPrefix(j, "create element"):
+		if !k.table {
+			return k.absente, errors.New("exit status 1")
+		}
+		k.elems["{ "+strings.Fields(args[5])[1]+" }"] = true
+	}
+	return nil, nil
+}
+
+func (k *noyauNft) script(_ context.Context, script []byte) ([]byte, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if !k.table {
+		return k.absente, errors.New("exit status 1")
+	}
+	for _, l := range strings.Split(strings.TrimSpace(string(script)), "\n") {
+		elems := strings.Split(strings.Trim(l[strings.Index(l, "{"):], "{ }"), ", ")
+		for _, e := range elems {
+			k.elems["{ "+strings.Fields(e)[0]+" }"] = true
+		}
 	}
 	return nil, nil
 }
@@ -256,7 +287,7 @@ func banneurNoyau(t *testing.T, k *noyauNft) *NftBanner {
 	t.Helper()
 	store := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
 	b := NewNftBanner("nft", "secubox", time.Hour, store)
-	b.runner = k.run
+	b.runner, b.scripts = k.run, k.script
 	b.cooldown = time.Hour
 	if err := b.Ensure(); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -272,6 +303,7 @@ func TestNftBanner_BanApresFlushRepare(t *testing.T) {
 	k.flushRuleset()
 
 	b.Ban("203.0.113.20", "scanners", "high")
+	finRepose(b)
 	if !k.table || !k.regles {
 		t.Fatalf("la table et sa règle de drop devaient être recréées (table=%v règles=%v)", k.table, k.regles)
 	}
@@ -331,6 +363,7 @@ func TestNftBanner_RafaleUneSeuleReparation(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	finRepose(b)
 	if got := k.creees - avant; got != 1 {
 		t.Fatalf("une seule recréation attendue, obtenu %d", got)
 	}
@@ -344,7 +377,7 @@ func TestNftBanner_ReparerPasPret(t *testing.T) {
 	k := nouveauNoyau()
 	store := NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl"))
 	b := NewNftBanner("nft", "secubox", time.Hour, store)
-	b.runner = k.run
+	b.runner, b.scripts = k.run, k.script
 	if b.Reparer("test") || k.creees != 0 {
 		t.Fatal("un banneur non prêt ne doit pas créer de table")
 	}

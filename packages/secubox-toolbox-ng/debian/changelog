@@ -1,3 +1,46 @@
+secubox-toolbox-ng (0.20.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-authwatch : leurres de messagerie (ref #3924), ÉTEINTS par défaut
+    (SBX_MAIL_CONTENEUR dans /etc/default/secubox-authwatch, lu par
+    authwatch lui-même et seulement s'il est à root).
+    Pendant l'arrêt du conteneur de courrier, sondé toutes les 30 s
+    (--mail-sonde), une table nft propre à authwatch redirige 25, 465, 587,
+    993 et 995 vers des ports locaux ; la règle du site n'est pas touchée.
+    Il faut deux sondes ratées, un conteneur CONNU arrêté (cgroup, socket
+    LXC) et une configuration LXC portant bien l'adresse réglée. Une sonde réussie,
+    un conteneur qui démarre, l'arrêt et le plantage (ExecStopPost) la
+    retirent, et elle expire seule en trois périodes. 110 et 143 : leurres
+    permanents si rien d'autre n'y écoute. --simulation ne redirige rien.
+  * Port 25 : 421 dès la bannière, sans capture. 587, 143, 110 :
+    authentification en clair non annoncée, STARTTLS annoncé et refusé ;
+    seul le compte est lu, échecs tous temporaires. Aucun mot de passe
+    gardé, journalisé ni haché ; un compte ne s'affiche (masqué) que s'il
+    existe, et ne part jamais vers sbx-actord.
+  * Seul bannit un compte INEXISTANT, liste de comptes chargée et leurre
+    réglé « bannir » (défaut : observer). Le reste est une ligne « detect »
+    de gravité audit. 465, 993, 995 : adresse et cadence comptées par jour
+    dans /run/secubox-authwatch/leurres-mail.json (0600), jamais de ban.
+  * Lignes bornées : une par minute et par (adresse, leurre) avec le total,
+    60 `detect` par minute en tout ; compteurs du jour complets.
+  * Liste des comptes réels relue quand elle change.
+  * Unité : LimitCORE=0, UMask=0027.
+  * --leurres refuse les ports de messagerie, et identifiants.go n'y
+    capture jamais rien.
+  * Famille « messagerie » : auth_imap* s'ajoute à auth_smtp*.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 16:00:00 +0100
+
+secubox-toolbox-ng (0.19.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-authwatch : asn, asn_org, reseau_classe et identifiant de campagne
+    sur ses alertes (--geoip-asn, --reseaux-classes) ; état des campagnes par
+    compte visé, compte masqué, dans /run/secubox-authwatch/campagnes.json
+    (--campagnes-etat, RuntimeDirectory propre au service) (ref #3919).
+  * Paquet Go internal/reseau : annuaire ASN local et catalogue des classes
+    de réseau, partagé avec sbxwaf et sbx-actord (secubox-waf-ng 1.44.0).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 14:15:00 +0100
+
 secubox-toolbox-ng (0.18.2-1~trixie1) trixie; urgency=medium
 
   * sbxdpi : le snapshot disque stats.json (3,5 Mo sur gk2) s'écrit toutes

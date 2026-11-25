@@ -2,6 +2,11 @@
 %:
 	dh $@
 
+# La fenêtre de relance (#3925) peut tenir le conteneur éveillé plusieurs dizaines de minutes : une mise à jour du paquet
+# ne doit ni la redémarrer ni l'arrêter (-X : unité exclue de dh_installsystemd ; ses minuteries restent gérées).
+override_dh_installsystemd:
+	dh_installsystemd -Xsecubox-mail-fenetre.service
+
 override_dh_auto_install:
 	# API
 	install -d debian/secubox-mail/usr/lib/secubox/mail
@@ -98,6 +103,9 @@ override_dh_auto_install:
 	# Veille des services de courrier du conteneur (#3842).
 	install -m 644 debian/secubox-mail-veille.service debian/secubox-mail/usr/lib/systemd/system/
 	install -m 644 debian/secubox-mail-veille.timer debian/secubox-mail/usr/lib/systemd/system/
+	# Fenêtre de relance planifiée du conteneur mail (#3925).
+	install -m 644 debian/secubox-mail-fenetre.service debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-fenetre.timer debian/secubox-mail/usr/lib/systemd/system/
 	# Composant absorbé : smtp-relay (#2050)
 	install -d debian/secubox-mail/usr/lib/secubox/smtp-relay/
 	cp -r composants/smtp-relay/api debian/secubox-mail/usr/lib/secubox/smtp-relay/

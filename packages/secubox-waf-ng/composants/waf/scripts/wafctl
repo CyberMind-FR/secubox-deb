@@ -404,7 +404,8 @@ cmd_leurres_modes() {
 import json, os, sys, tempfile
 verbe, chemin = sys.argv[1], sys.argv[2]
 exec(sys.argv[3])
-SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql"}
+SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql",
+            "submission", "imap", "pop3"}  # messagerie (#3924), « observer » par défaut ; smtp, smtps, imaps, pop3s toujours
 def lire():
     try:
         with open(chemin, encoding="utf-8") as f:
@@ -1046,13 +1047,123 @@ cmd_indices_init() {
     _indices_ecrire init
 }
 
+# JOURNAL DES BANS (#3930). sbxwaf remet dans nft, toutes les 2 min, chaque ban de son journal qui y manque : un simple
+# `nft delete` se défaisait donc tout seul. Toute levée (sauf `unban <ip> <fin_max>`) écrit d'abord une ligne `unban` au journal, puis retire l'élément.
+#
+# Le dossier est inscriptible par secubox-waf et wafctl tourne en root : rien n'est créé, aucun lien n'est suivi, le
+# fichier doit être ordinaire, à un seul lien et à secubox-waf ; UNE écriture en O_APPEND (comme sbxwaf), donc ni mode ni
+# propriétaire touchés. Compactage horaire (nouveau fichier renommé) : si le chemin a changé d'inode après l'écriture, on
+# récrit ; si elle a précédé le rename, c'est sbxwaf qui recopie ce qui est arrivé entre-temps (recopierTardives).
+# Journal absent (sbxwaf n'a jamais rien banni) : rien à écrire. Journal présent mais douteux ou inscriptible : refus
+# (`refus:journal`), l'élément reste — une levée qui se déferait en 2 min serait un mensonge.
+BANS_JOURNAL="/var/lib/secubox/waf/bans.jsonl"
+BANS_PROPRIO="secubox-waf"
+
+# Adresse normalisée comme sbxwaf l'écrit (net/netip : IPv6 abrégée, IPv4 en ::ffff: ramenée à l'IPv4, pas de zone).
+# shellcheck disable=SC2016
+WAFCTL_PY_IP='
+import ipaddress
+INTERDITS = [ipaddress.ip_network(r) for r in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+    "::1/128", "fe80::/10", "fc00::/7", "::/128")]
+def normaliser(texte):
+    if "%" in texte:
+        return None
+    try:
+        a = ipaddress.ip_address(texte)
+    except ValueError:
+        return None
+    if a.version == 6 and a.ipv4_mapped is not None:
+        a = a.ipv4_mapped
+    if any(a.version == r.version and a in r for r in INTERDITS):
+        return None
+    return a
+'
+
+# _ip_levee <ip> — « <version> <adresse normalisée> », ou rend 1 (invalide ou privée).
+_ip_levee() {
+    python3 -I -c "$WAFCTL_PY_IP"'
+import sys
+a = normaliser(sys.argv[1])
+if a is None:
+    sys.exit(1)
+print(a.version, a)
+' "$1" 2>/dev/null
+}
+
+# _journal_unban <action> <détail> — adresses normalisées sur le descripteur 3, une par ligne : une ligne `unban` chacune,
+# d'un seul bloc, puis une ligne d'audit. Rend 1 (`refus:journal` sur stderr) si le journal existe et n'a pas pu l'être.
+_journal_unban() {
+    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$BANS_JOURNAL" "$BANS_PROPRIO" "$WAFCTL_PY_AUDIT" "$1" "$2" <<'PY'
+import errno, json, os, pwd, stat, sys, time
+chemin, proprio, preambule, action, detail = sys.argv[1:6]
+exec(preambule)
+adresses = [l for l in os.fdopen(3, "r", encoding="ascii").read().split("\n") if l]
+def refus(message):
+    auditer(action, "refus", f"{detail} : journal des bans : {message}", "local")
+    print(f"wafctl: journal des bans : {message}", file=sys.stderr)
+    print("refus:journal", file=sys.stderr)
+    sys.exit(1)
+maintenant = int(time.time())
+bloc = "".join(json.dumps({"ip": a, "cat": "levee:" + action, "sev": "info", "at": maintenant, "exp": 0,
+                           "action": "unban"}, separators=(",", ":")) + "\n" for a in adresses).encode("ascii")
+dossier, nom = os.path.split(chemin)
+try:
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+except FileNotFoundError:
+    dfd = None
+except OSError as e:
+    refus(os.strerror(e.errno))
+ecrit = False
+for _ in range(5 if dfd is not None else 0):
+    try:
+        fd = os.open(nom, os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except FileNotFoundError:
+        ecrit = True  # absent : rien n'est banni par le journal (le rename du compactage ne le fait jamais disparaître)
+        break
+    except OSError as e:
+        refus("lien symbolique" if e.errno == errno.ELOOP else os.strerror(e.errno))
+    try:
+        st = os.fstat(fd)
+        try:
+            uid = pwd.getpwnam(proprio).pw_uid
+        except KeyError:
+            refus(f"compte {proprio} inconnu")
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink > 1 or st.st_uid != uid:
+            refus("pas un fichier ordinaire de " + proprio)
+        # Une fin sans saut de ligne (écriture interrompue) ne doit pas avaler la première ligne.
+        tete = b"\n" if st.st_size and os.pread(fd, 1, st.st_size - 1) != b"\n" else b""
+        if os.write(fd, tete + bloc) != len(tete) + len(bloc):
+            refus("écriture partielle")
+        os.fsync(fd)
+        try:
+            ici = os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        if (ici.st_dev, ici.st_ino) == (st.st_dev, st.st_ino):
+            ecrit = True
+            break
+    except OSError as e:
+        refus(os.strerror(e.errno))
+    finally:
+        os.close(fd)
+if dfd is not None and not ecrit:
+    refus("remplacé sans cesse")
+auditer(action, "ok", detail, "local")
+PY
+}
+
 # `unban <ip> [fin_max]` : avec `fin_max` (levée d'ai-ban, revue finale #3723 I4), le ban n'est levé que si sa fin
 # réelle ne la dépasse pas (`refus:couvert` sinon : prolongé par SADE ou un autre) ; état illisible : `refus:etat`.
+# L'appelant y défait le ban qu'il a posé, pas celui de sbxwaf : rien au journal (#3930), un ban de sbxwaf plus court revient
+# à la ré-affirmation. Sans `fin_max`, levée entière voulue par l'opérateur : `unban` au journal d'abord.
 cmd_unban() {
     local ip="$1" fin_max="${2:-}" version reste
-    version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    reste=$(_ip_levee "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    read -r version ip <<< "$reste"
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
+    command -v nft >/dev/null 2>&1 || { error "nft introuvable"; return 1; }
     if [ -n "$fin_max" ]; then
         _fin_max_valide "$fin_max" || { error "Usage : wafctl unban <ip> [fin_max]"; return 1; }
         reste=$(_reste_element "$NFT_TABLE" "$ensemble" "$ip") || { printf 'refus:etat\n' >&2; return 1; }
@@ -1065,7 +1176,9 @@ cmd_unban() {
     # qu'elle ne soit plus bannie, et c'est deja le cas. Sous `set -e`, un
     # `nft delete` nu d'un element absent sortait en 1 AVANT ce constat (#3716) :
     # l'echec n'en est un que si l'element est TOUJOURS la apres le retrait.
-    command -v nft >/dev/null 2>&1 || { error "nft introuvable"; return 1; }
+    if [ -z "$fin_max" ]; then
+        _journal_unban waf-unban "$ip" 3<<< "$ip" || return 1
+    fi
     if ! nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null; then
         if nft get element inet "$NFT_TABLE" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
             error "nft a refusé le retrait de $ip"
@@ -1073,6 +1186,79 @@ cmd_unban() {
         fi
     fi
     log "unban $ip"
+}
+
+# cmd_unban_liste <fichier> — levée en nombre (root seul, hors sudoers) : une adresse par ligne, lignes vides et « # »
+# ignorées, adresses invalides ou privées comptées et sautées. Une seule écriture au journal, puis nft par lots de 1 000 :
+# ajout et retrait dans la même transaction, car retirer un élément absent ferait échouer tout le lot.
+UNBAN_LISTE_OCTETS=8388608
+UNBAN_LOT=1000
+
+_lot_unban() {
+    local ensemble="$1" ip ajout="" retrait=""
+    shift
+    [ "$#" -gt 0 ] || return 0
+    for ip in "$@"; do
+        ajout="${ajout:+$ajout, }$ip timeout 60s"
+        retrait="${retrait:+$retrait, }$ip"
+    done
+    printf 'add element inet %s %s { %s }\n' "$NFT_TABLE" "$ensemble" "$ajout"
+    printf 'delete element inet %s %s { %s }\n' "$NFT_TABLE" "$ensemble" "$retrait"
+}
+
+cmd_unban_liste() {
+    [ "$#" -eq 1 ] || { error "Usage : wafctl unban-liste <fichier>"; return 1; }
+    command -v nft >/dev/null 2>&1 || { error "nft introuvable"; return 1; }
+    local texte v4=() v6=() ip total echecs=0 i
+    texte=$(python3 -I -c "$WAFCTL_PY_IP"'
+import os, stat, sys
+chemin, maxi = sys.argv[1], int(sys.argv[2])
+try:
+    fd = os.open(chemin, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            raise OSError("pas un fichier ordinaire")
+        brut = f.read(maxi + 1)
+    if len(brut) > maxi:
+        raise OSError(f"plus de {maxi} octets")
+except OSError as e:
+    print(f"wafctl: {chemin} : {e}", file=sys.stderr)
+    sys.exit(1)
+vues, invalides = {}, 0
+for n, ligne in enumerate(brut.decode("utf-8", "replace").splitlines(), 1):
+    ligne = ligne.strip()
+    if not ligne or ligne.startswith("#"):
+        continue
+    a = normaliser(ligne)
+    if a is None:
+        invalides += 1
+        if invalides <= 20:
+            print(f"wafctl: ligne {n} : adresse invalide ou privée", file=sys.stderr)
+        continue
+    vues[a] = None
+print(invalides)
+for a in vues:
+    print(a)
+' "$1" "$UNBAN_LISTE_OCTETS") || return 1
+    local invalides="${texte%%$'\n'*}"
+    [ "$texte" != "$invalides" ] || { error "unban-liste : aucune adresse valide ($invalides invalide(s))"; return 1; }
+    texte="${texte#*$'\n'}"
+    while read -r ip; do
+        case "$ip" in *:*) v6+=("$ip") ;; *) v4+=("$ip") ;; esac
+    done <<< "$texte"
+    total=$(( ${#v4[@]} + ${#v6[@]} ))
+    _journal_unban waf-unban-liste "$total adresse(s), $invalides invalide(s), $1" 3<<< "$texte" || return 1
+    for (( i = 0; i < ${#v4[@]}; i += UNBAN_LOT )); do
+        _lot_unban waf_ban "${v4[@]:i:UNBAN_LOT}" | nft -f - 2>/dev/null || echecs=$(( echecs + 1 ))
+    done
+    for (( i = 0; i < ${#v6[@]}; i += UNBAN_LOT )); do
+        _lot_unban waf_ban6 "${v6[@]:i:UNBAN_LOT}" | nft -f - 2>/dev/null || echecs=$(( echecs + 1 ))
+    done
+    if [ "$echecs" -gt 0 ]; then
+        error "unban-liste : $total adresse(s) au journal, $echecs lot(s) refusé(s) par nft (encore bannis jusqu'à leur échéance)"
+        return 1
+    fi
+    log "unban-liste : $total adresse(s) levée(s), $invalides ligne(s) invalide(s)"
 }
 
 # cmd_ban_bloc / cmd_unban_bloc / cmd_blocs — bans de bloc /24 (#3716).
@@ -1333,6 +1519,7 @@ case "${1:-}" in
     indices-init) shift; cmd_indices_init "$@" ;;
     unban)      [ "$#" -le 3 ] || { error "Usage : wafctl unban <ip> [fin_max]"; exit 1; }
                 cmd_unban "${2:-}" "${3:-}" ;;
+    unban-liste) shift; cmd_unban_liste "$@" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;
     blocs)      shift; cmd_blocs "$@" ;;
@@ -1365,7 +1552,8 @@ Cache:
 
 Bans (garde waf-blocs : jamais le privé, une plage protégée, la box ni un pair):
   ban <ip> [durée]           Bannit une adresse (30m, 4h, 1d… ; 4h par défaut)
-  unban <ip>                 Retire le ban d'une adresse
+  unban <ip>                 Retire le ban d'une adresse (nft et journal de sbxwaf)
+  unban-liste <fichier>      Idem pour une adresse par ligne (root seul)
   ban-bloc <a.b.c.0/24> <durée>  Bannit un bloc /24 (1h à 7d), rejoué après un
                              rechargement du pare-feu (secubox-waf-blocs)
   unban-bloc <a.b.c.0/24>    Retire le ban d'un bloc

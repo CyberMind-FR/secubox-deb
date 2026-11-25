@@ -30,4 +30,6 @@ ExecStart=/usr/sbin/sbxwaf \
   --campagne-ban propose \
   --reevaluation propose \
   --mesures propose \
+  --rotation propose \
+  --rotation-verdict differe \
   --actor-ban-protegees 192.0.2.10/32

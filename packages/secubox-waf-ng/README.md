@@ -36,8 +36,9 @@ addons WAF. It shares an extracted core (`internal/forge`, `internal/httpcodec`,
   - Rollback: `"enabled": false` per category in `/etc/secubox/waf/waf-rules.json` (hot reload); with no active structural category nothing is captured. `waf-rules-sync` keeps that `false` across upgrades. The panel (`/php/signaux`, cached, flagged `perime` after 10 minutes) shows counts per family, rule, vhost and public address.
   - Known limits: IPv6 addresses are not grouped by /64 for the `nc-002` counter (4 096 IPs at most, so a /64 can fill it); Nextcloud chunking v1 (`/remote.php/dav/uploads/…` v1 layout) is not covered; `nc-004` is a false positive when a client logs in with its e-mail address (identifier different from the `<uid>`), accepted in `detect` and to be measured; `/php/signaux` reads only the current threat log and its `.1` rotation, not older `.N.gz` files. Roundcube `1.6.5+dfsg-1+deb12u12` stays vulnerable to 113386, 114720, 114724, 114725 and 114727: these signatures spot attacks, they do not fix them.
 - **Graduated ban** — sliding window (300 s / threshold 3) → WARNING then BAN, append-only threat log
-- **sbx-actord load (#3320, 1.33.0)** — in-memory actor graph pruned at the event retention; consolidation incremental through the index every 10 min; proposals recomputed every 90 s (file rewritten only when changed, at least every 5 min for sbxwaf freshness), measures kept at 30 s (event cache 25 s); `--workers` defaults to 1; a rejected batch is replayed event by event; ingestion and evidence ledger written in batches (≤ 256 events / 200 ms per transaction); prune in batches of 5 000 keys; bbolt `NoFreelistSync` + map freelist; unit: `--workers 1`, `GOMEMLIMIT=180MiB GOGC=50`, `MemoryHigh=200M` under `MemoryMax=256M`. The evidence ledger still has no retention (it is a proof): follow-up.
+- **sbx-actord load (#3320, 1.33.0)** — in-memory actor graph pruned at the event retention; consolidation incremental through the index every 10 min; proposals recomputed every 90 s (file rewritten only when changed, at least every 5 min for sbxwaf freshness), measures kept at 30 s (event cache 25 s); `--workers` defaults to 1; a rejected batch is replayed event by event; ingestion and evidence ledger written in batches (≤ 256 events / 200 ms per transaction); prune in batches of 5 000 keys; bbolt `NoFreelistSync` + map freelist; unit: `--workers 1`, `GOMEMLIMIT=180MiB GOGC=50`, `MemoryHigh=450M` under `MemoryMax=512M` (1.44.1: steady anonymous memory is ~7 MB, the rest is bbolt page cache, reclaimable; at 200M the 1.28 GB of bases kept being re-read at startup), free-page list written once on clean stop so the next start does not scan the whole bases (#3919). The evidence ledger still has no retention (it is a proof): follow-up.
 - **Native nftables bans** — `inet secubox` sets `waf_ban`/`waf_ban6` (4 h), decisions emitted to `sbx-actord` (campaigns, decoys); external blocking bridge removed (#1218)
+- **Campagnes et populations (#3919)** — `/waf/campagnes.html` ouvre sur une carte par population d'attaquants (`GET /api/v1/waf/populations`, relevé de fond de 7 jours) : état, types de réseau, pays, cible, 7 jours ; rendu partagé `cartes-campagnes.js` + `reperes.js` (textContent seul), relevé absent → « Relevé indisponible »
 - **RGPD cookie-audit** — per `Set-Cookie` JSONL, values SHA-256-hashed (raw value never stored)
 - **Media-cache** — 16 MB/obj, 2 GB total, per-vhost keyed, `Flusher` passthrough for progressive media
 - **Themed error pages** — 502/503/504 (Host HTML-escaped — no reflected XSS)
@@ -109,6 +110,8 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl unban <ip> [fin_max]` | #3930 : ligne `unban` au journal de sbxwaf (`bans.jsonl`, adresse normalisée) **avant** le retrait nft, sinon la ré-affirmation (2 min) remettait le ban ; journal présent mais lien, d'un autre compte ou non inscriptible : `refus:journal`, rien n'est levé ; audit `waf-unban`. Avec `fin_max` (ai-ban, indices, garde défont LEUR ban) : rien au journal ; un ban de sbxwaf plus court revient à la ré-affirmation |
+| `wafctl unban-liste <fichier>` | **root seul**, hors sudoers : une adresse par ligne (invalides comptées et sautées), une écriture au journal puis nft par lots de 1 000 ; audit `waf-unban-liste` |
 | `wafctl leurre <ip> <N>s` / `wafctl leurre-lever <ip>` | #3723 : redirection d'une adresse publique IPv4 ou IPv6 vers le théâtre de sbxwaf (1 h à 7 j, sinon `refus:duree`) : remplacement atomique de `/var/lib/secubox/waf/leurres-ip.json` sous verrou ; sortie `{"fin": <epoch>}` ou `refus:<motif>` (`plein` au-delà de 2 048) ; garde d'office ; sudoers `SBX_WAF_LEURRE` |
 | `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
 | `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
@@ -298,7 +301,7 @@ Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; appl
 vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
 `wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
 n'est jamais touché. `unban` : même garde (compte `garde`, portée `garde-ban`), audit `garde-unban` avant
-`wafctl unban` (chemin du retour arrière de l'ai-ban), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+`wafctl unban` sans `fin_max` (geste de l'administrateur : levée entière, écrite au journal de sbxwaf), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
 acceptées, comme pour l'ai-ban (banc et essais).
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
@@ -318,8 +321,8 @@ ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : ét
 `/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
 enregistrée.
 
-**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban et le relit au
-démarrage. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
+**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban (`wafctl unban`
+y ajoute les siennes, #3930) ; il le relit au démarrage et en ré-affirme toutes les 2 min les bans qui manquent à nft. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
 de `--ban-store-fenetre` (31 j d'office, jamais moins de 30 j : récidive leurre et campagne, plafond de chaîne de la
 réévaluation, vue `/enforcement`), le dernier état de chaque ban actif et toute chaîne de bans qui atteint la fenêtre ; le
 reste est ajouté à `bans-AAAAMM.jsonl.gz` (mois de `at`, gzip multi-membres, `zcat` le lit), archives purgées au-delà de
@@ -373,6 +376,7 @@ chemin SANS `/api/v1/waf`. gk3 appelle `https://<gk2>/api/v1/waf/menaces/flux?�
 | `GET /api/v1/waf/menaces/flux` | `/menaces/flux` | `depuis=<inode>:<octet>` (début de ligne, sinon 422), `max` 1–2000 (500) |
 | `GET /api/v1/waf/enforcement` | `/enforcement` | `depuis` époque 0–4102444800, `limite` 1–1000 (200), `statut` ∈ {`active`,`expired`,`released`} |
 | `GET /api/v1/waf/campaigns` | `/campaigns` | `limite` 1–1000 (20) |
+| `GET /api/v1/waf/populations` | `/populations` | — (#3919) |
 | `GET /api/v1/waf/mesures` | `/mesures` | `depuis` époque (0), `limite` 1–2000 (500) |
 | `GET /api/v1/waf/actord/propositions` | `/actord/propositions` | — |
 | `GET /api/v1/waf/alerts` | `/alerts` | `limit` 1–500 (50), `aggregate` |
@@ -408,6 +412,85 @@ groupe manque). `actord-lecture` est un groupe en **lecture seule** (créé par 
 `secubox-waf`, aucun fichier inscriptible par lui) : sbxwaf et l'API du WAF lisent ; sbx-actord n'entre jamais dans
 `secubox-waf` (écriture de `waf-threats.log`) et `secubox` jamais dans `actord-ingest`.
 Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
+
+## Populations d'attaquants (#3919, 1.44.0)
+
+**Réseau de chaque alerte** : sbxwaf (et sbx-authwatch) ajoute `asn`, `asn_org` et `reseau_classe` aux lignes de
+`waf-threats.log`, et l'ASN à l'enveloppe de sbx-actord. Lecture locale seule, jamais un appel réseau ; base absente :
+champs vides. Le réseau qualifie, il ne bannit jamais.
+
+| Option (sbxwaf, sbx-actord, sbx-authwatch) | Défaut |
+|---|---|
+| `--geoip-asn` | `/var/lib/GeoIP/GeoLite2-ASN.mmdb` (`""` = désactivé) |
+| `--reseaux-classes` | `/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml` |
+
+**Catalogue** : classes `acces`, `mobile_partage`, `hebergeur`, `proxy_loue`, `cdn`, `relais_vie_privee`,
+`scanner_recherche` ; un ASN absent est `inconnu`, jamais déduit du nom de l'opérateur. Surcharge de l'opérateur :
+`/etc/secubox/waf/reseaux-classes.toml` (0644), même format, gagne ASN par ASN. Rechargement : toutes les 24 h, ou
+`systemctl reload secubox-actord` et `systemctl kill -s HUP --kill-whom=main secubox-authwatch` (sbxwaf : au plus 12 h,
+son unité le recycle ; jamais de signal à la main, #2629).
+
+```toml
+[classes]
+hebergeur = [64496, 64497]
+```
+
+**Relevé** : toutes les 30 min, l'API lance `python3 -m api.populations` (compte `secubox`, `nice` 10, `ionice` best-effort 7, tué à 540 s, jamais deux à la fois) sur
+7 jours de `waf-threats.log*` ; cache `/var/lib/secubox/waf/populations.json` (0640), double tampon : une passe
+partielle n'écrase pas un relevé complet de moins d'une heure.
+Réserve `/var/lib/secubox/waf/populations-agregats/` (2770, groupe secubox-waf, fichiers 0640) : agrégat de chaque journal tourné, nommé par
+(st_dev, st_ino, taille, mtime), et réseau et pays des adresses déjà cherchées (valables tant que les bases GeoIP ne changent
+pas) ; jamais un compte en clair ; effaçable sans risque, elle se refait. Un relevé de 30 à 40 min est normal.
+`GET /api/v1/waf/populations` (`require_lecture_ai`) rend ce cache : `{"disponible": false}` s'il manque, sinon
+`disponible`, `age_s`, `genere_le`, `complet`, `manques`, `duree_s`, le recouvrement et `populations` (`id` stable,
+`famille`, `nom_cible`, `cibles`, `adresses` et `reseaux` (nombres), `classes`, `pays_top`, `une`, `le3`, `rotation`,
+`etat`, `bans`, `actives_24h`, `bannies_24h`, `premier`, `dernier`, `reseaux_top`, `serie` sur 7 jours, `cves`, `campagne_actord`).
+`etat` : `bannie` si la moitié au moins des adresses actives depuis 24 h ont été bannies depuis 24 h, sinon `observee`,
+`inactive` sans activité depuis 24 h. `rotation` d'une population de famille (`famille:…`) : 50 adresses, 80 % à trois
+tentatives ou moins, et une même cible pour la moitié des tentatives au moins. Jamais une adresse, un compte en clair ni un mot de
+passe. Sources facultatives, absentes sans erreur : `/run/secubox-authwatch/campagnes.json`,
+`/var/lib/secubox/waf/rotation-etat.json` (détecteur de rotation, ci-dessous), sbx-actord.
+
+**Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
+`classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
+(`sources` compte toutes les adresses) ; aucune : `classes`, `pays_top`, `une` et `le3` sont **absents**. `rotation`
+exige 50 adresses mesurées, dont 80 % à trois tentatives ou moins. Un service d'authwatch (`smtp`, `ssh`…, liste fermée)
+s'affiche, un compte reste masqué, un hôte qui est une adresse n'est pas retenu. **L'ASN ne sert qu'aux vues** : il n'entre
+pas dans la corrélation d'actord (`signatureDe`), donc ni dans la confiance, ni dans les mesures, ni dans les bans.
+
+**Droits** : `secubox-actord` traverse `/etc/secubox/waf` par une ACL nommée « x » (postinst), jamais par le groupe
+`secubox-waf`. **DataScope n'a pas accès à `populations.json` dans ce lot** : le remplacement atomique fait perdre une
+ACL de fichier, une ACL par défaut ouvrirait tous les fichiers à venir du dossier, et la traversée seule ouvrirait ses
+autres fichiers lisibles par tous. Accès à concevoir dans #3921 (copie publiée dans un dossier à part).
+
+### Détecteur de campagnes à rotation web (1.45.0)
+
+Une campagne à rotation fait tourner une même requête sur des milliers d'adresses louées, une à trois visites chacune : aucune
+ne franchit seule un seuil. sbxwaf la reconnaît à sa **signature** (navigateur déclaré exact, JA4, hôte) : 50 sources sans
+preuve de navigateur en 1 h, dont 80 % à trois pages ou moins et 60 % en `proxy_loue`/`hebergeur`. Sans base ASN : jamais.
+
+| Option | Livré | Sens |
+|---|---|---|
+| `--rotation` | `propose` | `off`, `propose` (tout est établi, compté, écrit ; **aucun ban, aucune ligne de menace**), `auto` |
+| `--rotation-verdict` | `differe` | `differe` : adresse jugée 10 s après une page servie, si aucune preuve (ressource, cookie, référent…) n'est venue d'elle, ni dans les 7 jours ; `immediat` |
+| `--rotation-etat` | `/var/lib/secubox/waf/rotation-etat.json` | état, verrou (`.verrou`) ; mémoire des navigateurs `rotation-navigateurs.bin` à côté (0640, condensés salés, 7 j) |
+| `--rotation-max-heure` | 1500 | verdicts par heure glissante |
+| `--rotation-sorties-tor` | `/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt` | jamais bannies ; illisible : `tor_garde: false` dans l'état |
+
+Seules les classes `proxy_loue` et `hebergeur` sont bannissables (24 h, `rotation:<8 hex>`) ; jamais une adresse privée ou
+protégée, un robot vérifié ou invérifiable, une sortie Tor, une source d'établissement. Passer en `auto` est une décision du
+propriétaire, à écrire dans l'unité **et** dans `conf/honeypot.conf` (miroir, testé). **Un seul processus** porte le détecteur :
+le verrou l'impose, un second sbxwaf le laisse désactivé et le dit dans son journal. Un verdict ne nourrit rien d'autre : ni actord,
+ni récidive, ni indices partagés, ni riposte de SecuBox AI, ni tentatives du SOC.
+
+**Rejeu hors ligne** (lecture seule, sans privilège, sans réseau ; rapport JSON sur la sortie) :
+
+```
+sbxwaf --rotation-rejeu [--rotation-rejeu-adresses] [--rotation-rejeu-sans-grace=false] copie/secubox-hosts.log*
+```
+
+Majorant (approximations dans le rapport). Ne pas donner `secubox-hosts.log` **et** les journaux par vhost : double compte.
+`suspects_faux_positifs` : seul `preuve_apres` informe ; `structurels` est nul par construction.
 
 ## Migration / cutover
 

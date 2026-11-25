@@ -31,10 +31,13 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reseau"
 )
 
 func main() {
@@ -68,6 +71,13 @@ func main() {
 			"nombre de sources distinctes visant un même compte établissant une campagne (0 = désactivé)")
 		campFen = flag.Duration("campagne-fenetre", time.Hour,
 			"fenêtre d'observation des campagnes par compte visé")
+		geoipASN = flag.String("geoip-asn", "/var/lib/GeoIP/GeoLite2-ASN.mmdb",
+			"base MaxMind des ASN, lue LOCALEMENT (\"\" = désactivée) : réseau de la source sur chaque alerte (#3919)")
+		reseauxClasses = flag.String("reseaux-classes",
+			"/usr/share/secubox/waf/reseaux-classes.toml,/etc/secubox/waf/reseaux-classes.toml",
+			"catalogues de classes de réseaux, séparés par des virgules ; le dernier gagne ASN par ASN (#3919)")
+		campEtat = flag.String("campagnes-etat", "/run/secubox-authwatch/campagnes.json",
+			"état des campagnes par compte visé, écrit toutes les 60 s par renommage atomique (\"\" = désactivé)")
 		leurres = flag.String("leurres", "",
 			"ports leurres : `defaut` pour la liste connue, ou « 3389:rdp,5900:vnc »")
 		// #1290 — RÉGIME BANNIÈRE. Sans lui, le leurre accepte et ferme : on
@@ -86,6 +96,17 @@ func main() {
 		simule = flag.Bool("simulation", false, "détecter et journaliser sans jamais bannir")
 		modesF = flag.String("leurres-modes", "/etc/secubox/authwatch/leurres-modes.json",
 			"réglage observer|bannir par leurre (#3741), relu à chaud ; absent = tous bannissent")
+		mailConteneur = flag.String("mail-conteneur", "",
+			"adresse IPv4 du conteneur de courrier : pendant son arrêt, des leurres de messagerie "+
+				"répondent à sa place (#3924) ; 110 et 143 permanents (\"\" = désactivé)")
+		mailNom   = flag.String("mail-nom", "", "nom du conteneur de courrier (défaut : « mail »)")
+		mailLxc   = flag.String("mail-lxcpaths", "/data/lxc,/var/lib/lxc", "chemins LXC où chercher sa configuration")
+		reglagesF = flag.String("reglages", "/etc/default/secubox-authwatch",
+			"réglages de l'opérateur (SBX_MAIL_CONTENEUR, SBX_MAIL_NOM) ; ignorés si le fichier n'est pas à root seul en écriture")
+		mailSonde = flag.Duration("mail-sonde", 30*time.Second,
+			"période de la sonde du conteneur de courrier ; la redirection expire seule après trois périodes")
+		mailEtat = flag.String("mail-etat", "/run/secubox-authwatch/leurres-mail.json",
+			"état des leurres de messagerie et décompte des connexions TLS, root seul (\"\" = désactivé)")
 		sansGarde = flag.Bool("sans-verification-nft", false,
 			"démarrer même si aucune règle ne consulte l'ensemble (DANGEREUX : les bannissements seraient sans effet)")
 	)
@@ -163,6 +184,56 @@ func main() {
 		campagnes = NewCampagnes(*campFen, *campSeuil)
 	}
 	journalMenaces := NewJournalMenaces(*menaces)
+	journalMenaces.SetCampagnes(campagnes)
+
+	// #3919 : annuaire de réseaux, rechargé au SIGHUP et toutes les 24 h.
+	if *geoipASN != "" {
+		var catalogues []string
+		for _, c := range strings.Split(*reseauxClasses, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				catalogues = append(catalogues, c)
+			}
+		}
+		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		journalMenaces.SetReseau(ann)
+		defer ann.Close()
+		hupReseau := make(chan os.Signal, 1)
+		signal.Notify(hupReseau, syscall.SIGHUP)
+		go func() {
+			tic := time.NewTicker(24 * time.Hour)
+			defer tic.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-hupReseau:
+				case <-tic.C:
+				}
+				ann.Recharger()
+			}
+		}()
+	}
+
+	// #3919 : état des campagnes publié toutes les 60 s. Un répertoire non
+	// inscriptible se dit UNE fois et ne fait jamais tomber le service.
+	if campagnes != nil && *campEtat != "" {
+		go func() {
+			var dit bool
+			tic := time.NewTicker(60 * time.Second)
+			defer tic.Stop()
+			for {
+				if err := EcrireEtat(campagnes, *campEtat, time.Now()); err != nil && !dit {
+					dit = true
+					log.Printf("sbx-authwatch: état des campagnes non écrit (%s) : %v", *campEtat, err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-tic.C:
+				}
+			}
+		}()
+	}
 	signaux := make(chan Signal, 256)
 
 	// ── sources de journaux ────────────────────────────────────────────────
@@ -215,6 +286,66 @@ func main() {
 				log.Printf("sbx-authwatch: %v", err)
 			}
 		}(l)
+	}
+
+	// ── leurres de messagerie (#3924) ──────────────────────────────────────
+	// Une valeur invalide coupe CES leurres, jamais la surveillance.
+	finMail := make(chan struct{})
+	close(finMail)
+	reglages := lireReglages(*reglagesF, 0)
+	if *mailConteneur == "" {
+		*mailConteneur = reglages["SBX_MAIL_CONTENEUR"]
+	}
+	if *mailNom == "" {
+		if *mailNom = reglages["SBX_MAIL_NOM"]; *mailNom == "" {
+			*mailNom = "mail"
+		}
+	}
+	if *mailConteneur != "" {
+		serveurMail := NewServeurMail(signaux, lb)
+		bascule, err := NewBasculeMail(*mailConteneur, *mailNom, listeNonVide(*mailLxc), *mailSonde, banneur, serveurMail)
+		if err != nil {
+			log.Printf("sbx-authwatch: leurres de messagerie désactivés — %v", err)
+		} else {
+			serveurMail.Permanents(ctx)
+			go func() {
+				tic := time.NewTicker(10 * time.Second)
+				defer tic.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-tic.C:
+						journalMenaces.mail.Vide(journalMenaces, time.Now(), false)
+					}
+				}
+			}()
+			if *simule {
+				log.Printf("sbx-authwatch: simulation — aucune redirection de messagerie")
+			} else {
+				finMail = make(chan struct{})
+				go func() { defer close(finMail); bascule.Boucle(ctx) }()
+			}
+			if *mailEtat != "" {
+				go func() {
+					var dit bool
+					tic := time.NewTicker(60 * time.Second)
+					defer tic.Stop()
+					for {
+						if err := bascule.EcrireEtat(serveurMail, journalMenaces.mail, *mailEtat, time.Now()); err != nil && !dit {
+							dit = true
+							log.Printf("sbx-authwatch: état des leurres de messagerie non écrit (%s) : %v", *mailEtat, err)
+						}
+						select {
+						case <-ctx.Done():
+							return
+						case <-tic.C:
+						}
+					}
+				}()
+			}
+			log.Printf("sbx-authwatch: leurres de messagerie armés (conteneur %s, sonde %s)", *mailConteneur, *mailSonde)
+		}
 	}
 
 	log.Printf("sbx-authwatch: seuil %d sur %s, campagne à %d sources sur %s, ban %s, "+
@@ -270,6 +401,8 @@ func main() {
 	}
 
 	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule, acteur)
+	journalMenaces.mail.Vide(journalMenaces, time.Now(), true)
+	<-finMail // la redirection de messagerie est retirée avant de sortir
 	log.Printf("sbx-authwatch: arrêt")
 }
 
@@ -300,6 +433,10 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 				}
 				appliquer(ctx, sig, 1, banneur, journal, simule)
 				acteur.Emet(sig, !simule) // signal certain : sanction, sauf simulation
+				continue
+			}
+			if sig.LeurreMail != "" {
+				traiteMail(ctx, sig, comptes, banneur, journal, simule, acteur)
 				continue
 			}
 			// Tout signal retenu nourrit le graphe, sanctionné ou non : observer
@@ -343,6 +480,32 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 	}
 }
 
+// graviteAudit : gravité neutre (aucun corrélateur ne tient l'adresse pour hostile).
+const graviteAudit = "audit"
+
+// traiteMail décide d'un signal de leurre de messagerie (#3924). UN SEUL cas
+// bannit : leurre réglé « bannir », liste de comptes chargée, compte lisible et
+// inexistant. Tout le reste — compte réel, liste absente, compte illisible, mode
+// observer — est une ligne « detect » de gravité neutre, sans compteur, sans
+// campagne et sans émission vers sbx-actord.
+func traiteMail(ctx context.Context, sig Signal, comptes *Comptes, banneur *Banneur,
+	journal *JournalMenaces, simule bool, acteur *Acteur) {
+	inexistant := comptes.Inexistant(sig.Cible)
+	sig.CompteReel = comptes.Charge() && sig.Cible != "" && !inexistant
+	sig.Severite = graviteAudit
+	if !inexistant || !modesLeurres.BannitMail(sig.LeurreMail) {
+		journal.mail.Detecte(journal, sig, time.Now())
+		return
+	}
+	if !journal.mail.Bannit(sig, time.Now()) {
+		return
+	}
+	sig.Severite = "high"
+	sig.Detail += " — compte inexistant"
+	appliquer(ctx, sig, 1, banneur, journal, simule)
+	acteur.Emet(sig, !simule)
+}
+
 func appliquer(ctx context.Context, sig Signal, total int,
 	banneur *Banneur, journal *JournalMenaces, simule bool) {
 	if simule {
@@ -361,6 +524,16 @@ func appliquer(ctx context.Context, sig Signal, total int,
 	}
 	journal.Inscrit(sig, "banned", total)
 	log.Printf("sbx-authwatch: BAN %s ← %s (%s, total %d)", sig.IP, sig.Categorie, sig.Detail, total)
+}
+
+// listeNonVide découpe une liste à virgules.
+func listeNonVide(s string) (out []string) {
+	for _, x := range strings.Split(s, ",") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // analyseSources traduit « hote,mail:/chemin » en sources.
