@@ -1,3 +1,21 @@
+secubox-live (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Refonte de la page publique (ref #3933, maquette validée) : ville des
+    boîtiers, billets, carte attaques / visiteurs, portes, dernière heure,
+    atelier, histoire, « En clair ». Nuit par défaut, jour au bouton (choix
+    retenu par le navigateur). Relevé mis à jour en place, sans perdre le
+    focus, l infobulle, la carte choisie ni le défilement ; relevé ancien ou
+    injoignable dit à l écran ; un boîtier hors ligne n affiche aucun chiffre.
+  * Polices Unbounded et JetBrains Mono hébergées ici (OFL, latin, woff2
+    variables, licences jointes) ; CSP : font-src self, rien d intégré ni
+    d externe ; live.css et live.js appelés avec la version du paquet.
+  * Mise à jour : un vhost déjà exposé est rendu de nouveau (nginx -t avant le
+    rechargement, précédent remis en place en cas d échec) ; une box non
+    exposée le reste. Relance manuelle de l exposeur : un vhost déjà servi n
+    est plus retiré si nginx refuse le nouveau.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 06:00:00 +0100
+
 secubox-live (0.1.8-1~trixie1) trixie; urgency=medium
 
   * Bans : identité de bans.jsonl lue sur le descripteur ouvert (fstat) ; sbxwaf
