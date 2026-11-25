@@ -1,3 +1,10 @@
+secubox-garde (0.3.13-1~trixie1) trixie; urgency=medium
+
+  * Menu : catégorie « wall », thème « bouclier » (charte ; « security »
+    n'apparaissait dans aucun groupe) (ref #3946).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 05:40:00 +0100
+
 secubox-garde (0.3.12-1~trixie1) trixie; urgency=medium
 
   * Levée d'une décision qui tient plusieurs adresses d'une même MAC en UN geste
