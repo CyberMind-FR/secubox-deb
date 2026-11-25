@@ -1,3 +1,12 @@
+secubox-metrics (1.30.0-1~trixie1) trixie; urgency=medium
+
+  * Vue d'ensemble et sites : cartes vivantes (ref #3945), relevés successifs de
+    l'onglet, date écrite ; mémoire et charge reculent sur l'historique de 24 h ;
+    visites, requêtes et erreurs des sites sur leur série par jour. Composant
+    /shared/pouls.js de secubox-hub 1.13.0 ; absent, pages fixes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 12:00:00 +0100
+
 secubox-metrics (1.29.14-1~trixie1) trixie; urgency=medium
 
   * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni

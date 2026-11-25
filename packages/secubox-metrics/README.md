@@ -113,6 +113,13 @@ Un timer (`secubox-metrics-memoire.timer`, 5 min) ecrit `/var/lib/secubox/metric
 memoire disponible et le swap, en part de la RAM, et signale une croissance soutenue du noyau avant le seuil. Les alertes
 (`ALERTE memoire : ...`) vont au journal du service.
 
+## Graphiques vivants (1.30.0, #3945)
+
+Composant `/shared/pouls.js` (secubox-hub ≥ 1.13.0 ; absent, pages fixes). Vue d'ensemble : cartes attaques et visiteurs (relevés
+successifs de l'onglet, `sessionStorage`, 12 au plus, 3 h), mémoire et charge (un point réel par heure de `/memory/history`, puis la
+valeur affichée). Sites : carte des visites (relevés de l'onglet), visiteurs, requêtes et erreurs (série par jour : le total ne bouge
+pas, la date porte la valeur du jour). La carte du détail d'un site reste fixe : aucun historique par site et par relevé.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

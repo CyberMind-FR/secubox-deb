@@ -245,7 +245,11 @@
     const s = document.createElement('script'); s.src = '/shared/sidebar.js'; document.body.appendChild(s);
   }
 
-  // ── état ──
+  // Mesures vivantes (#3945) : composant partagé, relevés réels seulement ; absent, la page reste fixe.
+  var VIE=null;
+  function vivre(){var P=window.SbxPouls;if(!P||!VIE)return;try{VIE(P);}catch(e){console.warn('pouls',e);}}
+  (function(){var j=document.createElement('script');j.src='/shared/pouls.js';j.onload=vivre;document.head.appendChild(j);})();
+    // ── état ──
   let per = 'semaine', groupe = false, vue = null, certs = null, live = null, det = null, courant = null;
   let tri = 'requetes', sens = -1, filtre = '', recherche = '', toutAfficher = false, session = true;
 
@@ -440,7 +444,21 @@
     const vp = {}; vh.forEach(v=>(v.pays||[]).forEach(p=>{ vp[p.code] = (vp[p.code]||0)+num(p.n); }));
     const vl = Object.keys(vp).map(k=>({code:k,n:vp[k]}));
     el('mondeNote').textContent = ok ? 'visites · somme des 15 premiers pays de chaque site' : 'pays déduit de l’adresse';
+    const lu = Date.now()/1000, jourDit = j => 'le '+new Date(j+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+    VIE = P => {
+      const svg = el('mondeL'), pan = svg.closest('.pan'), L = {}, rangs = el('paysL').querySelectorAll('b');
+      const l = vl.map(p=>({code:String(p.code).toUpperCase(),n:num(p.n)})).sort((a,b)=>b.n-a.n), r = {t:lu, pays:l.slice(0,60)};
+      l.filter(p=>CENTRE[p.code]).slice(0,8).forEach((p,i)=>{ if(rangs[i]) L[p.code] = rangs[i]; });
+      P.bouton(document.querySelector('.droite'),'bt');
+      P.carte(svg,{cle:'mondeL',sujet:per+groupe,coul:'#19f0ff',centres:CENTRE,format:fmt,liste:L,instantanes:!l.length?[]:DEMO?[r]:P.memoire('vhosts-'+per+(groupe?'-familles':''),r),quand:pan.querySelector('h3'),zone:pan});
+      // Séries par jour : la tuile porte le total de la période, seule la date porte la valeur du jour.
+      [[0,'visites','#2ecc71'],[2,'requetes','#19f0ff'],[3,'erreurs','#ff2d6f']].forEach(x=>{
+        const t = el('tuiles').children[x[0]], b = t && t.querySelectorAll('svg.sp rect'); if(!b || !b.length) return;
+        P.compteur(t.querySelector('.v'),{cle:x[1],total:true,valeurs:serie.map(s=>s[x[1]]==null?null:num(s[x[1]])),libelles:serie.map(s=>jourDit(s.jour)+(x[1]==='visites'?' · visites':'')),format:fmt,coul:x[2],barres:b,quand:t,zone:t,maintenant:jourDit(serie[serie.length-1].jour)});
+      });
+    };
     carteMonde('mondeL','paysL','geoNoteL', ok && vl.length ? vl : null, '#29b6f6', 'lueurL', 'aucune visite géolocalisée', ok ? 'Aucune visite géolocalisée sur la période (base GeoLite2 absente ou trafic privé).' : (session ? 'Aucune mesure disponible.' : 'Session requise.'));
+    vivre();
     {
       const iv = ok ? 'Aucune visite classée.' : (session?'Aucune mesure disponible.':'Session requise.');
       const os = {}; vh.forEach(v=>Object.keys(v.plateformes||{}).forEach(k=>{ os[k] = (os[k]||0)+num(v.plateformes[k]); }));
