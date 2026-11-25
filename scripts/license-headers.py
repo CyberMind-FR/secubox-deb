@@ -14,7 +14,9 @@ from __future__ import annotations
 import argparse
 import difflib
 import fnmatch
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -207,6 +209,28 @@ def _matches_allowlist(rel: Path, enrolled: list[str]) -> bool:
     return False
 
 
+def _git(root: Path, *args: str) -> list[Path] | None:
+    """Chemins rendus par `git <args> -z` depuis `root` ; None si ce n'est pas un dépôt (ou git absent)."""
+    try:
+        r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    return [root / os.fsdecode(x) for x in r.stdout.split(b"\0") if x]
+
+
+def fichiers_suivis(root: Path) -> list[Path] | None:
+    """#3950 : suivis, et nouveaux non ignorés. Jamais les arbres de construction (debian/secubox-*, node_modules…) : sans cela le
+    contrôle local listait des milliers de faux manques et n'était plus lançable ; la CI, elle, part d'un dépôt propre."""
+    return _git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+
+
+def fichiers_indexes(root: Path) -> list[Path] | None:
+    """Fichiers de l'index (ajoutés, copiés, modifiés, renommés) : contrôle avant commit."""
+    return _git(root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR")
+
+
 def walk(paths: list[Path], enrolled: list[str], repo_root: Path | None = None):
     """Yield in-scope files under each path, honoring SKIP_DIRS, SKIP_GLOBS, allowlist.
 
@@ -229,7 +253,8 @@ def walk(paths: list[Path], enrolled: list[str], repo_root: Path | None = None):
             if _matches_allowlist(rel, enrolled):
                 yield root
             continue
-        for p in root.rglob("*"):
+        suivis = fichiers_suivis(root)
+        for p in (root.rglob("*") if suivis is None else suivis):
             # Prune skip-dirs
             if any(part in SKIP_DIRS for part in p.relative_to(root).parts):
                 continue
@@ -285,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--fix", action="store_true")
     mode.add_argument("--list", dest="list_", action="store_true")
     mode.add_argument("--diff", action="store_true")
+    parser.add_argument("--staged", action="store_true",
+                        help="seulement les fichiers de l'index git (contrôle avant commit)")
     parser.add_argument("paths", nargs="*")
 
     try:
@@ -294,7 +321,20 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_root = _find_repo_root(Path.cwd())
     enrolled = _read_enrollment(repo_root)
-    paths = [Path(p) for p in args.paths] if args.paths else [repo_root]
+    if args.staged:
+        if args.paths:
+            print("--staged ne prend pas de chemin", file=sys.stderr)
+            return 2
+        indexes = fichiers_indexes(repo_root)
+        if indexes is None:
+            print("--staged : pas un dépôt git", file=sys.stderr)
+            return 2
+        paths = [p for p in indexes if p.is_file()
+                 and not any(part in SKIP_DIRS for part in p.relative_to(repo_root).parts)]
+        if not paths:
+            return 0
+    else:
+        paths = [Path(p) for p in args.paths] if args.paths else [repo_root]
 
     missing: list[Path] = []
     for p in walk(paths, enrolled, repo_root=repo_root):
@@ -335,6 +375,14 @@ def main(argv: list[str] | None = None) -> int:
         print("Files missing CMSD-1.0 header:")
         for p in missing:
             print(f"  {p}")
+        # #3950 : la commande qui répare, et une annotation par fichier sur GitHub.
+        rel = [p.resolve().relative_to(repo_root.resolve()) if p.resolve().is_relative_to(repo_root.resolve()) else p
+               for p in missing]
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            for r in rel:
+                print(f"::error file={r},line=1::En-tête CMSD-1.0 manquant : python3 scripts/license-headers.py --fix {r}")
+        print("Réparer : python3 scripts/license-headers.py --fix " + " ".join(f"'{r}'" for r in rel[:20])
+              + (" …" if len(rel) > 20 else ""))
         return 1
     return 0
 

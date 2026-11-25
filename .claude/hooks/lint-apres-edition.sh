@@ -10,6 +10,7 @@
 # l'événement sur l'entrée standard, ne regarde que `tool_input.file_path` :
 #   *.py                          → ruff check (sans correction)
 #   *.sh                          → shellcheck
+#   tout fichier connu de scripts/license-headers.py → en-tête CMSD-1.0 posé s'il manque (#3950)
 #   debian/{pre,post}{inst,rm},
 #   debian/*.{pre,post}{inst,rm}  → sh -n
 # Rapide (un fichier, un outil). Un constat est renvoyé à la session par
@@ -38,6 +39,27 @@ trouve_ruff() {
     return 1
 }
 
+# #3950 : en-tête CMSD-1.0 posé tout de suite sur un fichier neuf (l'échec « License Headers » de la CI vient de là). L'outil ne
+# touche que les extensions qu'il connaît, les fichiers suivis ou non ignorés, et jamais un en-tête déjà présent (ni tiers).
+entete=""
+depot=$(git -C "$(dirname "$chemin")" rev-parse --show-toplevel 2>/dev/null || true)
+if [ -n "$depot" ] && [ -f "$depot/scripts/license-headers.py" ] && command -v python3 >/dev/null 2>&1 \
+   && ! git -C "$depot" check-ignore -q -- "$chemin" 2>/dev/null; then
+    manque=$(cd "$depot" 2>/dev/null; python3 scripts/license-headers.py --list -- "$chemin" 2>/dev/null) || manque=""
+    if [ -n "$manque" ] && (cd "$depot" && python3 scripts/license-headers.py --fix -- "$chemin" >/dev/null 2>&1); then
+        entete="En-tête CMSD-1.0 ajouté en tête du fichier (le relire avant un nouvel Edit)."
+    fi
+fi
+
+rendre() {  # $1 outil, $2 texte
+    jq -n --arg o "$1" --arg f "$chemin" --arg t "$2" '{
+        hookSpecificOutput: {
+            hookEventName: "PostToolUse",
+            additionalContext: ("Lint après édition — " + $o + " sur " + $f + " :\n" + $t)
+        }
+    }'
+}
+
 sortie=""
 outil=""
 case "$chemin" in
@@ -60,10 +82,15 @@ case "$chemin" in
             sortie=$(shellcheck -f gcc "$chemin" 2>&1 || true)
         fi
         ;;
-    *) exit 0 ;;
+    *) outil="licence" ;;
 esac
 
-[ -n "$sortie" ] || exit 0
+if [ -z "$sortie" ]; then
+    [ -z "$entete" ] || rendre licence "$entete"
+    exit 0
+fi
+[ -z "$entete" ] || sortie="$entete
+$sortie"
 
 # 40 lignes au plus : le contexte de la session n'est pas une poubelle.
 extrait=$(printf '%s\n' "$sortie" | head -n 40)
@@ -72,10 +99,5 @@ suite=""
 [ "$total" -le 40 ] || suite="
 … ($((total - 40)) ligne(s) de plus)"
 
-jq -n --arg o "$outil" --arg f "$chemin" --arg t "$extrait$suite" '{
-    hookSpecificOutput: {
-        hookEventName: "PostToolUse",
-        additionalContext: ("Lint après édition — " + $o + " sur " + $f + " :\n" + $t)
-    }
-}'
+rendre "$outil" "$extrait$suite"
 exit 0

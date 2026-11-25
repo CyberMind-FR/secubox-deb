@@ -461,3 +461,63 @@ def test_main_check_missing_allowlist_enforces_repo_wide(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     rc = license_headers.main(["--check"])
     assert rc == 1
+
+
+# --- #3950 : fichiers suivis, index, annotations --------------------------------------------------------------------------------
+
+def _depot(tmp_path):
+    import subprocess
+    for a in (["init", "-q"], ["config", "user.email", "a@b"], ["config", "user.name", "t"]):
+        subprocess.run(["git", "-C", str(tmp_path), *a], check=True)
+    (tmp_path / ".gitignore").write_text("build-arbre/\n")
+    return lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True)
+
+
+def test_check_ignore_les_arbres_de_construction(tmp_path, monkeypatch, capsys):
+    git = _depot(tmp_path)
+    (tmp_path / "bon.py").write_text(license_headers.render_header("hash") + "\nx = 1\n")
+    (tmp_path / "build-arbre").mkdir()
+    (tmp_path / "build-arbre" / "copie.py").write_text("x = 1\n")
+    git("add", "-A")
+    monkeypatch.chdir(tmp_path)
+    assert license_headers.main(["--check"]) == 0
+    (tmp_path / "neuf.md").write_text("# non suivi mais pas ignoré\n")
+    assert license_headers.main(["--check"]) == 1
+    sortie = capsys.readouterr().out
+    assert "neuf.md" in sortie and "copie.py" not in sortie and "license-headers.py --fix 'neuf.md'" in sortie
+
+
+def test_staged_ne_regarde_que_l_index(tmp_path, monkeypatch):
+    git = _depot(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "hors.py").write_text("x = 1\n")
+    assert license_headers.main(["--check", "--staged"]) == 0
+    (tmp_path / "dedans.md").write_text("# plan\n")
+    git("add", "dedans.md")
+    assert license_headers.main(["--check", "--staged"]) == 1
+    assert license_headers.main(["--fix", "--staged"]) == 0
+    git("add", "dedans.md")
+    assert license_headers.main(["--check", "--staged"]) == 0
+    git("rm", "-q", "--cached", "dedans.md")
+    assert license_headers.main(["--check", "--staged"]) == 0
+    assert license_headers.main(["--check", "--staged", "hors.py"]) == 2
+
+
+def test_annotations_github(tmp_path, monkeypatch, capsys):
+    _depot(tmp_path)
+    (tmp_path / "a.py").write_text("x = 1\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert license_headers.main(["--check"]) == 1
+    assert "::error file=a.py,line=1::" in capsys.readouterr().out
+
+
+def test_hooks_et_regles_posent_le_controle_avant_la_ci():
+    from pathlib import Path
+    racine = Path(__file__).resolve().parents[1]
+    pre = (racine / ".githooks" / "pre-commit").read_text()
+    assert "license-headers.py --check --staged" in pre
+    assert "license-headers.py" in (racine / ".claude" / "hooks" / "lint-apres-edition.sh").read_text()
+    assert "core.hooksPath .githooks" in (racine / "scripts" / "agent-worktree.sh").read_text()
+    regles = (racine / ".claude" / "RULES-CODE.md").read_text()
+    assert "## 11. Avant de commiter" in regles and "license-headers.py --fix" in regles
