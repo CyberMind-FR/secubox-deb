@@ -21,7 +21,7 @@ func serveurAnomalieNft(t *testing.T) (*Server, string, *fauxNft) {
 	fx := &fauxNft{}
 	nb := NewNftBanner("nft", "secubox", time.Hour,
 		NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl")))
-	nb.runner = fx.run
+	nb.runner, nb.scripts = fx.run, fx.script
 	if err := nb.Ensure(); err != nil {
 		t.Fatalf("Ensure: %v", err)
 	}

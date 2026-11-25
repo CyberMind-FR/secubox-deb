@@ -12,7 +12,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"net"
 	"net/netip"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -36,8 +39,13 @@ import (
 //     borné (nftban_robots.go) ;
 //   - une seule repose à la fois, hors de la veille ; une table recréée pendant une repose la fait repartir de zéro.
 //
-// Rien n'est retiré, sauf ce que la passe vient elle-même de poser et que le journal dit LEVÉ depuis (wafctl unban, robot) :
-// la levée écrit son `unban` au journal AVANT de retirer l'élément, le journal relu en fin de passe la dit donc.
+// Rien n'est retiré, sauf ce qu'un lot vient lui-même de poser et que le journal dit LEVÉ depuis (wafctl unban, robot) : la
+// levée écrit son `unban` au journal AVANT de retirer l'élément. Le journal est suivi (octets ajoutés seulement, Levees)
+// juste avant le lot, qui écarte les levées, juste après, pour celles que le lot a croisées, et en fin de passe (#3932). Une levée suivie d'un
+// ban posé à la main (wafctl, hors journal) n'est pas défaite : l'élément n'est retiré que si son échéance est celle que le
+// lot a posée. Reste une fenêtre, celle du lot (sa transaction nft, d'ordinaire moins d'une seconde, delaiLot au pire) : un
+// ban à la main plus court que l'élément remis (wafctl ne raccourcit rien, il n'y touche donc pas) y est indiscernable de
+// lui et repart avec lui.
 const (
 	tailleLot       = 1000
 	delaiLot        = 20 * time.Second
@@ -92,17 +100,31 @@ type banARePoser struct {
 }
 
 // adresseBan normalise une adresse du journal. Refusé : ce qui n'est pas une adresse, une zone (texte libre), et ce que
-// banAt n'aurait jamais banni (boucle locale, privé, lien local) — même garde-fou, au même dernier moment.
+// banAt n'aurait jamais banni (boucle locale, privé, lien local, CGNAT 100.64.0.0/10 #3932) — même garde-fou, au même dernier moment.
 func adresseBan(ip string) (netip.Addr, bool) {
 	a, err := netip.ParseAddr(ip)
 	if err != nil || a.Zone() != "" {
 		return netip.Addr{}, false
 	}
 	a = a.Unmap()
-	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsUnspecified() {
+	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsUnspecified() || rejeuCGNAT.Contains(a) {
 		return netip.Addr{}, false
 	}
 	return a, true
+}
+
+// protegee : plage déclarée par l'administrateur (SECUBOX_WAF_PROTEGEES).
+func (b *NftBanner) protegee(a netip.Addr) bool {
+	if len(b.protegees) == 0 {
+		return false
+	}
+	ip := net.IP(a.AsSlice())
+	for _, n := range b.protegees {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p banARePoser) reste(now int64, duree time.Duration) int64 {
@@ -123,7 +145,7 @@ func (b *NftBanner) bansARePoser(now int64) []banARePoser {
 	out := make([]banARePoser, 0, len(actifs))
 	for _, r := range actifs {
 		a, ok := adresseBan(r.IP)
-		if !ok || (b.robots != nil && b.robots.Connu(r.IP) != "") {
+		if !ok || b.protegee(a) || (b.robots != nil && b.robots.Connu(r.IP) != "") {
 			continue // un robot vérifié n'est pas reposé ; LibererRobots écrit son unban
 		}
 		p := banARePoser{adr: a, ip: a.String(), pose: r.At, expires: r.Expires}
@@ -270,8 +292,9 @@ func decoderPresents(r io.Reader) (map[netip.Addr]struct{}, error) {
 
 // manquants retire de `bans` ceux que nft porte déjà. Ensemble absent : tout manque (le lot le constatera et fera recréer
 // la table). Ensemble illisible, deux fois : ses bans ne sont ni posés ni comptés — jamais un ajout à l'aveugle.
-func (b *NftBanner) manquants(ctx context.Context, bans []banARePoser) (absents []banARePoser, presents int, illisible error) {
-	parFamille := map[bool]map[netip.Addr]struct{}{}
+// parFamille : les ensembles lus (true : IPv4).
+func (b *NftBanner) manquants(ctx context.Context, bans []banARePoser) (absents []banARePoser, presents int, parFamille map[bool]map[netip.Addr]struct{}, illisible error) {
+	parFamille = map[bool]map[netip.Addr]struct{}{}
 	sautee := map[bool]bool{}
 	for _, quatre := range []bool{true, false} {
 		set := b.set6
@@ -295,14 +318,20 @@ func (b *NftBanner) manquants(ctx context.Context, bans []banARePoser) (absents 
 			absents = append(absents, p)
 		}
 	}
-	return absents, presents, illisible
+	return absents, presents, parFamille, illisible
 }
 
 // scriptLot écrit le script d'un lot, à l'instant où il part : délais exacts. Écartés : les échus, les robots reconnus
 // depuis (Connu), et les adresses rebannies ou prolongées depuis `debut` — le lot porte leur ANCIENNE échéance, que le
 // noyau ≥ 6.12 imposerait ; elles comptent comme posées.
-func (b *NftBanner) scriptLot(lot []banARePoser, debut time.Time) (script []byte, poses []netip.Addr, deja int) {
+func (b *NftBanner) scriptLot(lot []banARePoser, debut time.Time) (script []byte, poses []poseLot, deja, levees int) {
 	now := time.Now().Unix()
+	adrs := make([]netip.Addr, len(lot))
+	for i, p := range lot {
+		adrs[i] = p.adr
+	}
+	// Levées depuis le relevé : elles ne partent pas. Journal illisible : le lot part, verifierLeves le dira.
+	leves, _ := b.store.Levees(adrs, now)
 	var e4, e6 []byte
 	b.mu.Lock()
 	recent := make([]bool, len(lot))
@@ -313,6 +342,10 @@ func (b *NftBanner) scriptLot(lot []banARePoser, debut time.Time) (script []byte
 	b.mu.Unlock()
 	for i, p := range lot {
 		reste := p.reste(now, b.duration)
+		if _, leve := leves[p.adr]; leve {
+			levees++
+			continue
+		}
 		switch {
 		case reste <= 0 || (b.robots != nil && b.robots.Connu(p.ip) != ""):
 			continue
@@ -331,7 +364,7 @@ func (b *NftBanner) scriptLot(lot []banARePoser, debut time.Time) (script []byte
 		*e = append(*e, " timeout "...)
 		*e = strconv.AppendInt(*e, reste, 10)
 		*e = append(*e, 's')
-		poses = append(poses, p.adr)
+		poses = append(poses, poseLot{adr: p.adr, fin: now + reste})
 	}
 	for _, x := range []struct {
 		set   string
@@ -343,8 +376,18 @@ func (b *NftBanner) scriptLot(lot []banARePoser, debut time.Time) (script []byte
 			script = append(script, " }\n"...)
 		}
 	}
-	return script, poses, deja
+	return script, poses, deja, levees
 }
+
+// poseLot : un élément posé par un lot, et la fenêtre de son échéance dans le noyau (secondes Unix) : `fin`, calculée quand
+// le lot est écrit, à `finMax`, si la transaction n'est passée qu'au retour de nft.
+type poseLot struct {
+	adr         netip.Addr
+	fin, finMax int64
+}
+
+// margeEcheance : arrondis (délais entiers, `expires` lu à la seconde).
+const margeEcheance = 3
 
 // bilanRepose suit une passe.
 type bilanRepose struct {
@@ -354,8 +397,8 @@ type bilanRepose struct {
 	tableAbsente                bool // table ou ensemble disparu en cours de passe
 	complet                     bool
 	dernierRefus                string
-	illisible                   error        // un ensemble n'a pas pu être lu : ses bans n'ont pas été reposés
-	envoyes                     []netip.Addr // posés par cette passe, les sautés exclus
+	illisible                   error     // un ensemble n'a pas pu être lu : ses bans n'ont pas été reposés
+	envoyes                     []poseLot // posés par cette passe, les sautés exclus
 }
 
 func (r *bilanRepose) poses() int { return r.presents + r.ajoutes }
@@ -367,23 +410,37 @@ func (b *NftBanner) poserLot(ctx context.Context, lot []banARePoser, debut time.
 	}
 	// poseMu : la levée d'un robot (retrait nft + unban au journal) ne s'intercale jamais entre le tri et la pose.
 	b.poseMu.Lock()
-	script, poses, deja := b.scriptLot(lot, debut)
+	script, poses, deja, levees := b.scriptLot(lot, debut)
 	n := len(poses)
 	r.presents += deja
+	r.attendus -= levees
 	if n == 0 {
 		b.poseMu.Unlock()
 		return
 	}
+	avant := time.Now().Unix()
 	c, cancel := context.WithTimeout(ctx, delaiLot)
 	out, err := b.scripts(c, script)
 	cancel()
+	if err == nil {
+		// Le délai part quand la transaction passe, entre l'écriture du lot et le retour de nft.
+		for i := range poses {
+			poses[i].finMax = poses[i].fin + time.Now().Unix() - avant + 1
+		}
+		traites := b.retirerLeves(poses)
+		for _, p := range poses { // une levée traitée l'est : la fin de passe ne la relit pas
+			if _, ok := traites[p.adr]; !ok {
+				r.envoyes = append(r.envoyes, p)
+			}
+		}
+	}
 	b.poseMu.Unlock()
 	if err == nil {
 		r.ajoutes += n
-		r.envoyes = append(r.envoyes, poses...)
 		return
 	}
 	r.presents -= deja // recomptés par les moitiés
+	r.attendus += levees
 	switch msg := strings.TrimSpace(string(out)); {
 	case tableEffacee(out):
 		r.tableAbsente = true
@@ -418,16 +475,26 @@ func tronque(s string, n int) string {
 // passe pose une fois les bans manquants ; complet=false : à rejouer (table recréée) ou délai épuisé.
 func (b *NftBanner) passe(ctx context.Context, generation int64) (r bilanRepose) {
 	debut := time.Now()
+	b.poseMu.Lock()
+	b.retirerLeves(nil) // retraits de la passe d'avant restés en échec
+	b.poseMu.Unlock()
 	bans := b.bansARePoser(debut.Unix())
 	r = bilanRepose{attendus: len(bans), budget: budgetIsolement}
-	if len(bans) == 0 {
+	if len(bans) == 0 && b.protegeesLevees {
 		r.complet = true
 		return r
 	}
-	var absents []banARePoser
-	absents, r.presents, r.illisible = b.manquants(ctx, bans)
+	absents, presents, ensembles, illisible := b.manquants(ctx, bans)
+	r.presents, r.illisible = presents, illisible
+	if !b.protegeesLevees {
+		b.protegeesLevees = b.leverProtegees(ensembles) && illisible == nil
+	}
 	b.publierRepose(r)
-	defer func() { b.retirerLeves(r.envoyes) }()
+	defer func() {
+		b.poseMu.Lock()
+		defer b.poseMu.Unlock()
+		b.retirerLeves(r.envoyes)
+	}()
 	for i := 0; i < len(absents); i += tailleLot {
 		if ctx.Err() != nil || b.generation.Load() != generation {
 			return r
@@ -451,61 +518,213 @@ func (b *NftBanner) publierRepose(r bilanRepose) {
 	b.mu.Unlock()
 }
 
-// retirerLeves retire de nft les adresses que la passe a posées et dont la dernière ligne au journal est une levée. Une
-// échéance passée n'en est pas une, une adresse absente du journal non plus ; journal illisible : rien n'est retiré.
-func (b *NftBanner) retirerLeves(envoyes []netip.Addr) {
-	if len(envoyes) == 0 {
-		return
+// retirerLeves retire de nft les éléments que le lot vient de poser (`poses`, et ceux des passes d'avant restés à retirer)
+// et dont la dernière ligne au journal est une levée, s'ils y sont encore AVEC l'échéance posée par le lot : un autre
+// élément (ban à la main posé depuis la levée) n'est pas le nôtre. Une échéance passée n'est pas une levée, une adresse
+// absente du journal non plus. Journal illisible ou retrait refusé : gardés, revus à la passe suivante. Rend les adresses
+// que le journal dit levées. poseMu tenu.
+func (b *NftBanner) retirerLeves(poses []poseLot) map[netip.Addr]struct{} {
+	if len(poses)+len(b.aRetirer) == 0 || b.store == nil {
+		return nil
 	}
-	b.poseMu.Lock() // ni ban ni levée de robot entre la relecture et le retrait
-	defer b.poseMu.Unlock()
-	// Tri par l'index, sans relire le journal : le plus souvent personne n'est candidat.
-	actifs := map[netip.Addr]struct{}{}
-	for _, r := range b.store.ActiveBans(time.Now().Unix()) {
-		if a, ok := adresseBan(r.IP); ok {
-			actifs[a] = struct{}{}
+	now := time.Now().Unix()
+	tous := make(map[netip.Addr]poseLot, len(poses)+len(b.aRetirer))
+	for a, p := range b.aRetirer {
+		if p.finMax+margeEcheance > now { // sinon échu : le noyau l'a retiré
+			tous[a] = p
 		}
 	}
-	candidats := map[string]netip.Addr{}
-	for _, a := range envoyes {
-		if _, ok := actifs[a]; !ok {
-			candidats[a.String()] = a
-		}
+	for _, p := range poses {
+		tous[p.adr] = p
 	}
-	if len(candidats) == 0 {
-		return
+	b.aRetirer = nil
+	if len(tous) == 0 {
+		return nil
 	}
-	levees, err := b.store.Levees(candidats)
+	adrs := make([]netip.Addr, 0, len(tous))
+	for a := range tous {
+		adrs = append(adrs, a)
+	}
+	levees, err := b.store.Levees(adrs, now)
 	if err != nil {
+		b.aRetirer = tous
 		msg := fmt.Sprintf("journal des bans illisible, levées faites pendant la repose non vérifiées : %v", err)
-		log.Printf("sbxwaf: nft — %s", msg)
-		b.noterEchec(msg)
-		return
-	}
-	leves := make([]netip.Addr, 0, len(levees))
-	for ip := range levees {
-		leves = append(leves, candidats[ip])
-	}
-	sort.Slice(leves, func(i, j int) bool { return leves[i].Less(leves[j]) })
-	for i := 0; i < len(leves); i += tailleLot {
-		var script []byte
-		for _, a := range leves[i:min(i+tailleLot, len(leves))] {
-			// Ajout puis retrait, en une transaction : le retrait d'un élément déjà parti ferait échouer le lot.
-			script = fmt.Appendf(script, "add element inet %s %s { %s timeout 60s }\ndelete element inet %s %s { %s }\n",
-				b.table, b.setDe(a), a, b.table, b.setDe(a), a)
+		if b.noterEchec(msg) {
+			log.Printf("sbxwaf: nft — %s", msg)
 		}
+		return nil
+	}
+	if len(levees) == 0 {
+		return nil
+	}
+	echeance := b.lecteurEcheances(len(levees))
+	nos := make([]netip.Addr, 0, len(levees))
+	for a := range levees {
+		min, max, present, err := echeance(a)
+		switch {
+		case err != nil: // nft n'a pas répondu : ni retiré, ni oublié
+			b.garderARetirer(tous[a])
+		case !present:
+		case max < tous[a].fin-margeEcheance || min > tous[a].finMax+margeEcheance:
+			log.Printf("sbxwaf: nft — ban de %s levé puis reposé par un autre pendant la repose : laissé", a)
+		default:
+			nos = append(nos, a)
+		}
+	}
+	sort.Slice(nos, func(i, j int) bool { return nos[i].Less(nos[j]) })
+	retires := 0
+	for i := 0; i < len(nos); i += tailleLot {
+		lot := nos[i:min(i+tailleLot, len(nos))]
 		ctx, cancel := context.WithTimeout(context.Background(), delaiLot)
-		out, err := b.scripts(ctx, script)
+		out, err := b.scripts(ctx, b.scriptRetrait(lot))
 		cancel()
 		if err != nil {
-			msg := fmt.Sprintf("retrait de bans levés pendant la repose : %v: %s", err, tronque(strings.TrimSpace(string(out)), 200))
+			for _, a := range lot {
+				b.garderARetirer(tous[a])
+			}
+			msg := fmt.Sprintf("retrait de bans levés pendant la repose, à refaire : %v: %s", err, tronque(strings.TrimSpace(string(out)), 200))
 			log.Printf("sbxwaf: nft — %s", msg)
 			b.noterEchec(msg)
-			return
+			continue
+		}
+		retires += len(lot)
+	}
+	if retires > 0 {
+		log.Printf("sbxwaf: nft — %d ban(s) levé(s) pendant la repose, retiré(s)", retires)
+	}
+	return levees
+}
+
+// lecteurEcheances rend de quoi lire l'échéance de `n` éléments : `get element` un par un s'ils sont peu nombreux (chacun
+// charge l'ensemble), les ensembles une seule fois au-delà — poseMu est tenu. La lecture dure (des secondes à 50 000 bans) :
+// l'échéance est une fenêtre, de `min` à `max`. Sans échéance : jamais la nôtre, une fenêtre hors d'atteinte.
+func (b *NftBanner) lecteurEcheances(n int) func(a netip.Addr) (min, max int64, present bool, err error) {
+	if n <= 3 {
+		return func(a netip.Addr) (int64, int64, bool, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			debut := time.Now().Unix()
+			reste, present, err := b.resteElementSur(ctx, b.setDe(a), a.String())
+			if reste < 0 {
+				return math.MaxInt64, math.MaxInt64, present, err
+			}
+			return debut + reste, time.Now().Unix() + reste, present, err
 		}
 	}
-	if len(leves) > 0 {
-		log.Printf("sbxwaf: nft — %d ban(s) levé(s) pendant la repose, retiré(s)", len(leves))
+	debut := time.Now().Unix()
+	elems, err := b.ElementsAvecCompteurs(context.Background())
+	fin := time.Now().Unix()
+	return func(a netip.Addr) (int64, int64, bool, error) {
+		e, ok := elems[a.String()]
+		if ok && e.Reste == 0 { // sans échéance, ou dans sa dernière seconde
+			return math.MaxInt64, math.MaxInt64, true, err
+		}
+		return debut + e.Reste, fin + e.Reste, ok, err
+	}
+}
+
+func (b *NftBanner) garderARetirer(p poseLot) {
+	if b.aRetirer == nil {
+		b.aRetirer = map[netip.Addr]poseLot{}
+	}
+	b.aRetirer[p.adr] = p
+}
+
+// scriptRetrait retire des éléments : ajout puis retrait, en une transaction — retirer un élément déjà parti ferait échouer le lot.
+func (b *NftBanner) scriptRetrait(lot []netip.Addr) (script []byte) {
+	for _, a := range lot {
+		script = fmt.Appendf(script, "add element inet %s %s { %s timeout 60s }\ndelete element inet %s %s { %s }\n",
+			b.table, b.setDe(a), a, b.table, b.setDe(a), a)
+	}
+	return script
+}
+
+// leverProtegees rattrape les bans posés sur une adresse devenue protégée, ou en CGNAT (#3932) : levés du journal (`unban`)
+// puis de nft, et audités. `ensembles` : les adresses que nft porte. false : à refaire (retrait refusé). reposeMu tenu ; une
+// fois par démarrage, à la première passe.
+func (b *NftBanner) leverProtegees(ensembles map[bool]map[netip.Addr]struct{}) bool {
+	intouchable := func(a netip.Addr) bool { return rejeuCGNAT.Contains(a) || b.protegee(a) }
+	complet := true
+	cibles := map[netip.Addr]struct{}{}
+	dansNft := map[netip.Addr]bool{}
+	for _, e := range ensembles {
+		for a := range e {
+			if intouchable(a) {
+				cibles[a], dansNft[a] = struct{}{}, true
+			}
+		}
+	}
+	for _, r := range b.store.ActiveBans(time.Now().Unix()) {
+		if a, err := netip.ParseAddr(r.IP); err == nil && a.Zone() == "" && intouchable(a.Unmap()) {
+			cibles[a.Unmap()] = struct{}{}
+		}
+	}
+	lot := make([]netip.Addr, 0, len(cibles))
+	for a := range cibles {
+		lot = append(lot, a)
+	}
+	sort.Slice(lot, func(i, j int) bool { return lot[i].Less(lot[j]) })
+	for i := 0; i < len(lot); i += tailleLot {
+		if !b.leverLot(lot[i:min(i+tailleLot, len(lot))], dansNft) {
+			complet = false
+		}
+	}
+	return complet
+}
+
+func (b *NftBanner) leverLot(lot []netip.Addr, dansNft map[netip.Addr]bool) bool {
+	b.poseMu.Lock()
+	defer b.poseMu.Unlock()
+	now := time.Now()
+	var retraits, leves []netip.Addr
+	ok := true
+	for _, a := range lot {
+		// Le journal d'abord : un arrêt entre les deux laisse un ban sans journal, jamais un ban que la repose remettrait.
+		if err := b.store.Append(BanRecord{IP: a.String(), Category: "levee:protegee", Severity: "info", At: now.Unix(), Action: "unban"}); err != nil {
+			log.Printf("sbxwaf: ban de %s (plage protégée) non levé : journal : %v", a, err)
+			ok = false
+			continue
+		}
+		leves = append(leves, a)
+		if dansNft[a] {
+			retraits = append(retraits, a)
+		}
+	}
+	if len(retraits) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), delaiLot)
+		out, err := b.scripts(ctx, b.scriptRetrait(retraits))
+		cancel()
+		if err != nil {
+			msg := fmt.Sprintf("retrait de bans sur des plages protégées, à refaire : %v: %s", err, tronque(strings.TrimSpace(string(out)), 200))
+			log.Printf("sbxwaf: nft — %s", msg)
+			b.noterEchec(msg)
+			return false
+		}
+	}
+	for _, a := range leves {
+		log.Printf("sbxwaf: ban levé %s : plage protégée (SECUBOX_WAF_PROTEGEES) ou CGNAT", a)
+		b.auditer(now, "ban_protegee_leve", a.String())
+	}
+	return ok
+}
+
+// auditer écrit une ligne au journal d'audit du WAF.
+func (b *NftBanner) auditer(now time.Time, action, detail string) {
+	if b.audit == "" {
+		return
+	}
+	ligne, _ := json.Marshal(map[string]any{"ts": now.UTC().Format("2006-01-02T15:04:05Z"), "module": "waf", "action": action, "detail": detail})
+	mu := verrouAjout(b.audit)
+	mu.Lock()
+	defer mu.Unlock()
+	f, err := os.OpenFile(b.audit, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o640)
+	if err != nil {
+		log.Printf("sbxwaf: audit %s : %v", b.audit, err)
+		return
+	}
+	defer f.Close()
+	if _, err := f.Write(append(ligne, '\n')); err != nil {
+		log.Printf("sbxwaf: audit %s : %v", b.audit, err)
 	}
 }
 

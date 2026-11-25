@@ -127,19 +127,14 @@ func (r *Reeval) ecrire(chemin string, v any) {
 	_, _ = f.Write(append(b, '\n'))
 }
 
-// Tick réévalue les bans qui arrivent à échéance dans la fenêtre.
-func contexteCourt() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 8*time.Second)
-}
-
+// Tick réévalue les bans qui arrivent à échéance dans la fenêtre. Pas de délai global (#3932) : chaque lecture d'ensemble a
+// le sien, qui part une fois son tour venu (lireEnsemble) ; attendre la repose ne fait plus sauter une réévaluation.
 func (r *Reeval) Tick() {
 	if r.mode != "propose" && r.mode != "auto" {
 		return
 	}
 	now := r.now()
-	ctx, cancel := contexteCourt()
-	defer cancel()
-	elems, err := r.banneur.ElementsAvecCompteurs(ctx)
+	elems, err := r.banneur.ElementsAvecCompteurs(context.Background())
 	if err != nil {
 		r.mu.Lock()
 		premiere := !r.erreurLu
