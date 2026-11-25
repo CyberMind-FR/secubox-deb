@@ -81,7 +81,7 @@ def test_textes_du_reseau_en_textcontent():
     assert "hasOwnProperty.call" in v
     assert not re.search(r"SbxReperes\.(CLASSES|FAMILLES|ETATS)\[(?!k\])", v)  # [k] : Object.keys de la légende
     r = _node(_entre("function texteSur(", "\n") + _entre("function tronquer(", "\n") + r"""
-      process.stdout.write(JSON.stringify([texteSur('a‮b​c\u0007d'),texteSur(null),texteSur(12),
+      process.stdout.write(JSON.stringify([texteSur('a\u202eb\u200bc\u0007\u061c\u00add'),texteSur(null),texteSur(12),
         tronquer('🔁🔁🔁🔁',3),tronquer('abc',3)]));""")
     assert r[0] == "abcd" and r[1] == "" and r[2] == "12"
     assert r[3] == "\U0001f501\U0001f501…" and r[4] == "abc"
@@ -131,7 +131,7 @@ def test_fiche_et_liens_d_action_en_lecture():
         assert lien in v, lien
     assert "evolutionPaysage(" in c
     e = _fonction("evolutionPaysage")
-    assert "motif_difference_24h" in e and "reference_partiel" in e
+    assert "a.motif" in e and "reference_partiel" in e and "motif_difference_24h" in _fonction("affichePaysage")
     assert "fetch(" not in v and "method" not in v
 
 
@@ -266,3 +266,20 @@ def test_densite_aurora_12bis():
     tailles = [float(t) for t in re.findall(r"font-size:([0-9.]+)rem", css)]
     assert tailles and min(tailles) >= .85
     assert re.search(r"svg\.paysage text\{font-size:13\.6px", css) and "8.5px" not in css and "font-size:10px" not in css
+
+
+def test_mots_de_rotation_et_dictionnaires_sans_prototype():
+    e = _fonction("evolutionPaysage")
+    assert "apparue depuis la référence" in e and "terminée depuis la référence" in e
+    assert "levée" not in e and "retombée" not in e
+    assert "paysage.noeuds=Object.create(null)" in _fonction("indexerPaysage")
+    assert "var N=Object.create(null)" in _fonction("disposerPaysage")
+    assert "noeuds:{}" not in _vue()
+
+
+def test_cle_identifie_l_instantane_dessine():
+    c = _fonction("rendrePaysage")
+    assert "paysage.cle=clePaysage(" in c  # posée par le dessin lui-même, pas par l'appelant
+    assert "instantane.ts" in _fonction("clePaysage")
+    assert "indexerPaysage(" not in _fonction("prendrePaysage") or "rejoue" in _fonction("prendrePaysage")
+    assert "paysage.lu" not in _fonction("inspecter")

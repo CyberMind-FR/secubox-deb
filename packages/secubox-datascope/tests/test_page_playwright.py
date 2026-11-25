@@ -20,14 +20,22 @@ PAGE = pathlib.Path(__file__).resolve().parents[1] / "www" / "datascope" / "inde
 CAPTURES = os.environ.get("SECUBOX_DATASCOPE_CAPTURES")
 
 
-def _servir(pg, api):
-    """Sert la page et reperes.js sur http://datascope.test/, l'API depuis `api` ({route: (code, corps)}) ; rien d'autre."""
+def _servir(pg, api, crochet=None, reperes_lents=None):
+    """Sert la page et reperes.js sur http://datascope.test/, l'API depuis `api` ({route: (code, corps)}) ; rien d'autre.
+
+    `crochet` : expression exposée en window.__t depuis la fermeture de la page ; `reperes_lents` : liste où la requête de
+    reperes.js est retenue (à libérer par le scénario)."""
     def repondre(route):
+        if reperes_lents is not None and route.request.url.endswith("/reperes.js"):
+            return reperes_lents.append(route)
         chemin = route.request.url.split("datascope.test", 1)[1].split("?")[0]
         if chemin.startswith("/api/v1/datascope/"):
             code, corps = api.get(chemin[len("/api/v1/datascope/"):], (404, {}))
             return route.fulfill(status=code, content_type="application/json", body=json.dumps(corps))
         f = PAGE.parent / (chemin.removeprefix("/datascope/") or "index.html")
+        if crochet and f.name == "index.html":
+            corps = f.read_text(encoding="utf-8").replace("\n})();\n</script>", f"\nwindow.__t={crochet};\n}})();\n</script>")
+            return route.fulfill(content_type="text/html; charset=utf-8", body=corps)
         if chemin.startswith("/datascope/") and f.is_file():
             return route.fulfill(path=str(f))
         return route.fulfill(status=404, body="")
@@ -35,19 +43,21 @@ def _servir(pg, api):
     return "http://datascope.test/datascope/"
 
 
-def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, **contexte):
+def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, barres=False, crochet=None,
+                reperes_lents=None, **contexte):
     """Exécute `scenario(page)` dans un thread propre (Playwright refuse de tourner sous une boucle asyncio)."""
     def tache():
         with sync_api.sync_playwright() as p:
             try:
-                nav = p.chromium.launch()
+                nav = p.chromium.launch(ignore_default_args=["--hide-scrollbars"] if barres else None)
             except Exception as e:  # navigateur absent
                 return ("skip", str(e), [], [])
             pg = nav.new_page(viewport={"width": largeur, "height": hauteur}, **contexte)
             erreurs, natifs = [], []
             pg.on("pageerror", lambda e: erreurs.append(str(e)))
             pg.on("dialog", lambda d: (natifs.append(d.type), d.dismiss()))
-            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api)) + query)
+            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api, crochet, reperes_lents)) + query,
+                    wait_until="load" if reperes_lents is None else "domcontentloaded")
             pg.wait_for_timeout(400)
             r = scenario(pg)
             nav.close()
@@ -410,3 +420,159 @@ def test_paysage_embed_mouvement_reduit_et_retour():
         return r
     r = _navigateur(sc, query="?demo=1&embed=1", largeur=900, reduced_motion="reduce")
     assert r == ["0s", False, 1, 1, False, False, "true"]
+
+
+# contraste réel d'un texte du graphe : couleur, opacités cumulées, sur le fond le plus clair du panneau (15,32,64)
+CONTRASTE = """() => { const lin = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); },
+  L = c => .2126 * lin(c[0]) + .7152 * lin(c[1]) + .0722 * lin(c[2]), fond = [15, 32, 64];
+  return Math.min(...[...document.querySelectorAll('#topo .lbl, #topo .sous, #topo .col, #pLegende label span')].map(t => {
+    const st = getComputedStyle(t), c = (t.namespaceURI.endsWith('svg') ? st.fill : st.color).match(/[0-9.]+/g).map(Number);
+    let o = c.length > 3 ? c[3] : 1; for (let e = t; e && e.nodeType === 1; e = e.parentNode) o *= +getComputedStyle(e).opacity;
+    const m = [0, 1, 2].map(i => c[i] * o + fond[i] * (1 - o)); return (L(m) + .05) / (L(fond) + .05); })); }"""
+ATTENUE = """() => { const f = document.querySelector("#topo .nd[data-id='infra:secubox-demo'] .f"); let o = 1;
+  for (let e = f; e.nodeType === 1; e = e.parentNode) o *= +getComputedStyle(e).opacity; return o < .6; }"""
+NOEUD = "#topo .nd[data-id='pop:famille:balayage_web']"
+
+
+def test_paysage_selection_lisible_et_sortie_au_clavier():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(250)
+        r = {"avant": pg.evaluate(CONTRASTE)}
+        pg.focus(NOEUD)
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(300)
+        r["choisi"] = (pg.evaluate(CONTRASTE), pg.evaluate(ATTENUE), pg.get_attribute(NOEUD, "aria-pressed"))
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(300)
+        r["second"] = (pg.evaluate(ATTENUE), pg.get_attribute(NOEUD, "aria-pressed"), pg.inner_text("#insp"))
+        pg.keyboard.press("Enter")
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(300)
+        r["echap"] = (pg.evaluate(ATTENUE), pg.get_attribute(NOEUD, "aria-pressed"))
+        pg.keyboard.press("Enter")
+        pg.focus("#insp .actions a")
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(300)
+        r["echap_fiche"] = (pg.get_attribute(NOEUD, "aria-pressed"), pg.evaluate("document.activeElement.getAttribute('data-id')"))
+        pg.keyboard.press("Enter")
+        pg.reload()
+        pg.wait_for_timeout(500)
+        r["retour"] = (pg.evaluate(ATTENUE), pg.get_attribute(NOEUD, "aria-pressed"), "boutique.demo.test" in pg.inner_text("#insp"))
+        return r
+    r = _navigateur(sc, reduced_motion="reduce")
+    assert r["avant"] >= 4.5
+    assert r["choisi"][0] >= 4.5 and r["choisi"][1:] == (True, "true")
+    assert r["second"][:2] == (False, "false") and "Choisir un élément" in r["second"][2]
+    assert r["echap"] == (False, "false")
+    assert r["echap_fiche"] == ("false", "pop:famille:balayage_web")  # focus rendu au nœud, la fiche n'existe plus
+    assert r["retour"] == (False, "true", True)  # sélection et fiche retrouvées, rien d'atténué sans geste
+
+
+def test_paysage_largeur_avec_barres_de_defilement():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        return pg.evaluate("""() => { const t = document.getElementById('topo'); return [t.offsetWidth - t.clientWidth, t.scrollWidth - t.clientWidth,
+            t.querySelector('svg').getBoundingClientRect().height > t.clientHeight]; }""")
+    for hauteur in (500, 1600):
+        barre, trop, vertical = _navigateur(sc, largeur=1400, hauteur=hauteur, barres=True)
+        assert barre > 0 and trop <= 0 and vertical is (hauteur == 500)
+
+
+def test_paysage_fiche_survit_aux_bascules_et_au_rafraichissement():
+    d = _paysage_max()
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.focus("#topo .nd[data-id='pop:famille:p01']")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(150)
+        pg.click("#insp details:last-of-type summary")
+        pg.evaluate("document.querySelector('#insp details:last-of-type summary').dataset.t = '1'")
+        pg.evaluate("document.getElementById('pt-pays').click()")
+        pg.focus("#insp details:last-of-type summary")
+        pg.click("#rafraichir", force=True)
+        pg.focus("#insp details:last-of-type summary")
+        pg.evaluate("window.dispatchEvent(new Event('resize')); document.dispatchEvent(new Event('visibilitychange'))")
+        pg.wait_for_timeout(300)
+        r = [pg.locator("#insp details[open] summary[data-t]").count(), pg.evaluate("document.activeElement.dataset.t")]
+        d["instantane"]["ts"] = "2026-11-24T10:30:00.000000Z"  # nouveau relevé : la fiche est refaite
+        pg.focus("#insp .fJetons .lien")
+        pg.evaluate("document.getElementById('rafraichir').click()")
+        pg.wait_for_timeout(300)
+        r += [pg.locator("#insp summary[data-t]").count(), pg.locator("#insp details[open]").count(),
+              pg.evaluate("document.activeElement.className + ' ' + !!document.activeElement.closest('#insp')")]
+        return r
+    assert _navigateur(sc, query="", api=_api(d)) == [1, "1", 0, 1, "lien true"]
+
+
+def test_paysage_relecture_protegee_du_direct():
+    d = _paysage_max()
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("""() => __t.rejouer({ts: '2026-11-23T10:00:00.000000Z', epoch: 1795000000, partiel: false, compteurs: {populations: 1},
+            graphe: {noeuds: [{id: 'pop:ancienne', type: 'population', libelle: 'ancienne', famille: 'collecte', metriques: {adresses: 7}}], aretes: []}}, null)""")
+        pg.click("#topo .nd[data-id='pop:ancienne'] .prise")
+        pg.evaluate("document.querySelector('#topo svg').dataset.t = '1'")
+        d["instantane"]["ts"] = "2026-11-24T10:30:00.000000Z"
+        d["age_s"] = 9000
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(300)
+        r = [pg.locator("#topo svg[data-t]").count(), pg.locator("#topo .nd").count(), pg.evaluate("Object.keys(__t.paysage.noeuds)"),
+             "ancienne" in pg.inner_text("#insp"), "périmé" in pg.inner_text("#pEtat"), "aucun instantané antérieur" in pg.inner_text("#insp")]
+        pg.evaluate("__t.rejouer(null)")
+        pg.wait_for_timeout(200)
+        r += [pg.locator("#topo .nd").count(), pg.locator("#topo .nd[data-id='pop:ancienne']").count(), pg.evaluate("__t.paysage.ts"),
+              "Absent du relevé" in pg.inner_text("#insp")]
+        return r
+    r = _navigateur(sc, query="", api=_api(d), crochet="{rejouer:rejouerPaysage,paysage:paysage}")
+    assert r == [1, 1, ["pop:ancienne"], True, False, False, 12 * 13 + 82, 0, "2026-11-24T10:30:00.000000Z", True]
+
+
+def test_paysage_session_refusee_efface_la_relecture():
+    api = _api(_paysage_max())
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("__t.rejouer(__t.paysage.rep.instantane, null)")
+        api["paysage"] = (401, {})
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(300)
+        return pg.inner_text("#topo"), pg.evaluate("Object.keys(__t.paysage.noeuds).length")
+    t, n = _navigateur(sc, query="", api=api, crochet="{rejouer:rejouerPaysage,paysage:paysage}")
+    assert "session requise" in t and n == 0
+
+
+def test_paysage_reperes_tardifs_refont_graphe_et_fiche():
+    lents = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.focus("#topo .nd[data-id='pop:famille:p01']")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(150)
+        avant = pg.inner_text("#insp")
+        lents[0].fulfill(path=str(PAGE.parent / "reperes.js"))
+        pg.wait_for_timeout(400)
+        return avant, pg.inner_text("#insp"), pg.text_content("#topo .nd[data-id='pop:famille:p01'] .emo")
+    avant, apres, emo = _navigateur(sc, query="", api=_api(_paysage_max()), reperes_lents=lents)
+    assert "Mots de passe sur la messagerie" not in avant and "✉️ Mots de passe sur la messagerie" in apres and emo == "✉️"
+
+
+def test_paysage_lien_de_la_fiche_donne_le_focus_au_nouveau_titre():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(250)
+        pg.focus(NOEUD)
+        pg.keyboard.press("Enter")
+        pg.focus("#insp .fJetons .lien")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(200)
+        return pg.evaluate("[document.activeElement.className, document.activeElement.textContent]")
+    assert _navigateur(sc) == ["fTitre", "blog.demo.test"]

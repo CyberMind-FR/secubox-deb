@@ -113,6 +113,8 @@
      la place au graphe, le secondaire replié, texte à lire ≥ .85rem */
   .topoPan h3{flex-wrap:wrap}
   .corps.vuePaysage #panSources{display:none !important} .topoPan.vuePaysage .topoCorps{display:block}
+  /* place de la barre verticale toujours réservée : la largeur mesurée avant le dessin reste vraie après */
+  .topoPan.vuePaysage .topo{scrollbar-gutter:stable}
   body:not(.emb) .topoPan.vuePaysage .topo{max-height:max(460px,78vh)}
   @container a (min-width:900px){body:not(.emb) .corps.vuePaysage{grid-template-columns:minmax(0,1fr) 340px}}
   .pas.att{color:var(--orange);background:rgba(255,159,28,.12)}
@@ -131,13 +133,13 @@
   .paysage .halo{fill:none;stroke:var(--orange);stroke-width:1.6;stroke-dasharray:7 4} .paysage .halo2{fill:rgba(255,159,28,.10);stroke:none}
   .paysage .nd.sel .f{stroke:#fff;stroke-width:3} .paysage .nd:focus-visible{outline:none} .paysage .nd:focus-visible .prise{stroke:var(--cyan);stroke-width:2}
   .paysage .ar{cursor:default} .paysage .ar .v{fill:none;stroke:rgba(159,179,214,.26)} .paysage .l-SOURCE_DE .v{stroke:rgba(41,182,246,.28)} .paysage .l-EXPLOITE .v{stroke:rgba(255,159,28,.34)} .paysage .l-VISE .v{stroke:rgba(255,77,94,.30)} .paysage .l-HEBERGE .v{stroke:rgba(159,179,214,.14)} .paysage .l-MEMBRE_DE .v{stroke:rgba(167,139,250,.5)}
-  .paysage .nd,.paysage .ar{transition:opacity .15s} .paysage.foc .nd:not(.voisin):not(.sel){opacity:.3} .paysage.foc .ar:not(.lie){opacity:.22} .paysage .ar.lie .v{stroke:var(--cyan)}
+  .paysage .nd :is(.f,.f2,.emo,.halo,.halo2),.paysage .ar{transition:opacity .15s} .paysage.foc .nd:not(.voisin):not(.sel) :is(.f,.f2,.emo,.halo,.halo2){opacity:.3} .paysage.foc .ar:not(.lie){opacity:.22} .paysage .ar.lie .v{stroke:var(--cyan)}
   .paysage .infob{pointer-events:none} .paysage .ifond{fill:#0b1830;stroke:var(--trait2)} .paysage .infob text.itxt{stroke:none}
   .pLegende{font-size:.85rem;color:var(--doux);margin-top:6px} .pLegende fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:nowrap;gap:0 12px;overflow-x:auto;min-width:0}
   .pLegende legend{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
   .pLegende label{display:inline-flex;align-items:center;gap:2px;min-height:32px;cursor:pointer;white-space:nowrap;flex:none} .pLegende label svg{flex:none} .pLegende input{width:14px;height:14px;margin:0}
   @container t (min-width:560px){.pLegende fieldset{flex-wrap:wrap;overflow-x:visible;gap:0 3px}}
-  .pLegende label.off{color:var(--faible)} .pLegende label.off svg{opacity:.35}
+  .pLegende label.off svg{opacity:.35}
   .pAide{font-size:.85rem;color:var(--doux)} .pAide summary,.insp details summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:8px} .pAide summary::before,.insp details summary::before{content:'▸';color:var(--cyan)} .pAide[open] summary::before,.insp details[open] summary::before{content:'▾'}
   .pAide .puces{display:flex;flex-wrap:wrap;gap:3px 14px;margin:2px 0 6px}
   .vuePaysage .insp{font-size:.85rem} .vuePaysage .insp h4,.vuePaysage dl.props{font-size:.85rem} .vuePaysage .insp h4{margin:8px 0 4px} .vuePaysage dl.props dt{color:var(--doux)} .insp details{font-size:.85rem;color:var(--doux);border-top:1px solid var(--trait)}
@@ -149,7 +151,7 @@
   .fParts{display:flex;flex-wrap:wrap;gap:2px 12px} .fParts i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
   .vuePaysage .actions{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin-top:8px} .vuePaysage .actions a{margin:0;font-size:.85rem;min-height:40px;display:inline-flex;align-items:center}
   @media (pointer:coarse){.pLegende label,.vuePaysage .bt,.fJetons button.lien,.part button.lien{min-height:40px}}
-  @media (prefers-reduced-motion:reduce){.paysage .nd,.paysage .ar{transition:none}}
+  @media (prefers-reduced-motion:reduce){.paysage .nd *,.paysage .ar{transition:none}}
   dl.props{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:.76rem} dl.props dt{color:var(--faible)} dl.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
   .insp h4{margin:12px 0 5px;font-size:.78rem;color:var(--doux);font-weight:700}
   .rel{border-top:1px solid rgba(86,150,255,.12);padding:6px 0;font-size:.74rem;display:grid;gap:3px}
@@ -192,7 +194,7 @@
   // menu latéral commun : hors ?embed=1 et hors démonstration (règle Aurora), chargé sans balise <script src>
   if(!EMB&&!DEMO){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
   // repères partagés avec la page Actor (fichier du paquet, même origine), chargés de la même façon
-  try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(vue==='paysage')rendreTopo();};document.head.appendChild(rp);}catch(e){}
+  try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(vue==='paysage')rendreTopo();if(selection.id&&RE_PID.test(selection.id)){el('insp').removeAttribute('data-cle');inspecter();}};document.head.appendChild(rp);}catch(e){}
   var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques';
   var RE_ID=/^(node|network|interface|device|ip|service):[A-Za-z0-9:._-]{1,128}$/;
   var RE_PID=/^(pop|camp|asn|classe|cible|cve|pays|infra|autres):[A-Za-z0-9:._-]{1,160}$/;
@@ -422,7 +424,8 @@
     t.textContent=court(n.label||n.id,inc?14:22)+(inc?' · inconnu':'');
     activer(g,n.id);
   }
-  function activer(g,id){function choisir(){selectionner(id,{ouvrir:true});}
+  // `bascule` (paysage) : un second clic ou Entrée sur le nœud choisi le désélectionne ; en tiroir fermé, il rouvre la fiche
+  function activer(g,id,bascule){function choisir(){if(bascule){paysage.geste=true;if(selection.id===id&&!(modeTiroir()&&!el('panInsp').classList.contains('ouvert'))){deselectionnerPaysage();return;}}selectionner(id,{ouvrir:true});}
     g.addEventListener('click',choisir);g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();choisir();}});}
   // libellés lisibles à toute largeur : la taille de police suit l'échelle du viewBox (positions inchangées)
   function echelle(){var sv=document.querySelector('#topo svg.bulles');if(!sv)return;var rc=sv.getBoundingClientRect(),vb=sv.viewBox.baseVal;
@@ -544,7 +547,7 @@
   }
   function marquerSelection(){
     var sv=document.querySelector('#topo svg');if(!sv)return;
-    if(sv.classList.contains('paysage')){eclairer(sv,selection.id);return;}
+    if(sv.classList.contains('paysage')){eclairerSelection(sv);return;}
     var id=selection.id,vois={};
     if(id&&selection.type==='arete'){var p=id.split('|');vois[p[0]]=1;vois[p[2]]=1;}
     else if(id)Object.keys(etat.aretes).forEach(function(k){var a=etat.aretes[k];if(a.src===id)vois[a.dst]=1;if(a.dst===id)vois[a.src]=1;});
@@ -597,12 +600,14 @@
   function inspecter(){
     var box=el('insp'),ty=el('inspType'),id=selection.id,mon=++jetonInsp;
     // fiche du paysage : inchangée, elle n'est pas refaite (focus et défilement gardés au rafraîchissement)
-    var pid=!!id&&RE_PID.test(id),cle=pid?[id,paysage.cle,paysage.lu,window.SbxReperes?1:0].join('|'):'';
-    if(cle&&box.getAttribute('data-cle')===cle)return;
+    var pid=!!id&&RE_PID.test(id),cle=pid?[id,paysage.ts,paysage.ref,id.indexOf('infra:')===0&&etat.noeuds['node:'+id.slice(6)]?1:0].join('|'):'',vieille=box.getAttribute('data-cle')||'';
+    if(cle&&vieille===cle)return;
+    // même nœud, nouveau relevé : parties dépliées et focus retrouvés après la réécriture
+    var garde=pid&&vieille.split('|')[0]===id?etatFiche(box):null;
     box.setAttribute('data-cle',cle);vider(box);
     ty.textContent=selection.type?TYPE_FR[selection.type]||selection.type:'';
     if(!id){box.appendChild(h('div',{'class':'vide',text:'Choisir un élément de la topologie.'}));return;}
-    if(pid){inspecterPaysage(box,id);return;}
+    if(pid){inspecterPaysage(box,id);if(garde)retrouverFiche(box,garde);return;}
     if(selection.type==='arete'){inspecterArete(box,id,mon);return;}
     var n=etat.noeuds[id];
     box.appendChild(h('div',{'class':'mono',text:id}));
@@ -666,7 +671,7 @@
     return ks;
   }
   function disposerPaysage(noeuds,aretes,masques,largeur){
-    var N={},liste=noeuds.filter(function(n){return n&&typeof n.id==='string'&&Object.prototype.hasOwnProperty.call(P_TYPE_COL,n.type);}).slice().sort(pParId);
+    var N=Object.create(null),liste=noeuds.filter(function(n){return n&&typeof n.id==='string'&&Object.prototype.hasOwnProperty.call(P_TYPE_COL,n.type);}).slice().sort(pParId);
     liste.forEach(function(n){N[n.id]=n;});
     var A=aretes.filter(function(a){return a&&N[a.de]&&N[a.vers]&&P_REL.indexOf(a.type)>=0;}).slice().sort(function(x,y){var p=x.de+'|'+x.type+'|'+x.vers,q=y.de+'|'+y.type+'|'+y.vers;return p<q?-1:p>q?1:0;});
     // populations de la plus nombreuse à la moins nombreuse ; chaque campagne suit sa population
@@ -715,10 +720,10 @@
   var P_LIENS={'/actor/':['Actor','campagnes et acteurs'],'/waf/':['WAF','pare-feu applicatif'],'/garde/':['Garde','décisions de blocage'],'/nac/':['NAC','appareils du réseau']};
   var P_LIENS_TYPE={population:['/actor/','/waf/','/garde/'],campagne:['/actor/','/waf/'],reseau_source:['/actor/','/waf/','/garde/'],classe_reseau:['/actor/','/waf/'],cible:['/waf/','/nac/'],cve:['/waf/'],pays:['/actor/','/waf/'],infra:['/nac/','/garde/'],autres:['/actor/']};
   var pMasques=(function(){var m=lireStock(CLE_PTYPES);return Array.isArray(m)?m.filter(function(t){return P_TYPES.indexOf(t)>=0;}):P_MASQUES_DEFAUT.slice();})();
-  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',noeuds:{},aretes:[],diff:null},jetonPaysage=0;
+  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',ts:'',ref:'',rejoue:null,geste:false,silence:false,noeuds:Object.create(null),aretes:[],diff:null},jetonPaysage=0;
 
   // Texte du réseau : sans caractère de contrôle, d'espace nul ni de sens d'écriture (un nom ne doit pas se déguiser).
-  function texteSur(t){return String(t==null?'':t).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g,'');}
+  function texteSur(t){return String(t==null?'':t).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u00ad\u061c]/g,'');}
   function tronquer(t,n){var c=Array.from(t);return c.length>n?c.slice(0,n-1).join('')+'…':t;}
   // lignes d'au plus n caractères, coupées aux espaces ; un mot plus long est coupé net
   function couper(t,n){var r=[],l='';t.split(' ').forEach(function(m){var c=Array.from(m);
@@ -769,11 +774,24 @@
   function besoinPaysage(){return vue==='paysage'||Object.prototype.hasOwnProperty.call(TYPE_PREFIXE,String(selection.id||'').split(':')[0]);}
   function prendrePaysage(j){
     paysage.rep=j;paysage.lu=Date.now();paysage.refus=false;paysage.echec=false;
-    var i=j&&j.disponible!==false&&j.instantane&&typeof j.instantane==='object'?j.instantane:null;
-    indexerPaysage(i,j?j.difference_24h:null);
+    if(!paysage.rejoue)indexerAffiche();
+  }
+  // instantané affiché : celui qu'on rejoue s'il y en a un, sinon le direct. Une lecture du direct ne touche ni le dessin,
+  // ni l'index partagé (paysage.noeuds, aretes, diff) tant qu'une relecture est en cours.
+  function affichePaysage(){
+    if(paysage.rejoue)return paysage.rejoue;
+    var r=paysage.rep,i=r&&r.disponible!==false&&r.instantane&&typeof r.instantane==='object'?r.instantane:null;
+    return i?{instantane:i,difference:r.difference_24h||null,motif:r.motif_difference_24h,direct:true}:null;
+  }
+  function indexerAffiche(){var a=affichePaysage();indexerPaysage(a&&a.instantane,a&&a.difference);}
+  // enregistreur (tâche 7) : affiche cet instantané jusqu'à rejouerPaysage(null), qui revient au direct
+  function rejouerPaysage(instantane,difference){
+    paysage.rejoue=instantane?{instantane:instantane,difference:difference||null,motif:'',direct:false}:null;
+    indexerAffiche();apresPaysage();
   }
   function indexerPaysage(i,difference){
-    paysage.noeuds={};paysage.aretes=[];paysage.diff=difference||null;
+    paysage.noeuds=Object.create(null);paysage.aretes=[];paysage.diff=difference||null;
+    paysage.ts=i&&typeof i.ts==='string'?i.ts:'';paysage.ref=difference&&typeof difference.reference_ts==='string'?difference.reference_ts:'';
     var g=i&&i.graphe;if(!g||!Array.isArray(g.noeuds))return;
     g.noeuds.forEach(function(n){if(n&&typeof n.id==='string'&&RE_PID.test(n.id)&&Object.prototype.hasOwnProperty.call(P_TYPE_COL,n.type))paysage.noeuds[n.id]=n;});
     (Array.isArray(g.aretes)?g.aretes:[]).forEach(function(a){if(a&&paysage.noeuds[a.de]&&paysage.noeuds[a.vers])paysage.aretes.push(a);});
@@ -786,7 +804,7 @@
     jget('paysage').then(function(r){
       if(mon!==jetonPaysage)return;
       if(r.ok)prendrePaysage(r.j);
-      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus){paysage.rep=null;indexerPaysage(null,null);}}
+      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus){paysage.rep=null;paysage.rejoue=null;indexerAffiche();}}
       apresPaysage();
     });
   }
@@ -816,25 +834,26 @@
   }
   function horsPaysage(){['pEtat','pLegende','pBarre','pAide'].forEach(function(i){el(i).hidden=true;});}
   function rendreVuePaysage(box){
-    var i=paysage.rep&&paysage.rep.disponible!==false&&paysage.rep.instantane?paysage.rep.instantane:null;
-    if(!i){
+    var a=affichePaysage();
+    if(!a){
       vider(box);paysage.cle='';horsPaysage();el('topoBas').textContent='';
       box.appendChild(h('div',{'class':'vide',text:paysage.refus?'— (session requise : le paysage demande une session d’administration)'
         :!paysage.rep&&!paysage.echec?'Lecture du relevé des populations…'
         :'relevé des populations indisponible'+(paysage.echec?' (API DataScope injoignable ou instantané illisible)':' : aucun instantané enregistré pour le moment')}));
       return;
     }
-    rendreEtatPaysage(i,ageReleve());
+    rendreEtatPaysage(a.instantane,a.direct?ageReleve():null);
     // mêmes données : on ne redessine pas (défilement et focus gardés) — le rafraîchissement des 30 s ne coûte rien
-    var d=paysage.rep.difference_24h,cle=[i.ts,d?d.reference_ts:'',pMasques.join(','),window.SbxReperes?1:0,Math.round(box.clientWidth/16)].join('|');
-    if(paysage.cle===cle&&box.querySelector('svg.paysage'))return;
-    rendreAidePaysage(rendrePaysage(box,i,d));paysage.cle=cle;
+    if(paysage.cle===clePaysage(box,a.instantane,a.difference)&&box.querySelector('svg.paysage'))return;
+    rendreAidePaysage(rendrePaysage(box,a.instantane,a.difference));
     el('topoBas').textContent='';
   }
+  // ce qui détermine le dessin ; posée par rendrePaysage : la clé nomme toujours l'instantané réellement dessiné
+  function clePaysage(box,instantane,difference){return [instantane.ts,difference?difference.reference_ts:'',pMasques.join(','),window.SbxReperes?1:0,Math.round(box.clientWidth/16)].join('|');}
   // Dessine un instantané dans `box`. Réutilisée par les tâches suivantes (évolution, enregistreur).
   function rendrePaysage(box,instantane,difference){
     var sx=box.scrollLeft,sy=box.scrollTop,deja=!!box.querySelector('svg.paysage'),foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-id'):null;
-    vider(box);indexerPaysage(instantane,difference);
+    vider(box);indexerPaysage(instantane,difference);paysage.cle=clePaysage(box,instantane,difference);
     var N=paysage.noeuds,liste=Object.keys(N).map(function(k){return N[k];}),L=disposerPaysage(liste,paysage.aretes,pMasques,box.clientWidth);
     rendreLegendePaysage(liste);
     if(!liste.length){box.appendChild(h('div',{'class':'vide',text:'Aucune population dans ce relevé.'}));return [];}
@@ -854,7 +873,7 @@
     if(deja){box.scrollLeft=sx;box.scrollTop=sy;}
     else if(box.clientWidth<L.W)box.scrollLeft=Math.max(0,L.colonnes[1].x-box.clientWidth/2);  // étroit : les populations d'abord
     if(foc){var nf=Array.prototype.filter.call(sv.querySelectorAll('.nd'),function(n){return n.getAttribute('data-id')===foc;})[0];if(nf)try{nf.focus({preventScroll:true});}catch(e){}}
-    var notes=['Épaisseur d’un trait = volume (adresses pour un réseau). Survol ou focus : nom complet ; clic : fiche. Le graphe défile dans son cadre.'];
+    var notes=['Épaisseur d’un trait = volume (adresses pour un réseau). Survol ou focus : nom complet ; clic : fiche ; second clic, Entrée ou Échap : désélectionner. Le graphe défile dans son cadre.'];
     if(pMasques.indexOf('pays')>=0)notes.push('Pays repliés : à cocher dans la légende.');
     marquerSelection();
     return notes;
@@ -886,9 +905,9 @@
     var dy=formePaysage(g,n,p.x,p.y),sous=sousPaysage(n);
     var t=s('text',{'class':'lbl',x:p.x,y:p.y+dy+13,'text-anchor':'middle'},g);t.textContent=tronquer(courtPaysage(n),Math.floor((p.l-8)/7.6));
     if(sous){var t2=s('text',{'class':'sous',x:p.x,y:p.y+dy+29,'text-anchor':'middle'},g);t2.textContent=tronquer(sous,Math.floor(p.l/7.4));}
-    activer(g,n.id);
-    function montrer(){infoPaysage(sv,n,p,L);eclairer(sv,n.id);}
-    function cacher(){infoPaysage(sv,null);eclairer(sv,selection.id);}
+    activer(g,n.id,true);
+    function montrer(){if(paysage.silence)return;infoPaysage(sv,n,p,L);eclairer(sv,n.id);}
+    function cacher(){infoPaysage(sv,null);eclairerSelection(sv);}
     g.addEventListener('mouseenter',montrer);g.addEventListener('mouseleave',cacher);g.addEventListener('focus',montrer);g.addEventListener('blur',cacher);
   }
   // nom complet et chiffres au survol ou au focus, dans la partie visible du cadre
@@ -905,7 +924,17 @@
     fond.setAttribute('width',larg);fond.setAttribute('height',haut);
     Array.prototype.forEach.call(t.childNodes,function(ts,i){ts.setAttribute('x',8);if(!i)ts.setAttribute('y',18);});
   }
-  // met en avant un nœud et ses voisins, atténue le reste
+  // sélection retrouvée d'une visite précédente : marquée, mais rien n'est atténué avant un geste
+  function eclairerSelection(sv){eclairer(sv,paysage.geste?selection.id:null);}
+  function deselectionnerPaysage(){
+    var id=selection.id,dedans=el('panInsp').contains(document.activeElement);
+    if(modeTiroir())ouvrir('panInsp',false);
+    selectionner(null);
+    if(dedans){var n=Array.prototype.filter.call(document.querySelectorAll('#topo .nd'),function(x){return x.getAttribute('data-id')===id;})[0];
+      if(n){paysage.silence=true;try{n.focus();}catch(e){}paysage.silence=false;}}
+  }
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&vue==='paysage'&&selection.id&&RE_PID.test(selection.id)){e.preventDefault();deselectionnerPaysage();}});
+  // met en avant un nœud et ses voisins : formes et traits sans rapport atténués, libellés intacts
   function eclairer(sv,id){
     var vois={},ok=!!(id&&paysage.noeuds[id]);
     if(ok){vois[id]=1;paysage.aretes.forEach(function(a){if(a.de===id)vois[a.vers]=1;if(a.vers===id)vois[a.de]=1;});}
@@ -942,7 +971,20 @@
   }
 
   // --- fiche (inspecteur) : formes compactes, le secondaire replié ---
-  function lienPaysage(n){var b=h('button',{type:'button','class':'lien',text:(n.type==='pays'&&window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+nomPaysage(n),title:nomPaysage(n)});b.addEventListener('click',function(){selectionner(n.id);});return b;}
+  function lienPaysage(n){var b=h('button',{type:'button','class':'lien',text:(n.type==='pays'&&window.SbxReperes?SbxReperes.drapeau(n.libelle)+' ':'')+nomPaysage(n),title:nomPaysage(n)});
+    // la fiche est remplacée : le focus passe à son nouveau titre, il ne retombe pas en haut de la page
+    b.addEventListener('click',function(){paysage.geste=true;selectionner(n.id);var t=el('insp').querySelector('.fTitre');if(t)t.focus();});return b;}
+  function etatFiche(box){
+    var act=document.activeElement,f=act&&box.contains(act)?act:null,foc=null;
+    if(f){var t=f.tagName.toLowerCase(),memes=Array.prototype.filter.call(box.querySelectorAll(t),function(x){return x.textContent===f.textContent;});foc={tag:t,texte:f.textContent,cle:f.getAttribute('data-k'),rang:memes.indexOf(f)};}
+    return {ouverts:Array.from(box.querySelectorAll('details[open]')).map(function(d){return d.getAttribute('data-k');}),foc:foc};
+  }
+  function retrouverFiche(box,g){
+    Array.prototype.forEach.call(box.querySelectorAll('details'),function(d){if(g.ouverts.indexOf(d.getAttribute('data-k'))>=0)d.open=true;});
+    if(!g.foc)return;
+    var l=Array.prototype.filter.call(box.querySelectorAll(g.foc.tag),function(x){return g.foc.cle?x.getAttribute('data-k')===g.foc.cle:x.textContent===g.foc.texte;}),n=l[Math.max(0,g.foc.rang)]||l[0]||box.querySelector('.fTitre');
+    if(n)try{n.focus({preventScroll:true});}catch(e){}
+  }
   function fichePaysage(l){var dl=h('dl',{'class':'props'});l.forEach(function(p){dl.appendChild(h('dt',{text:p[0]}));dl.appendChild(h('dd',{text:p[1]}));});return dl;}
   function dateEpoch(v){return typeof v==='number'&&isFinite(v)?fmtDate(new Date(v*1000).toISOString()):'—';}
   function pct(v){return typeof v==='number'&&isFinite(v)?nombre(v)+' %':'—';}
@@ -950,20 +992,20 @@
   function jauge(p,coul){var i=h('i');i.style.width=borne100(p)+'%';if(coul)i.style.background=coul;return h('div',{'class':'jauge','aria-hidden':'true'},[i]);}
   // une ligne : nom (bouton ou texte), valeur, barre ; titre = nom complet
   function partPaysage(nom,valeur,p){return h('div',{'class':'part'},[h('span',{'class':'n'},[nom]),h('span',{'class':'v',text:valeur}),jauge(p)]);}
-  function replie(resume,kids){return h('details',{},[h('summary',{text:resume})].concat(kids));}
+  function replie(cle,resume,kids){return h('details',{'data-k':cle},[h('summary',{'data-k':'s-'+cle,text:resume})].concat(kids));}
   function lies(id,type,sortant){return paysage.aretes.filter(function(a){return a.type===type&&(sortant?a.de:a.vers)===id;}).sort(function(a,b){return pNombre(b.poids)-pNombre(a.poids)||(a.de+a.vers<b.de+b.vers?-1:1);});}
   function listeParts(box,titre,aretes,autre,unite,max,vus){
     if(!aretes.length)return;box.appendChild(h('h4',{text:titre+' ('+aretes.length+')'}));
     var m=max||aretes.reduce(function(t,a){return Math.max(t,pNombre(a.poids));},1);
     var l=aretes.map(function(a){return partPaysage(lienPaysage(paysage.noeuds[a[autre]]),nombre(a.poids)+unite,pNombre(a.poids)*100/m);});
     l.slice(0,vus||6).forEach(function(n){box.appendChild(n);});
-    if(l.length>(vus||6))box.appendChild(replie('+ '+(l.length-(vus||6))+' autres',l.slice(vus||6)));
+    if(l.length>(vus||6))box.appendChild(replie(titre,'+ '+(l.length-(vus||6))+' autres',l.slice(vus||6)));
   }
   function jetons(box,titre,aretes,autre){
     if(!aretes.length)return;box.appendChild(h('h4',{text:titre+' ('+aretes.length+')'}));
     var l=aretes.map(function(a){return lienPaysage(paysage.noeuds[a[autre]]);});
     box.appendChild(h('div',{'class':'fJetons'},l.slice(0,8)));
-    if(l.length>8)box.appendChild(replie('+ '+(l.length-8)+' autres',[h('div',{'class':'fJetons'},l.slice(8))]));
+    if(l.length>8)box.appendChild(replie(titre,'+ '+(l.length-8)+' autres',[h('div',{'class':'fJetons'},l.slice(8))]));
   }
   function classesEmpilees(box,classes){
     var l=Object.keys(classes).map(function(c){return [c,borne100(classes[c])];}).filter(function(x){return x[1]>0;}).sort(function(a,b){return b[1]-a[1]||(a[0]<b[0]?-1:1);});
@@ -978,9 +1020,9 @@
   function inspecterPaysage(box,id){
     var n=paysage.noeuds[id];
     if(!n){box.appendChild(h('div',{'class':'mono',text:id}));
-      box.appendChild(h('div',{'class':'note',text:paysage.rep?'Absent du relevé affiché (disparu, ou hors des plafonds d’affichage).':'Relevé des populations non chargé.'}));return;}
+      box.appendChild(h('div',{'class':'note',text:affichePaysage()?'Absent du relevé affiché (disparu, ou hors des plafonds d’affichage).':'Relevé des populations non chargé.'}));return;}
     var m=metr(n),puces=[],secondaire=[['Identifiant',n.id]],resume='Identifiant',b;
-    box.appendChild(h('div',{'class':'fTitre',text:nomPaysage(n)}));
+    box.appendChild(h('div',{'class':'fTitre',tabindex:'-1',text:nomPaysage(n)}));
     if(n.type==='population'){
       puces.push(texteRepere(repereFamille(n.famille)));if(m.rotation===true)puces.push(texteRepere(repereRotation()));var et=repereEtat(m.etat);puces.push(et?texteRepere(et):'état —');
     }else if(n.type==='reseau_source')puces.push('AS'+n.id.slice(4),texteRepere(repereClasse(n.classe)));
@@ -1008,18 +1050,18 @@
     }
     evolutionPaysage(box,n);
     if(n.type==='infra'){var nd='node:'+n.id.slice(6);if(etat.noeuds[nd]){
-      b=h('button',{type:'button','class':'bt',text:'Voir cette box dans la vue Bulles'});b.addEventListener('click',function(){choisirVue('bulles');selectionner(nd);});box.appendChild(b);}}
+      b=h('button',{type:'button','class':'bt',text:'Voir cette box dans la vue Bulles'});b.addEventListener('click',function(){choisirVue('bulles');selectionner(nd);el('vueBulles').focus();});box.appendChild(b);}}
     box.appendChild(h('div',{'class':'actions',title:'Cette vue est en lecture seule : les actions se font dans ces pages.'},[h('span',{text:'Agir dans'})].concat((P_LIENS_TYPE[n.type]||[]).map(function(u){return h('a',{href:u,target:'_top',title:P_LIENS[u][1],text:P_LIENS[u][0]});}))));
-    box.appendChild(replie(resume,[fichePaysage(secondaire)]));
+    box.appendChild(replie('secondaire',resume,[fichePaysage(secondaire)]));
   }
   function evolutionPaysage(box,n){
-    var d=paysage.diff,r=paysage.rep||{};
+    var d=paysage.diff,a=affichePaysage()||{};
     box.appendChild(h('h4',{text:'Évolution sur 24 h'}));
-    if(!d){box.appendChild(h('div',{'class':'note',text:'— '+(r.motif_difference_24h?texteSur(r.motif_difference_24h):'comparaison indisponible')}));return;}
+    if(!d){box.appendChild(h('div',{'class':'note',text:'— '+(a.motif?texteSur(a.motif):'comparaison indisponible')}));return;}
     var dans=function(k){return Array.isArray(d[k])&&d[k].indexOf(n.id)>=0;},l=[];
     if(dans('apparus'))l.push('✚ apparu depuis la référence');
-    if(dans('rotation_levee'))l.push(texteRepere(repereRotation())+' : levée depuis la référence');
-    if(dans('rotation_tombee'))l.push(texteRepere(repereRotation())+' : retombée depuis la référence');
+    if(dans('rotation_levee'))l.push(texteRepere(repereRotation())+' : apparue depuis la référence');
+    if(dans('rotation_tombee'))l.push(texteRepere(repereRotation())+' : terminée depuis la référence');
     [['hausses','▲ en hausse'],['baisses','▼ en baisse']].forEach(function(k){(Array.isArray(d[k[0]])?d[k[0]]:[]).forEach(function(x){if(x&&x.id===n.id)l.push(k[1]+' : '+texteSur(x.metrique)+' de '+nombre(x.de)+' à '+nombre(x.a));});});
     if(!l.length)l.push('pas de changement notable');
     box.appendChild(h('div',{'class':'fPuces'},l.map(function(t){return h('span',{text:t});})));
