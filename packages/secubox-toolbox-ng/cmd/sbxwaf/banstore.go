@@ -37,13 +37,15 @@ type BanRecord struct {
 }
 
 // BanStore sérialise l'accès à un fichier JSONL append-only, compacté par Compacter (#3816,
-// banstore_compactage.go) : mu sérialise les ajouts, les relectures et le rename du compactage ;
-// compactMu, les passes de compactage entre elles.
+// banstore_compactage.go) : mu sérialise les ajouts, les relectures entières et le rename du compactage ;
+// compactMu, les passes de compactage entre elles. idxMu garde l'index seul (#3932) : le suivi du journal, et sa première
+// lecture entière, n'attendent ni ne retiennent mu, que le chemin de requête prend. Ordre : mu → idxMu.
 type BanStore struct {
 	path      string
 	mu        sync.Mutex
 	compactMu sync.Mutex
-	idx       *indexBans // dernier état par adresse, relu au fil du fichier (#3930) ; sous mu
+	idxMu     sync.Mutex
+	idx       *indexBans // dernier état par adresse, relu au fil du fichier (#3930) ; sous idxMu
 }
 
 func NewBanStore(path string) *BanStore {
@@ -84,15 +86,15 @@ func (s *BanStore) ActiveBans(now int64) []BanRecord {
 	if s == nil {
 		return nil
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.idxMu.Lock()
+	defer s.idxMu.Unlock()
 	f, err := os.Open(s.path)
 	if err != nil {
 		s.idx = nil
 		return nil // journal absent = aucun ban
 	}
 	defer f.Close()
-	s.suivre(f, now)
+	_ = s.suivre(f, now)
 	var actifs []BanRecord
 	if n := len(s.idx.dernier); n > 0 {
 		actifs = make([]BanRecord, 0, n)
@@ -114,60 +116,44 @@ func (s *BanStore) Actif(ip string, now int64) (BanRecord, bool) {
 	if s == nil {
 		return BanRecord{}, false
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.idxMu.Lock()
+	defer s.idxMu.Unlock()
 	f, err := os.Open(s.path)
 	if err != nil {
 		s.idx = nil
 		return BanRecord{}, false
 	}
 	defer f.Close()
-	s.suivre(f, now)
+	_ = s.suivre(f, now)
 	r, ok := s.idx.dernier[cleBan(ip)]
 	return r, ok && (r.Expires == 0 || r.Expires > now)
 }
 
-// Levees rend, parmi `adresses` (clés de cleBan), celles dont la dernière ligne au journal est un « unban ». Relit tout le journal ; toute erreur
-// de lecture, absence comprise, est rendue : elle ne dit jamais « levé ».
-func (s *BanStore) Levees(adresses map[string]netip.Addr) (map[string]struct{}, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Levees rend, parmi `adresses`, celles dont la dernière ligne au journal est un « unban ». L'index suit le journal : seuls
+// les octets ajoutés depuis la dernière lecture sont lus (#3932). Toute erreur de lecture, absence comprise, est rendue :
+// elle ne dit jamais « levé ».
+func (s *BanStore) Levees(adresses []netip.Addr, now int64) (map[netip.Addr]struct{}, error) {
+	levees := map[netip.Addr]struct{}{}
+	if s == nil || len(adresses) == 0 {
+		return levees, nil
+	}
+	s.idxMu.Lock()
+	defer s.idxMu.Unlock()
 	f, err := os.Open(s.path)
 	if err != nil {
+		s.idx = nil
 		return nil, err
 	}
 	defer f.Close()
-	levees := map[string]struct{}{}
-	r := bufio.NewReaderSize(f, 256*1024)
-	var long []byte
-	var taille int
-	for {
-		morceau, err := r.ReadSlice('\n')
-		if err != nil && err != io.EOF && !errors.Is(err, bufio.ErrBufferFull) {
-			return nil, err
-		}
-		if taille += len(morceau); taille <= ligneMaxLectures { // sinon : ligne démesurée, ignorée comme par l'index
-			long = append(long, morceau...)
-		}
-		if errors.Is(err, bufio.ErrBufferFull) {
-			continue
-		}
-		var rec BanRecord
-		if taille <= ligneMaxLectures && json.Unmarshal(long, &rec) == nil && rec.IP != "" {
-			cle := cleBan(rec.IP)
-			if _, ok := adresses[cle]; ok {
-				if rec.Action == "unban" {
-					levees[cle] = struct{}{}
-				} else {
-					delete(levees, cle)
-				}
-			}
-		}
-		if err == io.EOF {
-			return levees, nil
-		}
-		long, taille = long[:0], 0
+	if err := s.suivre(f, now); err != nil {
+		return nil, err
 	}
+	for _, a := range adresses {
+		if _, ok := s.idx.leves[a.Unmap().String()]; ok {
+			levees[a] = struct{}{}
+		}
+	}
+	return levees, nil
 }
 
 // cleBan : une adresse, une clé, quelle que soit son écriture au journal (IPv6 non abrégée, IPv4 en ::ffff:). Un unban
@@ -189,30 +175,43 @@ type indexBans struct {
 	lu        int64  // octets consommés : fin d'une ligne complète
 	empreinte []byte // derniers octets avant lu
 	dernier   map[string]BanRecord
-	horizon   int64 // plus grand `now` servi : les échus d'avant horizon-margeIndex sont oubliés
+	leves     map[string]int64 // adresses dont la dernière ligne est un « unban » → sa date (bornée : margeLeves)
+	horizon   int64            // plus grand `now` servi : les échus d'avant horizon-margeIndex sont oubliés
+
+	leveesPurgees int64
 }
 
 const (
 	margeIndex       = 3600
+	margeLeves       = 86400 // une levée plus vieille que toute passe de repose est oubliée
 	tailleEmpreinte  = 64
 	ligneMaxLectures = 1024 * 1024
 )
 
-// suivre met l'index à jour depuis f (mu tenu).
-func (s *BanStore) suivre(f *os.File, now int64) {
+// suivre met l'index à jour depuis f (idxMu tenu). Erreur : le journal n'a pas pu être lu jusqu'au bout.
+func (s *BanStore) suivre(f *os.File, now int64) error {
 	st, err := f.Stat()
 	x := s.idx
 	if err != nil || x == nil || !os.SameFile(st, x.fichier) || st.Size() < x.lu || now < x.horizon-margeIndex || !x.memeDebut(f) {
-		x = &indexBans{dernier: map[string]BanRecord{}}
+		x = &indexBans{dernier: map[string]BanRecord{}, leves: map[string]int64{}}
 		s.idx = x
 	}
 	x.fichier = st
 	if now > x.horizon {
 		x.horizon = now
 	}
-	if _, err := f.Seek(x.lu, io.SeekStart); err != nil {
-		return
+	if now-x.leveesPurgees > margeIndex {
+		x.leveesPurgees = now
+		for ip, at := range x.leves {
+			if at <= now-margeLeves {
+				delete(x.leves, ip)
+			}
+		}
 	}
+	if _, err := f.Seek(x.lu, io.SeekStart); err != nil {
+		return err
+	}
+	var lecture error
 	r := bufio.NewReaderSize(f, 256*1024)
 	var long []byte
 	var taille int64 // octets de la ligne en cours
@@ -233,12 +232,16 @@ func (s *BanStore) suivre(f *os.File, now int64) {
 			x.appliquer(ligne, now)
 		} // sinon : ligne démesurée, ignorée comme une ligne corrompue
 		if err != nil {
+			if err != io.EOF {
+				lecture = err
+			}
 			break // fin de fichier ; une fin sans « \n » est lue mais non consommée (écriture en cours)
 		}
 		x.lu += taille
 		long, taille = long[:0], 0
 	}
 	x.marquer(f)
+	return lecture
 }
 
 func (x *indexBans) appliquer(ligne []byte, now int64) {
@@ -247,6 +250,10 @@ func (x *indexBans) appliquer(ligne []byte, now int64) {
 		return // ligne corrompue : on l'ignore, on ne casse pas la relecture
 	}
 	r.IP = cleBan(r.IP)
+	delete(x.leves, r.IP)
+	if r.Action == "unban" && r.At > now-margeLeves {
+		x.leves[r.IP] = r.At
+	}
 	if r.Action != "ban" || (r.Expires != 0 && r.Expires <= now-margeIndex) {
 		delete(x.dernier, r.IP)
 		return
@@ -273,7 +280,7 @@ func (x *indexBans) memeDebut(f *os.File) bool {
 	return b != nil && bytes.Equal(b, x.empreinte)
 }
 
-// deplacer suit le compactage (mu tenu) : `fin` octets recopiés tels quels depuis l'octet n de l'ancien fichier terminent
+// deplacer suit le compactage (mu et idxMu tenus) : `fin` octets recopiés tels quels depuis l'octet n de l'ancien fichier terminent
 // le nouveau, et le reste rend le même état (banstore_compactage.go) : l'index vaut toujours, seule sa position change.
 func (s *BanStore) deplacer(nouveau os.FileInfo, n, fin int64) {
 	x := s.idx

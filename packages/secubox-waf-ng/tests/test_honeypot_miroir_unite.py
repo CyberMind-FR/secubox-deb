@@ -52,3 +52,15 @@ def test_un_seul_processus_porte_le_detecteur_de_rotation():
     """Ailleurs, la page et ses ressources seraient vues par des processus différents (verrou du binaire en plus)."""
     porteurs = [f.name for f in (PKG / "systemd").iterdir() if "--rotation" in f.read_text()]
     assert porteurs == ["secubox-waf-ng.service"], porteurs
+
+
+def test_le_dropin_du_leurre_vide_execstart_puis_le_redefinit_une_fois():
+    """Sans le `ExecStart=` vide, une unité `simple` aurait deux commandes : systemd refuserait de la charger (port fermé)."""
+    lignes = [l for l in (PKG / "conf" / "honeypot.conf").read_text().splitlines() if l.startswith("ExecStart=")]
+    assert lignes[0] == "ExecStart=" and len(lignes) == 2 and lignes[1].startswith("ExecStart=/usr/sbin/sbxwaf")
+
+
+def test_une_seule_commande_dans_l_unite():
+    """Le postinst compare la surcharge locale à CE bloc (#3932)."""
+    lignes = [l for l in (PKG / "systemd" / "secubox-waf-ng.service").read_text().splitlines() if l.startswith("ExecStart=")]
+    assert lignes == ["ExecStart=/usr/sbin/sbxwaf \\"]

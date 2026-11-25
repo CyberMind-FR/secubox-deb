@@ -24,3 +24,24 @@ def test_attente_bornee_couverte_par_le_delai():
     delai = int(re.search(r"^TimeoutStartSec=(\d+)$", UNIT, re.M).group(1))
     assert delai > attente + 10
     assert SCRIPT.rstrip().endswith("exit 0")
+
+
+# ── #3939 : sans actord, l'unité est passée au lieu d'attendre 960 s et d'échouer (un changement de profil annulé) ──
+def test_ingest_passee_sans_actord_actif():
+    assert re.findall(r"^ExecCondition=(.*)$", UNIT, re.M) == ["/bin/systemctl -q is-active secubox-actord.service"]
+    # une CONDITION, pas un ExecStartPre (dont l'échec met l'unité en échec), et avant l'attente de la socket
+    assert "ExecStartPre=" not in UNIT and UNIT.index("ExecCondition=") < UNIT.index("\nExecStart=")
+
+
+def test_actord_est_actif_pendant_tout_son_rejeu():
+    """La condition ne vaut que si « active » ne veut pas dire « socket ouverte » : Type=simple, sans ExecStartPre ni ExecStartPost
+    (« activating » tant qu'ils tournent). Un passage à Type=notify/exec long ferait passer l'unité pendant les 11 min de rejeu."""
+    assert re.findall(r"^Type=(.*)$", ACTORD, re.M) == ["simple"]
+    assert not re.search(r"^ExecStart(Pre|Post)=", ACTORD, re.M)
+
+
+def test_ingest_toujours_tiree_par_le_demarrage_d_actord():
+    assert re.search(r"^WantedBy=secubox-actord\.service$", UNIT, re.M)
+    assert re.search(r"^Wants=secubox-actord-ingest\.service$", ACTORD, re.M)
+    assert re.search(r"^After=secubox-actord\.service$", UNIT, re.M)     # la condition est lue une fois actord actif
+    assert not re.search(r"^(Requires|Requisite)=", UNIT, re.M)

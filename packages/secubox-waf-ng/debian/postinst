@@ -334,6 +334,19 @@ PROTEGEES
       esac
     fi
 
+    # ── 5c. Règles du WAF (#1858, #3932) : AVANT l'unique relance de la section 6.
+    # Le postinst du composant les mettait à jour après elle et relançait sbxwaf
+    # une fois de plus quand elles avaient changé. Les livrées passent, les
+    # générées restent ; sauvegarde `.avant-<version>`.
+    if [ -x /usr/sbin/waf-rules-sync ]; then
+      sbx_regles=0
+      /usr/sbin/waf-rules-sync --version "${2:-nouveau}" || sbx_regles=$?
+      case "$sbx_regles" in
+        0|10) ;;
+        *) echo "secubox-waf-ng: mise à jour des règles refusée (code $sbx_regles) — /etc/secubox/waf/waf-rules.json laissé intact" >&2 ;;
+      esac
+    fi
+
     # ── 6. Systemd: single hardened unit (#896 reconcile) ────────────────────
     # The crash-looping worker@ fan-out is retired. Retire any leftover worker@
     # instances, drop the hand-created /etc override that shadowed the packaged
@@ -371,27 +384,134 @@ PROTEGEES
       fi
 
       systemctl daemon-reload || true
-      # Fresh install starts it; upgrade restarts it (dpkg SIGTERMs the unit
-      # before this postinst runs, so `restart` — not `try-restart` — is needed
-      # to bring it back). HAProxy srv0 → 127.0.0.1:8085 keeps pointing at it.
-      systemctl restart secubox-waf-ng.service 2>/dev/null || true
+
+      # >>> avertir (#3932)
+      sbx_avertir() {
+        echo "secubox-waf-ng: ATTENTION — $*" >&2
+        if command -v logger >/dev/null 2>&1; then
+          logger -t secubox-waf-ng -p daemon.warning -- "$*" || true
+        fi
+      }
+      # La ligne de commande EFFECTIVE (unité + surcharge locale), mots séparés par des espaces.
+      sbx_execstart() {
+        systemctl show secubox-waf-ng.service -p ExecStart --value 2>/dev/null \
+          | sed -n 's/^{ path=[^;]* ; argv\[\]=\(.*\) ; ignore_errors=.*/\1/p' | tail -n 1
+      }
+      # <<< avertir (#3932)
+
+      # >>> drapeaux de la surcharge (#3932)
+      # Une surcharge qui redéfinit ExecStart (conf/honeypot.conf recopié à la
+      # main) garde l'ancienne liste : un drapeau ajouté à l'unité y reste sans
+      # effet, sans erreur (2026-10-07). On le DIT ; la surcharge n'est jamais
+      # modifiée : elle appartient à l'administrateur.
+      _unite=""
+      for _f in ${WAF_UNITE:-/usr/lib/systemd/system/secubox-waf-ng.service /lib/systemd/system/secubox-waf-ng.service}; do
+        if [ -f "$_f" ]; then _unite="$_f"; break; fi
+      done
+      _effectifs=$(sbx_execstart | grep -oE -- ' --?[a-z0-9-]+' | sed 's/^ -*//' | tr '\n' ' ' || true)
+      if [ -n "$_unite" ] && [ -n "$_effectifs" ]; then
+        _absents=""
+        for _d in $(sed -n '/^ExecStart=\/usr\/sbin\/sbxwaf/,/[^\\]$/p' "$_unite" | grep -oE -- '(^| )--[a-z0-9-]+' | sed 's/^ *-*//'); do
+          case " $_effectifs" in
+            *" $_d "*) ;;
+            *) _absents="$_absents --$_d" ;;
+          esac
+        done
+        if [ -n "$_absents" ]; then
+          sbx_avertir "la surcharge locale d'ExecStart (systemctl cat secubox-waf-ng) n'a pas ces drapeaux de l'unité, sans effet sur cette box :$_absents — modèle à jour : /usr/share/secubox/waf/honeypot.conf (surcharge laissée telle quelle)"
+        fi
+      fi
+      # <<< drapeaux de la surcharge (#3932)
+
+      # >>> vérification avant la relance (#3932)
+      # Le NOUVEAU binaire, la ligne de commande effective, le compte du service :
+      # drapeaux, règles, routes. Pendant ce temps l'ancien processus sert encore.
+      sbx_verifier() {
+        set -f
+        _mots=$(sbx_execstart)
+        # shellcheck disable=SC2086
+        set -- $_mots
+        set +f
+        [ "${1:-}" = "/usr/sbin/sbxwaf" ] || return 0   # surcharge d'un autre genre : rien à vérifier
+        shift
+        # La dernière ligne, comme systemd : une plage trop large doit être refusée ICI.
+        _plages=$(sed -n 's/^[[:space:]]*SECUBOX_WAF_PROTEGEES=//p' "${WAF_PROTEGEES_ENV:-/etc/secubox/waf/protegees.env}" 2>/dev/null | tail -n 1 | tr -d "\"'" || true)
+        _n=$#
+        while [ "$_n" -gt 0 ]; do
+          _m="$1"; shift
+          # shellcheck disable=SC2016
+          [ "$_m" = '${SECUBOX_WAF_PROTEGEES}' ] && _m="$_plages"
+          set -- "$@" "$_m"
+          _n=$((_n - 1))
+        done
+        # --verifier en TÊTE : après un mot sans tiret, il ne serait plus lu et le WAF démarrerait.
+        timeout 30 setpriv --reuid secubox-waf --regid secubox-waf --init-groups -- \
+          "${WAF_BINAIRE:-/usr/sbin/sbxwaf}" --verifier "$@" 2>&1
+      }
+      # Les propriétaires que l'unité reposera de toute façon (ExecStartPre) : sans eux, un journal à un autre
+      # compte, que la relance réparerait, ferait refuser la nouvelle version. Les liens ne sont pas suivis.
+      chown -R secubox-waf:secubox-waf /var/log/secubox/cookie-audit /var/log/secubox/waf 2>/dev/null || true
+      sbx_relancer=1
+      if ! _bilan=$(sbx_verifier) && systemctl is-active --quiet secubox-waf-ng.service; then
+        sbx_relancer=""
+        sbx_avertir "la nouvelle version ne peut pas démarrer ($(printf '%s\n' "$_bilan" | head -n 1)) : l'ancienne continue de servir, rien n'est relancé. Corriger, puis relancer l'unité secubox-waf-ng ; sans cela elle s'arrête au plus tard 12 h après son démarrage (RuntimeMaxSec) et ne repart pas."
+      fi
+      # <<< vérification avant la relance (#3932)
+
+      # UNE SEULE relance par mise à jour (#3932). Le 2026-11-24 il y en a eu deux
+      # (16:47 puis 16:48) : celle-ci et celle de l'extrait debhelper, désormais
+      # un simple `start` sans effet sur un service qui tourne (debian/rules,
+      # --no-restart-after-upgrade). `restart` et pas `try-restart` : il doit
+      # tourner au bout, première installation comprise.
+      if [ -n "$sbx_relancer" ]; then
+        systemctl restart secubox-waf-ng.service 2>/dev/null || true
+      fi
       # #1693 : VÉRIFIER qu'il tourne vraiment. Sur gk3, sbxwaf était tué par
       # seccomp dès le démarrage et bouclait (35 000+ redémarrages) sans que rien
       # ne le dise : `restart` rend la main avant que le processus ne meure. On
       # attend l'écoute sur 8085 et, si --nft-ban est actif, la chaîne de drop.
       # Avertissement seulement : un postinst en échec bloquerait apt et les
       # mises à jour nocturnes, qui sont justement le moyen de corriger.
-      sbx_ok=""
-      for _i in 1 2 3 4 5 6 7 8 9 10; do
-        if ss -ltn 2>/dev/null | grep -q '127.0.0.1:8085 '; then sbx_ok=1; break; fi
-        sleep 1
-      done
-      if [ -z "$sbx_ok" ]; then
-        echo "secubox-waf-ng: ATTENTION — sbxwaf n'écoute pas sur 127.0.0.1:8085 après redémarrage." >&2
+      # >>> réponse réelle (#3932)
+      # Le port s'ouvre AVANT le chargement : l'écoute ne prouve plus rien (un
+      # binaire qui panique ensuite, ou reste figé, l'a ouvert aussi). On exige une
+      # RÉPONSE HTTP (2xx, 3xx ou 4xx : 421 pour un nom sans route) et aucun
+      # redémarrage entre-temps. `Host: localhost` depuis la boucle locale : trafic
+      # de la box avec elle-même, ni menace ni anomalie au journal.
+      sbx_repond() {
+        _avant=$(systemctl show secubox-waf-ng.service -p NRestarts --value 2>/dev/null || true)
+        _code=000
+        _i=0
+        while [ "$_i" -lt "${WAF_ESSAIS:-12}" ]; do
+          _code=$(curl --noproxy '*' -s -o /dev/null -m 3 -w '%{http_code}' -H 'Host: localhost' http://127.0.0.1:8085/ 2>/dev/null) || _code=000
+          case "$_code" in 2??|3??|4??) break ;; esac
+          _i=$((_i + 1))
+          sleep 1
+        done
+        case "$_code" in 2??|3??|4??) ;; *) sbx_motif="aucune réponse HTTP valable (dernier code $_code)"; return 1 ;; esac
+        # Une panique juste après le premier service : RestartSec=5.
+        sleep "${WAF_REPOS:-6}"
+        _apres=$(systemctl show secubox-waf-ng.service -p NRestarts --value 2>/dev/null || true)
+        if [ "$_apres" != "$_avant" ] || ! systemctl is-active --quiet secubox-waf-ng.service; then
+          sbx_motif="le service redémarre en boucle ou s'est arrêté (NRestarts ${_avant:-?} puis ${_apres:-?})"
+          return 1
+        fi
+      }
+      sbx_motif=""
+      # <<< réponse réelle (#3932)
+      if ! sbx_repond; then
+        sbx_avertir "sbxwaf ne sert pas sur 127.0.0.1:8085 après la mise à jour : $sbx_motif"
         echo "  → systemctl status secubox-waf-ng ; systemctl show secubox-waf-ng -p NRestarts -p Result" >&2
-      elif systemctl show secubox-waf-ng.service -p ExecStart --value 2>/dev/null | grep -q -- '--nft-ban' \
-           && ! nft list chain inet secubox waf_drop 2>/dev/null | grep -q '@waf_ban'; then
-        echo "secubox-waf-ng: ATTENTION — sbxwaf tourne mais la chaîne nft inet secubox waf_drop est absente : aucun ban n'est appliqué." >&2
+      elif systemctl show secubox-waf-ng.service -p ExecStart --value 2>/dev/null | grep -q -- '--nft-ban'; then
+        # Le port s'ouvre avant la pose de la chaîne (#3932) : on lui laisse le temps.
+        sbx_ok=""
+        for _i in 1 2 3 4 5 6 7 8 9 10; do
+          if nft list chain inet secubox waf_drop 2>/dev/null | grep -q '@waf_ban'; then sbx_ok=1; break; fi
+          sleep 1
+        done
+        if [ -z "$sbx_ok" ]; then
+          echo "secubox-waf-ng: ATTENTION — sbxwaf tourne mais la chaîne nft inet secubox waf_drop est absente : aucun ban n'est appliqué (la veille réessaie toutes les 30 s)." >&2
+        fi
       fi
       # #1070 D : activer le timer de corrélation des campagnes + une première
       # passe immédiate pour que le tableau de bord ait des données tout de suite.

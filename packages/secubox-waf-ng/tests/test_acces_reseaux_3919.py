@@ -106,7 +106,7 @@ def test_actord_a_de_quoi_tenir_le_cache_de_pages_de_ses_bases():
 def test_un_fichier_disparu_ne_bloque_pas_le_demarrage_du_waf():
     """`find … -exec chown` échoue si un fichier (temporaire du relevé) disparaît pendant la passe : jamais fatal."""
     waf = (PAQUET / "systemd" / "secubox-waf-ng.service").read_text(encoding="utf-8")
-    lignes = [l for l in waf.splitlines() if l.startswith("ExecStartPre=") and "/usr/bin/find" in l]
+    lignes = [l for l in waf.splitlines() if l.startswith("ExecStartPre=") and "/usr/bin/find /var/lib/" in l]
     assert len(lignes) == 1 and lignes[0].startswith("ExecStartPre=-+/usr/bin/find /var/lib/secubox/waf ")
     assert "ExecStartPre" not in (PAQUET / "conf" / "honeypot.conf").read_text(encoding="utf-8")   # rien à refléter
 
