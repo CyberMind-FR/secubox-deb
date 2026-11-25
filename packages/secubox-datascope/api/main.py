@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import re
 import sqlite3
@@ -33,6 +34,7 @@ from secubox_datascope.difference import difference  # noqa: E402
 
 CFG = config.charger()
 router = APIRouter(prefix="/api/v1/datascope")
+_log = logging.getLogger("secubox.datascope")
 
 
 def _etat(cfg: config.Config) -> Dict[str, Any]:
@@ -92,6 +94,9 @@ def _lire_base(fn):
         return fn(db)
     except sqlite3.Error:
         raise HTTPException(status_code=503, detail="base DataScope illisible")
+    except paysage_store.InstantaneIllisible as e:
+        _log.warning("%s", e)
+        raise HTTPException(status_code=503, detail="instantané du paysage illisible")
     finally:
         db.close()
 
@@ -332,6 +337,7 @@ CHRONO_MAX_S = 31 * 86400.0
 CHRONO_MAX = 1500  # en-têtes renvoyés au plus (31 j éclaircis : ~800)
 DIFF_MAX = 300  # éléments par liste de différence
 TENDANCE_JOURS_MAX = 30
+PARAM_MAX = 40  # caractères : au-delà, 400 (la borne de Query rendrait 422)
 _LISTES_DIFF = ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee")
 
 
@@ -352,6 +358,8 @@ def _ts_valide(ts: Optional[str]) -> str:
 def _epoch_param(v: Optional[str], nom: str) -> Optional[float]:
     if v is None:
         return None
+    if len(v) > PARAM_MAX:
+        raise HTTPException(status_code=400, detail=f"{nom} invalide")
     try:
         f = float(v)
     except ValueError:
@@ -394,9 +402,17 @@ def _paysage() -> Dict[str, Any]:
         if ref is None:
             out["motif_difference_24h"] = "aucun instantané antérieur d'au moins 12 h au dernier"
             return out
-        avant = paysage_store.lire(db, ref["ts"])
-        d = _borner_diff(difference(avant["graphe"] if avant else None, dernier["graphe"]))
-        d.update({"reference_ts": ref["ts"], "reference_epoch": ref["epoch"],
+        try:
+            avant = paysage_store.lire(db, ref["ts"])
+        except paysage_store.InstantaneIllisible as e:
+            _log.warning("référence 24 h : %s", e)
+            out["motif_difference_24h"] = "instantané de référence illisible"
+            return out
+        if avant is None:  # évincé entre les deux lectures : comparer à rien ferait tout « apparaître »
+            out["motif_difference_24h"] = "instantané de référence retiré pendant la lecture"
+            return out
+        d = _borner_diff(difference(avant["graphe"], dernier["graphe"]))
+        d.update({"reference_ts": ref["ts"], "reference_epoch": ref["epoch"], "reference_partiel": ref["partiel"],
                   "ecart_s": round(dernier["epoch"] - ref["epoch"], 3)})
         out["difference_24h"] = d
         return out
@@ -409,8 +425,7 @@ async def paysage() -> Dict[str, Any]:
 
 
 @router.get("/paysage/chronologie", dependencies=[Depends(require_jwt)])
-async def paysage_chronologie(de: Optional[str] = Query(None, max_length=32),
-                              a: Optional[str] = Query(None, max_length=32)) -> Dict[str, Any]:
+async def paysage_chronologie(de: Optional[str] = Query(None), a: Optional[str] = Query(None)) -> Dict[str, Any]:
     fa, fde = _epoch_param(a, "a"), _epoch_param(de, "de")
     if fa is None:
         fa = _maintenant()
@@ -437,8 +452,7 @@ async def paysage_instantane(ts: str) -> Dict[str, Any]:
 
 
 @router.get("/paysage/difference", dependencies=[Depends(require_jwt)])
-async def paysage_difference(de: Optional[str] = Query(None, max_length=40),
-                             a: Optional[str] = Query(None, max_length=40)) -> Dict[str, Any]:
+async def paysage_difference(de: Optional[str] = Query(None), a: Optional[str] = Query(None)) -> Dict[str, Any]:
     ts_de, ts_a = _ts_valide(de), _ts_valide(a)
 
     def lire(db):
@@ -452,29 +466,33 @@ def _entier(v: Any) -> Optional[int]:
 
 
 @router.get("/paysage/tendance/{id}", dependencies=[Depends(require_jwt)])
-async def paysage_tendance(id: str, jours: str = Query("7", max_length=8)) -> Dict[str, Any]:
+async def paysage_tendance(id: str, jours: str = Query("7")) -> Dict[str, Any]:
     if not _ID_NOEUD.fullmatch(id):
         raise HTTPException(status_code=400, detail="identifiant invalide")
-    if not jours.isascii() or not jours.isdigit() or not 1 <= int(jours) <= TENDANCE_JOURS_MAX:
+    if len(jours) > 8 or not jours.isascii() or not jours.isdigit() or not 1 <= int(jours) <= TENDANCE_JOURS_MAX:
         raise HTTPException(status_code=400, detail="jours invalide (1 à 30)")
     nb = int(jours)
 
     def lire(db):
         dernier = db.execute("SELECT max(epoch) FROM paysage_instantanes").fetchone()[0]
         if dernier is None:
-            return {"id": id, "points": []}
-        points = []
+            return {"id": id, "points": [], "illisibles": 0}
+        points: List[Dict[str, Any]] = []
+        illisibles = 0
         # Un graphe à la fois : décompressé, le nœud extrait, le reste oublié. Nœud absent : pas de point.
         for ts, epoch, g in paysage_store.horaires(db, dernier - nb * 86400.0, dernier):
+            if g is None:
+                illisibles += 1
+                continue
             noeud = next((n for n in g.get("noeuds", []) if isinstance(n, dict) and n.get("id") == id), None) \
-                if isinstance(g, dict) and isinstance(g.get("noeuds"), list) else None
+                if isinstance(g.get("noeuds"), list) else None
             if noeud is None:
                 continue
             m = noeud.get("metriques")
             m = m if isinstance(m, dict) else {}
             points.append({"ts": ts, "epoch": epoch, "adresses": _entier(m.get("adresses")),
                            "bans": _entier(m.get("bans")), "reseaux": _entier(m.get("reseaux"))})
-        return {"id": id, "points": points}
+        return {"id": id, "points": points, "illisibles": illisibles}
     return await asyncio.to_thread(_lire_base, lire)
 
 

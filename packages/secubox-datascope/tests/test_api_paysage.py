@@ -275,3 +275,78 @@ def test_tendance_jours_invalide(client, params):
                                    "pop:x'--"])
 def test_tendance_id_invalide(client, ident):
     assert client.get(P + "/tendance/" + quote(ident, safe=":")).status_code == 400
+
+
+# --- reports de la relecture de la tâche 4 ------------------------------------------------------------------
+
+@pytest.mark.parametrize("chemin,params", [
+    ("/chronologie", {"de": "1" * 33}), ("/chronologie", {"a": "1" * 33}), ("/chronologie", {"a": "1" * 6000}),
+    ("/difference", {"de": "2" * 41, "a": "x"}), ("/difference", {"de": "2" * 6000, "a": "2" * 6000}),
+    ("/tendance/pop:collecte", {"jours": "0" * 9}), ("/tendance/pop:collecte", {"jours": "7" * 6000}),
+])
+def test_valeur_trop_longue_400_pas_422(client, chemin, params):
+    assert client.get(P + chemin, params=params).status_code == 400
+
+
+def test_paysage_reference_partielle_signalee(env, client):
+    _ecrire(env, NOW - 86400, partiel=True)
+    _ecrire(env, NOW)
+    assert client.get(P).json()["difference_24h"]["reference_partiel"] is True
+
+
+def test_paysage_reference_complete_signalee(env, client):
+    _ecrire(env, NOW - 86400)
+    _ecrire(env, NOW, partiel=True)
+    d = client.get(P).json()
+    assert d["difference_24h"]["reference_partiel"] is False and d["instantane"]["partiel"] is True
+
+
+def test_paysage_reference_disparue_entre_deux_lectures(env, client, monkeypatch):
+    _ecrire(env, NOW - 86400)
+    _ecrire(env, NOW)
+    reel = ps.lire
+    monkeypatch.setattr(ps, "lire", lambda db, t: None if t == ts(NOW - 86400) else reel(db, t))
+    r = client.get(P)
+    d = r.json()
+    assert r.status_code == 200 and d["disponible"] is True and d["difference_24h"] is None
+    assert d["motif_difference_24h"]
+
+
+@pytest.mark.parametrize("blob", [b"pas du zlib", b"", zlib.compress(b"{pas du json"), zlib.compress(b"\xff\xfe"),
+                                  zlib.compress(b"[1,2]"), zlib.compress(b'{"noeuds": []}')[:-3],
+                                  "du texte", 12, zlib.compress(b"[" * 100000)])
+def test_instantane_corrompu_erreur_propre(env, client, blob):
+    _ecrire(env, NOW - 86400)
+    _ecrire(env, NOW)
+    env.execute("UPDATE paysage_instantanes SET graphe=? WHERE ts=?", (blob, ts(NOW)))
+    c = TestClient(main.app, raise_server_exceptions=False)
+    for chemin in ("", "/instantane/" + ts(NOW), f"/difference?de={ts(NOW - 86400)}&a={ts(NOW)}"):
+        r = c.get(P + chemin)
+        assert r.status_code == 503 and "illisible" in r.json()["detail"], chemin
+    assert c.get(P + "/instantane/" + ts(NOW - 86400)).status_code == 200
+
+
+def test_reference_corrompue_pas_de_difference_mais_paysage_rendu(env, client):
+    _ecrire(env, NOW - 86400)
+    _ecrire(env, NOW)
+    env.execute("UPDATE paysage_instantanes SET graphe=? WHERE ts=?", (b"x", ts(NOW - 86400)))
+    d = client.get(P).json()
+    assert d["disponible"] is True and d["difference_24h"] is None and "illisible" in d["motif_difference_24h"]
+
+
+def test_tendance_instantane_corrompu_omis_et_compte(env, client):
+    _ecrire(env, NOW - 2 * H, adresses=5)
+    _ecrire(env, NOW - H, adresses=6)
+    _ecrire(env, NOW, adresses=7)
+    env.execute("UPDATE paysage_instantanes SET graphe=? WHERE ts=?", (b"x", ts(NOW - H)))
+    d = client.get(P + "/tendance/pop:collecte").json()
+    assert [p["adresses"] for p in d["points"]] == [5, 7] and d["illisibles"] == 1
+
+
+def test_entete_corrompu_tolere(env, client):
+    _ecrire(env, NOW)
+    env.execute("UPDATE paysage_instantanes SET compteurs_json='{', difference_json='{'")
+    assert client.get(P + "/chronologie", params={"de": NOW - 1, "a": NOW}).json()["instantanes"][0]["compteurs"] == {}
+    d = client.get(P + "/instantane/" + ts(NOW)).json()
+    assert d["compteurs"] == {} and d["difference"] is None  # indisponible, jamais « rien n'a changé »
+    assert client.get(P).status_code == 200

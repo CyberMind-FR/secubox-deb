@@ -9,6 +9,7 @@ Aucun code ne suppose un espacement fixe entre instantanés. Le dernier instanta
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import zlib
 from datetime import datetime, timezone
@@ -18,6 +19,30 @@ BUDGET_OCTETS = 60 * 1024 * 1024
 FENETRE_FINE_S = 48 * 3600
 RETENTION_S = 30 * 86400
 TENDANCE_GRAPHES_MAX = 750  # 30 j x 24 h = 720 instantanés horaires au plus
+_log = logging.getLogger("secubox.datascope.paysage")
+
+
+class InstantaneIllisible(Exception):
+    """Graphe stocké indéchiffrable (zlib, UTF-8, JSON ou forme) : jamais rendu comme un graphe vide."""
+
+
+def _graphe(ts: str, blob: Any) -> dict:
+    try:
+        g = json.loads(zlib.decompress(blob).decode("utf-8"))
+    except (zlib.error, ValueError, TypeError, RecursionError) as e:
+        raise InstantaneIllisible(f"instantané {ts} illisible ({type(e).__name__})") from e
+    if not isinstance(g, dict):
+        raise InstantaneIllisible(f"instantané {ts} illisible (forme)")
+    return g
+
+
+def _objet(v: Any) -> Optional[dict]:
+    """JSON stocké à côté du graphe ; None s'il est illisible (accessoire : le graphe reste servi)."""
+    try:
+        d = json.loads(v)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    return d if isinstance(d, dict) else None
 
 
 def _ts(epoch: float) -> str:
@@ -53,7 +78,7 @@ def ecrire(db: sqlite3.Connection, epoch: float, partiel: bool, graphe: dict, co
 
 def _entete(r: sqlite3.Row) -> Dict[str, Any]:
     return {"ts": r["ts"], "epoch": r["epoch"], "partiel": bool(r["partiel"]),
-            "compteurs": json.loads(r["compteurs_json"])}
+            "compteurs": _objet(r["compteurs_json"]) or {}}
 
 
 def dernier(db: sqlite3.Connection) -> Optional[Dict[str, Any]]:
@@ -66,8 +91,8 @@ def lire(db: sqlite3.Connection, ts: str) -> Optional[Dict[str, Any]]:
     if not r:
         return None
     d = _entete(r)
-    d["graphe"] = json.loads(zlib.decompress(r["graphe"]).decode("utf-8"))
-    d["difference"] = json.loads(r["difference_json"])
+    d["graphe"] = _graphe(ts, r["graphe"])
+    d["difference"] = _objet(r["difference_json"])
     d["octets"] = r["octets"]
     return d
 
@@ -94,14 +119,20 @@ def proche(db: sqlite3.Connection, cible: float, epoch_max: float) -> Optional[D
 
 def horaires(db: sqlite3.Connection, de: float, a: float):
     """Génère (ts, epoch, graphe) : le premier instantané de chaque heure entre `de` et `a`, un graphe à la fois
-    (décompressé, rendu, puis oublié). Jamais plus de TENDANCE_GRAPHES_MAX ; au-delà, les plus récents."""
+    (décompressé, rendu, puis oublié). Jamais plus de TENDANCE_GRAPHES_MAX ; au-delà, les plus récents.
+    Un graphe illisible est rendu None (et journalisé) : l'appelant l'omet, la série continue."""
     heures = db.execute(
         "SELECT ts, MIN(epoch) AS e FROM paysage_instantanes WHERE epoch >= ? AND epoch <= ?"
         " GROUP BY CAST(epoch / 3600 AS INTEGER) ORDER BY e DESC LIMIT ?", (de, a, TENDANCE_GRAPHES_MAX)).fetchall()
     for h in reversed(heures):
         r = db.execute("SELECT graphe FROM paysage_instantanes WHERE ts = ?", (h["ts"],)).fetchone()
         if r is not None:
-            yield h["ts"], h["e"], json.loads(zlib.decompress(r["graphe"]).decode("utf-8"))
+            try:
+                g = _graphe(h["ts"], r["graphe"])
+            except InstantaneIllisible as e:
+                _log.warning("tendance : %s", e)
+                g = None
+            yield h["ts"], h["e"], g
 
 
 def eclaircir(db: sqlite3.Connection, maintenant: float) -> int:
