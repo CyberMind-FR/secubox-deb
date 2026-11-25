@@ -8,6 +8,7 @@ package main
 import (
 	"regexp"
 	"sort"
+	"time"
 	"unicode/utf8"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/envelope"
@@ -104,13 +105,13 @@ type activite struct {
 	nAttente int
 	// depuisTrous : fin du dernier trou abandonné au plafond ; la couverture ne remonte pas avant.
 	depuisTrous int64
-	// retard : dernier instant connu quand le démon démarre avec une horloge en retard ; 0 sinon.
-	retard  int64
-	enRejeu bool
-	seuil   int64 // pendant le rejeu : ce qui est antérieur est déjà dans l'instantané
-	noms    []string
-	parNom  map[string]uint16
-	global  activiteActeur // série de tous les événements (robots connus compris, comme /stats)
+	// mur et mono : horloges à la dernière vérification (verifierHorloge).
+	mur, mono int64
+	enRejeu   bool
+	seuil     int64 // pendant le rejeu : ce qui est antérieur est déjà dans l'instantané
+	noms      []string
+	parNom    map[string]uint16
+	global    activiteActeur // série de tous les événements (robots connus compris, comme /stats)
 }
 
 func avancer[T any](anneau []T, dernier *int64, rang int64) bool {
@@ -176,27 +177,51 @@ func estBlocage(e *envelope.Envelope) bool {
 	return e.Action == envelope.ActionBlock || e.Action == envelope.ActionQuarantps
 }
 
-// recaler remet la couverture dans le passé après une remise à l'heure vers l'arrière.
-func (t *activite) recaler(now int64) {
-	if t.depuis > now+futurTolere {
-		t.depuis = now
+// debutProcessus et monotone : une horloge que ni NTP ni l'opérateur ne déplacent.
+var debutProcessus = time.Now()
+var monotone = func() int64 { return int64(time.Since(debutProcessus) / time.Second) }
+
+// verifierHorloge compare le temps mural écoulé au temps réellement passé. Saut en avant (remise à
+// l'heure, mise en veille) : le morceau sauté n'a pas été observé, c'est un trou. Saut en arrière :
+// ce qui se trouve dans le futur est retiré, pour tous les acteurs, actifs ou non. Aucune déduction
+// tirée de la date d'un événement ou d'un fichier. Sous s.mu.
+func (t *activite) verifierHorloge(now int64) {
+	m := monotone()
+	mur, mono := t.mur, t.mono
+	t.mur, t.mono = now, m
+	if mur == 0 {
+		return
 	}
-	if t.depuisGraphe > now+futurTolere {
-		t.depuisGraphe = now
-	}
-	garde := t.trous[:0]
-	for _, tr := range t.trous {
-		if tr[0] <= now+futurTolere {
-			garde = append(garde, [2]int64{tr[0], min(tr[1], now)})
+	saut := (now - mur) - (m - mono)
+	switch {
+	case saut > futurTolere:
+		t.ajouterTrou(mur, now)
+	case saut < -futurTolere:
+		t.depuis, t.depuisGraphe = min(t.depuis, now), min(t.depuisGraphe, now)
+		garde := t.trous[:0]
+		for _, tr := range t.trous {
+			if tr[0] < now {
+				garde = append(garde, [2]int64{tr[0], min(tr[1], now)})
+			}
+		}
+		t.trous = garde
+		t.depuisTrous = min(t.depuisTrous, now)
+		t.global.remettre(now)
+		for _, x := range t.acteurs {
+			x.remettre(now)
 		}
 	}
-	t.trous = garde
 }
 
-// remettre vide les anneaux qu'un saut d'horloge en avant a poussés dans le futur : sans cela, plus
-// aucun événement n'y entrerait. Ce qu'ils savaient est perdu, la couverture repart de maintenant.
+// dansLeFutur : un saut d'horloge en avant a poussé les anneaux au-delà de maintenant.
+func (x *activiteActeur) dansLeFutur(now int64) bool {
+	return x.heure > now/3600+1 || x.rangS > now/3600+1 || x.jour > now/86400+1 || x.depuis > now+futurTolere || x.plein > now+futurTolere
+}
+
+// remettre vide des anneaux partis dans le futur : sans cela, plus aucun événement n'y entrerait. Ce
+// qu'ils savaient est perdu, la couverture repart de maintenant.
 func (x *activiteActeur) remettre(now int64) {
-	if x.heure <= now/3600+1 && x.rangS <= now/3600+1 && x.jour <= now/86400+1 && x.depuis <= now+futurTolere && x.plein <= now+futurTolere {
+	if !x.dansLeFutur(now) {
 		return
 	}
 	*x = activiteActeur{premier: min(x.premier, now), dernierBan: min(x.dernierBan, now), temoin: x.temoin, modules: x.modules, tech: x.tech,
@@ -220,20 +245,9 @@ func (t *activite) noterGlobal(e *envelope.Envelope) {
 // admis ouvre la couverture au premier événement et écarte une horloge absurde.
 func (t *activite) admis(e *envelope.Envelope) bool {
 	now := maintenant()
-	if t.retard > 0 && t.seuil == 0 && !t.enRejeu {
-		if now < t.retard {
-			return false // horloge encore en retard : la date de l'événement est fausse
-		}
-		if now-t.retard > trouMin {
-			t.ajouterTrou(t.retard, now)
-		}
-		t.retard = 0
-	}
-	if e.Timestamp <= 0 || e.Timestamp > max(now, t.retard)+futurTolere {
-		return false
-	}
-	if t.depuis > now+futurTolere && t.retard == 0 {
-		t.recaler(now)
+	t.verifierHorloge(now)
+	if e.Timestamp <= 0 || e.Timestamp > now+futurTolere {
+		return false // un événement daté en avance n'avance aucun anneau, au rejeu non plus
 	}
 	if t.depuis == 0 || t.depuisGraphe == 0 {
 		t.ouvrir(e.Timestamp)
@@ -272,9 +286,7 @@ func (t *activite) noter(a *graph.Actor, e *envelope.Envelope) {
 	} else {
 		t.reprendre(x, e.SrcIP, false)
 	}
-	if t.retard == 0 {
-		x.remettre(maintenant())
-	}
+	x.remettre(maintenant())
 	x.temoin = e.SrcIP
 	dIP, dPays, dCible := len(a.IPs)-x.nIPs, len(a.Countries)-x.nPays, len(a.Targets)-x.nCible
 	x.nIPs, x.nPays, x.nCible = len(a.IPs), len(a.Countries), len(a.Targets)
@@ -319,11 +331,7 @@ func (t *activite) reprendre(x *activiteActeur, ip string, neuf bool) {
 	if o == nil {
 		return
 	}
-	for _, i := range o.IPs {
-		if t.attente[i] == o {
-			delete(t.attente, i)
-		}
-	}
+	t.retirerAttente(o)
 	b := t.importer(*o, maintenant())
 	if neuf {
 		x.depuis, x.plein = b.depuis, b.plein
@@ -493,6 +501,9 @@ func (t *activite) couverture(a, b, now int64) int {
 // couvertureDe : la même, bornée par ce qu'on sait de CET acteur.
 func (t *activite) couvertureDe(x *activiteActeur, a, b, now int64) int {
 	c := t.couverture(a, b, now)
+	if x != nil && x.dansLeFutur(now) {
+		return couvNulle // jamais un zéro lu dans un anneau déplacé
+	}
 	if x == nil || x.depuis == 0 || c == couvNulle {
 		return c
 	}

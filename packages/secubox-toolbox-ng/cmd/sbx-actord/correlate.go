@@ -84,7 +84,13 @@ func (s *Server) rebuild() {
 	}
 	var ancien, recent int64
 	if len(evs) > 0 {
-		ancien, recent = evs[len(evs)-1].Timestamp, evs[0].Timestamp
+		ancien = evs[len(evs)-1].Timestamp
+		for i := range evs { // le plus récent à une date possible : un événement daté en avance ne cache pas un arrêt
+			if evs[i].Timestamp <= maintenant()+futurTolere {
+				recent = evs[i].Timestamp
+				break
+			}
+		}
 	}
 	inst := s.ouvrirRejeu(ancien, recent)
 	for i := len(evs) - 1; i >= 0; i-- { // Recent = plus récent d'abord
@@ -305,5 +311,6 @@ func (s *Server) purgerMemoire(avant int64) int {
 		delete(s.accum, id)
 		delete(s.act.acteurs, id)
 	}
+	s.act.purgerAttente(maintenant())
 	return len(ids)
 }

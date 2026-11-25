@@ -210,6 +210,7 @@ func (s *Server) calculerDetail(id string, reduite bool) *detailActeur {
 		return nil
 	}
 	t := &s.act
+	t.verifierHorloge(now)
 	d := &detailActeur{GenereLe: now, CouvertureDepuis: t.depuisGraphe, TotauxDepuis: t.depuisGraphe, Evenements: a.Events, Mesure: mesure}
 	if x := t.acteurs[id]; x != nil {
 		d.CouvertureDepuis = max(t.depuis, x.depuis)
@@ -386,6 +387,7 @@ func (s *Server) handleActivite(w http.ResponseWriter, r *http.Request) {
 	reduite := vueReduite(r)
 	s.mu.Lock()
 	t := &s.act
+	t.verifierHorloge(now)
 	g := t.serieDe(&t.global, 3600, 24, now, t.global.heureEvts)
 	out := lotActivite{GenereLe: now, CouvertureDepuis: t.depuis, Debut: g.Debut, Pas: g.Pas, Partielles: g.Partielles,
 		Evenements: g.Valeurs, Bloques: t.serieDe(&t.global, 3600, 24, now, t.global.heureBans).Valeurs, Acteurs: map[string][]*uint32{}}

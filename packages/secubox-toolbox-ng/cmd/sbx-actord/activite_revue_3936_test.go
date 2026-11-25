@@ -197,15 +197,17 @@ func TestHorlogeEnAvancePuisRemise(t *testing.T) {
 	now := horloge(t, t36)
 	s := serveur(t)
 	s.observe(evtDe(1, *now, "203.0.113.1"))
-	*now = t36 + 400*86400 // saut en avant
+	sauter(now, 400*86400)
 	s.observe(evtDe(1, *now, "203.0.113.1"))
-	*now = t36 + 7200 // remise à l'heure
+	sauter(now, -400*86400)
+	s.observe(evtDe(1, *now, "203.0.113.1"))
+	*now += 7200
 	s.observe(evtDe(1, *now, "203.0.113.1"))
 	s.observe(evtDe(1, *now, "203.0.113.1"))
 	a := acteurDeIP(t, s, "203.0.113.1")
 	x := s.act.acteurs[a.ID]
 	h := s.act.serieDe(x, 3600, 24, *now, x.heureEvts)
-	if val(h.Valeurs[23]) != 2 || h.Valeurs[20] != nil || val(s.act.serieDe(x, 86400, joursGardes, *now, x.jourEvts).Valeurs[14]) != 2 {
+	if val(h.Valeurs[23]) != 2 || h.Valeurs[20] != nil || val(s.act.serieDe(x, 86400, joursGardes, *now, x.jourEvts).Valeurs[14]) != 3 {
 		t.Errorf("anneaux figés : %d %d", val(h.Valeurs[23]), val(h.Valeurs[20]))
 	}
 	if g := s.act.serieDe(&s.act.global, 3600, 24, *now, s.act.global.heureEvts); val(g.Valeurs[23]) != 2 {
@@ -213,42 +215,14 @@ func TestHorlogeEnAvancePuisRemise(t *testing.T) {
 	}
 	// Couverture ouverte dans le futur (démarrage avec une horloge en avance).
 	s2 := serveur(t)
-	*now = t36 + 400*86400
+	sauter(now, 400*86400)
 	s2.rebuild()
-	*now = t36
+	sauter(now, -400*86400)
 	s2.observe(evtDe(1, *now, "203.0.113.1"))
 	a = acteurDeIP(t, s2, "203.0.113.1")
 	x = s2.act.acteurs[a.ID]
 	if n := val(s2.act.serieDe(x, 3600, 24, *now, x.heureEvts).Valeurs[23]); n != 1 {
 		t.Errorf("après recalage : %d", n)
-	}
-}
-
-func TestHorlogeEnRetardAuDemarrage(t *testing.T) {
-	now := horloge(t, t36)
-	s := serveur(t)
-	s.actChemin = filepath.Join(t.TempDir(), "activite.json")
-	*now = t36 - 600
-	s.rebuild()
-	*now = t36
-	e := evtDe(1, *now, "203.0.113.1")
-	_ = s.store.Ingest(e)
-	s.observe(e)
-	s.sauverActivite()
-	*now = t36 - 200*86400 // pas d'horloge matérielle : démarrage dans le passé
-	r := redemarrer(s, t)
-	a := acteurDeIP(t, r, "203.0.113.1")
-	if r.act.acteurs[a.ID].heureEvts(t36/3600) != 1 {
-		t.Fatal("instantané ou rejeu perdu")
-	}
-	r.observe(evtDe(1, *now, "203.0.113.1")) // daté par une horloge fausse : pas compté
-	*now = t36 + 5*3600                      // NTP
-	r.observe(evtDe(1, *now, "203.0.113.1"))
-	*now += 120
-	x := r.act.acteurs[a.ID]
-	h := r.act.serieDe(x, 3600, 24, *now, x.heureEvts)
-	if val(h.Valeurs[18]) != 1 || h.Valeurs[20] != nil || val(h.Valeurs[23]) != 1 {
-		t.Errorf("heures %d %d %d, trous %v", val(h.Valeurs[18]), val(h.Valeurs[20]), val(h.Valeurs[23]), r.act.trous)
 	}
 }
 

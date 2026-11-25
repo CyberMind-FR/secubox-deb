@@ -26,12 +26,17 @@ const t36 = int64(1_788_048_000) + 14*3600 + 1800
 
 func horloge(t testing.TB, now int64) *int64 {
 	t.Helper()
-	ancien := maintenant
+	ancien, mono := maintenant, monotone
 	h := now
+	decalageHorloge = 0
 	maintenant = func() int64 { return h }
-	t.Cleanup(func() { maintenant = ancien })
+	monotone = func() int64 { return h - decalageHorloge } // le temps passe comme l'horloge, sauf `sauter`
+	t.Cleanup(func() { maintenant, monotone = ancien, mono })
 	return &h
 }
+
+// decalageHorloge : ce que l'horloge murale a sauté sans que le temps passe (sauter).
+var decalageHorloge int64
 
 func evt(ts int64, ip, cible, action string) *envelope.Envelope {
 	return &envelope.Envelope{EventID: envelope.NewEventID(), Timestamp: ts, Sensor: envelope.SensorWAF, SrcIP: ip,

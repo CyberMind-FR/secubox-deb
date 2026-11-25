@@ -27,11 +27,16 @@ import (
 const (
 	instantanePas     = time.Hour
 	instantaneVersion = 1
-	instantaneMax     = 64 << 20
+	instantaneMaxDef  = 64 << 20
 	adressesParEntree = 512
-	// retardTolere : l'instantané peut dépasser l'horloge du démarrage (pas d'horloge matérielle).
-	retardTolere = 86400
+	// avanceTolere : l'instantané peut dépasser l'horloge du démarrage (pas de pile) ; ce qu'il date
+	// au-delà de maintenant n'est pas repris, et la remise à l'heure sera un trou (verifierHorloge).
+	avanceTolere = 86400
+	attenteMax   = 200000 // adresses en attente
 )
+
+// instantaneMax : plafond du fichier, à la lecture comme à l'écriture ; réduit en test.
+var instantaneMax = instantaneMaxDef
 
 type entreeInstantane struct {
 	IPs     []string          `json:"ips"`
@@ -145,7 +150,10 @@ func (s *Server) prendreInstantane() *instantane {
 	if t.depuis == 0 {
 		return nil
 	}
-	o := &instantane{Version: instantaneVersion, GenereLe: maintenant(), Depuis: t.depuis,
+	now := maintenant()
+	t.verifierHorloge(now)
+	t.global.remettre(now)
+	o := &instantane{Version: instantaneVersion, GenereLe: now, Depuis: t.depuis,
 		Trous: append([][2]int64(nil), t.trous...), Global: t.exporter(&t.global)}
 	o.Acteurs = make([]entreeInstantane, 0, len(t.acteurs))
 	for id, x := range t.acteurs {
@@ -153,6 +161,7 @@ func (s *Server) prendreInstantane() *instantane {
 		if !ok {
 			continue
 		}
+		x.remettre(now)
 		e := t.exporter(x)
 		ips := append([]string(nil), a.IPs...)
 		if len(ips) > adressesParEntree {
@@ -189,7 +198,7 @@ func (s *Server) sauverActivite() {
 	if o == nil {
 		return
 	}
-	b, err := json.Marshal(o)
+	b, err := o.encoder()
 	if err == nil {
 		tmp := s.actChemin + ".tmp"
 		if err = ecrireSync(tmp, b); err == nil {
@@ -199,6 +208,28 @@ func (s *Server) sauverActivite() {
 	if err != nil {
 		log.Printf("actord: instantané d'activité : %v", err)
 	}
+}
+
+// encoder rend l'instantané sous instantaneMax, sans quoi il ne se relirait pas : les entrées les plus
+// anciennes partent d'abord (leurs acteurs repartiront du rejeu).
+func (o *instantane) encoder() ([]byte, error) {
+	b, err := json.Marshal(o)
+	if err != nil || len(b) <= instantaneMax {
+		return b, err
+	}
+	total := len(o.Acteurs)
+	sort.SliceStable(o.Acteurs, func(i, j int) bool { return o.Acteurs[i].dernierJour() > o.Acteurs[j].dernierJour() })
+	for len(b) > instantaneMax && len(o.Acteurs) > 0 && err == nil {
+		// Au prorata, avec une marge : deux ou trois tours au plus.
+		n := int(int64(len(o.Acteurs)) * int64(instantaneMax) * 9 / (int64(len(b)) * 10))
+		o.Acteurs = o.Acteurs[:min(n, len(o.Acteurs)-1)]
+		b, err = json.Marshal(o)
+	}
+	if err == nil && len(b) > instantaneMax {
+		err = errors.New("trop gros sans aucun acteur")
+	}
+	log.Printf("actord: instantané d'activité : %d entrée(s) sur %d (plafond de taille)", len(o.Acteurs), total)
+	return b, err
 }
 
 // ecrireSync : contenu sur le disque avant le renommage (coupure de courant).
@@ -219,14 +250,13 @@ func (s *Server) boucleInstantane() {
 	}
 }
 
-// lireInstantane rend nil si le fichier manque ou n'est pas exploitable. ref : le plus tardif de
-// l'horloge et du dernier événement rejoué.
-func lireInstantane(chemin string, ref int64) *instantane {
+// lireInstantane rend nil si le fichier manque ou n'est pas exploitable.
+func lireInstantane(chemin string, now int64) *instantane {
 	if chemin == "" {
 		return nil
 	}
 	st, err := os.Stat(chemin)
-	if err == nil && st.Size() > instantaneMax {
+	if err == nil && st.Size() > int64(instantaneMax) {
 		err = errors.New("fichier trop gros")
 	}
 	var b []byte
@@ -237,7 +267,7 @@ func lireInstantane(chemin string, ref int64) *instantane {
 	if err == nil {
 		err = json.Unmarshal(b, o)
 	}
-	if err == nil && (o.Version != instantaneVersion || o.Depuis <= 0 || o.GenereLe < o.Depuis || o.GenereLe > ref+retardTolere) {
+	if err == nil && (o.Version != instantaneVersion || o.Depuis <= 0 || o.GenereLe < o.Depuis || o.GenereLe > now+avanceTolere) {
 		err = errors.New("contenu inattendu")
 	}
 	if err != nil {
@@ -255,18 +285,18 @@ func (s *Server) ouvrirRejeu(plusAncien, plusRecent int64) *instantane {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, now := &s.act, maintenant()
-	if plusAncien <= 0 {
+	if plusAncien <= 0 || plusAncien > now {
 		plusAncien, plusRecent = now, now
 	}
+	t.mur, t.mono = now, monotone()
 	t.depuis, t.depuisGraphe, t.trous = plusAncien, plusAncien, nil
-	ref := max(now, plusRecent)
-	o := lireInstantane(s.actChemin, ref)
+	o := lireInstantane(s.actChemin, now)
 	dernier := plusRecent
 	if o != nil {
 		// Les trous connus valent aussi pour le rejeu, même si l'instantané est écarté ensuite.
 		for _, tr := range o.Trous {
-			if tr[0] < tr[1] {
-				t.ajouterTrou(tr[0], tr[1])
+			if tr[0] < tr[1] && tr[0] < now {
+				t.ajouterTrou(tr[0], min(tr[1], now))
 			}
 		}
 		if o.GenereLe < plusAncien || o.Depuis > plusAncien {
@@ -275,13 +305,11 @@ func (s *Server) ouvrirRejeu(plusAncien, plusRecent int64) *instantane {
 		}
 	}
 	if o != nil {
-		t.depuis, t.seuil = max(o.Depuis, t.depuisTrous), o.GenereLe
+		t.depuis, t.seuil = max(o.Depuis, t.depuisTrous), min(o.GenereLe, now)
 		dernier = max(dernier, o.GenereLe)
 	}
 	if now-dernier > trouMin {
 		t.ajouterTrou(dernier, now)
-	} else if dernier-now > futurTolere {
-		t.retard = dernier // horloge en retard : le trou se mesurera à la remise à l'heure
 	}
 	t.enRejeu = true
 	return o
@@ -295,7 +323,7 @@ func (s *Server) fermerRejeu(o *instantane) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := &s.act
-	ref := max(maintenant(), t.retard)
+	now := maintenant()
 	t.seuil, t.enRejeu = 0, false
 	if o == nil {
 		return
@@ -332,16 +360,17 @@ func (s *Server) fermerRejeu(o *instantane) {
 		}
 		ap.premier, ap.dernierBan, ap.temoin = x.premier, x.dernierBan, x.temoin
 		ap.nIPs, ap.nPays, ap.nCible = x.nIPs, x.nPays, x.nCible
-		ap.depuis, ap.plein = o.GenereLe, o.GenereLe
+		ap.depuis, ap.plein = min(o.GenereLe, now), min(o.GenereLe, now)
 		t.acteurs[id] = ap
 	}
+	var seules []*entreeInstantane
 	for i, e := range o.Acteurs {
 		id := choix[i]
 		if id == "" {
-			t.mettreEnAttente(&o.Acteurs[i], ref)
+			seules = append(seules, &o.Acteurs[i])
 			continue
 		}
-		x, b := t.acteurs[id], t.importer(e, ref)
+		x, b := t.acteurs[id], t.importer(e, now)
 		if !repris[id] { // l'entrée EST cet acteur : sa couverture, pas une fusion
 			x.depuis, x.plein = b.depuis, b.plein
 			repris[id] = true
@@ -351,21 +380,53 @@ func (s *Server) fermerRejeu(o *instantane) {
 	for _, x := range t.acteurs {
 		x.apres = nil
 	}
-	t.global.verser(t.importer(o.Global, ref))
+	// Les plus récentes d'abord : ce sont elles qui peuvent revenir.
+	sort.SliceStable(seules, func(i, j int) bool { return seules[i].dernierJour() > seules[j].dernierJour() })
+	for _, e := range seules {
+		t.mettreEnAttente(e, now)
+	}
+	t.global.verser(t.importer(o.Global, now))
 	log.Printf("actord: activité reprise pour %d acteur(s) sur %d (couverture depuis %s)",
 		len(repris), len(o.Acteurs), time.Unix(t.depuis, 0).UTC().Format(time.RFC3339))
 }
 
-// mettreEnAttente garde une entrée sans acteur, par adresse ; bornée par le nombre d'acteurs suivis.
-func (t *activite) mettreEnAttente(e *entreeInstantane, ref int64) {
-	if e.dernierJour() <= ref/86400-joursGardes || len(e.IPs) == 0 || t.nAttente >= activiteMax {
+// mettreEnAttente garde une entrée sans acteur, par adresse ; bornée en entrées et en adresses.
+func (t *activite) mettreEnAttente(e *entreeInstantane, now int64) {
+	if e.dernierJour() <= now/86400-joursGardes || len(e.IPs) == 0 || t.nAttente >= activiteMax || len(t.attente)+len(e.IPs) > attenteMax {
 		return
 	}
 	if t.attente == nil {
 		t.attente = map[string]*entreeInstantane{}
 	}
-	t.nAttente++
+	pris := false
 	for _, ip := range e.IPs {
-		t.attente[ip] = e
+		if t.attente[ip] == nil { // une adresse ne désigne qu'une entrée : la plus récente
+			t.attente[ip], pris = e, true
+		}
+	}
+	if pris {
+		t.nAttente++
+	}
+}
+
+func (t *activite) retirerAttente(e *entreeInstantane) {
+	vue := false
+	for _, ip := range e.IPs {
+		if t.attente[ip] == e {
+			delete(t.attente, ip)
+			vue = true
+		}
+	}
+	if vue {
+		t.nAttente--
+	}
+}
+
+// purgerAttente oublie les entrées sans activité depuis joursGardes jours. Sous s.mu.
+func (t *activite) purgerAttente(now int64) {
+	for _, e := range t.attente {
+		if e.dernierJour() <= now/86400-joursGardes {
+			t.retirerAttente(e)
+		}
 	}
 }
