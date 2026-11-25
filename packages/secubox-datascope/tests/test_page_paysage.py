@@ -8,9 +8,14 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from secubox_datascope.difference import difference  # noqa: E402
 
 DS = Path(__file__).resolve().parent.parent
 PAGE = DS / "www" / "datascope" / "index.html"
@@ -206,7 +211,11 @@ def _demo():
     s = _script()
     i = s.index("var DEMO_DONNEES=(function(){")
     j = s.index("\n  })();", i) + len("\n  })();")
-    return _node(s[i:j] + "process.stdout.write(JSON.stringify(DEMO_DONNEES.paysage));")
+    return _node(_difference_js() + s[i:j] + "process.stdout.write(JSON.stringify(DEMO_DONNEES.paysage));")
+
+
+def _difference_js():
+    return _entre("// <difference-paysage>", "// </difference-paysage>")
 
 
 def test_demo_paysage():
@@ -414,7 +423,7 @@ def test_demo_chronologie_et_tendances():
     s = _script()
     i = s.index("var DEMO_DONNEES=(function(){")
     j = s.index("\n  })();", i) + len("\n  })();")
-    d = _node(s[i:j] + "process.stdout.write(JSON.stringify(DEMO_DONNEES));")
+    d = _node(_difference_js() + s[i:j] + "process.stdout.write(JSON.stringify(DEMO_DONNEES));")
     ch, pay = d["chronologie"], d["paysage"]
     assert ch["instantanes"][-1] == {"ts": pay["instantane"]["ts"], "epoch": pay["epoch"], "partiel": False,
                                      "compteurs": pay["instantane"]["compteurs"]}
@@ -426,3 +435,121 @@ def test_demo_chronologie_et_tendances():
     for k, t in d["tendances"].items():
         assert noeuds[k]["type"] == "population" and t["points"][-1]["adresses"] == noeuds[k]["metriques"]["adresses"]
     assert "Math.random" not in s
+
+
+# --- tâche 7 : mode évolution et enregistreur ---------------------------------------------------------------------
+
+def test_tache7_transport_fenetre_comparaison_et_bandeau():
+    p, s = _page(), _script()
+    for ident, signe, nom in (("eDebut", "⏮", "Rembobiner au début de la fenêtre"), ("ePrec", "◀◀", "Relevé précédent"),
+                              ("eLire", "▶", "Lire l’enregistrement"), ("eSuiv", "▶▶", "Relevé suivant"),
+                              ("eDirect", "⏭", "Revenir au direct")):
+        assert re.search(rf'<button type="button" class="bt" id="{ident}" aria-label="{nom}"[^>]*>{signe}', p), ident
+    assert "⏸" in s and "Mettre en pause" in s
+    for texte in ("48 h (pas fin)", "30 j (1 h)", ">24 h<", ">7 j<", ">date<", "relevé précédent", "×1", "×4", "×16"):
+        assert texte in p, texte
+    assert "10 min" not in p  # arbitrage R1 : aucun pas supposé
+    for badge in ("✚ apparu", "✖ disparu", "▲ en hausse", "▼ en baisse"):
+        assert badge in _fonction("badgesPaysage") + _fonction("noeudPaysage"), badge
+    assert "lecture du " in s and 'id="eBandeau"' in p and "prefers-reduced-motion" in s
+    assert "var Enregistreur=" in s and "E_CACHE_MAX=60" in s and "E_LOT=12" in s and "AbortController" in s
+    for m in ("aller:", "lecture:", "pause:", "pas:", "rembobiner:", "direct:", "vitesse:"):
+        assert m in s[s.index("var Enregistreur="):], m
+    assert "fetch(" not in _vue() and "'paysage/instantane/'" in s and "'paysage/difference?de='" in s
+    # barre de l'enregistreur : au-dessus des compteurs, commandes fixes (jamais refaites : le focus ne bouge pas)
+    assert p.index('id="panInsp"') < p.index('id="pEnreg"') < p.index('id="pBarre"')
+    assert 'id="eAnnonce" class="horsVue" aria-live="polite"' in p
+    assert " disabled" not in p[p.index('id="pEnreg"'):p.index('id="pBarre"')]
+    assert "vider(el('pEnreg'))" not in s
+
+
+def _enreg(programme):
+    return _node(_entre("function pNombre(", "\n") + _entre("// <enregistreur-purs>", "// </enregistreur-purs>") + programme)
+
+
+def test_liste_de_l_enregistreur_sans_pas_suppose():
+    r = _enreg(r"""
+      var E=1795000000-1795000000%3600,H=3600,L=[],i;
+      // relevés irréguliers sur 3 jours (pas de 47 min), un trou de 5 h, des entrées invalides, un doublon, en désordre
+      for(i=0;i<92;i++){var e=E-i*47*60;if(e<E-10*H&&e>E-15*H)continue;L.push({ts:'t'+i,epoch:e,partiel:false});}
+      var n=L.length,M=L.concat([null,{ts:'x'},{ts:'y',epoch:NaN},{ts:3,epoch:E},{ts:'t0',epoch:E}]);
+      var F=listeEnregistreur(M,'48h'),J=listeEnregistreur(M,'30j'),T=trousEnregistreur(F);
+      process.stdout.write(JSON.stringify({n:n,f:F.map(function(x){return x.epoch;}),j:J.map(function(x){return x.epoch;}),fin:E,
+        dern:[F[F.length-1].ts,J[J.length-1].ts],t:T.filter(Boolean),tl:T.length,ti:T.findIndex(Boolean),
+        vide:[listeEnregistreur([],'48h'),trousEnregistreur([]),trousEnregistreur(F.slice(0,2)),listeEnregistreur(L.slice(0,1),'30j').length],
+        proche:[indexProche(F,0),indexProche(F,E+9),indexProche(F,F[3].epoch+60),indexProche([],5)]}));""")
+    assert r["f"] == sorted(r["f"]) and len(set(r["f"])) == len(r["f"])
+    assert r["f"][0] >= r["fin"] - 48 * 3600 and r["f"][-1] == r["fin"]
+    assert len({int(e // 3600) for e in r["j"][:-1]}) == len(r["j"]) - 1  # 30 j : un relevé par heure, plus le dernier
+    assert r["j"][0] < r["fin"] - 48 * 3600 and r["dern"] == ["t0", "t0"]
+    assert len(r["t"]) == 1 and r["t"][0] > 5 * 3600 and r["tl"] == len(r["f"])
+    assert r["f"][r["ti"]] - r["f"][r["ti"] - 1] == r["t"][0]
+    assert r["vide"] == [[], [], [0, 0], 1]  # un seul intervalle : rien ne permet d'appeler cela un trou
+    assert r["proche"] == [0, len(r["f"]) - 1, 3, -1]
+
+
+def test_reference_de_comparaison_et_duree():
+    r = _enreg(r"""
+      var E=1795000000,H=3600,D=86400,L=[];for(var i=0;i<20;i++)L.push({ts:'t'+i,epoch:E-i*7*H});
+      var f=function(m,d,l,e){var x=referenceComparaison(l||L,e||E,m,d);return x?x.ts:null;};
+      process.stdout.write(JSON.stringify([f('24h'),f('7j'),f('date',E-20*H),f('date',E+9*D),f('date',null),f('24h',null,L.slice(0,2)),
+        f('24h',null,L.slice(0,3)),f('7j',null,L.slice(0,12)),f('24h',null,[]),f('date',E-99*D),f('24h',null,L,E-6*7*H),
+        [60,1800,5400,7200,3.5*H,86400,71*H,7*D].map(dureeTexte)]));""")
+    # 24 h : au moins 12 h plus ancien (même règle que l'API) ; 7 j : au moins 3,5 j ; date : le plus proche, strictement antérieur
+    assert r[:11] == ["t3", "t19", "t3", "t1", None, None, "t2", None, None, "t19", "t9"]
+    assert r[11] == ["1 min", "30 min", "90 min", "2 h", "3 h 30", "24 h", "71 h", "7 j"]
+
+
+def test_difference_de_la_page_identique_a_celle_du_serveur():
+    """Le pas de lecture compare les deux graphes affichés (les demi-heures éclaircies n'ont plus leur différence) : même règle."""
+    def g(graine):
+        n = [{"id": f"pop:p{i}", "type": "population", "metriques": {
+            "adresses": (i * 37 * graine) % 211, "bans": None if i % 5 == graine % 5 else (i * 13 * graine) % 97,
+            "reseaux": [3, 3.5, True, "9", 40][(i + graine) % 5], "rotation": [True, False, None, 1][(i * graine) % 4]}}
+            for i in range(24) if (i + graine) % 7]
+        n += [{"id": f"asn:{i}", "type": "reseau_source"} for i in range(30) if (i * graine) % 3]
+        return {"noeuds": n + [None, 4, {"type": "cible"}, {"id": "autres:x" + str(graine), "type": "autres"},
+                               {"id": "pop:z", "type": "population", "metriques": "x"}], "aretes": []}
+    graphes = [g(i) for i in range(1, 7)] + [{"noeuds": "x"}, {}, None]
+    r = _node(_difference_js() + "var G=" + json.dumps(graphes) + """;process.stdout.write(JSON.stringify(G.map(function(a){
+      return G.map(function(b){return differencePaysage(a,b);});})));""")
+    for i, a in enumerate(graphes):
+        for j, b in enumerate(graphes):
+            assert r[i][j] == difference(a, b), (i, j)
+
+
+def test_badges_de_l_evolution():
+    r = _node("var RE_PID=/^(pop|camp|asn|classe|cible|cve|pays|infra|autres):[A-Za-z0-9:._-]{1,160}$/;"
+              + _entre("function listeDiff(", "\n") + _fonction("badgesPaysage") + "\n  }" + r"""
+      var d={apparus:['pop:a','pop:<b>'],disparus:['cve:c',3],hausses:[{id:'pop:h',metrique:'adresses',de:1,a:9},{id:'pop:h',metrique:'bans',de:1,a:9},null],
+        baisses:[{id:'pop:h',metrique:'reseaux',de:9,a:1},{id:'pop:b',metrique:'bans',de:9,a:1}]},b=badgesPaysage(d);
+      process.stdout.write(JSON.stringify([Object.keys(b).sort(),Object.keys(b).map(function(k){return b[k].map(function(x){return x.t;}).join('+');}),
+        Object.keys(badgesPaysage(null)).length,Object.keys(badgesPaysage({apparus:['pop:a'],sans_precedent:'premier'})).length,Object.keys(badgesPaysage({})).length]));""")
+    assert r[0] == ["cve:c", "pop:a", "pop:b", "pop:h"]
+    assert sorted(r[1]) == ["▲ en hausse+▼ en baisse", "▼ en baisse", "✖ disparu", "✚ apparu"]
+    assert r[2:] == [0, 0, 0]
+
+
+def test_demo_instantanes_de_l_enregistreur():
+    s = _script()
+    i = s.index("var DEMO_DONNEES=(function(){")
+    j = s.index("\n  })();", i) + len("\n  })();")
+    d = _node(_difference_js() + s[i:j] + """
+      var C=DEMO_DONNEES.chronologie.instantanes;
+      process.stdout.write(JSON.stringify({p:DEMO_DONNEES.paysage,d:DEMO_DONNEES.chronologie.differences,c:C,
+        i:C.map(function(x){return DEMO_DONNEES.lire(x.ts);}),absent:DEMO_DONNEES.lire('2000-01-01T00:00:00.000000Z')}));""")
+    assert d["absent"] is None
+    for c, x in zip(d["c"], d["i"]):
+        assert (x["ts"], x["epoch"], x["partiel"], x["compteurs"]) == (c["ts"], c["epoch"], c["partiel"], c["compteurs"])
+        ids = {n["id"] for n in x["graphe"]["noeuds"]}
+        assert all(ID.match(k) for k in ids) and all(a["de"] in ids and a["vers"] in ids for a in x["graphe"]["aretes"])
+    assert d["i"][-1]["graphe"] == d["p"]["instantane"]["graphe"]
+    par_ts = {x["ts"]: x for x in d["i"]}
+    for k, x in enumerate(d["d"]):  # fil, pas de lecture et « 24 h » disent la même chose que les graphes
+        av = d["i"][len(d["i"]) - 2 - k]
+        attendu = difference(av["graphe"], par_ts[x["ts"]]["graphe"])
+        assert {c: x["difference"][c] for c in attendu} == attendu, k
+    ref = par_ts[d["p"]["difference_24h"]["reference_ts"]]
+    attendu = difference(ref["graphe"], d["i"][-1]["graphe"])
+    assert {c: d["p"]["difference_24h"][c] for c in attendu} == attendu
+    assert attendu["apparus"] and attendu["disparus"] and attendu["hausses"] and attendu["baisses"] and attendu["rotation_levee"]

@@ -20,11 +20,11 @@ PAGE = pathlib.Path(__file__).resolve().parents[1] / "www" / "datascope" / "inde
 CAPTURES = os.environ.get("SECUBOX_DATASCOPE_CAPTURES")
 
 
-def _servir(pg, api, crochet=None, reperes_lents=None, vus=None):
+def _servir(pg, api, crochet=None, reperes_lents=None, vus=None, retenir=None):
     """Sert la page et reperes.js sur http://datascope.test/, l'API depuis `api` ({route: (code, corps)}) ; rien d'autre.
 
     `crochet` : expression exposée en window.__t depuis la fermeture de la page ; `reperes_lents` : liste où la requête de
-    reperes.js est retenue (à libérer par le scénario) ; `vus` : liste où chaque appel de l'API est noté, requête comprise."""
+    reperes.js est retenue (à libérer par le scénario) ; `vus` : liste où chaque appel de l'API est noté, requête comprise ; `retenir` : (préfixe, liste) d'appels laissés sans réponse."""
     def repondre(route):
         if reperes_lents is not None and route.request.url.endswith("/reperes.js"):
             return reperes_lents.append(route)
@@ -32,6 +32,8 @@ def _servir(pg, api, crochet=None, reperes_lents=None, vus=None):
         if chemin.startswith("/api/v1/datascope/"):
             if vus is not None:
                 vus.append(route.request.url.split("/api/v1/datascope/", 1)[1])
+            if retenir is not None and retenir[2:] != (False,) and chemin.startswith("/api/v1/datascope/" + retenir[0]):
+                return retenir[1].append(route)
             code, corps = api.get(chemin[len("/api/v1/datascope/"):], (404, {}))
             return route.fulfill(status=code, content_type="application/json", body=json.dumps(corps))
         f = PAGE.parent / (chemin.removeprefix("/datascope/") or "index.html")
@@ -46,7 +48,7 @@ def _servir(pg, api, crochet=None, reperes_lents=None, vus=None):
 
 
 def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, barres=False, crochet=None,
-                reperes_lents=None, vus=None, **contexte):
+                reperes_lents=None, vus=None, retenir=None, **contexte):
     """Exécute `scenario(page)` dans un thread propre (Playwright refuse de tourner sous une boucle asyncio)."""
     def tache():
         with sync_api.sync_playwright() as p:
@@ -58,7 +60,7 @@ def _navigateur(scenario, query="?demo=1", largeur=1400, hauteur=900, api=None, 
             erreurs, natifs = [], []
             pg.on("pageerror", lambda e: erreurs.append(str(e)))
             pg.on("dialog", lambda d: (natifs.append(d.type), d.dismiss()))
-            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api, crochet, reperes_lents, vus)) + query,
+            pg.goto(("file://" + str(PAGE) if api is None else _servir(pg, api, crochet, reperes_lents, vus, retenir)) + query,
                     wait_until="load" if reperes_lents is None else "domcontentloaded")
             pg.wait_for_timeout(400)
             r = scenario(pg)
@@ -970,3 +972,510 @@ def test_session_refusee_pendant_la_lecture_de_l_historique():
         pg.wait_for_timeout(300)
         return r, pg.evaluate("!!__p.chrono.rep")
     assert _navigateur(sc, query="", api=api, crochet="0;window.__p=paysage") == (["", None, False], True)
+
+
+# --- tâche 7 : mode évolution et enregistreur --------------------------------------------------------------------
+
+def _enregistrements(nb=40, pas=1800, trou=(), partiels=(), codes=None, grand=False, jours=0):
+    """Paysage, chronologie et un instantané par relevé (indice 0 : le plus récent). Les adresses suivent l'indice ; la population p05
+    n'existe qu'aux indices pairs ; `codes` : {indice: code HTTP} des instantanés en panne ; `jours` : un relevé par heure en plus."""
+    d = _paysage_max(age_s=120.0)
+    e0 = float(int(d["epoch"]))
+    d["epoch"] = d["instantane"]["epoch"] = e0
+    d["instantane"]["ts"] = _iso(e0)
+    if not grand:
+        g = d["instantane"]["graphe"]
+        garde = {n["id"] for n in g["noeuds"] if n["id"] in ("infra:box-demo", "asn:64496", "asn:64497", "cible:hote-00.sous-domaine.demo.test")
+                 or n["id"].startswith("pop:famille:p0") and n["id"][-1] < "6"}
+        g["noeuds"] = [n for n in g["noeuds"] if n["id"] in garde]
+        g["aretes"] = [a for a in g["aretes"] if a["de"] in garde and a["vers"] in garde]
+    base, ecarts = d["instantane"], [i * pas for i in range(nb) if i not in trou]
+    ecarts += [nb * pas + 3600 * k for k in range(24 * jours)]
+    vide = {k: [] for k in ("apparus", "disparus", "hausses", "baisses", "rotation_levee", "rotation_tombee")}
+    api, ent = _api(d), []
+    for rang, x in enumerate(ecarts):
+        ts, g = _iso(e0 - x), {"aretes": base["graphe"]["aretes"], "noeuds": []}
+        for n in base["graphe"]["noeuds"]:
+            if n["id"] == "pop:famille:p05" and rang % 2:
+                continue
+            m = dict(n["metriques"])
+            if n["type"] == "population" and "adresses" in m and rang:
+                m["adresses"] = int(m["adresses"] * (.6 if rang % 4 == 2 else 1)) + rang
+            g["noeuds"].append({**n, "metriques": m})
+        g["aretes"] = [a for a in g["aretes"] if rang % 2 == 0 or "pop:famille:p05" not in (a["de"], a["vers"])]
+        h = {"ts": ts, "epoch": e0 - x, "partiel": rang in partiels, "compteurs": {**base["compteurs"], "adresses": 12000 - 10 * rang}}
+        ent.append(h)
+        api["paysage/instantane/" + ts.replace(":", "%3A")] = ((codes or {}).get(rang, 200), {**h, "graphe": g, "difference": dict(vide)})
+    api["paysage/chronologie"] = (200, {"instantanes": ent[::-1], "tronque": False,
+                                        "differences": [{k: x[k] for k in ("ts", "epoch", "partiel")} | {"difference": dict(vide)} for x in ent[:12]]})
+    api["paysage/difference"] = (200, {**vide, "apparus": ["pop:famille:p01"], "disparus": ["pop:famille:messagerie", "asn:64999"], "tronque": False})
+    return d, api, ent
+
+
+E_CROCHET = "{E:Enregistreur,p:paysage,evo:evo}"
+
+
+def _bandeau(pg):
+    return pg.inner_text("#eBandeau") if pg.is_visible("#eBandeau") else None
+
+
+def _instants(vus):
+    return [v.split("/")[-1] for v in vus if v.startswith("paysage/instantane/")]
+
+
+def test_enregistreur_demo_rembobine_avance_partiel_et_trou():
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(250)
+        r = {"direct": (_bandeau(pg), pg.inner_text("#eHeure"), pg.get_attribute("#eSuiv", "aria-disabled"), pg.get_attribute("#eDirect", "aria-disabled"))}
+        pg.focus("#eDebut")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(300)
+        r["debut"] = (_bandeau(pg), pg.evaluate("document.activeElement.id"))
+        for _ in range(3):
+            pg.click("#eSuiv")
+            pg.wait_for_timeout(120)
+        r["quatre"] = (_bandeau(pg), pg.evaluate("[__t.E.etat().i, __t.p.ts === __t.E.etat().liste[3].ts, __t.p.rejoue.instantane.ts === __t.p.ts]"),
+                       pg.inner_text("#pEtat"), pg.evaluate("document.activeElement.id"))
+        r["trou"], r["partiel"], r["disparu"] = None, None, None
+        for k in range(120):
+            pg.evaluate("__t.E.pas(1)")
+            pg.wait_for_timeout(25)
+            t = _bandeau(pg) or ""
+            r["trou"] = t if "trou" in t and not r["trou"] else r["trou"]
+            r["partiel"] = t if "partiel" in t and not r["partiel"] else r["partiel"]
+            if not r["disparu"] and pg.locator("#topo .nd.fantome").count():
+                r["disparu"] = pg.eval_on_selector_all("#topo .nd.fantome", "l => l.map(g => g.getAttribute('aria-label') + '|' + g.querySelector('.badge').textContent)")
+        r["apparu"] = pg.evaluate("__t.E.etat().i === __t.E.etat().n - 1")
+        pg.click("#eDirect")
+        pg.wait_for_timeout(200)
+        r["retour"] = (_bandeau(pg), pg.evaluate("[__t.p.rejoue, __t.E.etat().cache, __t.p.ts === __t.p.rep.instantane.ts]"), pg.evaluate("document.activeElement.id"))
+        return r
+    # la page de démonstration servie en http pour y poser le crochet ; aucun appel d'API ne part
+    vus = []
+    r = _navigateur(sc, api={}, vus=vus, crochet=E_CROCHET)
+    assert vus == []
+    assert r["direct"][0] is None and r["direct"][1].startswith("direct") and r["direct"][2:] == ("true", "true")
+    assert "relevé 1 sur " in r["debut"][0] and r["debut"][0].startswith("lecture du ") and r["debut"][1] == "eDebut"
+    assert "relevé 4 sur " in r["quatre"][0] and r["quatre"][1] == [3, True, True] and r["quatre"][3] == "eSuiv"
+    assert r["quatre"][2].split(" · ")[0].replace("relevé de ", "").split(" ")[0][:5] in r["quatre"][0]
+    assert "trou de 3 h 30 sauté" in r["trou"] and "relevé partiel" in r["partiel"]
+    assert any("✖ disparu" in x for x in r["disparu"]) and r["apparu"]
+    assert r["retour"] == (None, [None, 0, True], "eDirect")
+
+
+def test_enregistreur_partiel_dans_l_etat_et_lecture_jusqu_a_la_fin():
+    _, api, ent = _enregistrements(nb=6, partiels=(2,))
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eV16")
+        pg.click("#eLire")
+        vu = []
+        for _ in range(60):
+            pg.wait_for_timeout(25)
+            t = _bandeau(pg)
+            if t and t not in vu:
+                vu.append(t)
+        return vu, pg.get_attribute("#eLire", "aria-label"), pg.evaluate("document.activeElement.id"), pg.inner_text("#pEtat"), pg.get_attribute("#pEtat", "aria-live")
+    vu, lire, foc, etat, live = _navigateur(sc, query="", api=api)
+    assert [n for n in range(1, 7) if any(f"relevé {n} sur 6" in t for t in vu)] == [1, 2, 3, 4, 5, 6]
+    assert any("relevé partiel" in t and "relevé 4 sur 6" in t for t in vu) and "fin de la fenêtre" in vu[-1] and "en pause" in vu[-1]
+    assert lire == "Lire l’enregistrement" and foc == "eLire" and live == "off"
+
+
+@pytest.mark.parametrize("code", [404, 503])
+def test_enregistreur_saute_un_instantane_illisible_et_le_dit(code):
+    _, api, ent = _enregistrements(nb=10, codes={6: code, 5: code})
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(300)
+        pg.click("#eSuiv")
+        pg.click("#eSuiv")
+        pg.wait_for_timeout(300)
+        r = [_bandeau(pg)]
+        pg.click("#eSuiv")
+        pg.wait_for_timeout(300)
+        r.append(_bandeau(pg))
+        pg.click("#ePrec")
+        pg.wait_for_timeout(300)
+        r.append(_bandeau(pg))
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus)
+    assert "relevé 3 sur 10" in r[0] and "saut" not in r[0]
+    assert "relevé 6 sur 10" in r[1] and "2 relevés illisibles ou retirés sautés" in r[1]
+    assert "relevé 3 sur 10" in r[2] and "sautés" in r[2]
+    assert len(_instants(vus)) == len(set(_instants(vus))) <= 10  # un instantané en panne n'est pas redemandé
+
+
+def test_enregistreur_panne_generale_et_api_injoignable_bornees():
+    for code, mot in ((503, "5 relevés de suite illisibles ou retirés"), (500, "API DataScope injoignable")):
+        _, api, ent = _enregistrements(nb=90, codes={i: code for i in range(1, 90)})
+        vus = []
+
+        def sc(pg):
+            pg.click("#vuePaysage")
+            pg.wait_for_timeout(300)
+            pg.click("#eLire")
+            pg.wait_for_timeout(700)
+            return pg.inner_text("#eHeure"), _bandeau(pg), pg.locator("#topo svg.paysage").count(), pg.get_attribute("#eLire", "aria-label")
+        t, b, n, lire = _navigateur(sc, query="", api=api, vus=vus)
+        assert mot in t and b is None and n == 1 and lire == "Lire l’enregistrement"  # dit, et retour au direct
+        assert len(_instants(vus)) <= 12, len(_instants(vus))
+
+
+def test_enregistreur_cache_et_requetes_bornes():
+    _, api, ent = _enregistrements(nb=90)
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(500)
+        r = {"lot": len(_instants(vus)), "maxi": 0, "vols": 0}
+        for _ in range(95):
+            pg.evaluate("__t.E.pas(1)")
+            pg.wait_for_timeout(30)
+            e = pg.evaluate("(({cache, vols, file}) => [cache, vols, file])(__t.E.etat())")
+            r["maxi"], r["vols"] = max(r["maxi"], e[0]), max(r["vols"], e[1])
+        r["fin"] = pg.evaluate("[__t.E.etat().i, __t.E.etat().n]")
+        r["total"] = len(_instants(vus))
+        for _ in range(8):  # vus à l'instant : repris du cache
+            pg.evaluate("__t.E.pas(-1)")
+            pg.wait_for_timeout(20)
+        r["retour"] = len(_instants(vus))
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus, crochet=E_CROCHET)
+    assert 12 <= r["lot"] <= 14 and r["maxi"] <= 60 and r["vols"] <= 4
+    assert r["fin"] == [89, 90] and r["total"] == 90 and r["retour"] == 90
+
+
+def test_enregistreur_requetes_abandonnees_en_sortant():
+    _, api, ent = _enregistrements(nb=30)
+    tenues, vus = [], []
+
+    def sc(pg):
+        abandons = []
+        pg.on("requestfailed", lambda q: abandons.append(q.url))
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        r = []
+        for sortie in ("#eDirect", "#vueArbre"):
+            del abandons[:], vus[:]
+            pg.click("#eDebut")
+            pg.wait_for_timeout(200)
+            avant = (len(_instants(vus)), _bandeau(pg))
+            pg.click(sortie)
+            pg.wait_for_timeout(200)
+            r.append((avant, len(abandons), pg.evaluate("[__t.E.etat().vols, __t.E.etat().file, __t.E.actif(), __t.p.rejoue]"), _bandeau(pg), len(_instants(vus))))
+        return r
+    for (nb, bandeau), abandons, etat, apres, total in _navigateur(sc, query="", api=api, vus=vus, retenir=("paysage/instantane/", tenues), crochet=E_CROCHET):
+        assert nb == 4 and "chargement" in bandeau and abandons == 4 and etat == [0, 0, False, None] and apres is None and total == 4
+
+
+def test_enregistreur_direct_ne_bouge_rien_et_401_termine():
+    d, api, ent = _enregistrements(nb=12)
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(300)
+        pg.evaluate("document.querySelector('#topo svg').dataset.t = '1'; document.querySelector('#pBarre .pbCases').dataset.t = '1'; document.querySelector('#insp .sPhrase').dataset.t = '1'")
+        n0 = [len([v for v in vus if v.startswith("paysage/chronologie")]), pg.evaluate("__t.E.etat().n"), pg.evaluate("__t.p.ts")]
+        d["instantane"]["ts"] = _iso(d["epoch"] + 900)
+        d["epoch"] += 900
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(300)
+        r = [pg.locator("[data-t]").count(), n0 == [len([v for v in vus if v.startswith("paysage/chronologie")]), pg.evaluate("__t.E.etat().n"), pg.evaluate("__t.p.ts")]]
+        for k in list(api):
+            if k.startswith("paysage/instantane/"):
+                api[k] = (401, {})
+        pg.evaluate("__t.E.direct()")
+        pg.wait_for_timeout(200)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(300)
+        return r + [pg.inner_text("#topo"), pg.is_visible("#pEnreg"), _bandeau(pg), pg.evaluate("[Object.keys(__t.p.noeuds).length, __t.E.actif(), __t.E.etat().cache, __t.p.chrono.rep]")]
+    r = _navigateur(sc, query="", api=api, vus=vus, crochet=E_CROCHET)
+    assert r[:2] == [3, True]
+    assert "session requise" in r[2] and r[3:] == [False, None, [0, False, 0, None]]
+
+
+@pytest.mark.parametrize("nb", [0, 1, 2])
+def test_enregistreur_historique_court(nb):
+    d, api, ent = _enregistrements(nb=max(nb, 1))
+    if nb == 0:
+        api["paysage"] = (200, {"disponible": False})
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        if nb == 0:
+            return pg.is_visible("#pEnreg"), pg.inner_text("#topo")
+        r = [pg.inner_text("#eHeure"), pg.get_attribute("#eLire", "aria-disabled")]
+        for b in ("#eDebut", "#ePrec", "#eLire", "#eSuiv", "#eDirect"):
+            pg.click(b, force=True)  # aria-disabled : la commande reste cliquable et dit pourquoi elle ne fait rien
+            pg.wait_for_timeout(120)
+            if b == "#ePrec":
+                r.append(_bandeau(pg))
+            if b == "#eLire":
+                pg.click("#eLire", force=True)
+        pg.wait_for_timeout(700)
+        return r + [_bandeau(pg), pg.inner_text("#eAnnonce"), pg.locator("#topo svg.paysage").count()]
+    r = _navigateur(sc, query="", api=api)
+    if nb == 0:
+        assert r[0] is False and "aucun instantané" in r[1]
+    elif nb == 1:
+        assert "un seul relevé" in r[0] and r[1] == "true" and r[2:4] == [None, None] and r[4] != "" and r[5] == 1
+    else:
+        assert "2 relevés" in r[0] and r[1] == "false" and "relevé 1 sur 2" in r[2] and r[3] is None and r[5] == 1
+
+
+def test_enregistreur_selection_gardee_et_absente_a_cette_date():
+    _, api, ent = _enregistrements(nb=10)
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.focus("#topo .nd[data-id='pop:famille:p05']")
+        pg.keyboard.press("Enter")
+        pg.wait_for_timeout(150)
+        r, foc = [], []
+        for n in (-1, 1):  # focus dans le graphe : gardé sur le nœud, devenu fantôme puis revenu
+            pg.focus("#topo .nd[data-id='pop:famille:p05']")
+            pg.evaluate(f"__t.E.pas({n})")
+            pg.wait_for_timeout(250)
+            foc.append(pg.evaluate("document.activeElement.dataset.id"))
+        pg.evaluate("__t.E.direct()")
+        assert foc == ["pop:famille:p05"] * 2, foc
+        for _ in range(2):
+            pg.click("#ePrec")
+            pg.wait_for_timeout(250)
+            r.append((pg.inner_text("#insp"), pg.get_attribute("#topo .nd[data-id='pop:famille:p05']", "class"), pg.evaluate("sessionStorage.getItem('datascope.selection')")))
+        return r
+    r = _navigateur(sc, query="", api=api, crochet=E_CROCHET)
+    assert "Absent à cette date" in r[0][0] and "pop:famille:p05" in r[0][0] and "fantome" in r[0][1] and "sel" in r[0][1].split()
+    assert "Absent" not in r[1][0] and "service-numero-5" in r[1][0] and "fantome" not in r[1][1] and "sel" in r[1][1].split()
+    assert all(x[2] == '"pop:famille:p05"' for x in r)
+
+
+@pytest.mark.parametrize("reduit", [False, True])
+def test_enregistreur_transitions_et_mouvement_reduit(reduit):
+    _, api, ent = _enregistrements(nb=10)
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(500)
+        # animations du graphe juste après un pas, dans la même passe
+        return pg.evaluate("""() => { __t.E.pas(1); const a = document.getAnimations().filter(x => x.effect && x.effect.target.closest('#topo') && !x.transitionProperty);
+            return [a.length, Math.max(0, ...a.map(x => x.effect.getTiming().duration))]; }"""), pg.locator("#topo .nd .badge").count()
+    (n, duree), badges = _navigateur(sc, query="", api=api, crochet=E_CROCHET, reduced_motion="reduce" if reduit else "no-preference")
+    assert badges > 0
+    assert (n, duree) == (0, 0) if reduit else (n > 0 and duree == 300)
+
+
+def test_enregistreur_pas_sans_gel_sur_le_graphe_maximal():
+    _, api, ent = _enregistrements(nb=60, jours=26, grand=True)
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        pg.click("#eF30")
+        pg.wait_for_timeout(400)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(1500)
+        t = []
+        for _ in range(10):
+            t.append(pg.evaluate("() => { const t0 = performance.now(); __t.E.pas(1); return performance.now() - t0; }"))
+            pg.wait_for_timeout(400)
+        return t, pg.evaluate("[__t.E.etat().i, __t.E.etat().n]"), pg.locator("#topo .nd").count()
+    t, (i, n), noeuds = _navigateur(sc, query="", api=api, crochet=E_CROCHET)
+    assert i == 10 and n > 600 and noeuds >= 237
+    assert sorted(t)[2] < 100, t  # marge pour une machine de test chargée ; seule, elle donne 30 à 60 ms
+
+
+def test_evolution_badges_et_comparaisons():
+    d, api, ent = _enregistrements(nb=20, jours=9)
+    d["difference_24h"] = {"apparus": ["asn:64496"], "disparus": ["pop:famille:balayage_web", "cible:parti.demo.test", "cve:CVE-2099-10009"], "hausses": [
+        {"id": "pop:famille:p01", "metrique": "adresses", "de": 1000, "a": 1910}], "baisses": [{"id": "pop:famille:p01", "metrique": "bans", "de": 90, "a": 30},
+        {"id": "infra:box-demo", "metrique": "bans", "de": 90, "a": 30}], "rotation_levee": [], "rotation_tombee": [], "tronque": False, "reference_ts": "x",
+        "reference_epoch": d["epoch"] - 86400, "reference_partiel": False, "ecart_s": 86400}
+    vus = []
+    BADGES = "l => l.map(g => [g.dataset.id, [...g.querySelectorAll('.badge')].map(t => t.textContent).join('+')]).filter(x => x[1])"
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = {"b24": dict(pg.eval_on_selector_all("#topo .nd", BADGES)), "comp": pg.inner_text("#pComp"), "nb": len(vus),
+             "chevauche": pg.evaluate(MESURES.replace(".nd .lbl, .nd .sous", ".nd .lbl, .nd .sous, .nd .badge"))["chevauche"],
+             "dehors": pg.evaluate("""() => { const s = document.querySelector('#topo svg').getBoundingClientRect(); return [...document.querySelectorAll('#topo .badge')].filter(t => { const b = t.getBoundingClientRect(); return b.left < s.left || b.right > s.right; }).length; }"""),
+             "contraste": pg.evaluate(CONTRASTE.replace("#topo .lbl,", "#topo .badge, #topo .lbl,")), "legende": pg.inner_text("#pLegende"),
+             "fantome": pg.eval_on_selector_all("#topo .fantome .f", "l => l.map(f => getComputedStyle(f).stroke)"),
+             "colle": pg.eval_on_selector_all("#topo .nd", """l => l.filter(g => { const b = g.querySelector('.badge'), f = g.querySelector('.f'); if (!b) return false;
+                 const x = b.getBoundingClientRect(), y = f.getBoundingClientRect(); return x.left < y.right + 1 && x.right > y.left - 1 && x.top < y.bottom && x.bottom > y.top; }).map(g => g.dataset.id)""")}
+        pg.click("#eEvo")
+        pg.wait_for_timeout(150)
+        r["sans"] = (pg.locator("#topo .badge, #topo .fantome").count(), "✚ apparues" in pg.inner_text("#insp") or "▲" in pg.inner_text("#insp"), pg.get_attribute("#eEvo", "aria-pressed"))
+        pg.click("#eEvo")
+        pg.click("#eC7j")
+        pg.wait_for_timeout(400)
+        r["b7"] = dict(pg.eval_on_selector_all("#topo .nd", BADGES))
+        r["comp7"] = (pg.inner_text("#pComp"), pg.inner_text("#insp"), pg.get_attribute("#eC7j", "aria-pressed"))
+        r["req"] = [v for v in vus if v.startswith("paysage/difference")]
+        pg.click("#rafraichir")
+        pg.wait_for_timeout(300)
+        pg.click("#eC24h")
+        pg.click("#eC7j")
+        pg.wait_for_timeout(200)
+        r["req2"] = len([v for v in vus if v.startswith("paysage/difference")])
+        pg.click("#eCdate")
+        pg.wait_for_timeout(300)
+        r["date"] = (pg.is_visible("#eDate"), pg.input_value("#eDate") != "", pg.inner_text("#pComp"))
+        pg.fill("#eDate", "2001-01-01T00:00")
+        pg.dispatch_event("#eDate", "change")
+        pg.wait_for_timeout(300)
+        r["vieille"] = pg.inner_text("#pComp")
+        r["large"] = [v for v in vus if v.startswith("paysage/chronologie")]
+        # relecture : le relevé précédent d'abord ; « 24 h » à la demande, relatif à l'instant affiché
+        pg.click("#ePrec")
+        pg.wait_for_timeout(400)
+        r["pas"] = (pg.inner_text("#pComp"), pg.get_attribute("#eCpas", "aria-pressed"), pg.is_visible("#eDate"))
+        pg.click("#eC24h")
+        pg.wait_for_timeout(700)
+        r["rejeu24"] = (pg.inner_text("#pComp"), dict(pg.eval_on_selector_all("#topo .nd", BADGES)).get("pop:famille:p01"), [v for v in vus if v.startswith("paysage/difference")][-1])
+        api["paysage/difference"] = (404, {})
+        pg.click("#ePrec")
+        pg.wait_for_timeout(700)
+        r["panne"] = (pg.inner_text("#pComp"), pg.locator("#topo .badge").count())
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus)
+    assert r["b24"] == {"asn:64496": "✚ apparu", "pop:famille:p01": "▲ en hausse+▼ en baisse", "infra:box-demo": "▼ en baisse",
+                        "pop:famille:balayage_web": "✖ disparu", "cible:parti.demo.test": "✖ disparu", "cve:CVE-2099-10009": "✖ disparu"}
+    assert "24 h plus tôt" in r["comp"] and r["chevauche"] == [] and r["dehors"] == 0 and r["contraste"] >= 4.5
+    assert set(r["fantome"]) == {"rgb(159, 179, 214)"} and r["colle"] == []
+    assert "populations 6" in r["legende"]  # un fantôme ne compte pas
+    assert r["sans"] == (0, True, "false")
+    assert r["b7"].get("pop:famille:p01") == "✚ apparu" and r["b7"].get("pop:famille:messagerie") == "✖ disparu" == r["b7"].get("asn:64999")
+    assert "7 j plus tôt" in r["comp7"][0] and "depuis 7 j" in r["comp7"][1] and r["comp7"][2] == "true"
+    assert len(r["req"]) == 1 == r["req2"] and ent[0]["ts"].replace(":", "%3A") in r["req"][0]
+    assert r["date"][:2] == (True, True) and "plus tôt" in r["date"][2] and "plus tôt" in r["vieille"]
+    assert len(r["large"]) == 2 and "differences=12" in r["large"][1]  # 8 jours, puis 30 quand une date est demandée
+    assert "30 min plus tôt" in r["pas"][0] and r["pas"][1:] == ("true", False)
+    assert "plus tôt" in r["rejeu24"][0] and r["rejeu24"][1] == "✚ apparu" and "a=" + ent[1]["ts"].replace(":", "%3A") in r["rejeu24"][2]
+    assert "comparaison non lue" in r["panne"][0] and r["panne"][1] == 0
+
+
+def test_evolution_sans_precedent_aucun_badge():
+    _, api, ent = _enregistrements(nb=4)
+    for k, v in api.items():
+        if k.startswith("paysage/instantane/"):
+            v[1]["difference"] = {"apparus": ["pop:famille:p01"], "disparus": ["pop:famille:px"], "sans_precedent": "premier"}
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.click("#eDebut")
+        pg.wait_for_timeout(300)
+        r = [pg.locator("#topo .badge, #topo .fantome").count(), pg.inner_text("#pComp"), pg.inner_text("#insp")]
+        pg.click("#eSuiv")
+        pg.wait_for_timeout(300)
+        return r + [pg.inner_text("#pComp")]
+    r = _navigateur(sc, query="", api=api)
+    assert r[0] == 0 and "premier relevé enregistré" in r[1] and "✚ apparues" not in r[2]
+    assert "comparé au relevé de " in r[3]  # ensuite, les deux graphes affichés sont comparés
+
+
+def test_enregistreur_fenetre_30j_et_curseur():
+    _, api, ent = _enregistrements(nb=20, jours=20)
+    vus = []
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(400)
+        r = [pg.evaluate("__t.E.etat().n"), pg.locator("#eBande .r").count()]
+        pg.click("#eF30")
+        pg.wait_for_timeout(400)
+        r += [pg.evaluate("__t.E.etat().n"), pg.get_attribute("#eF30", "aria-pressed"), len([v for v in vus if v.startswith("paysage/chronologie")])]
+        b = pg.locator("#eCurseur").bounding_box()
+        for x in (.8, .6, .5, .3):  # glissé : la date suit, une seule lecture au repos
+            pg.mouse.move(b["x"] + b["width"] * x, b["y"] + 10)
+            pg.mouse.down() if x == .8 else None
+            pg.wait_for_timeout(20)
+        n = len(_instants(vus))
+        pg.mouse.up()
+        pg.wait_for_timeout(500)
+        i = pg.evaluate("__t.E.etat().i / __t.E.etat().n")
+        r += [n, .2 < i < .4, _bandeau(pg)]
+        pg.focus("#eCurseur")
+        av = pg.evaluate("__t.E.etat().i")
+        for t in ("ArrowRight", "ArrowRight", "ArrowLeft", "PageDown"):
+            pg.keyboard.press(t)
+            pg.wait_for_timeout(250)
+        r += [pg.evaluate("__t.E.etat().i") - av, pg.get_attribute("#eCurseur", "aria-valuetext")]
+        pg.click("#eF48")
+        pg.wait_for_timeout(400)
+        r += [pg.evaluate("[__t.E.etat().i, __t.p.ts === __t.E.etat().liste[0].ts]")]
+        pg.focus("#eCurseur")
+        pg.keyboard.press("End")
+        pg.wait_for_timeout(200)
+        return r + [_bandeau(pg)]
+    r = _navigateur(sc, query="", api=api, vus=vus, crochet=E_CROCHET)
+    assert 20 < r[0] == r[1] < 60 and r[2] > 400 and r[3] == "true" and r[4] == 2
+    assert r[5] <= 1 and r[6] is True and r[7].startswith("lecture du ")
+    assert r[8] == 1 - 12 and " sur " in r[9] and r[10] == [0, True] and r[11] is None
+
+
+def test_enregistreur_annonces_espacees_et_compteurs_au_temps_lu():
+    _, api, ent = _enregistrements(nb=40)
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("window.__dit = []; new MutationObserver(() => __dit.push(document.getElementById('eAnnonce').textContent)).observe(document.getElementById('eAnnonce'), {childList: true, characterData: true, subtree: true})")
+        pg.click("#eV16")
+        pg.click("#eLire")
+        pg.wait_for_timeout(2600)
+        n, i = pg.evaluate("__dit.length"), pg.evaluate("__t.E.etat().i")
+        pg.click("#eLire")
+        pg.wait_for_timeout(300)
+        k = pg.evaluate("__t.E.etat().i")
+        return n, i, k, pg.inner_text("#pBarre .pbCase:nth-child(4) b"), pg.get_attribute("#eAnnonce", "aria-live")
+    n, i, k, adr, live = _navigateur(sc, query="", api=api, crochet=E_CROCHET)
+    assert n <= 2 and i >= 8 and live == "polite"
+    assert adr.replace("\u202f", "").replace(" ", "") == str(12000 - 10 * (39 - k))
+
+
+@pytest.mark.parametrize("largeur", [1280, 400])
+def test_enregistreur_tient_dans_la_page(largeur):
+    tactile = {"has_touch": True, "is_mobile": True} if largeur == 400 else {}
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        pg.evaluate("document.getElementById('eC7j').click(); document.getElementById('eCdate').click()")
+        pg.wait_for_timeout(200)
+        r = {"deborde": [_debordement(pg)]}
+        _capture(pg, f"paysage-t7-demo-{largeur}-direct.png")
+        for _ in range(12):
+            pg.click("#ePrec")
+            pg.wait_for_timeout(60)
+        pg.wait_for_timeout(450)
+        r["deborde"].append(_debordement(pg))
+        _capture(pg, f"paysage-t7-demo-{largeur}-lecture.png")
+        r["petit"] = pg.eval_on_selector_all("#pEnreg *, #eBandeau", "l => l.filter(e => e.offsetParent && !e.classList.contains('horsVue') && [...e.childNodes].some(n => n.nodeType === 3 && n.data.trim()) && parseFloat(getComputedStyle(e).fontSize) < 13.5).map(e => e.id)")
+        r["cibles"] = pg.eval_on_selector_all("#pEnreg button, #pEnreg input", "l => l.filter(e => e.offsetParent).map(e => [e.id, e.getBoundingClientRect()]).filter(x => x[1].width < 40 || x[1].height < 40).map(x => x[0])")
+        r["contraste"] = pg.evaluate(CONTRASTE.replace("#topo .lbl, #topo .sous, #topo .col, #pLegende label span", "#pEnreg button, #pComp, #eHeure"))
+        r["chevauche"] = pg.evaluate(MESURES.replace(".nd .lbl, .nd .sous", ".nd .lbl, .nd .sous, .nd .badge"))["chevauche"]
+        return r
+    r = _navigateur(sc, largeur=largeur, **tactile)
+    assert r["deborde"] == [False, False] and r["petit"] == [] and r["contraste"] >= 4.5 and r["chevauche"] == []
+    assert largeur != 400 or r["cibles"] == []

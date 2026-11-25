@@ -10,6 +10,7 @@
     · gauche : sources et leur état ; centre : topologie SVG déterministe ; droite : inspecteur de la sélection ;
     · vue « Paysage » (#3921) : populations d'attaquants, réseaux sources, cibles et CVE (API paysage, relevé du WAF), même page ;
       compteurs et tendances à histogrammes (une heure sans relevé est « non mesuré », jamais 0), synthèse et fil des changements ;
+      badges d'évolution (24 h, 7 j, date) et enregistreur à rembobinage : chaque pas est l'instantané enregistré, jamais interpolé ;
     · sous 900 px de cadre ou avec ?embed=1, les panneaux latéraux deviennent des tiroirs.
   DONNÉES RÉELLES UNIQUEMENT : une mesure absente s'affiche « — » ; une source qui n'est pas « ok » rend l'état « inconnu ».
   ?demo=1 : données de DÉMONSTRATION (adresses RFC 5737), annoncées par un bandeau orange, aucun appel réseau.
@@ -116,7 +117,7 @@
   .corps.vuePaysage #panSources{display:none !important} .topoPan.vuePaysage .topoCorps{display:block}
   /* place de la barre verticale toujours réservée : la largeur mesurée avant le dessin reste vraie après */
   .topoPan.vuePaysage .topo{scrollbar-gutter:stable}
-  body:not(.emb) .topoPan.vuePaysage .topo{max-height:max(420px,calc(100vh - 435px))}
+  body:not(.emb) .topoPan.vuePaysage .topo{max-height:max(360px,calc(100vh - 531px))}
   /* l'inspecteur prend la hauteur du graphe et défile : pas de vide sous une colonne, les compteurs restent à l'écran */
   @container a (min-width:900px){body:not(.emb) .corps.vuePaysage{grid-template-columns:minmax(0,1fr) 340px;align-items:stretch}
     body:not(.emb) .corps.vuePaysage #panInsp{height:0;min-height:100%;overflow:auto}}
@@ -136,6 +137,21 @@
   /* case en cours : cadre toujours visible, barre ou non ; non mesuré : aplat et bord haut tireté ; mesure absente : cadre vide tireté ; nœud absent : trait au sol */
   .histo .encours{fill:none;stroke:#c9efff;stroke-width:1;vector-effect:non-scaling-stroke} .histo .trou{fill:rgba(159,179,214,.2)} .histo .bord{stroke:rgba(159,179,214,.85);stroke-width:2;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
   .histo .e-vide .trou{fill:none;stroke:rgba(159,179,214,.8);stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke} .histo .e-absent .trou{fill:rgba(159,179,214,.55)} .histo .e-non_charge .trou{fill:rgba(159,179,214,.08)}
+  /* enregistreur : commandes fixes au-dessus des compteurs ; la bande montre chaque relevé à son heure, un trou reste un trou */
+  .pEnreg{grid-column:1/-1;min-width:0;position:relative;border:1px solid var(--trait);border-radius:12px;padding:6px 10px;background:rgba(10,22,46,.6);font-size:.85rem;color:var(--doux);display:grid;gap:4px;grid-template-columns:minmax(0,1fr)} .pEnreg.rejeu{border-color:var(--orange)}
+  .eLigne{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;min-width:0} .eGroupe{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center} .pEnreg .bt{padding:3px 9px;min-height:30px;min-width:34px} .pEnreg .bt[aria-pressed="true"]{border-color:var(--cyan);background:rgba(41,182,246,.22)} .pEnreg .bt[aria-disabled="true"]{border-style:dashed;color:var(--doux);background:none;cursor:default}
+  .eHeure{color:var(--texte);font-variant-numeric:tabular-nums;min-width:142px} .pComp{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+  .ePiste{position:relative;flex:1 1 220px;min-width:0;height:34px;border-radius:6px;background:rgba(6,13,27,.5)} .ePiste svg{position:absolute;left:8px;top:0;width:calc(100% - 16px);height:100%}
+  .ePiste .r{fill:var(--cyan);opacity:.55} .ePiste .r.part{fill:rgba(41,182,246,.18);stroke:var(--cyan);stroke-width:1;stroke-dasharray:2 2;vector-effect:non-scaling-stroke;opacity:1} .ePiste .trou{fill:rgba(159,179,214,.16)} .ePiste .bord{stroke:rgba(159,179,214,.85);stroke-width:2;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+  .ePiste input{position:absolute;inset:0;width:100%;height:100%;margin:0;background:none;-webkit-appearance:none;appearance:none;cursor:pointer} .ePiste input:focus-visible,.pEnreg .bt:focus-visible,.pEnreg input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .ePiste input::-webkit-slider-runnable-track{height:100%;background:none} .ePiste input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:100%;border:2px solid #c9efff;border-radius:4px;background:rgba(201,239,255,.2)} .rejeu .ePiste input::-webkit-slider-thumb{border-color:var(--orange);background:rgba(255,159,28,.3)}
+  .ePiste input::-moz-range-track{height:100%;background:none} .ePiste input::-moz-range-thumb{box-sizing:border-box;width:16px;height:100%;border:2px solid #c9efff;border-radius:4px;background:rgba(201,239,255,.2)} .rejeu .ePiste input::-moz-range-thumb{border-color:var(--orange);background:rgba(255,159,28,.3)}
+  .pEnreg input[type=datetime-local]{font:inherit;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:2px 6px;min-height:30px;max-width:100%;color-scheme:dark}
+  /* le graphe cède la hauteur du bandeau : les commandes ne bougent pas sous le doigt à l'entrée en relecture */
+  .topoPan.rejeu .topo{max-height:690px} body:not(.emb) .topoPan.rejeu .topo{max-height:max(330px,calc(100vh - 561px))} @container a (max-width:559px){.topoPan.rejeu .eBandeau{min-height:43px} .topoPan.rejeu .topo{max-height:671px} body:not(.emb) .topoPan.rejeu .topo{max-height:max(311px,calc(100vh - 580px))}}
+  .eBandeau{line-height:18px;background:var(--orange);color:#1a1000;font-weight:700;border-radius:8px;padding:3px 10px;font-size:.85rem;margin-bottom:6px;font-variant-numeric:tabular-nums} .horsVue{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .paysage text.badge{font-weight:700} .paysage .b-app{fill:var(--jaune)} .paysage .b-haus{fill:var(--orange)} .paysage .b-bais{fill:var(--cyan)} .paysage .b-disp{fill:var(--doux)}
+  .paysage .nd.fantome .f{fill:rgba(159,179,214,.10);stroke:var(--doux);stroke-dasharray:3 3} .paysage .fantome :is(.f,.emo){opacity:.55} .paysage .fantome text.lbl{fill:var(--doux);font-style:italic} .paysage .ar.fant .v{stroke:rgba(159,179,214,.3);stroke-dasharray:3 4}
   svg.paysage:not(.ico){display:block;height:auto;margin:0 auto}
   svg.paysage text{font-size:13.6px;fill:var(--texte);paint-order:stroke;stroke:#060d1b;stroke-width:3.5px;stroke-linejoin:round;pointer-events:none}
   .paysage text.col{fill:var(--doux);font-weight:700} .paysage text.sous{fill:var(--doux)} .paysage text.emo{stroke:none} .paysage .p-population .lbl{font-weight:700}
@@ -168,7 +184,7 @@
   .fJetons{display:flex;flex-wrap:wrap;gap:4px 6px} .fJetons button,.part button.lien{font:inherit} .fJetons button.lien{border:1px solid var(--trait);border-radius:8px;padding:3px 8px;background:rgba(59,130,246,.10);text-decoration:none;color:var(--texte);min-width:0}
   .fParts{display:flex;flex-wrap:wrap;gap:2px 12px} .fParts i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
   .vuePaysage .actions{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin-top:8px} .vuePaysage .actions a{margin:0;font-size:.85rem;min-height:40px;display:inline-flex;align-items:center}
-  @media (pointer:coarse){svg.histo{height:40px} .pLegende label,.vuePaysage .bt,.fJetons button.lien,.part button.lien{min-height:40px} .vuePaysage .bt,.sLigne .lien,.filL .lien{min-width:40px;min-height:40px} .sLigne,.filL .h,.filL .e{align-items:center}}
+  @media (pointer:coarse){svg.histo{height:40px} .pLegende label,.vuePaysage .bt,.fJetons button.lien,.part button.lien,.pEnreg input[type=datetime-local]{min-height:40px} .ePiste{height:44px} .vuePaysage .bt,.vuePaysage .pEnreg .bt,.sLigne .lien,.filL .lien{min-width:40px;min-height:40px} .sLigne,.filL .h,.filL .e{align-items:center}}
   @media (prefers-reduced-motion:reduce){.paysage .nd *,.paysage .ar{transition:none}}
   dl.props{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:.76rem} dl.props dt{color:var(--faible)} dl.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
   .insp h4{margin:12px 0 5px;font-size:.78rem;color:var(--doux);font-weight:700}
@@ -196,8 +212,22 @@
   <div class="tuiles" id="tuiles"></div>
   <div class="corps">
     <div class="pan tiroir" id="panSources"><h3>Sources <i>relevé du collecteur</i><button type="button" class="bt fermer" data-ferme="panSources">✕ Fermer</button></h3><div id="sources"></div><div class="note">Décocher une source masque ses entités dans la topologie (affichage seulement).</div></div>
-    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button><button type="button" class="bt" id="vuePaysage" aria-pressed="false">Paysage</button></span><span class="pEtat" id="pEtat" role="status" hidden></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="pLegende" id="pLegende" hidden></div><details class="pAide" id="pAide" hidden><summary id="pAideT"></summary><div id="pAideC"></div></details><div class="note" id="topoBas"></div></div>
+    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button><button type="button" class="bt" id="vuePaysage" aria-pressed="false">Paysage</button></span><span class="pEtat" id="pEtat" role="status" hidden></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="eBandeau" id="eBandeau" hidden></div><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="pLegende" id="pLegende" hidden></div><details class="pAide" id="pAide" hidden><summary id="pAideT"></summary><div id="pAideC"></div></details><div class="note" id="topoBas"></div></div>
     <div class="pan tiroir insp" id="panInsp"><h3>Inspecteur <i id="inspType"></i><button type="button" class="bt fermer" data-ferme="panInsp">✕ Fermer</button></h3><div id="insp"><div class="vide">Choisir un élément de la topologie.</div></div></div>
+    <div class="pEnreg" id="pEnreg" role="group" aria-label="Enregistreur du paysage" hidden>
+      <div class="eLigne">
+        <span class="eGroupe" role="group" aria-label="Lecture"><button type="button" class="bt" id="eDebut" aria-label="Rembobiner au début de la fenêtre" title="Rembobiner au début de la fenêtre">⏮︎</button><button type="button" class="bt" id="ePrec" aria-label="Relevé précédent" title="Relevé précédent">◀◀</button><button type="button" class="bt" id="eLire" aria-label="Lire l’enregistrement" title="Lire l’enregistrement">▶</button><button type="button" class="bt" id="eSuiv" aria-label="Relevé suivant" title="Relevé suivant">▶▶</button><button type="button" class="bt" id="eDirect" aria-label="Revenir au direct" title="Revenir au direct">⏭︎</button></span>
+        <span class="ePiste" title="Chaque barre est un relevé enregistré, à son heure : hauteur = adresses (cumul par population)."><svg id="eBande" viewBox="0 0 1000 30" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg><input type="range" id="eCurseur" aria-label="Instant affiché" min="0" max="1" value="1" step="1"></span>
+        <span class="eHeure" id="eHeure">direct</span>
+      </div>
+      <div class="eLigne">
+        <span class="eGroupe" role="group" aria-label="Vitesse de lecture"><button type="button" class="bt" id="eV1" aria-pressed="true">×1</button><button type="button" class="bt" id="eV4" aria-pressed="false">×4</button><button type="button" class="bt" id="eV16" aria-pressed="false">×16</button></span>
+        <span class="eGroupe" role="group" aria-label="Fenêtre de l’enregistreur"><button type="button" class="bt" id="eF48" aria-pressed="true">48 h (pas fin)</button><button type="button" class="bt" id="eF30" aria-pressed="false">30 j (1 h)</button></span>
+        <span class="eGroupe" role="group" aria-label="Évolution : comparer à"><button type="button" class="bt" id="eEvo" aria-pressed="true" title="Afficher les badges d’évolution sur le graphe">badges ✚ ✖ ▲ ▼</button><button type="button" class="bt" id="eCpas" aria-pressed="true" hidden>relevé précédent</button><button type="button" class="bt" id="eC24h" aria-pressed="true">24 h</button><button type="button" class="bt" id="eC7j" aria-pressed="false">7 j</button><button type="button" class="bt" id="eCdate" aria-pressed="false">date</button><input type="datetime-local" id="eDate" aria-label="Comparer au relevé le plus proche de cette date" hidden></span>
+        <span class="pComp" id="pComp"></span>
+      </div>
+      <span id="eAnnonce" class="horsVue" aria-live="polite"></span>
+    </div>
     <div class="pBarre" id="pBarre" role="group" aria-label="Compteurs du paysage" hidden></div>
   </div>
   <div class="note">Lecture seule · chaque relation porte sa preuve (observée ou rapportée), sa source et sa date · aucune relation déduite.</div>
@@ -214,7 +244,7 @@
   if(!EMB&&!DEMO){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
   // repères partagés avec la page Actor (fichier du paquet, même origine), chargés de la même façon
   try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(vue==='paysage')rendreTopo();if(selection.id&&RE_PID.test(selection.id))inspecter();};document.head.appendChild(rp);}catch(e){}
-  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques', CLE_PPER='datascope.paysage.periode';
+  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques', CLE_PPER='datascope.paysage.periode', CLE_PEVO='datascope.paysage.evolution';
   var RE_ID=/^(node|network|interface|device|ip|service):[A-Za-z0-9:._-]{1,128}$/;
   var RE_PID=/^(pop|camp|asn|classe|cible|cve|pays|infra|autres):[A-Za-z0-9:._-]{1,160}$/;
   var TYPE_PREFIXE={pop:'population',camp:'campagne',asn:'reseau_source',classe:'classe_reseau',cible:'cible',cve:'cve',pays:'pays',infra:'infra',autres:'autres'};
@@ -266,8 +296,8 @@
 
   // --- accès aux données ---
   function jeton(){try{return localStorage.getItem('sbx_token')||sessionStorage.getItem('sbx_token')||'';}catch(e){return '';}}
-  function jget(chemin){var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
-    return fetch(API+chemin,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){
+  function jget(chemin,signal){var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
+    return fetch(API+chemin,{headers:hd,credentials:'same-origin',cache:'no-store',signal:signal}).then(function(r){
       if(r.status===401||r.status===403)return {refus:true};return r.ok?r.json().then(function(j){return {ok:true,j:j};}):{ok:false,status:r.status};
     }).catch(function(){return {ok:false};});}
 
@@ -563,6 +593,7 @@
   function boutonsVue(){[['bulles','vueBulles'],['arbre','vueArbre'],['paysage','vuePaysage']].forEach(function(b){el(b[1]).setAttribute('aria-pressed',vue===b[0]?'true':'false');});}
   function choisirVue(v){
     vue=nomVue(v);ecrireStock(CLE_VUE,vue);boutonsVue();
+    if(vue!=='paysage')Enregistreur.quitter();
     rendreTopo();if(vue==='paysage')chargePaysage();
   }
   function marquerSelection(){
@@ -621,7 +652,7 @@
     var box=el('insp'),ty=el('inspType'),id=selection.id,mon=++jetonInsp;
     // fiche du paysage : inchangée, elle n'est pas refaite (focus et défilement gardés au rafraîchissement)
     var pid=!!id&&RE_PID.test(id),rp=window.SbxReperes?1:0,syn=!id&&vue==='paysage'?affichePaysage():null,
-      cle=pid?[id,paysage.ts,paysage.ref,id.indexOf('infra:')===0&&etat.noeuds['node:'+id.slice(6)]?1:0,rp].join('|'):syn?['synthese',paysage.ts,paysage.ref,paysage.chrono.version,rp].join('|'):'',vieille=box.getAttribute('data-cle')||'';
+      cle=pid?[id,paysage.ts,paysage.ref,paysage.raison,id.indexOf('infra:')===0&&etat.noeuds['node:'+id.slice(6)]?1:0,rp].join('|'):syn?['synthese',paysage.ts,paysage.ref,paysage.raison,paysage.chrono.version,rp].join('|'):'',vieille=box.getAttribute('data-cle')||'';
     if(cle&&vieille===cle)return;
     // même nœud (ou même synthèse), nouveau relevé ou repères arrivés : parties dépliées et focus retrouvés après la réécriture
     var garde=(pid||syn)&&vieille.split('|')[0]===(id||'synthese')?etatFiche(box):null,sy=el('panInsp').scrollTop;
@@ -742,10 +773,10 @@
   var P_LIENS={'/actor/':['Actor','campagnes et acteurs'],'/waf/':['WAF','pare-feu applicatif'],'/garde/':['Garde','décisions de blocage'],'/nac/':['NAC','appareils du réseau']};
   var P_LIENS_TYPE={population:['/actor/','/waf/','/garde/'],campagne:['/actor/','/waf/'],reseau_source:['/actor/','/waf/','/garde/'],classe_reseau:['/actor/','/waf/'],cible:['/waf/','/nac/'],cve:['/waf/'],pays:['/actor/','/waf/'],infra:['/nac/','/garde/'],autres:['/actor/']};
   var pMasques=(function(){var m=lireStock(CLE_PTYPES);return Array.isArray(m)?m.filter(function(t){return P_TYPES.indexOf(t)>=0;}):P_MASQUES_DEFAUT.slice();})();
-  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',ts:'',ref:'',rejoue:null,geste:false,silence:false,noeuds:Object.create(null),aretes:[],diff:null,
+  var paysage={rep:null,motif:'',refus:false,echec:false,lu:0,cle:'',ts:'',ref:'',rejoue:null,raison:'',pos:null,anime:0,geste:false,silence:false,noeuds:Object.create(null),aretes:[],diff:null,
     // chronologie : relue seulement quand un nouveau relevé est arrivé ; tendances : une par population consultée, gardées en mémoire
-    chrono:{rep:null,ts:'',enVol:'',echec:false,lu:0,version:0},tendances:Object.create(null)},jetonPaysage=0;
-  var P_FENETRE_S=8*86400,P_TENDANCES_MAX=24,pPeriode=lireStock(CLE_PPER)==='7j'?'7j':'24h';
+    chrono:{rep:null,ts:'',large:0,enVol:'',echec:false,lu:0,version:0},tendances:Object.create(null)},jetonPaysage=0;
+  var P_FENETRE_S=8*86400,P_FENETRE_MAX_S=30*86400,P_TENDANCES_MAX=24,pPeriode=lireStock(CLE_PPER)==='7j'?'7j':'24h';
   // clé du compteur, libellé, vrai si c'est une somme sur les populations (une adresse vue dans deux populations compte deux fois)
   var P_COMPTEURS=[['populations','populations'],['rotation','en rotation'],['reseaux','réseaux',true],['adresses','adresses',true],['cibles','cibles'],['bans','bannies',true],['cves','CVE']];
 
@@ -808,14 +839,17 @@
   // instantané affiché : celui qu'on rejoue s'il y en a un, sinon le direct. Une lecture du direct ne touche ni le dessin,
   // ni l'index partagé (paysage.noeuds, aretes, diff) tant qu'une relecture est en cours.
   function affichePaysage(){
-    if(paysage.rejoue)return paysage.rejoue;
-    var r=paysage.rep,i=r&&r.disponible!==false&&r.instantane&&typeof r.instantane==='object'?r.instantane:null;
-    return i?{instantane:i,difference:r.difference_24h||null,motif:r.motif_difference_24h,direct:true}:null;
+    var r=paysage.rep,i=r&&r.disponible!==false&&r.instantane&&typeof r.instantane==='object'?r.instantane:null,
+      b=paysage.rejoue||(i?{instantane:i,difference:r.difference_24h||null,motif:r.motif_difference_24h,direct:true}:null);
+    if(!b||modeComparaison()===(b.direct?'24h':'pas'))return b;
+    var v=comparaisonVoulue(b.instantane),d=v.ref?propre(evo.cache,v.cle,null):null;
+    return {instantane:b.instantane,difference:d,motif:'',raison:d?'':v.raison,direct:b.direct};
   }
-  function indexerAffiche(){var a=affichePaysage();indexerPaysage(a&&a.instantane,a&&a.difference);}
-  // enregistreur (tâche 7) : affiche cet instantané jusqu'à rejouerPaysage(null), qui revient au direct
+  function indexerAffiche(){var a=affichePaysage();indexerPaysage(a&&a.instantane,a&&a.difference);paysage.raison=a&&a.raison||'';}
+  // enregistreur : affiche cet instantané jusqu'à rejouerPaysage(null), qui revient au direct
   function rejouerPaysage(instantane,difference){
     paysage.rejoue=instantane?{instantane:instantane,difference:difference||null,motif:'',direct:false}:null;
+    if(!instantane)evo.modeR='pas';
     indexerAffiche();apresPaysage();
   }
   function indexerPaysage(i,difference){
@@ -833,16 +867,22 @@
     jget('paysage').then(function(r){
       if(mon!==jetonPaysage)return;
       if(r.ok)prendrePaysage(r.j);
-      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus){paysage.rep=null;paysage.rejoue=null;indexerAffiche();
-        var ch=paysage.chrono;ch.rep=null;ch.ts='';ch.enVol='';ch.echec=false;ch.lu=0;ch.version++;paysage.tendances=Object.create(null);}}
+      else{paysage.echec=true;paysage.refus=!!r.refus;if(r.refus)effacerPaysage();}
       if(force){paysage.chrono.lu=0;Object.keys(paysage.tendances).forEach(function(k){paysage.tendances[k].lu=0;});}   // « Rafraîchir » : les lectures échouées sont retentées
       apresPaysage();
     });
   }
+  // session refusée : plus rien du paysage ne reste à l'écran ni en mémoire, la relecture est terminée
+  function effacerPaysage(){
+    var ch=paysage.chrono;Enregistreur.arreter();annulerComparaison();
+    paysage.rep=null;paysage.rejoue=null;paysage.pos=null;paysage.vus=null;evo.modeR='pas';evo.cache=Object.create(null);evo.echecs=Object.create(null);indexerAffiche();
+    ch.rep=null;ch.ts='';ch.large=0;ch.enVol='';ch.echec=false;ch.lu=0;ch.version++;paysage.tendances=Object.create(null);
+  }
+  function refusPaysage(){paysage.echec=true;paysage.refus=true;effacerPaysage();apresPaysage();}
   function apresPaysage(){
     if(vue==='paysage')rendreTopo();
     if(selection.id&&RE_PID.test(selection.id))selectionner(selection.id);
-    chargeChronologie();tendanceFiche();
+    chargeChronologie();chargeComparaison();tendanceFiche();Enregistreur.historique();
   }
   function tsDirect(){var r=paysage.rep,i=r&&r.disponible!==false&&r.instantane;return i&&typeof i.ts==='string'?i.ts:'';}
   // temps affiché : celui de l'instantané rejoué, sinon maintenant (jamais avant le relevé : horloge du poste en retard)
@@ -851,34 +891,156 @@
     var r=paysage.rep||{},e=pNombre(r.epoch);
     return DEMO?e+pNombre(r.age_s):Math.max(Date.now()/1000,e);
   }
-  // en-têtes des 8 derniers jours et différences des 12 derniers relevés : une requête par nouveau relevé, si la vue se voit
+  // en-têtes des 8 derniers jours (30 si l'enregistreur ou une date le demande) et différences des 12 derniers relevés : une requête
+  // par nouveau relevé, si la vue se voit ; pendant une relecture, l'historique ne bouge pas sous le curseur
+  function largeurChrono(){return Enregistreur.fenetre()==='30j'||evo.mode==='date'||evo.modeR==='date'?P_FENETRE_MAX_S:P_FENETRE_S;}
   function chargeChronologie(){
-    var c=paysage.chrono,ts=tsDirect();
+    var c=paysage.chrono,ts=tsDirect(),large=Math.max(c.large,largeurChrono()),cle=ts+'|'+large;
     if(!ts||vue!=='paysage'||document.hidden)return;
-    if(c.enVol===ts||(c.ts===ts&&!c.echec))return;
+    if(c.enVol===cle||(c.large>=large&&!c.echec&&(c.ts===ts||Enregistreur.actif())))return;
     if(c.echec&&Date.now()-c.lu<P_RELECTURE_MS)return;
-    var de=Math.max(0,Math.floor(pNombre(paysage.rep.epoch)-P_FENETRE_S));
+    var fin=Math.ceil(pNombre(paysage.rep.epoch)),de=Math.max(0,fin-large);
     function fini(r){
-      if(c.enVol!==ts)return;
+      if(c.enVol!==cle)return;
+      if(r.refus){refusPaysage();return;}
       c.enVol='';c.lu=Date.now();c.version++;c.echec=!(r.ok&&r.j&&Array.isArray(r.j.instantanes));
-      if(!c.echec){c.ts=ts;c.rep={instantanes:r.j.instantanes.filter(function(i){return i&&typeof i.epoch==='number';}),differences:Array.isArray(r.j.differences)?r.j.differences:[],
+      if(!c.echec){c.ts=ts;c.large=large;c.rep={instantanes:r.j.instantanes.filter(function(i){return i&&typeof i.epoch==='number';}),differences:Array.isArray(r.j.differences)?r.j.differences:[],
         de:r.j.tronque&&r.j.instantanes[0]?r.j.instantanes[0].epoch:de};}
-      if(vue==='paysage'){rendreBarre();if(!selection.id)inspecter();}
+      Enregistreur.historique();
+      if(vue==='paysage'){indexerAffiche();rendreBarre();if(!selection.id)inspecter();chargeComparaison();}
       tendanceFiche();
     }
-    c.enVol=ts;
+    c.enVol=cle;
     if(DEMO){fini({ok:true,j:DEMO_DONNEES.chronologie});return;}
-    jget('paysage/chronologie?de='+de+'&differences=12').then(fini);
+    jget('paysage/chronologie?de='+de+'&a='+(fin+1)+'&differences=12').then(fini);
   }
+
+  // <enregistreur-purs> — fonctions pures (tests/test_page_paysage.py, node). Rangement par époque : aucun pas supposé.
+  var E_FENETRES={'48h':48*3600,'30j':30*86400},E_COMP={'24h':{min:43200,cible:86400},'7j':{min:302400,cible:604800}};
+  // relevés de la fenêtre, du plus ancien au plus récent ; 30 j : le premier de chaque heure, et le dernier relevé
+  function listeEnregistreur(instantanes,fenetre){
+    var vus=Object.create(null),l=instantanes.filter(function(x){if(!x||typeof x.ts!=='string'||typeof x.epoch!=='number'||!isFinite(x.epoch)||vus[x.ts])return false;vus[x.ts]=1;return true;})
+      .sort(function(a,b){return a.epoch-b.epoch;}),fin=l.length?l[l.length-1].epoch:0,heure=-1;
+    l=l.filter(function(x){return x.epoch>=fin-E_FENETRES[fenetre];});
+    if(fenetre!=='30j')return l;
+    return l.filter(function(x,k){var y=Math.floor(x.epoch/3600),neuf=y!==heure;heure=y;return neuf||k===l.length-1;});
+  }
+  // durée du trou qui précède chaque relevé, 0 sinon : plus de 2,5 fois l'intervalle médian mesuré (au moins trois intervalles)
+  function trousEnregistreur(l){
+    var d=l.map(function(x,k){return k?x.epoch-l[k-1].epoch:0;}),t=d.slice(1).sort(function(a,b){return a-b;}),med=t.length>2?t[Math.floor((t.length-1)/2)]:Infinity;
+    return d.map(function(x){return x>2.5*med?x:0;});
+  }
+  function indexProche(l,epoch){var b=-1;l.forEach(function(x,k){if(b<0||Math.abs(x.epoch-epoch)<Math.abs(l[b].epoch-epoch))b=k;});return b;}
+  // relevé auquel comparer celui d'époque `epoch` : 24 h et 7 j, le plus proche parmi ceux d'au moins une demi-période plus anciens
+  // (même règle que l'API) ; date : le plus proche de la date, strictement antérieur
+  function referenceComparaison(l,epoch,mode,date){
+    var C=E_COMP[mode],cible=C?epoch-C.cible:date,r=l.filter(function(x){return x&&(C?x.epoch<=epoch-C.min:x.epoch<epoch);});
+    if(typeof cible!=='number'||!isFinite(cible)||!r.length)return null;
+    return r[indexProche(r,cible)];
+  }
+  function dureeTexte(s){var m=Math.round(s/60);return m<120?Math.max(1,m)+' min':m<720&&m%60?Math.floor(m/60)+' h '+(m%60<10?'0':'')+m%60:s<72*3600?Math.round(s/3600)+' h':Math.round(s/86400)+' j';}
+  // </enregistreur-purs>
+
+  // <difference-paysage> — même règle que secubox_datascope/difference.py (parité testée). Sert au pas de lecture : la différence
+  // enregistrée avec un relevé compare au relevé de la demi-heure d'avant, que l'éclaircissement horaire a pu retirer.
+  function differencePaysage(avant,apres){
+    function noeuds(g){var m=Object.create(null);(g&&Array.isArray(g.noeuds)?g.noeuds:[]).forEach(function(n){if(n&&typeof n.id==='string')m[n.id]=n;});return m;}
+    function mt(n){return n.metriques&&typeof n.metriques==='object'?n.metriques:{};}
+    function tri(x,y){return x<y?-1:x>y?1:0;}
+    function hors(x,y){return Object.keys(x).filter(function(k){return !y[k]&&k.indexOf('autres:')!==0;}).sort(tri);}
+    var A=noeuds(avant),B=noeuds(apres),d={apparus:hors(B,A),disparus:hors(A,B),hausses:[],baisses:[],rotation_levee:[],rotation_tombee:[]};
+    Object.keys(A).sort(tri).forEach(function(id){
+      var a=A[id],b=B[id];if(!b||a.type!=='population'||b.type!=='population')return;
+      ['adresses','bans','reseaux'].forEach(function(k){var x=mt(a)[k],y=mt(b)[k];if(!Number.isInteger(x)||!Number.isInteger(y))return;
+        var e=Math.abs(y-x);if(e>10&&e>.2*x)(y>x?d.hausses:d.baisses).push({id:id,metrique:k,de:x,a:y});});
+      var p=mt(a).rotation,q=mt(b).rotation;if(p===false&&q===true)d.rotation_levee.push(id);else if(p===true&&q===false)d.rotation_tombee.push(id);
+    });
+    return d;
+  }
+  // </difference-paysage>
+
+  // --- mode évolution : à quoi l'instantané affiché est comparé. Direct : 24 h (fournie par /paysage), 7 j ou date ; relecture :
+  // relevé précédent d'abord, les autres à la demande, à l'arrêt seulement (une requête à la fois, la dernière l'emporte).
+  var E_COMP_MAX=60,evo=(function(){var m=lireStock(CLE_PEVO)||{};
+    return {badges:m.badges!==false,mode:m.mode==='7j'?'7j':'24h',modeR:'pas',date:null,cache:Object.create(null),echecs:Object.create(null),enVol:'',ctl:null,minuterie:0};})();
+  function modeComparaison(){return paysage.rejoue?evo.modeR:evo.mode;}
+  function comparaisonVoulue(i){
+    var mode=modeComparaison(),c=paysage.chrono,e=pNombre(i.epoch);
+    if(mode==='date'&&evo.date===null)return {ref:null,raison:'date'};
+    if(!c.rep)return {ref:null,raison:c.echec?'histo_echec':'histo'};
+    var ref=referenceComparaison(c.rep.instantanes,e,mode,evo.date);
+    if(!ref)return {ref:null,raison:c.large<largeurChrono()?(c.echec?'histo_echec':'histo'):'sans_'+mode};
+    var cle=ref.ts+'|'+i.ts;
+    return {ref:ref,cle:cle,raison:evo.echecs[cle]?'echec':Enregistreur.enCours()?'arret':'lecture'};
+  }
+  var RAISONS={date:'choisir une date',histo:'historique en lecture…',histo_echec:'historique indisponible',sans_24h:'aucun relevé d’au moins 12 h plus ancien',sans_7j:'aucun relevé d’au moins 3,5 jours plus ancien',
+    sans_date:'aucun relevé enregistré avant celui-ci',echec:'comparaison non lue (relevé retiré, illisible ou API injoignable)',arret:'calculée à l’arrêt de la lecture',lecture:'comparaison en lecture…'};
+  function decorerDiff(d,ref,i){
+    var x={};Object.keys(d).forEach(function(k){x[k]=d[k];});
+    x.reference_ts=ref?ref.ts:'enregistree';x.reference_epoch=ref?ref.epoch:null;x.reference_partiel=!!ref&&ref.partiel===true;x.ecart_s=ref?pNombre(i.epoch)-ref.epoch:null;return x;
+  }
+  function chargeComparaison(){
+    clearTimeout(evo.minuterie);
+    var a=affichePaysage();if(!a||vue!=='paysage'||document.hidden||modeComparaison()===(a.direct?'24h':'pas'))return annulerComparaison();
+    var v=comparaisonVoulue(a.instantane),i=a.instantane;
+    if(!v.ref||v.raison==='arret'||propre(evo.cache,v.cle,null))return annulerComparaison();
+    if(evo.enVol===v.cle||(evo.echecs[v.cle]&&Date.now()-evo.echecs[v.cle]<P_RELECTURE_MS))return;
+    annulerComparaison();evo.minuterie=setTimeout(function(){
+      var ctl=abandon();evo.enVol=v.cle;evo.ctl=ctl;
+      lireDifference(v.ref.ts,i,ctl.signal).then(function(r){
+        if(evo.ctl!==ctl)return;
+        evo.enVol='';evo.ctl=null;
+        if(r.refus){refusPaysage();return;}
+        if(r.ok&&r.j&&typeof r.j==='object'){delete evo.echecs[v.cle];evo.cache[v.cle]=decorerDiff(r.j,v.ref,i);
+          Object.keys(evo.cache).slice(0,Math.max(0,Object.keys(evo.cache).length-E_COMP_MAX)).forEach(function(k){delete evo.cache[k];});}
+        else{if(Object.keys(evo.echecs).length>E_COMP_MAX)evo.echecs=Object.create(null);evo.echecs[v.cle]=Date.now();}
+        indexerAffiche();apresPaysage();
+      });
+    },a.direct?0:250);
+  }
+  function annulerComparaison(){clearTimeout(evo.minuterie);if(evo.ctl){evo.ctl.abort();evo.ctl=null;}evo.enVol='';}
+  function abandon(){return window.AbortController?new AbortController():{signal:undefined,abort:function(){}};}
+  function lireDifference(de,i,signal){
+    if(DEMO)return Promise.resolve({ok:true,j:differencePaysage(DEMO_DONNEES.lire(de).graphe,i.graphe)});
+    return jget('paysage/difference?de='+encodeURIComponent(de)+'&a='+encodeURIComponent(i.ts),signal);
+  }
+  function lireInstantane(ts,signal){
+    if(DEMO)return Promise.resolve(DEMO_DONNEES.lire(ts)).then(function(j){return j?{ok:true,j:j}:{ok:false,status:404};});
+    return jget('paysage/instantane/'+encodeURIComponent(ts),signal);
+  }
+  // un mode, un bouton ; l'état n'est retenu que pour le direct (24 h ou 7 j)
+  function choisirComparaison(m){
+    if(paysage.rejoue)evo.modeR=m;else{evo.mode=m==='pas'?'24h':m;if(m!=='date')retenirEvo();}
+    if(m==='date'&&evo.date===null){var i=affichePaysage(),e=i?pNombre(i.instantane.epoch)-86400:0;if(e>0)evo.date=e;}
+    indexerAffiche();apresPaysage();
+  }
+  function retenirEvo(){ecrireStock(CLE_PEVO,{badges:evo.badges,mode:evo.mode==='7j'?'7j':'24h'});}
+  function texteRaison(a){
+    var d=a&&a.difference;
+    if(a&&a.raison)return RAISONS[a.raison];
+    if(d&&d.sans_precedent)return d.sans_precedent==='premier'?'premier relevé enregistré : rien à comparer':'relevé précédent illisible';
+    return a&&!a.direct?'différence enregistrée illisible':'elle demande un relevé lisible d’au moins 12 h plus ancien';
+  }
+  function rendreComparaison(){
+    var a=affichePaysage(),mode=modeComparaison(),d=a&&a.difference,t;
+    [['eCpas','pas'],['eC24h','24h'],['eC7j','7j'],['eCdate','date']].forEach(function(x){el(x[0]).setAttribute('aria-pressed',mode===x[1]?'true':'false');});
+    el('eCpas').hidden=!paysage.rejoue;el('eDate').hidden=mode!=='date';el('eEvo').setAttribute('aria-pressed',evo.badges?'true':'false');
+    if(mode==='date'&&evo.date!==null&&document.activeElement!==el('eDate')){var j=new Date(evo.date*1000);el('eDate').value=new Date(j.getTime()-j.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+    if(d&&!d.sans_precedent)t='comparé au relevé '+(typeof d.reference_epoch==='number'?'de '+heureReleve(d.reference_epoch)+(typeof d.ecart_s==='number'?', '+dureeTexte(d.ecart_s)+' plus tôt':''):'enregistré juste avant')+(d.reference_partiel?' (partiel : la comparaison peut se tromper)':'');
+    else t='pas de comparaison : '+(a?texteRaison(a):'—');
+    if(el('pComp').textContent!==t)el('pComp').textContent=t;
+  }
+
   function ficheVisible(){return !document.hidden&&el('panInsp').getClientRects().length>0;}
   // tendance d'une population : lue à l'ouverture de sa fiche, une fois par nouveau relevé
   function chargeTendance(id){
     var T=paysage.tendances,ts=tsDirect(),t=T[id];
     if(!ts||!ficheVisible())return;
-    if(t&&(t.enVol||(t.ts===ts&&!t.echec)||(t.echec&&Date.now()-t.lu<P_RELECTURE_MS)))return;
+    if(t&&(t.enVol||((t.ts===ts||Enregistreur.actif())&&t.points&&!t.echec)||(t.echec&&Date.now()-t.lu<P_RELECTURE_MS)))return;
     t=T[id]=t||{ts:'',points:null,illisibles:0,echec:false,lu:0,enVol:false};
     Object.keys(T).slice(0,Math.max(0,Object.keys(T).length-P_TENDANCES_MAX)).forEach(function(k){if(k!==id)delete T[k];});
     function fini(r){
+      if(r.refus){refusPaysage();return;}
       t.enVol=false;t.lu=Date.now();t.echec=!(r.ok&&r.j&&Array.isArray(r.j.points));
       if(!t.echec){t.ts=ts;t.points=r.j.points.filter(function(p){return p&&typeof p.epoch==='number';});t.illisibles=pNombre(r.j.illisibles);t.de=pNombre(paysage.rep&&paysage.rep.epoch)-7*86400;}
       if(selection.id===id&&paysage.tendances[id]===t)tendanceFiche();
@@ -891,7 +1053,7 @@
   // --- rendu ---
   function ageReleve(){var r=paysage.rep;if(!r||typeof r.age_s!=='number')return null;return DEMO?r.age_s:r.age_s+(Date.now()-paysage.lu)/1000;}
   function heureReleve(epoch){if(typeof epoch!=='number'||!isFinite(epoch))return '—';var d=new Date(epoch*1000);if(isNaN(d.getTime()))return '—';
-    return d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+(d.toDateString()===new Date().toDateString()?'':' le '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}));}
+    return heureCourte(epoch)+(d.toDateString()===new Date().toDateString()?'':' le '+dateCourte(epoch));}
   function rendreEtatPaysage(instantane,age){
     var box=el('pEtat'),c=instantane.compteurs&&typeof instantane.compteurs==='object'?instantane.compteurs:{};
     var pastilles=[h('b',{text:'relevé de '+heureReleve(instantane.epoch)})];
@@ -901,9 +1063,10 @@
     pastilles.push(h('span',{text:nombre(c.populations)+' populations, dont '+nombre(c.rotation)+' en rotation · '+nombre(c.cibles)+' cibles · '+nombre(c.cves)+' CVE'}));
     var cle=pastilles.map(function(n){return n.textContent;}).join('|');
     if(box.getAttribute('data-cle')!==cle){vider(box);pastilles.forEach(function(n){box.appendChild(n);});box.setAttribute('data-cle',cle);}
-    box.hidden=false;
+    // pendant une relecture, seul l'enregistreur annonce (au plus toutes les 2,5 s)
+    box.setAttribute('aria-live',paysage.rejoue?'off':'polite');box.hidden=false;
   }
-  function horsPaysage(){['pEtat','pLegende','pBarre','pAide'].forEach(function(i){el(i).hidden=true;});}
+  function horsPaysage(){['pEtat','pLegende','pBarre','pAide','pEnreg','eBandeau'].forEach(function(i){el(i).hidden=true;});}
   function rendreVuePaysage(box){
     var a=affichePaysage();
     if(!a){
@@ -914,19 +1077,24 @@
       return;
     }
     rendreEtatPaysage(a.instantane,a.direct?ageReleve():null);
-    rendreBarre();if(!selection.id)inspecter();
+    rendreBarre();Enregistreur.maj();if(!selection.id)inspecter();
     // mêmes données : on ne redessine pas (défilement et focus gardés) — le rafraîchissement des 30 s ne coûte rien
     if(paysage.cle===clePaysage(box,a.instantane,a.difference)&&box.querySelector('svg.paysage'))return;
     rendreAidePaysage(rendrePaysage(box,a.instantane,a.difference));
     el('topoBas').textContent='';
   }
   // ce qui détermine le dessin ; posée par rendrePaysage : la clé nomme toujours l'instantané réellement dessiné
-  function clePaysage(box,instantane,difference){return [instantane.ts,difference?difference.reference_ts:'',pMasques.join(','),window.SbxReperes?1:0,Math.round(box.clientWidth/16)].join('|');}
+  function clePaysage(box,instantane,difference){return [instantane.ts,difference?difference.reference_ts:'',evo.badges?1:0,pMasques.join(','),window.SbxReperes?1:0,Math.round(box.clientWidth/16)].join('|');}
   // Dessine un instantané dans `box`. Réutilisée par les tâches suivantes (évolution, enregistreur).
   function rendrePaysage(box,instantane,difference){
     var sx=box.scrollLeft,sy=box.scrollTop,deja=!!box.querySelector('svg.paysage'),foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-id'):null;
-    vider(box);indexerPaysage(instantane,difference);paysage.cle=clePaysage(box,instantane,difference);
-    var N=paysage.noeuds,liste=Object.keys(N).map(function(k){return N[k];}),L=disposerPaysage(liste,paysage.aretes,pMasques,box.clientWidth);
+    var avant={pos:deja?paysage.pos:null,noeuds:paysage.vus||{}},ms=paysage.anime;
+    var larg=box.clientWidth;   // mesures avant d'écrire : une seule mise en page forcée par dessin
+    paysage.cle=clePaysage(box,instantane,difference);vider(box);indexerPaysage(instantane,difference);paysage.pos=null;paysage.vus=paysage.noeuds;
+    // badges et fantômes : seulement si la comparaison a un précédent ; les nœuds disparus ne comptent ni dans la légende ni dans les fiches
+    var N=Object.create(null),M=paysage.noeuds,liste=Object.keys(M).map(function(k){return M[k];}),B=evo.badges?badgesPaysage(difference):{},F=evo.badges?fantomesPaysage(difference):{noeuds:[],aretes:[],reste:0},fant=Object.create(null);
+    liste.forEach(function(n){N[n.id]=n;});F.noeuds.forEach(function(n){N[n.id]=n;fant[n.id]=1;});
+    var L=disposerPaysage(liste.concat(F.noeuds),paysage.aretes.concat(F.aretes),pMasques,larg);paysage.pos=L.pos;
     rendreLegendePaysage(liste);
     if(!liste.length){box.appendChild(h('div',{'class':'vide',text:'Aucune population dans ce relevé.'}));return [];}
     if(!Object.keys(L.pos).length){box.appendChild(h('div',{'class':'vide',text:'Tous les types sont masqués : cocher un type dans la légende.'}));return [];}
@@ -935,18 +1103,24 @@
     L.colonnes.forEach(function(c){var t=s('text',{'class':'col',x:c.x,y:18,'text-anchor':'middle'},sv);t.textContent=c.t;});
     var gl=s('g',{'class':'liens'},sv);
     L.liens.forEach(function(a){
-      var g=s('g',{'class':'ar l-'+a.type,'data-src':a.de,'data-dst':a.vers},gl),ti=s('title',{},g);
+      var g=s('g',{'class':'ar l-'+a.type+(fant[a.de]||fant[a.vers]?' fant':''),'data-src':a.de,'data-dst':a.vers},gl),ti=s('title',{},g);
       ti.textContent=nomPaysage(N[a.de])+' — '+P_REL_FR[a.type][0]+' — '+nomPaysage(N[a.vers])+(a.type==='SOURCE_DE'?' · '+nombre(a.poids)+' adresses':a.type==='ORIGINE'?' · '+nombre(a.poids)+' %':'');
       s('path',{'class':'v',d:traitPaysage(L.pos[a.de],L.pos[a.vers]),'stroke-width':a.e},g);
     });
-    Object.keys(L.pos).sort(function(a,b){var p=L.pos[a],q=L.pos[b];return p.c-q.c||p.y-q.y||p.x-q.x;}).forEach(function(id){noeudPaysage(sv,N[id],L.pos[id],L);});
+    Object.keys(L.pos).sort(function(a,b){var p=L.pos[a],q=L.pos[b];return p.c-q.c||p.y-q.y||p.x-q.x;}).forEach(function(id){noeudPaysage(sv,N[id],L.pos[id],L,B[id]||[],!!fant[id]);});
     s('g',{'class':'infob','aria-hidden':'true'},sv);
     sv.addEventListener('click',function(e){if(e.target===sv)selectionner(null);});
     if(deja){box.scrollLeft=sx;box.scrollTop=sy;}
-    else if(box.clientWidth<L.W)box.scrollLeft=Math.max(0,L.colonnes[1].x-box.clientWidth/2);  // étroit : les populations d'abord
-    if(foc){var nf=Array.prototype.filter.call(sv.querySelectorAll('.nd'),function(n){return n.getAttribute('data-id')===foc;})[0];if(nf)try{nf.focus({preventScroll:true});}catch(e){}}
+    else if(larg<L.W)box.scrollLeft=Math.max(0,L.colonnes[1].x-larg/2);  // étroit : les populations d'abord
+    if(foc){var nf=Array.prototype.filter.call(sv.querySelectorAll('.nd'),function(n){return n.getAttribute('data-id')===foc;})[0];
+      // nœud au focus disparu sans fantôme : le focus reste dans le graphe, il ne retombe pas en haut de la page
+      if(!nf){sv.setAttribute('tabindex','-1');nf=sv;}
+      try{nf.focus({preventScroll:true});}catch(e){}}
+    animerPaysage(sv,L,avant,ms);
     var notes=['Épaisseur d’un trait = volume (adresses pour un réseau). Survol ou focus : nom complet ; clic : fiche ; second clic, Entrée ou Échap : désélectionner. Le graphe défile dans son cadre.'];
     notes.push('Anneau vert d’une population = part bannie de ses adresses ; pas d’anneau : part non mesurée.');
+    if(Object.keys(B).length)notes.push('Badges d’évolution : ✚ apparu, ✖ disparu (fantôme grisé), ▲ en hausse, ▼ en baisse (écart de plus de 20 % et de plus de 10).');
+    if(F.reste)notes.push(F.reste+' nœuds disparus de plus, non dessinés.');
     if(pMasques.indexOf('pays')>=0)notes.push('Pays repliés : à cocher dans la légende.');
     marquerSelection();
     return notes;
@@ -974,21 +1148,66 @@
     if(t==='pays'){s('circle',{'class':'f',cx:x,cy:y,r:11},g);emoji(window.SbxReperes?SbxReperes.drapeau(n.libelle):'',14);return 11;}
     /* autres */ s('rect',{'class':'f',x:x-14,y:y-9,width:28,height:18,rx:9},g);return 9;
   }
-  function noeudPaysage(sv,n,p,L){
-    var g=s('g',{'class':'nd p-'+n.type,tabindex:'0',role:'button','data-id':n.id,'aria-label':descPaysage(n).join(' · ')},sv);
+  function noeudPaysage(sv,n,p,L,badges,fantome){
+    if(fantome)badges=[{t:'✖ disparu',c:'b-disp'}];
+    var desc=(fantome?['✖ disparu · '+TYPE_FR[n.type]+' · '+nomPaysage(n),'absent du relevé affiché'+(n.derive?'':', présent dans le relevé de comparaison')]:descPaysage(n).concat(badges.map(function(b){return b.t+(b.d?' : '+b.d:'');}))),
+      g=s('g',{'class':'nd p-'+n.type+(fantome?' fantome':''),tabindex:'0',role:'button','data-id':n.id,'aria-label':desc.join(' · ')},sv);
     s('circle',{'class':'prise',cx:p.x,cy:p.y+4,r:22},g);
-    var dy=formePaysage(g,n,p.x,p.y),sous=sousPaysage(n);
+    var dy=formePaysage(g,fantome?{id:n.id,type:n.type,libelle:n.libelle,famille:n.famille,classe:n.classe}:n,p.x,p.y),sous=n.derive?'':sousPaysage(n);
+    if(n.derive)Array.prototype.forEach.call(g.querySelectorAll('.emo'),function(x){g.removeChild(x);});   // famille ou classe non connue : aucun repère inventé
+    // badge à droite de la forme, au-dessus des libellés ; dernière colonne (pas de place à droite) : à la place de la seconde ligne
+    badges.forEach(function(b,k){var bt=s('text',{'class':'badge '+b.c,x:p.c===3?p.x:p.x+(n.type==='population'?27:Math.max(p.d,12)+5),y:p.c===3?p.y+dy+29+16*k:p.y+(badges.length>1?-3+16*k:5),'text-anchor':p.c===3?'middle':'start'},g);bt.textContent=b.t;});
     var t=s('text',{'class':'lbl',x:p.x,y:p.y+dy+13,'text-anchor':'middle'},g);t.textContent=tronquer(courtPaysage(n),Math.floor((p.l-8)/7.6));
-    if(sous){var t2=s('text',{'class':'sous',x:p.x,y:p.y+dy+29,'text-anchor':'middle'},g);t2.textContent=tronquer(sous,Math.floor(p.l/7.4));}
+    if(sous&&!(p.c===3&&badges.length)){var t2=s('text',{'class':'sous',x:p.x,y:p.y+dy+29,'text-anchor':'middle'},g);t2.textContent=tronquer(sous,Math.floor(p.l/7.4));}
     activer(g,n.id,true);
-    function montrer(){if(paysage.silence)return;infoPaysage(sv,n,p,L);eclairer(sv,n.id);}
+    function montrer(){if(paysage.silence)return;infoPaysage(sv,n,p,L,desc);eclairer(sv,n.id);}
     function cacher(){infoPaysage(sv,null);eclairerSelection(sv);}
     g.addEventListener('mouseenter',montrer);g.addEventListener('mouseleave',cacher);g.addEventListener('focus',montrer);g.addEventListener('blur',cacher);
   }
+  function badgesPaysage(d){
+    var b=Object.create(null);if(!d||d.sans_precedent)return b;
+    function P(id,t,c,det){if(typeof id!=='string'||!RE_PID.test(id))return;var l=b[id]=b[id]||[],x=l.filter(function(y){return y.t===t;})[0];if(x){if(det)x.d+=', '+det;}else l.push({t:t,c:c,d:det||''});}
+    listeDiff(d,'apparus').forEach(function(i){P(i,'✚ apparu','b-app');});listeDiff(d,'disparus').forEach(function(i){P(i,'✖ disparu','b-disp');});
+    [['hausses','▲ en hausse','b-haus'],['baisses','▼ en baisse','b-bais']].forEach(function(k){listeDiff(d,k[0]).forEach(function(x){if(x)P(x.id,k[1],k[2],x.metrique+' '+x.de+' → '+x.a);});});
+    return b;
+  }
+  // nœuds disparus, en fantômes grisés : repris du relevé de comparaison s'il est en mémoire, sinon déduits du seul identifiant
+  var P_FANTOMES_MAX=40;
+  function fantomesPaysage(d){
+    var r={noeuds:[],aretes:[],reste:0};if(!d||d.sans_precedent)return r;
+    var ids=listeDiff(d,'disparus').filter(function(i){return typeof i==='string'&&RE_PID.test(i)&&!paysage.noeuds[i]&&pMasques.indexOf(typeId(i))<0&&Object.prototype.hasOwnProperty.call(P_TYPE_COL,typeId(i));}),
+      ordre=['population','campagne','cible','cve','reseau_source','classe_reseau','infra','pays','autres'],ref=Enregistreur.connu(d.reference_ts),G=ref&&ref.graphe,R=Object.create(null),dessines=Object.create(null);
+    (G&&Array.isArray(G.noeuds)?G.noeuds:[]).forEach(function(n){if(n&&typeof n.id==='string')R[n.id]=n;});
+    ids.sort(function(x,y){return ordre.indexOf(typeId(x))-ordre.indexOf(typeId(y))||(x<y?-1:1);});
+    r.reste=Math.max(0,ids.length-P_FANTOMES_MAX);
+    r.noeuds=ids.slice(0,P_FANTOMES_MAX).map(function(i){dessines[i]=1;var n=R[i];return n&&n.type===typeId(i)?n:noeudDeduit(i);});
+    (G&&Array.isArray(G.aretes)?G.aretes:[]).forEach(function(a){if(a&&(dessines[a.de]||dessines[a.vers])&&(dessines[a.de]||paysage.noeuds[a.de])&&(dessines[a.vers]||paysage.noeuds[a.vers]))r.aretes.push(a);});
+    return r;
+  }
+  function noeudDeduit(id){var t=typeId(id),c=id.slice(id.indexOf(':')+1),m=/^famille:([a-z_]+)$/.exec(c);
+    if(t==='population'&&m)return {id:id,type:t,libelle:repereFamille(m[1])[1],famille:m[1],metriques:{},derive:true};
+    return {id:id,type:t,libelle:t==='reseau_source'?'AS'+c:t==='classe_reseau'?c.split(':').pop():c,classe:t==='classe_reseau'?c.split(':').pop():undefined,metriques:{},derive:true};}
+  // passage d'un instantané au suivant : les nœuds glissent, apparaissent, grossissent ou s'effacent en une passe (animations du navigateur)
+  function mouvementReduit(){try{return matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){return false;}}
+  function animerPaysage(sv,L,avant,ms){
+    if(!(ms>0)||!avant.pos||!sv.animate||mouvementReduit())return;
+    var o={duration:ms,easing:'ease-out'},bouge=false;
+    Array.prototype.forEach.call(sv.querySelectorAll('.nd'),function(g){
+      var id=g.getAttribute('data-id'),p=L.pos[id],q=avant.pos[id],m=avant.noeuds[id],n=paysage.noeuds[id];
+      if(!q){g.animate([{opacity:0},{opacity:1}],o);bouge=true;return;}
+      if(p.x!==q.x||p.y!==q.y){g.animate([{transform:'translate('+(q.x-p.x)+'px,'+(q.y-p.y)+'px)'},{transform:'none'}],o);bouge=true;}
+      if(m&&!n)Array.prototype.forEach.call(g.querySelectorAll('.f,.emo'),function(f){f.animate([{opacity:1},{opacity:.55}],o);});
+      var k=m&&n?croissance(metr(m).adresses,metr(n).adresses):1;
+      if(k!==1)Array.prototype.forEach.call(g.querySelectorAll('.f,.emo,.halo,.halo2,.pisteBan'),function(f){f.style.transformOrigin=p.x+'px '+p.y+'px';f.animate([{transform:'scale('+k+')'},{transform:'none'}],o);});
+    });
+    var gl=sv.querySelector('.liens');if(gl&&bouge)gl.animate([{opacity:.15},{opacity:1}],o);
+  }
+  // taille de départ d'un nœud dont le volume a changé de plus de 20 % : bornée, la forme finit toujours à sa taille
+  function croissance(a,b){if(typeof a!=='number'||typeof b!=='number'||!(a>0)||!(b>0)||Math.abs(b-a)<=.2*a)return 1;return Math.max(.5,Math.min(1.6,Math.sqrt(a/b)));}
   // nom complet et chiffres au survol ou au focus, dans la partie visible du cadre
-  function infoPaysage(sv,n,p,L){
+  function infoPaysage(sv,n,p,L,desc){
     var g=sv.querySelector('g.infob');if(!g)return;vider(g);if(!n)return;
-    var lignes=[];descPaysage(n).forEach(function(l){lignes=lignes.concat(couper(l,40));});lignes=lignes.slice(0,12);
+    var lignes=[];desc.forEach(function(l){lignes=lignes.concat(couper(l,40));});lignes=lignes.slice(0,12);
     var fond=s('rect',{'class':'ifond',rx:6},g),t=s('text',{'class':'itxt'},g);
     lignes.forEach(function(l,i){var ts=s('tspan',{x:0,dy:i?17:0},t);ts.textContent=l;});
     var bb;try{bb=t.getBBox();}catch(e){bb=null;}
@@ -1099,8 +1318,11 @@
   // <series-paysage> — séries des compteurs et des tendances : fonctions pures (tests/test_page_paysage.py, node). Rangement par
   // époque (aucun pas supposé) ; une case sans relevé est « non mesuré », jamais 0 ; un écart n'existe que si ses deux points existent.
   var P_PERIODES={'24h':{s:86400,tol:7200,avant:'24 h plus tôt',tolT:'± 2 h'},'7j':{s:7*86400,tol:21600,avant:'7 j plus tôt',tolT:'± 6 h'}};
-  function dateCourte(e,jour){var d=new Date(e*1000);return isNaN(d.getTime())?'—':d.toLocaleDateString('fr-FR',jour?{weekday:'short',day:'2-digit',month:'2-digit'}:{day:'2-digit',month:'2-digit'});}
-  function heureCourte(e){var d=new Date(e*1000);return isNaN(d.getTime())?'—':d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  // formateurs gardés : en créer un par barre (toLocaleString) coûtait plus que tout le reste d'un pas de lecture
+  var P_FORMATS={};
+  function formatDate(cle,o,e){var d=new Date(e*1000);if(isNaN(d.getTime()))return '—';return (P_FORMATS[cle]=P_FORMATS[cle]||new Intl.DateTimeFormat('fr-FR',o)).format(d);}
+  function dateCourte(e,jour){return jour?formatDate('j',{weekday:'short',day:'2-digit',month:'2-digit'},e):formatDate('d',{day:'2-digit',month:'2-digit'},e);}
+  function heureCourte(e){return formatDate('h',{hour:'2-digit',minute:'2-digit'},e);}
   // 24 heures d'horloge ou 7 jours locaux (changement d'heure compris) ; la dernière case est en cours
   function casesPaysage(periode,m){
     var r=[],i,de,a;
@@ -1198,7 +1420,7 @@
     if(box.getAttribute('data-cle')===cle)return;
     var foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-k'):null;
     vider(box);box.setAttribute('data-cle',cle);
-    var pts=pointsCompteurs(chronologie,i),cases=casesPaysage(pPeriode,m),borne=chronologie?chronologie.de:Infinity,repos='survol, toucher ou ← → : valeur d’une barre',out=h('span',{'class':'pLecture','aria-live':'polite','data-repos':repos,text:repos}),
+    var pts=pointsCompteurs(chronologie,i),cases=casesPaysage(pPeriode,m),borne=chronologie?chronologie.de:Infinity,repos='survol, toucher ou ← → : valeur d’une barre',out=h('span',{'class':'pLecture','aria-live':Enregistreur.enCours()?'off':'polite','data-repos':repos,text:repos}),
       gen=seriePaysage(pts.map(function(p){return {epoch:p.epoch,partiel:p.partiel,v:{n:1}};}),'n',cases,borne,m),nm=gen.filter(function(x){return x.etat==='non_mesure';}).length,np=gen.filter(function(x){return x.partiel;}).length,
       unite=pPeriode==='7j'?' j':' h',groupe=h('span',{'class':'vues',role:'group','aria-label':'Période des histogrammes'});
     [['24h','24 h'],['7j','7 j']].forEach(function(x){var b=h('button',{type:'button','class':'bt','data-k':'per-'+x[0],'aria-pressed':pPeriode===x[0]?'true':'false',text:x[1]});b.addEventListener('click',function(){choisirPeriode(x[0]);});groupe.appendChild(b);});
@@ -1236,7 +1458,7 @@
     var pts=(points||[]).filter(function(p){return p.ts!==inst.ts;}).map(function(p){return {epoch:p.epoch,partiel:part[p.ts]===true,v:p};});
     if(typeof inst.epoch==='number')pts.push({epoch:inst.epoch,partiel:inst.partiel===true,v:m});   // le chiffre affiché est le dernier point
     var cases=casesPaysage(pPeriode,now),rel=((rep&&rep.instantanes)||[]).map(function(i){return i.epoch;}),repos=points?(pPeriode==='7j'?'7 jours':'24 heures')+' · échelle par série'+(pts[0]&&pts[0].epoch>pNombre(t.de)+7200?' · première mesure '+dateCourte(pts[0].epoch)+' '+heureCourte(pts[0].epoch):'')+(t.illisibles?' · '+t.illisibles+' relevés illisibles':''):t.echec?'tendance indisponible':'tendance en lecture…',
-      out=h('div',{'class':'tNote','aria-live':'polite','data-repos':repos,text:repos});
+      out=h('div',{'class':'tNote','aria-live':Enregistreur.enCours()?'off':'polite','data-repos':repos,text:repos});
     box.appendChild(h('div',{'class':'fChiffres'},[['adresses','adresses',nombre(m.actives_24h)+' sur 24 h'],['reseaux','réseaux',''],['bans','bannies',nombre(m.bannies_24h)+' sur 24 h']].map(function(x){
       var d=chiffre(nombre(m[x[0]]),x[1],x[2]);if(!points)return d;
       var ec=texteEcart(ecartPaysage(pts,x[0],pPeriode,now));
@@ -1254,7 +1476,7 @@
   function idsDe(l,type){return l.filter(function(i){return typeof i==='string'&&RE_PID.test(i)&&typeId(i)===type;});}
   function variations(l){return l.filter(function(x){return x&&typeof x.id==='string'&&RE_PID.test(x.id);});}
   function texteVariation(x){var u={adresses:'adresses',bans:'bannies',reseaux:'réseaux'};return propre(u,x.metrique,'')+' '+nombre(x.de)+' → '+nombre(x.a);}
-  function depuisTexte(d){return typeof d.ecart_s==='number'&&isFinite(d.ecart_s)?'depuis '+Math.round(d.ecart_s/3600)+' h':'depuis le relevé précédent';}
+  function depuisTexte(d){return typeof d.ecart_s==='number'&&isFinite(d.ecart_s)?'depuis '+dureeTexte(d.ecart_s):'depuis le relevé précédent';}
   function pastillePartiel(t){return h('span',{'class':'pas att',title:'La source a signalé un relevé incomplet : une hausse, une baisse ou une disparition peut n’être qu’un manque.',text:t});}
   function ligneSynthese(cle,titre,kids){   // clé fixe : le titre change quand les repères arrivent
     var c=h('div',{'class':'c'},kids.slice(0,6));
@@ -1264,7 +1486,7 @@
     var box=el('insp'),c=instantane.compteurs&&typeof instantane.compteurs==='object'?instantane.compteurs:{},d=difference,lignes=[];
     box.appendChild(h('div',{'class':'sPhrase fTitre',tabindex:'-1',text:nombre(c.populations)+' populations, dont '+nombre(c.rotation)+' en rotation'}));
     if(instantane.partiel===true)box.appendChild(h('div',{'class':'fPuces'},[pastillePartiel('relevé affiché partiel')]));
-    if(!d||d.sans_precedent)box.appendChild(h('div',{'class':'fPuces',text:'— comparaison indisponible : elle demande un relevé lisible d’au moins 12 h plus ancien.'}));
+    if(!d||d.sans_precedent)box.appendChild(h('div',{'class':'fPuces',text:'— comparaison indisponible : '+texteRaison(affichePaysage())+'.'}));
     else{
       var dep=depuisTexte(d),app=listeDiff(d,'apparus'),dis=listeDiff(d,'disparus');
       [['apparus','✚ apparues',app],['disparus','✖ disparues',dis],['rotation_levee',repereRotation()[0]+' rotation apparue',listeDiff(d,'rotation_levee')],['rotation_tombee',repereRotation()[0]+' rotation terminée',listeDiff(d,'rotation_tombee')]].forEach(function(x){
@@ -1295,12 +1517,16 @@
     var c=paysage.chrono,rep=c.rep,fin=pNombre(instantane.epoch);
     box.appendChild(h('h4',{title:'Différences enregistrées à l’arrivée de chaque relevé, du plus récent au plus ancien.',text:'Fil des changements · 12 derniers relevés'}));
     if(!rep){box.appendChild(h('div',{'class':'vide',text:c.echec?'— fil indisponible':'fil en lecture…'}));return;}
-    var l=rep.differences.filter(function(x){return x&&typeof x.epoch==='number'&&x.epoch<=fin;}),calmes=[];
+    // relecture : les 12 relevés qui précèdent l'instant affiché, pour ceux dont la différence est en mémoire ; les autres sont comptés
+    var l=rep.differences,calmes=[],manque=0;
+    if(paysage.rejoue){l=[];rep.instantanes.filter(function(x){return x.epoch<=fin;}).sort(function(x,y){return y.epoch-x.epoch;}).slice(0,12).forEach(function(x){
+      var k=rep.differences.filter(function(y){return y&&y.ts===x.ts;})[0]||Enregistreur.connu(x.ts);if(k)l.push(k);else manque++;});}
+    l=l.filter(function(x){return x&&typeof x.epoch==='number'&&x.epoch<=fin;});
     // le relevé d'avant, pris dans toute la chronologie : celui de la plus ancienne ligne n'est pas dans le fil
     function apresPartiel(x){var av=null;rep.instantanes.forEach(function(i){if(i.epoch<x.epoch&&(!av||i.epoch>av.epoch))av=i;});return !!av&&av.partiel===true;}
     function vidange(){if(!calmes.length)return;var n=calmes.length;
       box.appendChild(h('div',{'class':'filL calme',text:(n>1?heureReleve(calmes[n-1])+' à ':'')+heureReleve(calmes[0])+' : '+(n>1?n+' relevés sans changement':'sans changement')}));calmes=[];}
-    if(!l.length)box.appendChild(h('div',{'class':'vide',text:'— aucun des 12 derniers relevés n’est antérieur à l’instant affiché.'}));
+    if(!l.length&&!manque)box.appendChild(h('div',{'class':'vide',text:'— aucun des 12 derniers relevés n’est antérieur à l’instant affiché.'}));
     l.forEach(function(x){
       var d=x.difference,ev=d&&!d.sans_precedent?evenementsFil(d):[],pp=!!d&&!d.sans_precedent&&apresPartiel(x);
       if(d&&!d.sans_precedent&&!ev.length&&x.partiel!==true&&!pp){calmes.push(x.epoch);return;}
@@ -1317,12 +1543,14 @@
       box.appendChild(r);
     });
     vidange();
+    if(manque)box.appendChild(h('div',{'class':'filL calme',text:manque+(manque>1?' relevés antérieurs non chargés':' relevé antérieur non chargé')}));
   }
   function chiffre(v,t,sous){return h('div',{},[h('b',{text:v}),h('span',{text:t}),sous?h('span',{text:sous}):null]);}
   function inspecterPaysage(box,id){
     var n=paysage.noeuds[id];
-    if(!n){box.appendChild(h('div',{'class':'mono',text:id}));
-      box.appendChild(h('div',{'class':'note',text:affichePaysage()?'Absent du relevé affiché (disparu, ou hors des plafonds d’affichage).':'Relevé des populations non chargé.'}));return;}
+    if(!n){box.appendChild(h('div',{'class':'fTitre',tabindex:'-1',text:id}));
+      box.appendChild(h('div',{'class':'note',text:paysage.rejoue?'Absent à cette date (relevé de '+heureReleve(paysage.rejoue.instantane.epoch)+' : pas encore vu, disparu, ou hors des plafonds d’affichage). La sélection est gardée.'
+        :affichePaysage()?'Absent du relevé affiché (disparu, ou hors des plafonds d’affichage).':'Relevé des populations non chargé.'}));return;}
     var m=metr(n),puces=[],secondaire=[['Identifiant',n.id]],resume='Identifiant',b;
     box.appendChild(h('div',{'class':'fTitre',tabindex:'-1',text:nomPaysage(n)}));
     if(n.type==='population'){
@@ -1358,9 +1586,9 @@
   }
   function evolutionPaysage(box,n){
     var d=paysage.diff,a=affichePaysage()||{};
-    box.appendChild(h('h4',{text:'Évolution sur 24 h'}));
+    box.appendChild(h('h4',{text:'Évolution'+(d&&!d.sans_precedent?' '+depuisTexte(d):'')}));
     if(a.instantane&&a.instantane.partiel===true)box.appendChild(h('div',{'class':'fPuces'},[pastillePartiel('relevé affiché partiel')]));
-    if(!d||d.sans_precedent){box.appendChild(h('div',{'class':'note',text:'— '+(a.motif?texteSur(a.motif):'comparaison indisponible')}));return;}
+    if(!d||d.sans_precedent){box.appendChild(h('div',{'class':'note',text:'— '+(a.motif?texteSur(a.motif):'comparaison indisponible : '+texteRaison(a))}));return;}
     var dans=function(k){return Array.isArray(d[k])&&d[k].indexOf(n.id)>=0;},l=[];
     if(dans('apparus'))l.push('✚ apparu depuis la référence');
     if(dans('rotation_levee'))l.push(texteRepere(repereRotation())+' : apparue depuis la référence');
@@ -1368,9 +1596,203 @@
     [['hausses','▲ en hausse'],['baisses','▼ en baisse']].forEach(function(k){(Array.isArray(d[k[0]])?d[k[0]]:[]).forEach(function(x){if(x&&x.id===n.id)l.push(k[1]+' : '+texteSur(x.metrique)+' de '+nombre(x.de)+' à '+nombre(x.a));});});
     if(!l.length)l.push('pas de changement notable');
     box.appendChild(h('div',{'class':'fPuces'},l.map(function(t){return h('span',{text:t});})));
-    box.appendChild(h('div',{'class':'fPuces',text:'référence : relevé de '+heureReleve(d.reference_epoch)+(d.reference_partiel?' (partiel : la comparaison peut se tromper)':'')+(d.tronque?' · liste tronquée':'')}));
+    box.appendChild(h('div',{'class':'fPuces',text:'référence : relevé '+(typeof d.reference_epoch==='number'?'de '+heureReleve(d.reference_epoch):'enregistré juste avant')+(d.reference_partiel?' (partiel : la comparaison peut se tromper)':'')+(d.tronque?' · liste tronquée':'')}));
   }
+
+  // --- enregistreur : rejoue les instantanés enregistrés, un pas = un instantané, par rejouerPaysage seulement. La liste est figée à
+  // l'entrée en relecture ; le direct continue d'être lu sans rien redessiner. Cache borné, requêtes bornées et abandonnées à la sortie.
+  var E_CACHE_MAX=60,E_LOT=12,E_VOLS_MAX=4,E_PAS_MS=2000,E_ANIM_MS=300,E_ECHECS_MAX=5,E_ANNONCE_MS=2500,E_VISEE_MS=180;
+  var Enregistreur=(function(){
+    var fen='48h',v=1,liste=[],trous=[],i=-1,cible=-1,sens=1,affiche='',actif=false,lit=false,bloque='',echecs=0,note='',sautes=[],
+      cache=Object.create(null),mauvais=Object.create(null),vols=Object.create(null),file=[],minuterie=0,viseur=0,vise=-1,annonce=0,dite='',quand=0;
+    function date(x){return dateCourte(x.epoch)+' '+heureCourte(x.epoch);}
+    function ts(k){return liste[k].ts;}
+    // l'instantané de rang i est bien celui qui est dessiné (faux quand la fenêtre vient de changer)
+    function vu(){return i>=0&&ts(i)===affiche;}
+    function attend(){return cible>=0&&(cible!==i||!vu());}
+    function connu(t){return propre(cache,t,null);}
+    // liste des relevés de la fenêtre ; pendant une relecture, refaite seulement si la fenêtre change
+    function relever(){
+      var rep=paysage.chrono.rep,d=paysage.rep&&paysage.rep.disponible!==false?paysage.rep.instantane:null,l=rep?rep.instantanes.slice():[],ici=i>=0?liste[i]:cible>=0?liste[cible]:null;
+      if(rep&&d&&!l.some(function(x){return x.ts===d.ts;}))l.push({ts:d.ts,epoch:d.epoch,partiel:d.partiel===true,compteurs:d.compteurs});
+      liste=listeEnregistreur(l,fen);trous=trousEnregistreur(liste);
+      if(ici){cible=indexProche(liste,ici.epoch);if(i>=0)i=cible;}
+    }
+    function historique(){if(!actif){relever();maj();}else if(paysage.chrono.version!==version){version=paysage.chrono.version;if(attendFenetre){attendFenetre=false;changerListe();}}}
+    var version=-1,attendFenetre=false;
+    function changerListe(){var ici=i>=0?liste[i].ts:'';relever();if(i>=0&&ts(i)!==ici)aller(ts(i));else{precharger();maj();}}
+    // --- lecture des instantanés
+    function pret(k){return !!connu(ts(k))&&(k===0||!!connu(ts(k-1))||!!mauvais[ts(k-1)]);}
+    function nbVols(){return Object.keys(vols).length;}
+    function annuler(){file=[];Object.keys(vols).forEach(function(t){var c=vols[t];delete vols[t];c.abort();});}
+    function precharger(){
+      var c=cible>=0?cible:i,veut=Object.create(null),besoin=[],devant=0,suite=true,k,n;if(!actif||c<0||bloque)return;
+      function voir(k){if(k<0||k>=liste.length||veut[ts(k)])return;veut[ts(k)]=1;if(!connu(ts(k))&&!mauvais[ts(k)])besoin.push(ts(k));}
+      voir(c);voir(c-1);var presse=besoin.length;
+      for(n=1;n<=E_LOT;n++){k=c+sens*n;if(k<0||k>=liste.length){devant=E_LOT;break;}if(suite&&(connu(ts(k))||mauvais[ts(k)]||vols[ts(k)]))devant++;else suite=false;voir(k);}
+      // un lot part quand il reste moins d'un demi-lot d'avance ; les lectures devenues inutiles sont abandonnées
+      Object.keys(vols).forEach(function(t){if(!veut[t]){var x=vols[t];delete vols[t];x.abort();}});
+      file=(presse||devant<E_LOT/2?besoin:[]).filter(function(t){return !vols[t];});
+      pomper();
+    }
+    function pomper(){while(file.length&&nbVols()<E_VOLS_MAX&&!bloque)lancer(file.shift());}
+    function lancer(t){
+      var ctl=abandon();vols[t]=ctl;
+      lireInstantane(t,ctl.signal).then(function(r){
+        if(vols[t]!==ctl)return;
+        delete vols[t];
+        if(r.refus){refusPaysage();return;}
+        var j=r.j,bon=r.ok&&j&&typeof j==='object'&&j.graphe&&Array.isArray(j.graphe.noeuds)&&typeof j.epoch==='number'&&isFinite(j.epoch);
+        if(bon){echecs=0;ranger(t,j);}
+        else if(r.ok||r.status===404||r.status===503){mauvais[t]=r.status===404?'retiré':'illisible';if(++echecs>=E_ECHECS_MAX)bloque=E_ECHECS_MAX+' relevés de suite illisibles ou retirés';}
+        else bloque='API DataScope injoignable';
+        if(bloque)file=[];
+        pomper();
+        if(attend())tenter();
+      });
+    }
+    // cache borné : le relevé le plus loin de l'instant affiché (ou visé) part le premier
+    function ranger(t,j){
+      cache[t]={ts:t,epoch:j.epoch,partiel:j.partiel===true,compteurs:j.compteurs,graphe:j.graphe,difference:j.difference&&typeof j.difference==='object'?j.difference:null};
+      var l=Object.keys(cache),rang=Object.create(null),c=cible>=0?cible:i;if(l.length<=E_CACHE_MAX)return;
+      liste.forEach(function(x,k){rang[x.ts]=Math.abs(k-c);});
+      l.sort(function(a,b){return (rang[b]===undefined?1e9:rang[b])-(rang[a]===undefined?1e9:rang[a]);}).slice(0,l.length-E_CACHE_MAX).forEach(function(x){delete cache[x];});
+    }
+    // --- affichage d'un pas
+    function demander(k,s){
+      if(k<0||k>=liste.length)return;
+      actif=true;version=paysage.chrono.version;bloque='';echecs=0;note='';sautes=[];cible=k;sens=s;tenter();
+    }
+    function tenter(){
+      if(!actif||cible<0)return;
+      // un relevé retiré ou illisible est sauté, et dit
+      while(mauvais[ts(cible)]){
+        sautes.push(liste[cible]);var n=cible+sens;
+        if(n<0||n>=liste.length){
+          if(vu())return buter('aucun relevé lisible plus loin');
+          n=-1;liste.forEach(function(x,k){if(!mauvais[x.ts]&&(n<0||Math.abs(k-cible)<Math.abs(n-cible)))n=k;});
+          if(n<0)return buter('aucun relevé lisible dans la fenêtre');
+        }
+        cible=n;
+      }
+      if(pret(cible)||(bloque&&connu(ts(cible))))return montrer();
+      if(bloque)return buter(bloque);
+      precharger();maj();
+    }
+    function buter(t){lit=false;note=t;if(!vu()){sortir();note=t;maj();annoncer(t+' : direct');return;}cible=i;maj();annoncer(t);}
+    function montrer(){
+      var k=cible,x=connu(ts(k)),av=k?connu(ts(k-1)):null,t0=performance.now(),vient=i,bas=Math.min(k,vient),d;
+      d=av?decorerDiff(differencePaysage(av.graphe,x.graphe),av,x):x.difference?decorerDiff(x.difference,null,x):null;
+      note=sautes.length?(sautes.length>1?sautes.length+' relevés illisibles ou retirés sautés':'relevé du '+date(sautes[0])+' '+mauvais[sautes[0].ts]+' : sauté'):'';
+      var t=vient>=0&&Math.abs(k-vient)<=1+sautes.length?trous.slice(bas+1,Math.max(k,vient)+1).reduce(function(a,b){return Math.max(a,b);},0):0;
+      if(t)note+=(note?' · ':'')+'trou de '+dureeTexte(t)+' sauté';
+      i=k;affiche=ts(k);paysage.anime=lit?Math.min(E_ANIM_MS,E_PAS_MS/v*.6):E_ANIM_MS;
+      rejouerPaysage(x,d);paysage.anime=0;
+      if(!actif)return;   // session refusée entre-temps
+      precharger();maj();annoncer(texte());
+      if(lit)enchainer(t0);
+    }
+    function enchainer(t0){
+      clearTimeout(minuterie);
+      if(i>=liste.length-1){lit=false;note='fin de la fenêtre : dernier relevé';maj();annoncer(texte());chargeComparaison();return;}
+      minuterie=setTimeout(function(){if(lit&&actif){sautes=[];cible=i+1;sens=1;tenter();}},Math.max(10,E_PAS_MS/v-(performance.now()-t0)));
+    }
+    // --- commandes
+    function arreter(){lit=false;clearTimeout(minuterie);clearTimeout(viseur);vise=-1;annuler();sortirEtat();}
+    function sortirEtat(){actif=false;i=cible=-1;affiche='';bloque='';echecs=0;note='';sautes=[];attendFenetre=false;cache=Object.create(null);mauvais=Object.create(null);}
+    function sortir(){var avant=!!paysage.rejoue;arreter();relever();if(avant)rejouerPaysage(null);}
+    function aller(t){var k=-1;liste.forEach(function(x,n){if(x.ts===t)k=n;});if(k<0)return;pause();demander(k,i<0||k>=i?1:-1);}
+    function lecture(){
+      if(liste.length<2)return annoncer('un seul relevé : rien à lire');
+      lit=true;
+      if(!actif||i<0||i>=liste.length-1){demander(0,1);return;}
+      bloque='';echecs=0;sens=1;precharger();maj();annoncer('lecture');enchainer(performance.now());
+    }
+    function pause(){clearTimeout(minuterie);clearTimeout(viseur);vise=-1;var lisait=lit;lit=false;if(vu())cible=i;if(lisait){maj();annoncer('en pause · '+texte());chargeComparaison();}}
+    function pas(n){
+      var ici=actif?(cible>=0?cible:i):liste.length-1,k=ici+(n<0?-1:1);
+      if(k<0||k>=liste.length||(!actif&&n>0))return annoncer(n<0?'début de la fenêtre':actif?'dernier relevé de la fenêtre':'déjà en direct');
+      pause();demander(k,n<0?-1:1);
+    }
+    function rembobiner(){if(liste.length<2)return annoncer('un seul relevé : rien à rembobiner');pause();demander(0,1);}
+    function direct(){if(!actif)return annoncer('déjà en direct');sortir();maj();annoncer('retour au direct');}
+    function quitter(){if(actif)sortir();annulerComparaison();}
+    function vitesse(n){v=n===16?16:n===4?4:1;if(lit&&!attend()&&i>=0)enchainer(performance.now());maj();annoncer('vitesse ×'+v);}
+    function choisirFenetre(f){
+      if(f===fen)return;fen=f;
+      if(paysage.chrono.large<largeurChrono()&&!DEMO){attendFenetre=actif;if(paysage.chrono.echec)paysage.chrono.lu=0;chargeChronologie();}
+      if(actif)changerListe();else relever();
+      maj();annoncer('fenêtre de '+(f==='30j'?'30 jours':'48 heures')+', '+liste.length+' relevés');
+    }
+    // curseur : la date visée s'affiche tout de suite, l'instantané suit quand le curseur se pose
+    function viser(epoch){
+      var k=indexProche(liste,epoch);if(k<0)return;
+      if(lit){lit=false;clearTimeout(minuterie);}
+      vise=k;clearTimeout(viseur);maj();
+      viseur=setTimeout(function(){vise=-1;var d=i<0?1:k>=i?1:-1;if(!actif&&k===liste.length-1){maj();return;}demander(k,d);},actif&&pret(k)?0:E_VISEE_MS);
+    }
+    // --- état affiché
+    function texte(){
+      if(!vu())return actif&&cible>=0?'lecture : chargement du relevé du '+date(liste[cible]):'direct';
+      return 'lecture du '+date(liste[i])+(liste[i].partiel?' · relevé partiel':'')+(note?' · '+note:'');
+    }
+    function annoncer(t){
+      dite=t;if(annonce)return;
+      annonce=setTimeout(function(){annonce=0;quand=Date.now();el('eAnnonce').textContent=dite;},Math.max(250,quand+E_ANNONCE_MS-Date.now()));
+    }
+    function pose(id,k,x){if(el(id).getAttribute(k)!==x)el(id).setAttribute(k,x);}
+    function inactif(id,x){pose(id,'aria-disabled',x?'true':'false');}
+    function maj(){
+      var n=liste.length,a=affichePaysage(),voir=vue==='paysage'&&!!a,b=el('eBandeau'),k=vise>=0?vise:actif&&cible>=0?cible:n-1,t;
+      el('pEnreg').hidden=!voir;b.hidden=!voir||!actif;if(!voir){document.querySelector('.topoPan').classList.remove('rejeu');return;}
+      el('pEnreg').classList.toggle('rejeu',actif);document.querySelector('.topoPan').classList.toggle('rejeu',actif);
+      if(actif){t=texte()+(vu()?' · relevé '+(i+1)+' sur '+n+(lit?' · ×'+v:' · en pause')+(attend()?' · chargement…':''):'');if(b.textContent!==t)b.textContent=t;}
+      inactif('eDebut',n<2||i===0);inactif('ePrec',n<2||i===0);inactif('eLire',n<2);inactif('eSuiv',!actif||i===n-1);inactif('eDirect',!actif);
+      t=lit?['⏸︎','Mettre en pause']:['▶','Lire l’enregistrement'];if(el('eLire').textContent!==t[0])el('eLire').textContent=t[0];pose('eLire','aria-label',t[1]);pose('eLire','title',t[1]);
+      [1,4,16].forEach(function(x){pose('eV'+x,'aria-pressed',v===x?'true':'false');});pose('eF48','aria-pressed',fen==='48h'?'true':'false');pose('eF30','aria-pressed',fen==='30j'?'true':'false');
+      t=vise>=0?date(liste[vise]):i>=0?date(liste[i]):note?note:n>1?'direct · '+n+' relevés':n?'direct · un seul relevé':paysage.chrono.echec?'historique indisponible':'historique en lecture…';
+      if(el('eHeure').textContent!==t)el('eHeure').textContent=t;
+      var c=el('eCurseur'),de=n?liste[0].epoch:0,fin=n>1?liste[n-1].epoch:de+1;
+      pose('eCurseur','min',String(Math.floor(de)));pose('eCurseur','max',String(Math.ceil(fin)));
+      t=k>=0?String(Math.round(liste[k].epoch)):String(Math.ceil(fin));if(c.value!==t&&vise<0)c.value=t;
+      pose('eCurseur','aria-valuetext',k<0?'aucun relevé':(actif||vise>=0?'':'direct, ')+date(liste[k])+(liste[k].partiel?', partiel':'')+', relevé '+(k+1)+' sur '+n);
+      rendreBande(de,fin);rendreComparaison();
+    }
+    function rendreBande(de,fin){
+      var sv=el('eBande'),n=liste.length,cle=[fen,n,n?ts(0):'',n?ts(n-1):'',paysage.chrono.version].join('|'),max=0,x,w=Math.max(1.5,Math.min(9,700/(n||1)));
+      if(sv.getAttribute('data-cle')===cle)return;
+      vider(sv);sv.setAttribute('data-cle',cle);if(n<2)return;
+      function val(y){return valeurPoint({v:y.compteurs},'adresses');}
+      liste.forEach(function(y){max=Math.max(max,pNombre(val(y)));});
+      liste.forEach(function(y,k){
+        x=(y.epoch-de)/(fin-de)*1000;
+        if(trous[k]){var x0=(liste[k-1].epoch-de)/(fin-de)*1000;s('rect',{'class':'trou',x:x0+w/2,y:0,width:Math.max(0,x-x0-w),height:30},sv);s('line',{'class':'bord',x1:x0+w/2,x2:x-w/2,y1:1.5,y2:1.5},sv);}
+        var q=val(y),ht=q===null?2:Math.max(2,max?q*26/max:2);s('rect',{'class':'r'+(y.partiel?' part':''),x:x-w/2,y:30-ht,width:w,height:ht},sv);
+      });
+    }
+    function clavier(e){
+      var n=e.key==='ArrowLeft'||e.key==='ArrowDown'?-1:e.key==='ArrowRight'||e.key==='ArrowUp'?1:0,ici=actif?(cible>=0?cible:i):liste.length-1;
+      if(n)pas(n);
+      else if(e.key==='PageUp'||e.key==='PageDown'){if(liste.length<2)return;n=Math.max(0,Math.min(liste.length-1,ici+(e.key==='PageUp'?E_LOT:-E_LOT)));if(n!==ici)aller(ts(n));}
+      else if(e.key==='Home')rembobiner();else if(e.key==='End'){if(actif)direct();}
+      else return;
+      e.preventDefault();
+    }
+    return {aller:aller,lecture:lecture,pause:pause,pas:pas,rembobiner:rembobiner,direct:direct,vitesse:vitesse,quitter:quitter,arreter:arreter,historique:historique,maj:maj,
+      choisirFenetre:choisirFenetre,viser:viser,clavier:clavier,connu:connu,fenetre:function(){return fen;},actif:function(){return actif;},enCours:function(){return lit;},
+      etat:function(){return {i:i,n:liste.length,cache:Object.keys(cache).length,vols:nbVols(),file:file.length,ts:i>=0?ts(i):'',liste:liste};}};
+  })();
   // </paysage>
+
+  // --- enregistreur et évolution : commandes. Une commande sans effet (aria-disabled) reste au focus et dit pourquoi.
+  [['eDebut',function(){Enregistreur.rembobiner();}],['ePrec',function(){Enregistreur.pas(-1);}],['eSuiv',function(){Enregistreur.pas(1);}],['eDirect',function(){Enregistreur.direct();}],
+    ['eLire',function(){if(Enregistreur.enCours())Enregistreur.pause();else Enregistreur.lecture();}],['eV1',function(){Enregistreur.vitesse(1);}],['eV4',function(){Enregistreur.vitesse(4);}],['eV16',function(){Enregistreur.vitesse(16);}],
+    ['eF48',function(){Enregistreur.choisirFenetre('48h');}],['eF30',function(){Enregistreur.choisirFenetre('30j');}],
+    ['eCpas',function(){choisirComparaison('pas');}],['eC24h',function(){choisirComparaison('24h');}],['eC7j',function(){choisirComparaison('7j');}],['eCdate',function(){choisirComparaison('date');}],
+    ['eEvo',function(){evo.badges=!evo.badges;retenirEvo();apresPaysage();}]].forEach(function(x){el(x[0]).addEventListener('click',x[1]);});
+  el('eCurseur').addEventListener('input',function(){Enregistreur.viser(+el('eCurseur').value);});
+  el('eCurseur').addEventListener('keydown',function(e){Enregistreur.clavier(e);});
+  el('eDate').addEventListener('change',function(){var t=Date.parse(el('eDate').value);if(isFinite(t)){evo.date=t/1000;choisirComparaison('date');}});
 
   // --- tiroirs ---
   function modeTiroir(){return getComputedStyle(el('btInsp')).display!=='none';}
@@ -1422,27 +1844,44 @@
       pop('famille:acces_distant','acces_distant',['leurre-ssh.example','leurre-bureau.example'],M(95,22,12,false,'observee',50,80,{scanner_recherche:55,hebergeur:45}),[[6,44],[0,18],[8,9]],[],[['CH',12]],null);
       pop('profileur:demo2','autre',['api.demo.test'],M(14,3,0,false,'inactive',12,40,{inconnu:100}),[[8,9]],['CVE-2099-10002'],[],null);
       K('autres:populations','autres','+ 2 autres',{metriques:{repliees:2}});
-      var ts=new Date(e0*1000).toISOString().replace('Z','000Z'),ref=e0-86400;
-      return {disponible:true,epoch:e0,age_s:600,instantane:{ts:ts,epoch:e0,partiel:false,graphe:{noeuds:gn,aretes:ga},compteurs:{populations:7,rotation:1,reseaux:146,adresses:2779,cibles:9,bans:977,cves:3}},
-        difference_24h:{apparus:['pop:profileur:demo2','cible:api.demo.test'],disparus:[],hausses:[{id:'pop:rotation:0d3m0a1b',metrique:'adresses',de:1210,a:1840}],baisses:[{id:'pop:famille:messagerie',metrique:'adresses',de:290,a:210}],
-          rotation_levee:['pop:rotation:0d3m0a1b'],rotation_tombee:[],tronque:false,reference_ts:new Date(ref*1000).toISOString().replace('Z','000Z'),reference_epoch:ref,reference_partiel:false,ecart_s:86400}};
+      var ts=new Date(e0*1000).toISOString().replace('Z','000Z');
+      return {disponible:true,epoch:e0,age_s:600,instantane:{ts:ts,epoch:e0,partiel:false,graphe:{noeuds:gn,aretes:ga},compteurs:{populations:7,rotation:1,reseaux:146,adresses:2779,cibles:9,bans:977,cves:3}}};
     })();
     // chronologie : toutes les 30 min sur 48 h puis toutes les heures, 4,6 jours d'historique, un trou de trois heures, un relevé partiel
     var tsDemo=function(e){return new Date(e*1000).toISOString().replace('Z','000Z');},E0=paysageDemo.epoch,courbe=function(n,p,e){var x=(E0-e)/86400;return Math.max(0,Math.round(n+(p-n)*Math.min(x,1.4)+(n>20?.09*n*Math.sin(6*Math.PI*x):0)));},
       epoques=[],veille={populations:6,rotation:0,reseaux:131,adresses:2215,cibles:8,bans:921,cves:3},veillePop={'pop:rotation:0d3m0a1b':[1210,51,190],'pop:famille:balayage_web':[590,40,470],'pop:famille:messagerie':[290,21,141],'pop:famille:acces_distant':[95,22,12],'pop:profileur:demo2':null};
     for(var k=0;k<96;k++)epoques.push(E0-k*1800);for(k=48;k<110;k++)epoques.push(E0-k*3600);
     epoques=epoques.filter(function(e){return !(e<E0-6.2*3600&&e>E0-9.4*3600);}).reverse();
-    var cActuels=paysageDemo.instantane.compteurs,chronologieDemo={tronque:false,instantanes:epoques.map(function(e){var c={};Object.keys(cActuels).forEach(function(x){c[x]=courbe(cActuels[x],veille[x],e);});return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,compteurs:c};})};
-    var rienDemo=function(x){var d={apparus:[],disparus:[],hausses:[],baisses:[],rotation_levee:[],rotation_tombee:[],tronque:false};for(var y in (x||{}))d[y]=x[y];return d;},
-      filDemo=[{},{hausses:[{id:'pop:rotation:0d3m0a1b',metrique:'adresses',de:1490,a:1812}]},{},{},{apparus:['pop:profileur:demo2','cible:api.demo.test','asn:64504']},{},{rotation_levee:['pop:rotation:0d3m0a1b'],apparus:['asn:64497','asn:64498','classe:rotation:0d3m0a1b:acces']},{},{},{},{apparus:['cve:CVE-2099-10003'],baisses:[{id:'pop:famille:messagerie',metrique:'adresses',de:290,a:221}],disparus:['pop:profileur:demo1','cible:ancien.demo.test']},{}];
-    chronologieDemo.differences=epoques.slice(-12).reverse().map(function(e,i){return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,difference:rienDemo(filDemo[i])};});
+    var cActuels=paysageDemo.instantane.compteurs,chronologieDemo={tronque:false,instantanes:epoques.map(function(e){var c={};Object.keys(cActuels).forEach(function(x){c[x]=courbe(cActuels[x],veille[x],e);});
+      // compteurs accordés aux graphes rejoués (naissances et disparitions plus bas)
+      var g=E0-e;c.populations=7-(g>7200?1:0)+(g>18000?1:0);c.rotation=g>10800?0:1;c.cibles=9-(g>7200?1:0)+(g>18000?1:0)-(g>108000?1:0)+(g>158400?1:0);c.cves=g>18000?2:3;return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,compteurs:c};})};
+    // instantanés rejoués : le graphe courant, moins ce qui n'était pas encore là, plus ce qui a disparu ; les différences en sont déduites
+    var H=3600,ne={'pop:profileur:demo2':2*H,'cible:api.demo.test':2*H,'asn:64504':2*H,'asn:64497':3*H,'asn:64498':3*H,'classe:rotation:0d3m0a1b:acces':3*H,'cve:CVE-2099-10003':5*H,'cible:portail-des-usagers-tres-long.demo.test':30*H,'asn:64505':30*H,'camp:sig-demo-2':40*H},
+      partis=[[5*H,{id:'pop:profileur:demo1',type:'population',libelle:'ancien.demo.test',famille:'autre',metriques:{adresses:22,reseaux:4,bans:3,rotation:false,etat:'inactive'}},[['pop:profileur:demo1','cible:ancien.demo.test','VISE']]],[5*H,{id:'cible:ancien.demo.test',type:'cible',libelle:'ancien.demo.test',metriques:{}},[['cible:ancien.demo.test','infra:secubox-demo','HEBERGE']]],
+        [44*H,{id:'cible:vieux.demo.test',type:'cible',libelle:'vieux.demo.test',metriques:{}},[['pop:famille:messagerie','cible:vieux.demo.test','VISE'],['cible:vieux.demo.test','infra:secubox-demo','HEBERGE']]]];
+    function lireDemo(ts,seul){
+      var c=chronologieDemo.instantanes.filter(function(x){return x.ts===ts;})[0],g=paysageDemo.instantane.graphe,x;if(!c)return null;
+      if(c.epoch===E0)x=g;
+      else{
+        var age=E0-c.epoch,N=g.noeuds.filter(function(n){return !(age>ne[n.id]);}).map(function(n){
+            var v=veillePop[n.id];if(!v)return n;var m={},o={};for(var k in n.metriques)m[k]=n.metriques[k];for(k in n)o[k]=n[k];
+            m.adresses=courbe(m.adresses,v[0],c.epoch);m.reseaux=courbe(m.reseaux,v[1],c.epoch);m.bans=courbe(m.bans,v[2],c.epoch);if(n.id==='pop:rotation:0d3m0a1b')m.rotation=age<=3*H;o.metriques=m;return o;}),ids={},A=g.aretes.slice();
+        partis.forEach(function(p){if(age>=p[0]+1){N.push(p[1]);p[2].forEach(function(l){A.push({de:l[0],vers:l[1],type:l[2],poids:1});});}});
+        N.forEach(function(n){ids[n.id]=1;});x={noeuds:N,aretes:A.filter(function(l){return ids[l.de]&&ids[l.vers];})};
+      }
+      var rang=epoques.indexOf(c.epoch);
+      return {ts:c.ts,epoch:c.epoch,partiel:c.partiel,compteurs:c.compteurs,graphe:x,difference:seul?null:rang?diffDemo(tsDemo(epoques[rang-1]),ts):{sans_precedent:'premier'}};
+    }
+    function diffDemo(de,a){var d=differencePaysage(lireDemo(de,true).graphe,lireDemo(a,true).graphe);d.tronque=false;return d;}
+    chronologieDemo.differences=epoques.slice(-12).reverse().map(function(e,i){return {ts:tsDemo(e),epoch:e,partiel:e===E0-9000||e===E0-10800,difference:diffDemo(tsDemo(epoques[epoques.length-2-i]),tsDemo(e))};});
+    var d24=diffDemo(tsDemo(E0-86400),tsDemo(E0));d24.reference_ts=tsDemo(E0-86400);d24.reference_epoch=E0-86400;d24.reference_partiel=false;d24.ecart_s=86400;paysageDemo.difference_24h=d24;
     var tendancesDemo={},parHeure={};epoques.forEach(function(e){var x=Math.floor(e/3600);if(parHeure[x]===undefined)parHeure[x]=e;});
     var premiers=Object.keys(parHeure).map(function(x){return parHeure[x];}).sort(function(x,y){return x-y;});
     Object.keys(veillePop).forEach(function(id){var mq=paysageDemo.instantane.graphe.noeuds.filter(function(x){return x.id===id;})[0].metriques,v=veillePop[id];
       tendancesDemo[id]={id:id,illisibles:0,points:premiers.concat(premiers.indexOf(E0)<0?[E0]:[]).filter(function(e){return v||e>E0-8000;}).map(function(e){return {ts:tsDemo(e),epoch:e,adresses:courbe(mq.adresses,v?v[0]:mq.adresses,e),reseaux:courbe(mq.reseaux,v?v[1]:mq.reseaux,e),bans:courbe(mq.bans,v?v[2]:mq.bans,e)};})};});
     return {overview:{disponible:true,genere_le:iso(2),verifie_le:iso(1),complet:false,perime:false,entites:compte,relations:a.length},
       sources:[{source:'status',etat:'inaccessible',motif:'santé des modules périmée (plus de 300 s)',vu_le:iso(14)},{source:'network',etat:'ok',motif:null,vu_le:iso(2)}],
-      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,paysage:paysageDemo,chronologie:chronologieDemo,tendances:tendancesDemo,_attrs:at,_just:just};
+      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,paysage:paysageDemo,chronologie:chronologieDemo,tendances:tendancesDemo,lire:lireDemo,_attrs:at,_just:just};
   })();
   function contexteDemo(id){
     var D=DEMO_DONNEES,e=etat.noeuds[id];if(!e)return null;e=JSON.parse(JSON.stringify(e));e.attributes=JSON.parse(JSON.stringify(D._attrs[id]||{}));
@@ -1471,7 +1910,7 @@
   charge();
   // actualisation toutes les 30 s, seulement si l'onglet est visible
   setInterval(function(){if(!document.hidden)charge();},30000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)charge();});
+  document.addEventListener('visibilitychange',function(){if(document.hidden)Enregistreur.pause();else charge();});
 })();
 </script>
 </body>
