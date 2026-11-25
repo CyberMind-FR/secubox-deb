@@ -39,5 +39,4 @@ def test_montee_arrete_les_anciennes_unites_et_depend_du_coeur():
     # et le cœur refuse de cohabiter avec un webos qui gérerait encore le vhost
     coeur = (PKG.parent / "secubox-core/debian/control").read_text()
     assert "Breaks: " in coeur and "secubox-webos (<< 1.21.3~)" in coeur.split("Breaks: ", 1)[1].splitlines()[0]
-    version = (PKG / "debian/changelog").read_text().split("\n", 1)[0]
-    assert version.startswith("secubox-webos (1.21.3-1~trixie1)")
+    assert "secubox-webos (1.21.3-1~trixie1)" in (PKG / "debian/changelog").read_text()

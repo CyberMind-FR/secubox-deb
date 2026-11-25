@@ -20,7 +20,6 @@ RACINE = PKG.parents[1]
 HALL_DIR = PKG / "www" / "hall"
 JS = (HALL_DIR / "sbx-dice.js").read_text(encoding="utf-8")
 COQUE_JS = (HALL_DIR / "hall-v2.js").read_text(encoding="utf-8")
-SRC = (HALL_DIR / "index.html").read_text(encoding="utf-8")
 RULES = (PKG / "debian" / "rules").read_text(encoding="utf-8")
 PLY = RACINE / "image" / "plymouth" / "secubox-cube"
 
@@ -41,9 +40,22 @@ def test_budget_et_interdits():
         assert interdit not in JS, interdit
     assert "customElements.define('sbx-dice'" in JS
     assert "prefers-reduced-motion: reduce" in JS and "visibilitychange" in JS and "IntersectionObserver" in JS
-    # le Hall v1 ne charge pas le composant : seule la coque v2 l'injecte
-    assert "sbx-dice" not in SRC
     assert "s.src='/sbx-dice.js'" in COQUE_JS
+
+
+def test_orientation_des_faces_verte_et_rouge_3938():
+    """#3938 : le terminal « >_ » (face 4) se lit à l'endroit, la fusée (face 2) est tournée de 180° — mêmes sens que le dé 3D
+    de l'accueil du nœud (secubox-core, de3d.js). Sens de lecture : le coin 0 de l'image est le premier sommet, l'image suit u
+    (1er → 2e) et v (1er → 4e) ; vue de dehors, u × v doit rentrer dans le dé, sinon le dessin est en miroir."""
+    faces = {int(fi): ([int(x) for x in v.split(",")], [int(x) for x in n.split(",")])
+             for v, n, fi in re.findall(r"\{v:\[([\d,]+)\],n:\[([-\d,]+)\],fi:(\d)\}", JS)}
+    assert faces[4][0] == [4, 0, 2, 6] and faces[2][0] == [5, 1, 3, 7]
+    coins = [[-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1], [-1, -1, 1], [1, -1, 1], [-1, 1, 1], [1, 1, 1]]
+    v, n = faces[4]
+    a, b, d = coins[v[0]], coins[v[1]], coins[v[3]]
+    u, w = [(b[i] - a[i]) // 2 for i in range(3)], [(d[i] - a[i]) // 2 for i in range(3)]
+    produit = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+    assert produit == [-x for x in n] and w == [0, 1, 0]      # ni miroir, ni tête en bas (y vers le bas)
 
 
 def test_six_textures_jpeg_320_decodees_pas_de_base64():

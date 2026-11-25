@@ -1,0 +1,26 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: secubox-core
+Source: https://secubox.in
+
+Files: *
+Copyright: 2026 CyberMind / Gérald Kerma <devel@cybermind.fr>
+License: LicenseRef-CMSD-1.0
+ Source-Disclosed License — All rights reserved except as expressly granted.
+ See LICENCE-CMSD-1.0.md for terms.
+
+Files: usr/share/secubox/www/noeud/polices/unbounded-latin.woff2
+Copyright: 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
+License: OFL-1.1
+
+Files: usr/share/secubox/www/noeud/polices/jetbrains-mono-latin.woff2
+Copyright: 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+License: OFL-1.1
+
+License: OFL-1.1
+ This Font Software is licensed under the SIL Open Font License, Version 1.1.
+ .
+ The complete text is installed next to the fonts, in
+ /usr/share/secubox/www/noeud/polices/OFL-unbounded.txt and
+ /usr/share/secubox/www/noeud/polices/OFL-jetbrains-mono.txt. The fonts
+ (Latin subset, WOFF2) are byte-for-byte those shipped by secubox-live;
+ source in the tree: packages/secubox-live/www/live/polices/.

@@ -23,6 +23,8 @@ SCRIPT = PKG / "sbin" / "secubox-noeud"
 PAGE = PKG / "www" / "noeud" / "index.html"
 # Source du moteur et des faces du dé : le Hall (debian/rules de secubox-core les livre sous www/noeud/, #3883).
 HALL = RACINE / "packages" / "secubox-webos" / "www" / "hall"
+DE3D = PKG / "www" / "noeud" / "de3d.js"                     # dé holographique (#3938)
+POLICES = RACINE / "packages" / "secubox-live" / "www" / "live" / "polices"   # source des polices OFL de la page
 WAF_ROUTE = RACINE / "packages" / "secubox-core" / "usr" / "sbin" / "secubox-waf-route"
 DOM = "gk2.secubox.in"
 
