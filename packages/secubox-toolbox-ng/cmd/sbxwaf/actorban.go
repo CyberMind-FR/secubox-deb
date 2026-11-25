@@ -83,11 +83,11 @@ func NewActorBan(chemin, mode string, store *BanStore, b banneur) *ActorBan {
 		maxParHeure: 20, fraicheur: 10 * time.Minute, now: time.Now}
 }
 
-// Plages protégées : au plus /16 en IPv4 et /32 en IPv6 (#3932). Une faute de frappe (`82.67.100.75/3`, `0.0.0.0/0`) protégerait
+// Plages protégées : au plus /12 en IPv4 et /28 en IPv6 (#3932) : assez pour un opérateur entier (Meta : 57.144.0.0/14, 2803:6080::/29). Une faute de frappe (`82.67.100.75/3`, `0.0.0.0/0`) protégerait
 // une part d'Internet, et ferait lever au démarrage autant de bans du journal. Le privé (jamais banni) n'a pas de borne.
 const (
-	prefixeMinProtege4 = 16
-	prefixeMinProtege6 = 32
+	prefixeMinProtege4 = 12
+	prefixeMinProtege6 = 28
 )
 
 var jamaisBannissables = func() (out []*net.IPNet) {
