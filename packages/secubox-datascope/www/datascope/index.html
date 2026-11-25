@@ -235,7 +235,7 @@
     <div class="pan tiroir insp" id="panInsp"><h3>Inspecteur <i id="inspType"></i><button type="button" class="bt fermer" data-ferme="panInsp">✕ Fermer</button></h3><div id="insp"><div class="vide">Choisir un élément de la topologie.</div></div></div>
     <div class="pEnreg" id="pEnreg" role="group" aria-label="Enregistreur du paysage" hidden>
       <div class="eLigne">
-        <span class="eGroupe" role="group" aria-label="Lecture"><button type="button" class="bt" id="eDebut" aria-label="Rembobiner au début de la fenêtre" title="Rembobiner au début de la fenêtre">⏮︎</button><button type="button" class="bt" id="ePrec" aria-label="Relevé précédent" title="Relevé précédent">◀◀</button><button type="button" class="bt" id="eLire" aria-label="Lire l’enregistrement" title="Lire l’enregistrement">▶</button><button type="button" class="bt" id="eSuiv" aria-label="Relevé suivant" title="Relevé suivant">▶▶</button><button type="button" class="bt" id="eDirect" aria-label="Revenir au direct" title="Revenir au direct">⏭︎</button></span>
+        <span class="eGroupe" role="group" aria-label="Lecture"><button type="button" class="bt" id="eDebut" aria-label="Rembobiner au début de la fenêtre" title="Rembobiner au début de la fenêtre">⏮︎</button><button type="button" class="bt" id="ePrec" aria-label="Relevé précédent" title="Relevé précédent">◀◀</button><button type="button" class="bt" id="eLire" aria-label="Lire l’enregistrement" title="Lire l’enregistrement">▶</button><button type="button" class="bt" id="eSuiv" aria-label="Relevé suivant" title="Relevé suivant">▶▶</button><button type="button" class="bt" id="eDirect" aria-label="Revenir au direct" title="Revenir au direct">⏭︎</button><button type="button" class="bt" id="eBoucle" aria-pressed="false" aria-label="Lire en boucle" title="Lire en boucle : à la fin, la lecture reprend aux derniers relevés gardés en mémoire (60 au plus)">↻</button></span>
         <span class="ePiste" title="Chaque barre est un relevé enregistré, à son heure : hauteur = adresses (cumul par population)."><svg id="eBande" viewBox="0 0 1000 30" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg><input type="range" id="eCurseur" aria-label="Instant affiché" min="0" max="1" value="1" step="1"></span>
         <span class="eHeure" id="eHeure">direct</span>
       </div>
@@ -263,7 +263,7 @@
   if(!EMB&&!DEMO){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
   // repères partagés avec la page Actor (fichier du paquet, même origine), chargés de la même façon
   try{var rp=document.createElement('script');rp.src='reperes.js';rp.onload=function(){if(menace())rendreTopo();if(selection.id&&RE_PID.test(selection.id))inspecter();};document.head.appendChild(rp);}catch(e){}
-  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques', CLE_PPER='datascope.paysage.periode', CLE_PEVO='datascope.paysage.evolution';
+  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue', CLE_PTYPES='datascope.paysage.masques', CLE_PBOUCLE='datascope.paysage.boucle', CLE_PPER='datascope.paysage.periode', CLE_PEVO='datascope.paysage.evolution';
   var RE_ID=/^(node|network|interface|device|ip|service):[A-Za-z0-9:._-]{1,128}$/;
   var RE_PID=/^(pop|camp|asn|classe|cible|cve|pays|infra|autres):[A-Za-z0-9:._-]{1,160}$/;
   var TYPE_PREFIXE={pop:'population',camp:'campagne',asn:'reseau_source',classe:'classe_reseau',cible:'cible',cve:'cve',pays:'pays',infra:'infra',autres:'autres'};
@@ -1900,9 +1900,9 @@
 
   // --- enregistreur : rejoue les instantanés enregistrés, un pas = un instantané, par rejouerPaysage seulement. La liste est figée à
   // l'entrée en relecture ; le direct continue d'être lu sans rien redessiner. Cache borné, requêtes bornées et abandonnées à la sortie.
-  var E_CACHE_MAX=60,E_LOT=12,E_VOLS_MAX=4,E_PAS_MS=2000,E_ANIM_MS=300,E_ECHECS_MAX=5,E_ANNONCE_MS=2500,E_VISEE_MS=180;
+  var E_CACHE_MAX=60,E_LOT=12,E_VOLS_MAX=4,E_PAS_MS=2000,E_ANIM_MS=300,E_ECHECS_MAX=5,E_ANNONCE_MS=2500,E_VISEE_MS=180,E_BOUCLE_MS=1500;
   var Enregistreur=(function(){
-    var fen='48h',v=1,liste=[],trous=[],i=-1,cible=-1,sens=1,affiche='',actif=false,lit=false,bloque='',echecs=0,note='',sautes=[],
+    var fen='48h',boucle=lireStock(CLE_PBOUCLE)===true,v=1,liste=[],trous=[],i=-1,cible=-1,sens=1,affiche='',actif=false,lit=false,bloque='',echecs=0,note='',sautes=[],
       cache=Object.create(null),mauvais=Object.create(null),pannes=Object.create(null),reussites=0,vols=Object.create(null),file=[],minuterie=0,viseur=0,vise=-1,annonce=0,dite='',quand=0;
     function date(x){return dateCourte(x.epoch)+' '+heureCourte(x.epoch);}
     function ts(k){return liste[k].ts;}
@@ -2001,6 +2001,9 @@
     }
     function enchainer(t0){
       clearTimeout(minuterie);
+      // boucle : reprise aux relevés encore en cache (le premier a besoin du précédent), donc aucune lecture de plus sur la box
+      if(i>=liste.length-1&&boucle&&liste.length>1){
+        minuterie=setTimeout(function(){if(lit&&actif){sautes=[];note='';cible=Math.max(0,liste.length-E_CACHE_MAX+1);sens=1;tenter();}},Math.max(E_BOUCLE_MS,E_PAS_MS/v));return;}
       if(i>=liste.length-1){lit=false;note='fin de la fenêtre : dernier relevé';maj();annoncer(texte());chargeComparaison();return;}
       minuterie=setTimeout(function(){if(lit&&actif){sautes=[];cible=i+1;sens=1;tenter();}},Math.max(10,E_PAS_MS/v-(performance.now()-t0)));
     }
@@ -2028,6 +2031,7 @@
     function direct(){if(!actif)return annoncer('déjà en direct');sortir();maj();annoncer('retour au direct');}
     function quitter(){if(actif)sortir();annulerComparaison();}
     function vitesse(n){v=n===16?16:n===4?4:1;if(lit&&!attend()&&i>=0)enchainer(performance.now());maj();annoncer('vitesse ×'+v);}
+    function basculerBoucle(){boucle=!boucle;ecrireStock(CLE_PBOUCLE,boucle);maj();annoncer('lecture en boucle '+(boucle?'activée':'arrêtée'));}
     function choisirFenetre(f){
       if(f===fen)return;fen=f;
       if(paysage.chrono.large<largeurChrono()&&!DEMO){attendFenetre=actif;if(paysage.chrono.echec)paysage.chrono.lu=0;chargeChronologie();}
@@ -2061,7 +2065,7 @@
       if(actif){t=texte()+(vu()?' · relevé '+(i+1)+' sur '+n+(lit?' · ×'+v:' · en pause')+(attend()?' · chargement…':''):'');if(b.textContent!==t)b.textContent=t;}
       inactif('eDebut',n<2||i===0);inactif('ePrec',n<2||i===0);inactif('eLire',n<2);inactif('eSuiv',!actif||i===n-1);inactif('eDirect',!actif);
       t=lit?['⏸︎','Mettre en pause']:['▶','Lire l’enregistrement'];if(el('eLire').textContent!==t[0])el('eLire').textContent=t[0];pose('eLire','aria-label',t[1]);pose('eLire','title',t[1]);
-      [1,4,16].forEach(function(x){pose('eV'+x,'aria-pressed',v===x?'true':'false');});pose('eF48','aria-pressed',fen==='48h'?'true':'false');pose('eF30','aria-pressed',fen==='30j'?'true':'false');
+      [1,4,16].forEach(function(x){pose('eV'+x,'aria-pressed',v===x?'true':'false');});pose('eBoucle','aria-pressed',boucle?'true':'false');pose('eF48','aria-pressed',fen==='48h'?'true':'false');pose('eF30','aria-pressed',fen==='30j'?'true':'false');
       t=vise>=0?date(liste[vise]):i>=0?date(liste[i]):note?note:n>1?'direct · '+n+' relevés':n?'direct · un seul relevé':paysage.chrono.echec?'historique indisponible':'historique en lecture…';
       if(el('eHeure').textContent!==t)el('eHeure').textContent=t;
       var c=el('eCurseur'),de=n?liste[0].epoch:0,fin=n>1?liste[n-1].epoch:de+1;
@@ -2098,7 +2102,7 @@
       e.preventDefault();
     }
     return {aller:aller,lecture:lecture,pause:pause,pas:pas,rembobiner:rembobiner,direct:direct,vitesse:vitesse,quitter:quitter,oublier:oublier,historique:historique,maj:maj,
-      choisirFenetre:choisirFenetre,viser:viser,clavier:clavier,connu:connu,fenetre:function(){return fen;},actif:function(){return actif;},enCours:function(){return lit;},
+      choisirFenetre:choisirFenetre,basculerBoucle:basculerBoucle,viser:viser,clavier:clavier,connu:connu,fenetre:function(){return fen;},actif:function(){return actif;},enCours:function(){return lit;},
       etat:function(){return {i:i,n:liste.length,cache:Object.keys(cache).length,vols:nbVols(),file:file.length,ts:i>=0?ts(i):'',liste:liste};}};
   })();
   // </paysage>
@@ -2106,7 +2110,7 @@
   // --- enregistreur et évolution : commandes. Une commande sans effet (aria-disabled) reste au focus et dit pourquoi.
   [['eDebut',function(){Enregistreur.rembobiner();}],['ePrec',function(){Enregistreur.pas(-1);}],['eSuiv',function(){Enregistreur.pas(1);}],['eDirect',function(){Enregistreur.direct();}],
     ['eLire',function(){if(Enregistreur.enCours())Enregistreur.pause();else Enregistreur.lecture();}],['eV1',function(){Enregistreur.vitesse(1);}],['eV4',function(){Enregistreur.vitesse(4);}],['eV16',function(){Enregistreur.vitesse(16);}],
-    ['eF48',function(){Enregistreur.choisirFenetre('48h');}],['eF30',function(){Enregistreur.choisirFenetre('30j');}],
+    ['eBoucle',function(){Enregistreur.basculerBoucle();}],['eF48',function(){Enregistreur.choisirFenetre('48h');}],['eF30',function(){Enregistreur.choisirFenetre('30j');}],
     ['eCpas',function(){choisirComparaison('pas');}],['eC24h',function(){choisirComparaison('24h');}],['eC7j',function(){choisirComparaison('7j');}],['eCdate',function(){choisirComparaison('date');}],
     ['eEvo',function(){evo.badges=!evo.badges;retenirEvo();apresPaysage();}]].forEach(function(x){el(x[0]).addEventListener('click',x[1]);});
   el('eCurseur').addEventListener('input',function(){Enregistreur.viser(+el('eCurseur').value);});

@@ -1132,6 +1132,44 @@ def test_enregistreur_partiel_dans_l_etat_et_lecture_jusqu_a_la_fin():
     assert lire == "Lire l’enregistrement" and foc == "eLire" and live == "off"
 
 
+def test_enregistreur_en_boucle_sans_lecture_de_plus():
+    """#3921 : la lecture reprend seule à la fin, sans requête au second tour ; pause et bascule l'arrêtent."""
+    _, api, _ent = _enregistrements(nb=6)
+    vus = []
+
+    def relectures():
+        return len([u for u in vus if "instantane" in str(u)])
+
+    def sc(pg):
+        pg.click("#vuePaysage")
+        pg.wait_for_timeout(300)
+        r = {"avant": pg.get_attribute("#eBoucle", "aria-pressed")}
+        pg.click("#eBoucle")
+        r["apres"] = pg.get_attribute("#eBoucle", "aria-pressed")
+        pg.click("#eV16")
+        pg.click("#eLire")
+        tours, dernier, n1 = 0, False, None
+        for _ in range(400):
+            pg.wait_for_timeout(25)
+            t = _bandeau(pg) or ""
+            if "relevé 6 sur 6" in t and not dernier:
+                dernier, tours = True, tours + 1
+                n1 = relectures() if tours == 1 else n1
+            elif "relevé 2 sur 6" in t:
+                dernier = False
+            if tours == 3:
+                break
+        r["tours"], r["requetes"] = tours, (n1, relectures())
+        pg.click("#eLire")
+        pg.wait_for_timeout(2500)
+        r["pause"] = _bandeau(pg)
+        return r
+    r = _navigateur(sc, query="", api=api, vus=vus)
+    assert (r["avant"], r["apres"], r["tours"]) == ("false", "true", 3)
+    assert r["requetes"][0] == r["requetes"][1] and r["requetes"][0] > 0
+    assert "en pause" in r["pause"]
+
+
 @pytest.mark.parametrize("code", [404, 503])
 def test_enregistreur_saute_un_instantane_illisible_et_le_dit(code):
     _, api, ent = _enregistrements(nb=10, codes={6: code, 5: code})
