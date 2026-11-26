@@ -58,16 +58,63 @@ type Banneur struct {
 	// sbxwaf la recrée avec SES bans, pas avec ceux d'authwatch.
 	mu     sync.Mutex
 	actifs map[string]time.Time
+
+	// LEURRES DE SERVICE (#3988). Un contact sur un service inexistant n'a
+	// aucune lecture innocente : 24 h au premier contact, 7 j à la récidive
+	// (fenêtre de 30 jours), au lieu de la durée des mots de passe ratés.
+	dureeLeurre         time.Duration
+	dureeLeurreRecidive time.Duration
+	leurres             map[string][]time.Time // ip → bans de leurre posés dans la fenêtre
 }
+
+// Durées par défaut des bans de leurre de service (#3988).
+const (
+	DureeLeurreDefaut         = 24 * time.Hour
+	DureeLeurreRecidiveDefaut = 7 * 24 * time.Hour
+	fenetreRecidiveLeurre     = 30 * 24 * time.Hour
+)
 
 func NewBanneur(nftPath, table, set4, set6 string, duree time.Duration, simule bool) *Banneur {
 	if nftPath == "" {
 		nftPath = "nft"
 	}
 	b := &Banneur{nftPath: nftPath, table: table, set4: set4, set6: set6, duree: duree, simule: simule,
-		actifs: map[string]time.Time{}}
+		actifs: map[string]time.Time{}, leurres: map[string][]time.Time{},
+		dureeLeurre: DureeLeurreDefaut, dureeLeurreRecidive: DureeLeurreRecidiveDefaut}
 	b.exec = b.execReel
 	return b
+}
+
+// RegleLeurres fixe les durées des bans de leurre ; une valeur nulle ou
+// négative garde le défaut (24 h, puis 7 j).
+func (b *Banneur) RegleLeurres(premier, recidive time.Duration) {
+	if premier > 0 {
+		b.dureeLeurre = premier
+	}
+	if recidive > 0 {
+		b.dureeLeurreRecidive = recidive
+	}
+	if b.dureeLeurreRecidive < b.dureeLeurre {
+		b.dureeLeurreRecidive = b.dureeLeurre // la récidive ne raccourcit jamais
+	}
+}
+
+// dureeLeurrePour note un ban de leurre posé à `at` et rend sa durée :
+// premier contact dans la fenêtre → dureeLeurre, sinon dureeLeurreRecidive.
+// Appelant : b.mu tenu.
+func (b *Banneur) dureeLeurrePour(ip string, at time.Time) time.Duration {
+	garde := b.leurres[ip][:0]
+	for _, t := range b.leurres[ip] {
+		if at.Sub(t) < fenetreRecidiveLeurre && !t.After(at) {
+			garde = append(garde, t)
+		}
+	}
+	d := b.dureeLeurre
+	if len(garde) > 0 {
+		d = b.dureeLeurreRecidive
+	}
+	b.leurres[ip] = append(garde, at)
+	return d
 }
 
 func (b *Banneur) execReel(ctx context.Context, args ...string) ([]byte, error) {
@@ -108,6 +155,23 @@ func (b *Banneur) Verifie(ctx context.Context) error {
 // reel ; une seule erreur en amont couperait l'administration de la box depuis
 // la box. Le refus est ici, au dernier moment, ou rien ne peut le contourner.
 func (b *Banneur) Bannit(ctx context.Context, ip string) error {
+	return b.bannitPour(ctx, ip, b.duree)
+}
+
+// BannitLeurre bannit pour un contact sur un leurre de service (#3988) :
+// durée graduée 24 h puis 7 j, indépendante de `--duree-ban`. Mêmes garde-fous
+// que Bannit (jamais une adresse privée). Rend la durée appliquée.
+func (b *Banneur) BannitLeurre(ctx context.Context, ip string) (time.Duration, error) {
+	if p := net.ParseIP(ip); p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() || p.IsUnspecified() {
+		return 0, b.bannitPour(ctx, ip, 0) // même refus, même message
+	}
+	b.mu.Lock()
+	d := b.dureeLeurrePour(ip, time.Now())
+	b.mu.Unlock()
+	return d, b.bannitPour(ctx, ip, d)
+}
+
+func (b *Banneur) bannitPour(ctx context.Context, ip string, duree time.Duration) error {
 	p := net.ParseIP(ip)
 	if p == nil {
 		return fmt.Errorf("adresse invalide : %q", ip)
@@ -119,12 +183,14 @@ func (b *Banneur) Bannit(ctx context.Context, ip string) error {
 	if p.To4() != nil {
 		set = b.set4
 	}
-	elem := fmt.Sprintf("{ %s timeout %ds }", ip, int(b.duree.Seconds()))
+	elem := fmt.Sprintf("{ %s timeout %ds }", ip, int(duree.Seconds()))
 	if b.simule {
 		return nil
 	}
 	b.mu.Lock()
-	b.actifs[ip] = time.Now().Add(b.duree)
+	if fin := time.Now().Add(duree); fin.After(b.actifs[ip]) {
+		b.actifs[ip] = fin
+	}
 	b.mu.Unlock()
 	if out, err := b.run(ctx, "add", "element", "inet", b.table, set, elem); err != nil {
 		if strings.Contains(string(out), "No such file or directory") {
@@ -185,7 +251,14 @@ func (b *Banneur) RechargeJournal(chemins []string, maintenant time.Time) int {
 	type ligne struct {
 		Timestamp string `json:"timestamp"`
 		ClientIP  string `json:"client_ip"`
+		Category  string `json:"category"`
 	}
+	type ban struct {
+		ip     string
+		at     time.Time
+		leurre bool
+	}
+	var bans []ban
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	avant := len(b.actifs)
@@ -222,11 +295,21 @@ func (b *Banneur) RechargeJournal(chemins []string, maintenant time.Time) int {
 			if err != nil {
 				continue
 			}
-			if fin := at.Add(b.duree); fin.After(maintenant) && fin.After(b.actifs[e.ClientIP]) {
-				b.actifs[e.ClientIP] = fin
-			}
+			bans = append(bans, ban{e.ClientIP, at, strings.HasPrefix(e.Category, "leurre:")})
 		}
 		f.Close()
+	}
+	// Ordre chronologique : le journal tourné vient après le courant dans
+	// `chemins`, et la récidive des leurres (#3988) se compte dans l'ordre.
+	sort.SliceStable(bans, func(i, j int) bool { return bans[i].at.Before(bans[j].at) })
+	for _, x := range bans {
+		d := b.duree
+		if x.leurre {
+			d = b.dureeLeurrePour(x.ip, x.at)
+		}
+		if fin := x.at.Add(d); fin.After(maintenant) && fin.After(b.actifs[x.ip]) {
+			b.actifs[x.ip] = fin
+		}
 	}
 	return len(b.actifs) - avant
 }

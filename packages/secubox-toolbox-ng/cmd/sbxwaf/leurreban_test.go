@@ -15,7 +15,7 @@ import (
 )
 
 func TestDureeLeurre_GradueeParRecidive(t *testing.T) {
-	for r, want := range map[int]time.Duration{0: time.Hour, 1: 24 * time.Hour, 2: 7 * 24 * time.Hour, 9: 7 * 24 * time.Hour} {
+	for r, want := range map[int]time.Duration{0: 24 * time.Hour, 1: 7 * 24 * time.Hour, 2: 7 * 24 * time.Hour, 9: 7 * 24 * time.Hour} {
 		if got := dureeLeurre(r); got != want {
 			t.Fatalf("dureeLeurre(%d) = %s, attendu %s", r, got, want)
 		}
@@ -41,25 +41,25 @@ func attendNft(fx *fauxNft, motif string) bool {
 	return false
 }
 
-func TestLeurre_PremierHitBannitUneHeure(t *testing.T) {
+func TestLeurre_PremierHitBannit24h(t *testing.T) {
 	srv, logPath, fx := serveurAnomalieNft(t)
 	srv.leurreBan = true
 	srv.recordHostAnomalyAvecLeurre(demandeLeurre("scan.example.org", "203.0.113.50:4444"), "scan.example.org", "sonde_racine", "alea")
 	if data, _ := os.ReadFile(logPath); !strings.Contains(string(data), `"action":"banned"`) {
 		t.Fatalf("le hit sur le leurre doit être journalisé banned : %s", data)
 	}
-	if !attendNft(fx, "203.0.113.50 timeout 3600s") {
-		t.Fatalf("ban d'1 h attendu ; dernière commande : %q", joint(fx.dernier()))
+	if !attendNft(fx, "203.0.113.50 timeout 86400s") {
+		t.Fatalf("ban de 24 h attendu (#3988) ; dernière commande : %q", joint(fx.dernier()))
 	}
 }
 
-func TestLeurre_RecidiveBannit24h(t *testing.T) {
+func TestLeurre_RecidiveBannit7j(t *testing.T) {
 	srv, _, fx := serveurAnomalieNft(t)
 	srv.leurreBan = true
 	_ = srv.nftBan.store.Append(BanRecord{IP: "203.0.113.51", Category: "leurre:unrouted", Severity: "high", At: time.Now().Add(-48 * time.Hour).Unix(), Action: "ban"})
 	srv.recordHostAnomalyAvecLeurre(demandeLeurre("scan.example.org", "203.0.113.51:4444"), "scan.example.org", "sonde_racine", "alea")
-	if !attendNft(fx, "203.0.113.51 timeout 86400s") {
-		t.Fatalf("ban de 24 h attendu à la 2e récidive ; dernière commande : %q", joint(fx.dernier()))
+	if !attendNft(fx, "203.0.113.51 timeout 604800s") {
+		t.Fatalf("ban de 7 j attendu à la récidive ; dernière commande : %q", joint(fx.dernier()))
 	}
 }
 
@@ -96,8 +96,8 @@ func TestBanLeurre_PlagesProtegeesJamaisBannies(t *testing.T) {
 	srv.protegees = parseCIDRs("203.0.113.0/24")
 	srv.banLeurre("203.0.113.77", "bait", "high", 0) // la box, la Freebox, le maillage : jamais
 	srv.banLeurre("198.51.100.7", "bait", "high", 0)
-	if !attendNft(fx, "198.51.100.7 timeout 3600s") {
-		t.Fatalf("une adresse ordinaire est bannie 1 h : %q", joint(fx.dernier()))
+	if !attendNft(fx, "198.51.100.7 timeout 86400s") {
+		t.Fatalf("une adresse ordinaire est bannie 24 h : %q", joint(fx.dernier()))
 	}
 	for _, c := range fx.cmds {
 		if strings.Contains(joint(c), "203.0.113.77") {
@@ -177,4 +177,13 @@ func secretFiligraneDeTest(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return chemin
+}
+
+// #3988 : les mesures (`mesure:`) gardent leur gradation 1 h / 24 h / 7 j.
+func TestDureeMesure_Inchangee(t *testing.T) {
+	for r, want := range map[int]time.Duration{0: time.Hour, 1: 24 * time.Hour, 2: 7 * 24 * time.Hour} {
+		if got := dureeMesure(r); got != want {
+			t.Fatalf("dureeMesure(%d) = %s, attendu %s", r, got, want)
+		}
+	}
 }

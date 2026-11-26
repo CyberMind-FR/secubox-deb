@@ -1486,7 +1486,7 @@ func main() {
 		"probes within the escalate window before an IP is banned")
 	scanSensor := flag.Bool("scan-sensor", false, "capteur pare-feu : relit l'ensemble nft des paquets rejetés (nftables.d/zz-secubox-scan-tap.nft) et émet les balayages de ports vers actord (#2240)")
 	scanSeuil := flag.Int("scan-seuil", 8, "ports DISTINCTS frappés par une même adresse (10 min) pour parler de balayage vertical")
-	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 1 h / 24 h / 7 j à la récidive (#2238)")
+	leurreBan := flag.Bool("leurre-ban", false, "ban dès le premier hit sur le leurre (hôte non routé, hors LAN et première partie), durée graduée 24 h / 7 j à la récidive (#2238, #3988)")
 	campagneBanMode := flag.String("campagne-ban", "off", "ban des campagnes (même workflow de sondes, haute valeur) : off | propose | auto (#2238)")
 	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
 	mesuresMode := flag.String("mesures", "off", "échelle de réponse d'actord appliquée : délai, défi (preuve de travail), tarpit, ban : off | propose | auto (#2274)")

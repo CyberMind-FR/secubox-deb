@@ -20,8 +20,8 @@ const h = time.Hour
 
 func TestReevaluer_PersistantProlongeEnGradue(t *testing.T) {
 	d := Reevaluer("leurre:unrouted", 50, true, 0, 2*h, 10)
-	if d.Action != "EXTEND" || d.Duree != 24*h {
-		t.Fatalf("un leurre qui insiste pendant son ban : 1 h puis 24 h : %+v", d)
+	if d.Action != "EXTEND" || d.Duree != 7*24*h {
+		t.Fatalf("un leurre qui insiste pendant son ban : 24 h puis 7 j (#3988) : %+v", d)
 	}
 	if d := Reevaluer("campagne:abc", 50, true, 1, 30*h, 10); d.Action != "EXTEND" || d.Duree != 7*24*h {
 		t.Fatalf("campagne : 4 h, 24 h, puis 7 j : %+v", d)
@@ -141,8 +141,8 @@ func TestTick_ProlongeUnBanQuiInsisteEtEnLaisseLaPreuve(t *testing.T) {
 	r, fx, store, dir := bancReeval(t, "auto", map[string][2]int64{"198.51.100.5": {40, 45}})
 	poseBan(store, "198.51.100.5", "leurre:unrouted", now-3555, now+45)
 	r.Tick()
-	if !fx.vu("-f - " + string(scriptRemplacer("secubox", "waf_ban", "198.51.100.5", 86400))) {
-		t.Fatalf("EXTEND : l'élément est refait pour 24 h, en une transaction : %v", fx.cmds)
+	if !fx.vu("-f - " + string(scriptRemplacer("secubox", "waf_ban", "198.51.100.5", 604800))) {
+		t.Fatalf("EXTEND : l'élément est refait pour 7 j, en une transaction : %v", fx.cmds)
 	}
 	for _, c := range fx.cmds {
 		if c[0] == "delete" {
@@ -157,7 +157,7 @@ func TestTick_ProlongeUnBanQuiInsisteEtEnLaisseLaPreuve(t *testing.T) {
 		t.Fatal("la transition est aussi une ligne d'audit")
 	}
 	actifs := store.ActiveBans(now + 1)
-	if len(actifs) != 1 || !strings.HasPrefix(actifs[0].Category, "leurre:") || actifs[0].Expires != now+86400 {
+	if len(actifs) != 1 || !strings.HasPrefix(actifs[0].Category, "leurre:") || actifs[0].Expires != now+604800 {
 		t.Fatalf("le journal de bans porte la prolongation (catégorie de famille conservée) : %+v", actifs)
 	}
 }
