@@ -19,10 +19,13 @@ Copié dans ~/poc-secubox-ai/relais/ ; relais.py l'appelle par deux lignes en fi
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import shutil
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -32,7 +35,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 SOCKET = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "secubox-ai-agents/agents.sock"
 JETON = Path.home() / ".config/secubox-ai-jeton/jeton"
 PAGE = Path(__file__).parent / "agents.html"
-CHEMIN_RE = re.compile(r"^[A-Za-z0-9/_-]{1,120}$")
+CHEMIN_RE = re.compile(r"^[A-Za-z0-9/_-]{1,120}(\.png)?$")   # .png : vignettes de /creations
 CORPS_MAX = 256 * 1024
 API = "/api/v1/ai/jarvis"   # PAS /agents : le POC sert déjà POST /api/v1/ai/agents/{nom} (relais.py l.3163)
 
@@ -54,6 +57,46 @@ MARGE_RAM_O = 1536 * 1024 ** 2      # le second moteur ne démarre que s'il rest
 API2 = "/api/v1/ai/jarvis-moteur2"
 API3 = "/api/v1/ai/jarvis-medias"
 IMAGE_MAX = 8 * 1024 * 1024         # corps de POST /image (image en base64)
+# Reconnaissance vocale (whisper.cpp, CPU, aucun réseau) : l'audio reste sur ce poste, rien n'est journalisé.
+WHISPER = Path(os.environ.get("SECUBOX_AI_WHISPER", Path.home() / "poc-secubox-ai/whispercpp/build/bin/whisper-cli"))
+WHISPER_MODELE = Path(os.environ.get("SECUBOX_AI_WHISPER_MODELE",
+                                     Path.home() / "AI/models/whisper/ggml-large-v3-turbo-q5_0.bin"))
+AUDIO_MAX = 10 * 1024 * 1024        # ~2 min de webm/opus
+AUDIO_TYPES = ("audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mp4")
+AUDIO_DELAI_S = 120
+# Lexique donné à Whisper pour orienter la reconnaissance des termes techniques (jamais une consigne).
+LEXIQUE = "Jarvis, SecuBox, gk2, SSH, WAF, nftables, HAProxy, Debian, CVE, LXC, WireGuard, DNS."
+_verrou_ecoute = asyncio.Lock()
+
+
+async def transcrire(audio: bytes) -> str:
+    """Audio quelconque → wav 16 kHz mono (ffmpeg) → texte (whisper.cpp, langue détectée). Fichiers 0600, effacés."""
+    with tempfile.TemporaryDirectory(prefix="jarvis-ecoute-") as d:
+        brut, wav = Path(d) / "entree", Path(d) / "entree.wav"
+        fd = os.open(brut, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(audio)
+        p = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-loglevel", "error", "-nostdin", "-i", str(brut), "-t", "120", "-ar", "16000", "-ac", "1",
+            "-c:a", "pcm_s16le", str(wav), stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        if await asyncio.wait_for(p.wait(), 60) != 0 or not wav.is_file():
+            raise HTTPException(422, "audio illisible")
+        # Fenêtre de l'encodeur ajustée à la durée réelle (1500 = 30 s) : 3 s de parole en ~5 s au lieu de ~17 s.
+        duree_s = max(0, wav.stat().st_size - 44) / 32000          # PCM 16 bits, 16 kHz, mono
+        contexte = min(1500, max(512, int(duree_s * 50) + 192))
+        p = await asyncio.create_subprocess_exec(
+            str(WHISPER), "-m", str(WHISPER_MODELE), "-f", str(wav), "-l", "auto", "-t", "12", "-bs", "1", "-bo", "1",
+            "-fa", "-ac", str(contexte), "-nt", "-np", "--prompt", LEXIQUE,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            out, _ = await asyncio.wait_for(p.communicate(), AUDIO_DELAI_S)
+        except asyncio.TimeoutError:
+            p.kill()
+            raise HTTPException(504, "transcription trop longue")
+        if p.returncode != 0:
+            raise HTTPException(502, "transcription impossible")
+    texte = " ".join(out.decode(errors="replace").split())
+    return re.sub(r"^\[[^\]]*\]\s*", "", texte)   # « [Musique] » et marques du même genre en tête
 
 
 def _relais():
@@ -172,6 +215,34 @@ def brancher(app, local) -> None:
         r.telechargements[nom] = {"recu": 0, "total": choix["taille"]}
         taches.add_task(r.telecharger, depot, nom, choix["sha256"], choix["taille"], infos["licence"])
         return {"telechargement": nom, "sha256": choix["sha256"], "taille": choix["taille"], "licence": infos["licence"]}
+
+    # --- écoute (#3999) : reconnaissance vocale locale ; geste explicite (en-tête), Host local seulement ---
+    @app.get(API3 + "/ecoute")
+    def ecoute_etat(request: Request):
+        local(request)
+        return {"disponible": WHISPER.is_file() and WHISPER_MODELE.is_file(), "modele": WHISPER_MODELE.name}
+
+    @app.post(API3 + "/ecoute")
+    async def ecoute(request: Request):
+        local(request)
+        if request.headers.get("x-sbx-geste") != "1":
+            raise HTTPException(403, "geste requis")
+        ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
+        if ctype not in AUDIO_TYPES:
+            raise HTTPException(415, "audio attendu")
+        if not (WHISPER.is_file() and WHISPER_MODELE.is_file()):
+            raise HTTPException(503, "reconnaissance vocale non installée")
+        audio = bytearray()
+        async for morceau in request.stream():
+            audio += morceau
+            if len(audio) > AUDIO_MAX:
+                raise HTTPException(413, "audio trop long")
+        if len(audio) < 1000:
+            raise HTTPException(422, "audio vide")
+        debut = time.monotonic()
+        async with _verrou_ecoute:
+            texte = await transcrire(bytes(audio))
+        return {"texte": texte, "duree_s": round(time.monotonic() - debut, 1)}
 
     @app.get("/jarvis")
     def page_agents(request: Request):
