@@ -1,3 +1,26 @@
+secubox-metrics (1.32.0-1~trixie1) trixie; urgency=medium
+
+  * Rapport de pilotage hebdomadaire (ref #3970) : six feuilles A4 paysage, version
+    papier (synthèse et verdict, trafic par couches, origines, défense, acteurs,
+    décisions et santé), api/rapport_pilotage.py, fpdf2 seul. Données réelles ;
+    « non mesuré » quand une mesure manque ; écart seulement si la semaine
+    précédente est mesurée ; décisions nées de seuils écrits ; aucune adresse IP.
+    Minuteur livré DÉSACTIVÉ ; envoi seulement avec [rapport.pilotage] actif = true ;
+    --sortie fichier.pdf génère sans envoyer. L'ancien rapport du lundi est inchangé.
+  * Relevé quotidien (api/releve_quotidien.py) : une ligne par jour de Paris,
+    releve-AAAAMM.jsonl, 13 mois gardés, écriture atomique, ligne bornée ; minuteur
+    activé (00:20).
+  * vhost_stats : résumé léger par jour et par site, sans adresse
+    (/var/cache/secubox/metrics/vhost-jours.json), à côté du cache complet.
+  * Non repris : disponibilité si la base de Status Live n'est pas lisible par le
+    compte secubox ; temps de réponse : un instantané par jour (relevé), pas de série
+    continue.
+  * Cartes du monde papier (continents en aplat, cercles proportionnés, anneau de part
+    bloquée, drapeaux) en feuilles 1, 3 et 5 ; emojis (drapeaux, catégories, couches,
+    états) rendus en images depuis fonts-noto-color-emoji par Pillow (Recommends).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 09:00:00 +0100
+
 secubox-metrics (1.31.0-1~trixie1) trixie; urgency=medium
 
   * Vue d'ensemble et sites : cartes vivantes (ref #3945), relevés successifs de

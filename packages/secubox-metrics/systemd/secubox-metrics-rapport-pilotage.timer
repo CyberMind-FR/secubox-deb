@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — rapport de pilotage hebdomadaire (lundi 06:15, livré désactivé, #3970)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3970
+
+[Timer]
+# Chaque lundi : la semaine du lundi au dimanche précédents. Décalé du rapport du lundi (07:00) pour ne pas empiler
+# deux rendus. NON activé par le paquet : `systemctl enable --now secubox-metrics-rapport-pilotage.timer` une fois validé.
+OnCalendar=Mon *-*-* 06:15:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

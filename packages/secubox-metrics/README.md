@@ -128,6 +128,38 @@ successifs de l'onglet, `sessionStorage`, 12 au plus, 3 h), mémoire et charge (
 valeur affichée). Sites : carte des visites (relevés de l'onglet), visiteurs, requêtes et erreurs (série par jour : le total ne bouge
 pas, la date porte la valeur du jour). La carte du détail d'un site reste fixe : aucun historique par site et par relevé.
 
+## Rapport de pilotage hebdomadaire et relevé quotidien (1.32.0, #3970)
+
+Six feuilles A4 paysage, version papier de la charte Aurora (fpdf2 seul) : synthèse (verdict + six chiffres avec série et écart),
+trafic par couches, origines des requêtes hostiles, défense, acteurs suivis, décisions et santé. Période : les 7 derniers jours
+complets de Paris. Livré **désactivé** ; l'ancien rapport du lundi est inchangé.
+
+```toml
+[rapport.pilotage]
+actif = false              # true pour envoyer (minuteur à activer aussi : secubox-metrics-rapport-pilotage.timer)
+destinataire = ""          # à défaut, celui de [rapport.waf] ; aucun destinataire = rien ne part
+noeud = ""                 # nom du nœud dans Status Live (défaut : nom d'hôte)
+```
+
+```sh
+python3 -m api.rapport_pilotage --sortie /tmp/pilotage.pdf   # générer sans envoyer (données réelles)
+python3 -m api.rapport_pilotage --exemple --sortie ex.pdf    # jeu fictif, annoncé « Données d'exemple »
+python3 -m api.releve_quotidien [--jour AAAA-MM-JJ]          # relevé (minuterie quotidienne 00:20)
+```
+
+Sources (lecture seule, en flux, bornées) : `waf-threats.log` et ses rotations `.N.gz` (couches, catégories, heures, sites, pays par
+GeoLite2-Country si présente), `bans.jsonl`, `mesures.jsonl` (adresses proposées au ban sans suite), `dnstv.db` d'ad-guard (jours
+UTC), `vhost-jours.json` (résumé léger écrit par ce service, sans adresse), `status.db` de Status Live (si lisible par `secubox`),
+sonde `health/status.json` et `health-doctor.json` (instantanés), actord (vue réduite), `populations.json`.
+
+Règles : une mesure absente est « non mesuré » ; un chiffre de la semaine exige ses 7 jours mesurés, l'écart exige aussi la semaine
+précédente ; décisions par seuils écrits dans `rapport_pilotage.py` (service vital en échec, site injoignable, adresses proposées au
+ban sans suite, acteur à bloquer sans mesure, disponibilité < 99,5 %, temps de réponse médian > 500 ms, site recevant ≥ 50 % et
+≥ 1 000 requêtes bloquées, journal du WAF illisible), trois au plus ; aucune adresse IP ni identifiant d'acteur (acteurs A, B, C…).
+
+Relevé : `/var/lib/secubox/metrics/releve/releve-AAAAMM.jsonl`, une ligne par jour (≤ 32 Kio), remplacée par écriture atomique,
+13 mois gardés ; il rattrape les jours manquants des 7 derniers et sert de repli au rapport quand les journaux ont tourné.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

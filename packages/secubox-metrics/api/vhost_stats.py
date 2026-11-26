@@ -42,6 +42,8 @@ from typing import Iterable, Optional
 
 REP_LOGS = Path("/var/log/nginx")
 CACHE = Path("/var/cache/secubox/metrics/vhost_stats.json")
+# #3970 : résumé léger par jour (sans adresse), à côté du cache complet.
+RESUME_JOURS = "vhost-jours.json"
 SUFFIXE = "_access.log"
 
 RETENTION = 30          # jours conserves
@@ -929,6 +931,18 @@ class VhostStatsAggregator:
                 for j, vhosts in self._jours.items()},
         }
 
+    def resume_jours(self) -> dict:
+        """Résumé LÉGER par jour et par site, sans adresse (#3970) : ce que lisent le rapport de pilotage et le relevé quotidien,
+        qui ne peuvent pas relire le cache complet (60 Mo sur gk2). `depuis` exclut le plus vieux jour de la fenêtre, qui peut
+        n'avoir été lu qu'en partie ; un jour absent entre `depuis` et `maj` est un 0 réel."""
+        with self._verrou:
+            jours = {j: {v: {c: s[c] for c in ("requetes", "visites", "robots", "sondes", "erreurs")} for v, s in vh.items()}
+                     for j, vh in self._jours.items()}
+            maj = self._maj
+        cles = sorted(jours)
+        depuis = (date.fromisoformat(cles[0]) + timedelta(days=1)).isoformat() if cles else None
+        return {"version": 1, "depuis": depuis, "maj": maj, "jours": jours}
+
     def _persister(self) -> None:
         # La sérialisation lit `_jours` : sous le verrou. L'écriture (60 Mo sur gk2) se fait
         # dehors, pour ne pas retenir les lectures pendant ce temps.
@@ -939,6 +953,14 @@ class VhostStatsAggregator:
             tmp = CACHE.with_suffix(".tmp")
             tmp.write_text(contenu)
             os.replace(tmp, CACHE)      # remplacement atomique
+        except OSError:
+            pass
+        # #3970 : le résumé léger, à côté du cache complet, remplacé de la même façon.
+        try:
+            leger = CACHE.with_name(RESUME_JOURS)
+            tmp = leger.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.resume_jours(), separators=(",", ":")))
+            os.replace(tmp, leger)
         except OSError:
             pass
 
