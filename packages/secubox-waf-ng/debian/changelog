@@ -1,4 +1,4 @@
-secubox-waf-ng (1.50.0-1~trixie1) trixie; urgency=medium
+secubox-waf-ng (1.51.0-1~trixie1) trixie; urgency=medium
 
   * Campagnes, bas de page refait (ref #3969) ; le haut (populations, tuiles)
     est inchangé.
@@ -18,6 +18,25 @@ secubox-waf-ng (1.50.0-1~trixie1) trixie; urgency=medium
   * Mini-série : population « profileur:<signature> » du relevé des
     populations quand il la porte (agrégat déjà lu par la page), sinon les
     alertes lues par jour. Aucune donnée ajoutée côté serveur.
+  * Activité des campagnes (ref #3969) : agrégat incrémental en tâche de fond
+    (api/activite.py, patron des dossiers par site), 7 jours par tranche de
+    6 h, état atomique /var/lib/secubox/waf/activite-campagnes.json, aucune
+    adresse gardée. GET /campaigns/activite (require_lecture_ai) ; tranche
+    non mesurée = null. La frise des campagnes s'en sert, les alertes lues
+    restent le repli. Une campagne n'est comptée qu'à partir de la tranche
+    qui suit son entrée dans l'instantané du corrélateur.
+  * Attaquants (ref #3969) : frise fine bornée (12), classement compact 10 +
+    « Afficher plus », un seul détail, répartitions gravité/nature
+    regroupées (le donut disparaît). Adresses masquées hors du détail, où
+    l'adresse complète reste repliée. Rien de nouveau côté serveur.
+  * Leurres (ref #3969) : par leurre en barres avec le mode de la page Modes,
+    tuile « Balayage des leurres » (population acces_distant, 7 jours),
+    frise bornée, classement compact 10 + « Afficher plus », un détail
+    (fiche lue à la demande, gestes ban/levée), dictionnaire, comptes et
+    rejeux regroupés ; la couche « détourné » par site reste dans Sites
+    (lien). Mode démonstration ajouté.
+  * Hôte /waf/ : hauteur maximale portée à 16000 px pour Attaquants et
+    Leurres.
   * Pas repris : la frise par premier→dernier signe et les cartes par
     campagne. Le corrélateur ne date toujours pas ses campagnes : tout ce qui
     est daté vient des alertes lues (500 au plus).
