@@ -115,6 +115,8 @@ override_dh_auto_install:
 	# --force-confold n'installe jamais la version livrée. Le postinst complète la copie de la box avec les
 	# services et vhosts livrés absents, depuis la copie de référence /usr/share/secubox/waf/vhost_profiles.json.
 	install -m 755 composants/waf/scripts/waf-profils-fusion debian/secubox-waf-ng/usr/sbin/waf-profils-fusion
+	# #3974 : détecteur des sites PHP, lancé par `wafctl php-sites` (root).
+	install -D -m 755 composants/waf/scripts/waf-php-sites debian/secubox-waf-ng/usr/lib/secubox/waf/waf-php-sites
 	# Sudoers : `secubox` peut purger le cache média du WAF (wafctl purge-cache).
 	# Conffile /etc/sudoers.d (0440) — permet aux tâches de contenu tournant sous
 	# `secubox` (metablog-sync) de rafraîchir le cache après une synchro git.

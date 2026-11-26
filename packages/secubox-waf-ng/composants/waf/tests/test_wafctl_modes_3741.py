@@ -22,7 +22,8 @@ def ctl(tmp_path):
     (tmp_path / "routes.json").write_text(json.dumps({"a.exemple.fr": ["127.0.0.1", 80]}))
     s = (ICI / "scripts" / "wafctl").read_text()
     for var, val in (("PROFILS_VHOST", tmp_path / "vp.json"), ("LEURRES_MODES", tmp_path / "auth" / "lm.json"),
-                     ("ROUTES_HAPROXY", tmp_path / "routes.json"), ("AUDIT_SECUBOX", tmp_path / "audit.log")):
+                     ("ROUTES_HAPROXY", tmp_path / "routes.json"), ("AUDIT_SECUBOX", tmp_path / "audit.log"),
+                     ("PHP_SITES", tmp_path / "php-sites.json")):
         s = re.sub(rf'^{var}=.*$', f'{var}="{val}"', s, count=1, flags=re.M)
     (tmp_path / "wafctl").write_text(s)
 

@@ -50,7 +50,7 @@ def test_ecritures_refusees_sans_jwt(c):
     c.waf.app.dependency_overrides.clear()
     assert c.post("/categories/modes", json={"changements": [{"categorie": "sqli", "mode": "detect"}]}).status_code in (401, 403)
     assert c.post("/leurres-service/modes", json={"modes": {}}).status_code in (401, 403)
-    assert c.post("/php-hotes", json={"hotes": []}).status_code in (401, 403)
+    assert c.post("/php-sites", json={"forcer": []}).status_code in (401, 403)
 
 
 def test_categories_live_total_motifs_plus_structurels(c):
@@ -167,35 +167,25 @@ def test_php_hotes(c):
     assert h["nc.ex.fr"]["conteneur_php"] == "oui" and h["nc.ex.fr"]["couvert"]
     assert h["blog.ex.fr"]["explicite"] and h["blog.ex.fr"]["conteneur_php"] == "inconnu"
     assert not h["web.ex.fr"]["couvert"] and not h["web.ex.fr"]["explicite"]
-    assert c.post("/php-hotes", json={"hotes": ["a;b"]}).status_code == 422
-    assert c.post("/php-hotes", json={"hotes": ["Web.ex.fr"]}).status_code == 200
-    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-hotes", "ecrire"], {"acteur": "admin", "hotes": ["web.ex.fr"]}) in c.ctl.appels
+    assert c.post("/php-hotes", json={"hotes": ["web.ex.fr"]}).status_code == 405   # #3974 : écriture par /php-sites
 
 
 def test_sudoers_lignes_exactes():
     t = SUDOERS_WAF.read_text()
     for ligne in ("/usr/sbin/wafctl leurres-modes lister", "/usr/sbin/wafctl leurres-modes ecrire",
-              "/usr/sbin/wafctl php-hotes lister", "/usr/sbin/wafctl php-hotes ecrire"):
+              "/usr/sbin/wafctl php-hotes lister", "/usr/sbin/wafctl php-sites lister",
+              "/usr/sbin/wafctl php-sites ecrire", "/usr/sbin/wafctl php-sites detecter"):
         assert ligne in t
+    assert "wafctl php-hotes ecrire" not in t and "php-sites retablir" not in t     # #3974 : retour arrière en root
 
 
 def test_page_modes_et_onglet():
     www = Path(__file__).resolve().parents[1] / "www" / "waf"
     page = (www / "modes.html").read_text(encoding="utf-8")
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in page and "sbx_token" in page and "demo=1" in page
-    for route in ("/categories/modes", "/categories/stats7j", "/leurres-service/modes", "/php-hotes"):
+    for route in ("/categories/modes", "/categories/stats7j", "/leurres-service/modes", "/php-sites"):
         assert route in page
     assert "ban immédiat, requêtes suivantes bloquées" in page and "innerHTML" not in page
     assert "fenetre" not in page                      # pas de fenêtre par catégorie (fenêtre escalate globale)
     onglets = (www / "index.html").read_text(encoding="utf-8")
     assert 'data-tab="modes"' in onglets and "modes: 'modes'" in onglets
-
-
-def test_php_hotes_tous(c):
-    c.ctl.reponses[("wafctl", "php-hotes", "lister")] = (0, {"ok": True, "vhosts": ["a.ex.fr"], "profils_vhosts": {},
-                                                           "php_services": [], "php_hotes": ["^.*$"]})
-    c.ctl.reponses[("wafctl", "php-hotes", "ecrire")] = (0, {"ok": True})
-    r = c.post("/php-hotes", json={"tous": True})
-    assert r.status_code == 200 and r.json()["tous"] is True and r.json()["hotes"][0]["couvert"] is True
-    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-hotes", "ecrire"], {"acteur": "admin", "tous": True}) in c.ctl.appels
-    assert c.post("/php-hotes", json={}).status_code == 422

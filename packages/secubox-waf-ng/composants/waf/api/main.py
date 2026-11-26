@@ -99,6 +99,7 @@ HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
 # Profils de vhost déclaratifs (lus aussi par sbxwaf) et relevé des signaux PHP (#3273), calculé en tâche de fond.
 VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
+SITES_PHP_PERIODE = 3600   # #3974 : détection des sites PHP (journal nginx, en-têtes d'origine), wafctl root
 LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
 # Relevé « populations d'attaquants » (#3919) : 7 jours du journal balayés par un PROCESSUS à part (nice 10), lu par
@@ -1086,7 +1087,7 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = dernier_dossiers = 0.0
+    dernier_sites_php = dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = dernier_dossiers = 0.0
     _leurres_panne = _dossiers_panne = ""
     while True:
         try:
@@ -1123,6 +1124,12 @@ async def _warm_loop():
                 dernier_php = time.time()
             except Exception:
                 pass  # le relevé précédent reste servi ; la route annonce son âge
+        if time.time() - dernier_sites_php >= SITES_PHP_PERIODE:     # #3974 : sites PHP détectés (wafctl, root)
+            try:
+                await asyncio.to_thread(_modes.detecter_sites)
+            except Exception as e:  # noqa: BLE001 — la couverture déjà écrite reste, repris au tour suivant
+                log.warning("sites PHP : détection en échec : %s", getattr(e, "detail", e))
+            dernier_sites_php = time.time()
         if time.time() - dernier_stats7j >= _modes.STATS7J_TTL:      # #3741 : touches 7 j par catégorie
             try:
                 await asyncio.to_thread(_modes.rafraichir_stats7j)

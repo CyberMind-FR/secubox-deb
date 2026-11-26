@@ -334,6 +334,14 @@ PROTEGEES
       esac
     fi
 
+    # ── 5b bis. Sites PHP détectés (#3974) : première détection, qui reprend les anciens hôtes PHP cochés comme
+    # exceptions « forcer » (rien n'est retiré de la couverture). Avant la relance de la section 6. Échec non bloquant :
+    # l'ancien réglage reste en place, la tâche de fond de l'API refait la détection.
+    if [ -x /usr/lib/secubox/waf/waf-php-sites ] && [ -f /etc/secubox/waf/vhost_profiles.json ]; then
+      /usr/sbin/wafctl php-sites detecter </dev/null >/dev/null \
+        || echo "secubox-waf-ng: détection des sites PHP non faite (wafctl php-sites detecter), ancien réglage gardé" >&2
+    fi
+
     # ── 5c. Règles du WAF (#1858, #3932) : AVANT l'unique relance de la section 6.
     # Le postinst du composant les mettait à jour après elle et relançait sbxwaf
     # une fois de plus quand elles avaient changé. Les livrées passent, les
