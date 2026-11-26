@@ -1,3 +1,11 @@
+secubox-health (1.4.4-1~trixie1) trixie; urgency=medium
+
+  * Diagnostic (ref #3967) : conteneurs lus par leur cgroup (la sonde tourne sans
+    root, lxc-info y échouait toujours) ; arrêt normal d'un module à la demande ou
+    du courrier entre deux fenêtres planifiées ; hub servi par l'agrégateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 20:10:00 +0100
+
 secubox-health (1.4.3-1~trixie1) trixie; urgency=medium
 
   * Diagnostic : avertissement si un administrateur actif n'a pas de mot de passe
