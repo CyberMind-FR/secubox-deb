@@ -14,11 +14,23 @@ import (
 //
 // Un leurre n'est servi QUE dans l'espace non routé, à un client extérieur, pour un hôte qui n'est pas à nous (voir main.go : LAN et première
 // partie ne sont jamais leurrés). Quelqu'un qui y arrive n'est donc pas un utilisateur de nos services. Reste le risque réel : un CGNAT partagé
-// avec un scanner. D'où la durée GRADUÉE — un faux positif est débloqué en une heure —, qui monte à la récidive : 1 h, puis 24 h, puis 7 j.
+// avec un scanner. Le propriétaire a tranché (#3988, 2026-11-26) : un balayeur de service inexistant n'a aucune lecture innocente, il est traité en
+// offensif — 24 h au premier contact, 7 j à la récidive (l'ancienne marche d'une heure laissait des centaines d'attaquants « non bannis »).
 // La récidive se lit dans le journal de bans (catégorie « leurre: »), fenêtre de 30 jours : la mémoire survit aux redémarrages.
 const fenetreRecidiveLeurre = 30 * 24 * time.Hour
 
 func dureeLeurre(recidives int) time.Duration {
+	switch {
+	case recidives <= 0:
+		return 24 * time.Hour
+	default:
+		return 7 * 24 * time.Hour
+	}
+}
+
+// dureeMesure garde l'ancienne gradation 1 h / 24 h / 7 j pour les mesures
+// (`mesure:`), qui l'empruntaient : #3988 ne change que les leurres.
+func dureeMesure(recidives int) time.Duration {
 	switch {
 	case recidives <= 0:
 		return time.Hour
@@ -39,7 +51,7 @@ func (s *Server) recidivesLeurre(ip string) int {
 
 // UN LEURRE N'A AUCUN AUTRE BUT QUE DE DÉTECTER (décision du propriétaire, 2026-10-11) : tout contact avec un service simulé est banni, où qu'il ait
 // lieu — hôte non routé, chemin-appât d'un vrai vhost, marque rejouée. Les garde-fous restent : jamais le LAN, jamais une plage protégée (la box, la
-// Freebox, le maillage), durée graduée à la récidive pour qu'un faux positif (CGNAT) se dénoue en une heure, journal de bans annulable.
+// Freebox, le maillage), durée graduée à la récidive (24 h puis 7 j, #3988), journal de bans annulable.
 //
 // `minDuree` : plancher de durée. Une MARQUE REJOUÉE (une fausse clé servie par le leurre qui revient dans une requête) prouve que cette source a
 // moissonné le leurre puis essaie ce qu'elle a pris : 24 h au minimum.

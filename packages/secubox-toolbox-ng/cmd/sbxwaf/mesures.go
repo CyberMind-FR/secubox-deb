@@ -257,7 +257,7 @@ func (m *MesuresWAF) traiter(x mesureLue, ip string, now time.Time, nouv map[str
 	if m.store != nil {
 		n = m.store.CompteCategorie(ip, "mesure:", now.Add(-plafondChaine).Unix())
 	}
-	d := dureeLeurre(n)
+	d := dureeMesure(n)
 	m.bannis[cle] = true
 	m.recents = append(m.recents, now)
 	m.preuve(x, ip, "banni", true, now)

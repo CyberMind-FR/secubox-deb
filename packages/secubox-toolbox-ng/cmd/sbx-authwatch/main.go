@@ -48,7 +48,11 @@ func main() {
 		depuis  = flag.String("depuis", "now", "point de départ de la première lecture (syntaxe journalctl)")
 		seuil   = flag.Int("seuil", 6, "poids cumulé déclenchant le bannissement")
 		fenetre = flag.Duration("fenetre", 10*time.Minute, "durée de la fenêtre glissante")
-		duree   = flag.Duration("duree-ban", 4*time.Hour, "durée du bannissement nft")
+		duree   = flag.Duration("duree-ban", 4*time.Hour, "durée du bannissement nft (mots de passe, campagnes, comptes inexistants)")
+		dureeL  = flag.Duration("duree-ban-leurre", DureeLeurreDefaut,
+			"durée du ban au premier contact sur un leurre de service (#3988)")
+		dureeLR = flag.Duration("duree-ban-leurre-recidive", DureeLeurreRecidiveDefaut,
+			"durée du ban de leurre à la récidive dans les 30 jours (#3988)")
 		repit   = flag.Duration("repit", 30*time.Minute, "délai avant qu'une adresse déjà bannie puisse re-déclencher")
 		table   = flag.String("nft-table", "secubox", "table nft alimentée")
 		set4    = flag.String("nft-set4", "waf_ban", "ensemble IPv4 alimenté")
@@ -124,6 +128,7 @@ func main() {
 	}
 
 	banneur := NewBanneur(*nftPath, *table, *set4, *set6, *duree, *simule)
+	banneur.RegleLeurres(*dureeL, *dureeLR)
 	ctx, arret := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer arret()
 
@@ -513,7 +518,14 @@ func appliquer(ctx context.Context, sig Signal, total int,
 		log.Printf("sbx-authwatch: SIMULATION %s ← %s (%s)", sig.IP, sig.Categorie, sig.Detail)
 		return
 	}
-	if err := banneur.Bannit(ctx, sig.IP); errors.Is(err, ErrTableAbsente) {
+	var err error
+	if strings.HasPrefix(sig.Categorie, "leurre:") {
+		// #3988 : un leurre de service bannit 24 h, 7 j à la récidive.
+		_, err = banneur.BannitLeurre(ctx, sig.IP)
+	} else {
+		err = banneur.Bannit(ctx, sig.IP)
+	}
+	if errors.Is(err, ErrTableAbsente) {
 		journal.Inscrit(sig, "banned", total)
 		log.Printf("sbx-authwatch: BAN %s ← %s (%s, total %d) — %v", sig.IP, sig.Categorie, sig.Detail, total, err)
 		return

@@ -1,3 +1,11 @@
+secubox-waf-ng (1.52.1-1~trixie1) trixie; urgency=medium
+
+  * Leurres HTTP de sbxwaf (ref #3988) : ban de 24 h au premier contact,
+    7 j à la récidive (30 jours), au lieu de 1 h / 24 h / 7 j. Les mesures
+    (mesure:) gardent leur gradation 1 h / 24 h / 7 j (dureeMesure).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 10:29:19 +0100
+
 secubox-waf-ng (1.52.0-1~trixie1) trixie; urgency=medium
 
   * Page Modes refaite (ref #3980) : trois onglets internes pleine largeur,

@@ -22,7 +22,7 @@ import (
 // Un ban ne se prolonge pas « par défaut » et ne devient jamais permanent par accident. Quelques instants avant l'échéance, on regarde ce que l'adresse a FAIT
 // pendant son ban : les compteurs par élément de l'ensemble nft disent combien de paquets elle a encore envoyés (la chaîne les rejette avant tout journal : sans
 // eux, une adresse qui insiste et une adresse qui s'est tue sont indiscernables).
-//   - elle insiste (≥ seuil de paquets)  → EXTEND, avec la durée GRADUÉE suivante (leurre 1 h/24 h/7 j, campagne 4 h/24 h/7 j) ;
+//   - elle insiste (≥ seuil de paquets)  → EXTEND, avec la durée GRADUÉE suivante (leurre 24 h/7 j, campagne 4 h/24 h/7 j) ;
 //   - ban de rotation (`rotation:`)      → RELEASE, toujours (#3919) : 24 h, jamais plus ;
 //   - elle s'est tue                     → RELEASE : le timeout nft fait le travail, rien n'est posé ;
 //   - pas de compteur (ensemble ancien)  → RELEASE : jamais de prolongation à l'aveugle ;

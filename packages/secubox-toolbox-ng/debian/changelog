@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.20.1-1~trixie1) trixie; urgency=medium
+
+  * sbx-authwatch (ref #3988) : un contact sur un leurre de service (telnet,
+    rdp, mssql…) bannit 24 h, 7 j à la récidive dans les 30 jours, au lieu
+    de --duree-ban (4 h). Réglables par --duree-ban-leurre et
+    --duree-ban-leurre-recidive ; la relecture du journal au démarrage
+    applique les mêmes durées. Mots de passe ratés, liste blanche, LAN et
+    maillage inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 10:29:19 +0100
+
 secubox-toolbox-ng (0.20.0-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch : leurres de messagerie (ref #3924), ÉTEINTS par défaut
