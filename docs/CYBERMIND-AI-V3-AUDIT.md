@@ -231,3 +231,90 @@ points. Le plus grave : un agent qui obtiendrait un accès, même indirect, à l
 2. relire `security/capabilities.py`, `approval_store.py`, `guardrails.py` en entier avant de s'y fier ;
 3. dresser la licence de chaque dépendance du venv retenu ;
 4. décision du propriétaire sur le sous-système de minage (exclusion) et sur la dépendance à un projet Alpha.
+
+Points 1 à 4 traités en § 8.
+
+## 8. Qualification gk0 (2026-11-26)
+
+Décisions du propriétaire reçues avant cette étape : dépendance à un projet Alpha **acceptée** ; sous-système
+de minage « Pearl » **exclu** (jamais installé ni importé).
+
+### 8.1 Conditions
+
+- Poste gk0, Python 3.12.3, **aucun** sudo, apt ni Docker ; services du POC non touchés.
+- Environnement jetable : `uv venv` dans le scratchpad (`…/scratchpad/oj/venv`), OpenJarvis amont `556ddf32`
+  installé en mode éditable avec les extras `dev,server` seulement (ni vLLM, torch, faiss, canaux,
+  navigateur, minage). Venv : 503 Mo.
+- Extension Rust : `rustc 1.95.0` (paquet système, sans rustup ; `rust-toolchain.toml` demande 1.89, ignoré
+  faute de rustup), `maturin develop --release` réussi en 2 min 14 s ; `RUST_AVAILABLE = True`.
+- Réseau : ouvert **seulement** pour `uv pip install` et `cargo` (téléchargements). Imports et tests lancés
+  sous `unshare -rn` (espace réseau vide, **boucle locale comprise**).
+- Télémétrie coupée : `OPENJARVIS_HOME` et `HOME` dans le scratchpad, `OPENJARVIS_NO_UPDATE_CHECK=1`
+  (`cli/_version_check.py:53-65`), `OPENJARVIS_ANALYTICS_HOST=http://127.0.0.1:9` (en plus de
+  `analytics.enabled=False` par défaut), `CUDA_VISIBLE_DEVICES=` (pas de GPU). `posthog` n'est pas importé
+  par les paquets de base.
+
+### 8.2 Suite de tests (sans GPU, hors réseau, 8 processus, 23 min 34 s)
+
+**10 006 réussis, 32 échecs, 0 erreur, 118 sautés.**
+
+| Module | Réussis | Échecs | Cause des échecs |
+|---|---|---|---|
+| tools | 1 054 | 1 | message de `git` en français (locale du poste), pas un défaut |
+| channels | 806 | 1 | `npm install` (whatsapp_baileys) : pas de réseau |
+| agents | 797 | 4 | 2 × opencode : réseau ; 2 × `test_rust_agent_ctors` (hôte d'engin personnalisé ollama/vllm) : **à analyser** (boucle locale coupée probable) |
+| engine | 663 | 4 | gemma.cpp « live » : pas de poids de modèle |
+| evals | 628 | 10 | jeux de données Hugging Face à télécharger |
+| server | 510 | 2 | Granola injoignable ; démon : connexion locale refusée (boucle coupée par `unshare`) |
+| connectors | 464 | 5 | 4 « live » (Oura, Strava, Spotify, Google Tasks) ; 1 × IMAP `logout` non appelé : **à analyser** |
+| skills | 309 | 4 | tests « live » : aucun moteur lancé |
+| deployment | 62 | 1 | `uv build` d'un sdist : réseau |
+| autres modules | tous | 0 | — |
+
+Aucun échec ne touche `security/`, `memory/`, `scheduler/`, `mcp/`, `a2a/`. Trois échecs restent à expliquer
+(2 agents Rust, 1 IMAP) : à relancer avec la boucle locale active avant de conclure.
+
+### 8.3 Relecture complète des trois fichiers de sécurité
+
+- `security/capabilities.py` (370 l.) : **ouvert par défaut** — sans politique pour un agent, tout est
+  permis (`default_deny=False`, l.71-73, 146, 163). L'inventaire des outils internes est bien conçu : un
+  outil interne non inventorié exige `system:admin` (l.352-353), un outil MCP exige `tool:invoke` quel que
+  soit son nom (l.327-331), une usurpation de `calculator`/`think` est refusée (l.335-350). Avec Rust, la
+  vérification passe par l'implémentation native (l.137-138) : équivalence avec le repli Python non
+  vérifiée. **Chez nous : `default_deny=True` obligatoire et politique fichier explicite.**
+- `tools/approval_store.py` (406 l.) : simple SQLite (`approvals.db` sous `OPENJARVIS_HOME`, l.150-158),
+  sans identité de l'approbateur, sans signature ni journal d'audit ; `update_status` accepte n'importe quel
+  passage d'état (l.265-284) ; `INSERT OR REPLACE` (l.212) ; palier `trivial` = exécution sans demander
+  (l.39) et mémoire « toujours approuver » (l.28, 307-349). **Ne remplace pas** notre circuit de
+  propositions (plafonds, revalidation, audit, gk2 fait foi) : à ne pas utiliser pour des actions.
+- `security/guardrails.py` (330 l.) : enveloppe d'engin qui cherche **secrets et données personnelles**
+  (`SecretScanner`, `PIIScanner`, l.56-59), **pas** l'injection de prompt ; mode par défaut `WARN` = texte
+  transmis tel quel (l.47, 126-136) ; en flux, la sortie n'est contrôlée **qu'après** envoi au client
+  (l.248-269, 294-315). Utile pour la souveraineté des données, sans valeur de barrière.
+
+### 8.4 Licences des dépendances
+
+- Python (87 distributions du venv, métadonnées `importlib.metadata`) : MIT, BSD, Apache-2.0, PSF pour
+  l'essentiel. À signaler : **`python-telegram-bot` 22.8 en LGPL-3.0-only** (dépendance de **base**,
+  inutile pour nous : à retirer du venv livré, ou accepter la LGPL en bibliothèque), `certifi` et `tqdm` en
+  MPL-2.0 (copyleft par fichier, acceptables sans modification), `openjarvis-rust` sans métadonnée de
+  licence (Apache-2.0 du dépôt). Aucune GPL, AGPL, SSPL ni BUSL.
+- Rust (312 crates du registre téléchargé) : MIT / Apache-2.0 / Unicode-3.0 / BSD / ISC / Zlib /
+  CDLA-Permissive-2.0 ; `r-efi` propose LGPL-2.1 **en option** parmi MIT/Apache. Aucune incompatible.
+
+### 8.5 « Pearl » à l'import
+
+- `import openjarvis` et `openjarvis.{agents,tools,engine,memory,security}` : **aucun** module `mining`.
+- `import openjarvis.server.app` ou `openjarvis.cli` : **13 modules de minage chargés**
+  (`openjarvis.mining.{cpu_pearl,vllm_pearl,_docker,_install,_pearl_subprocess,…}`, `cli.pearl_cmd`).
+  Liens : `core/config.py:42,2051` (`MiningConfig`), `engine/_discovery.py:84-85` (import dans une fonction),
+  `cli/mine_cmd.py:20-42`. Le code de minage n'est pas lancé, mais il est importé.
+- Exclusion : ne **jamais** utiliser le serveur ni la CLI d'OpenJarvis (ADR-4) ; dans le venv livré,
+  supprimer `openjarvis/mining/`, `cli/pearl_cmd.py`, `cli/mine_cmd.py`, et vérifier par un test que
+  `openjarvis.agents`, `.tools`, `.engine`, `.memory`, `.security` s'importent sans eux et qu'aucun module
+  `mining` n'apparaît dans `sys.modules`.
+
+### 8.6 Espace disque
+
+Venv 503 Mo, registre cargo 641 Mo, compilation Rust 660 Mo : 1,8 Go au total dans le scratchpad, sous le
+seuil de 5 Go, conservés. Espace libre du poste : 32 Go.
