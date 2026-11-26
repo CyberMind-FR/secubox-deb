@@ -9,9 +9,11 @@ Checks must be defensive: any exception -> ok=False, details={"error": str(e)}.
 """
 from __future__ import annotations
 
+import http.client
 import socket
 import subprocess
 import time
+import tomllib
 from pathlib import Path
 from typing import Callable, Dict, Tuple
 
@@ -30,12 +32,47 @@ def _systemd_active(unit: str) -> bool:
         return False
 
 
-def _lxc_running(name: str, lxc_path: str = "/data/lxc") -> bool:
+CGROUP = Path("/sys/fs/cgroup")
+MODULES_D = Path("/etc/secubox/modules.d")
+MAIL_TOML = Path("/etc/secubox/mail.toml")
+
+
+def _lxc_running(name: str) -> bool:
+    """Par le cgroup, lisible de tous (#3967) : la sonde tourne sous `secubox` et `lxc-info` y échoue toujours (verrou
+    root), ce qui donnait « arrêté » pour un conteneur en service. `-1`, `-2`… : reliquat d'un démarrage précédent."""
+    for d in [CGROUP / f"lxc.payload.{name}", *CGROUP.glob(f"lxc.payload.{name}-[0-9]*")]:
+        try:
+            if "populated 1" in (d / "cgroup.events").read_text():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _toml(chemin: Path) -> dict:
     try:
-        r = _run(["lxc-info", "-n", name, "-P", lxc_path, "-s"])
-        return "RUNNING" in r.stdout
-    except Exception:
+        return tomllib.loads(chemin.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _a_la_demande(module: str) -> bool:
+    """Le module dort quand il ne sert pas : arrêté est alors son état normal."""
+    return _toml(MODULES_D / f"{module}.toml").get("lifecycle") == "on-demand"
+
+
+def _http_200(socket_unix: str, chemin: str, delai: float = 3.0) -> bool:
+    conn = http.client.HTTPConnection("localhost", timeout=delai)
+    conn.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.sock.settimeout(delai)
+    try:
+        conn.sock.connect(socket_unix)
+        conn.request("GET", chemin)
+        return conn.getresponse().status == 200
+    except (OSError, http.client.HTTPException):
         return False
+    finally:
+        conn.close()
 
 
 def _tcp_open(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -97,12 +134,16 @@ def check_secubox_metrics() -> tuple[bool, dict]:
 
 
 def check_secubox_hub() -> tuple[bool, dict]:
+    """Servi par son unité, ou par l'agrégateur (unité propre alors inactive, c'est voulu)."""
     unit_ok = _systemd_active("secubox-hub")
-    return (unit_ok, {"systemd_active": unit_ok})
+    agg_ok = not unit_ok and _http_200("/run/secubox/aggregator.sock", "/api/v1/hub/health")
+    return (unit_ok or agg_ok, {"systemd_active": unit_ok, "par_agregateur": agg_ok})
 
 
 def check_gitea_lxc() -> tuple[bool, dict]:
     running = _lxc_running("gitea")
+    if not running and _a_la_demande("gitea"):
+        return True, {"lxc_state": "STOPPED", "veille_normale": True}
     http_ok = False
     if running:
         http_ok = _tcp_open("10.100.0.40", 3000, timeout=2.0)
@@ -115,7 +156,12 @@ def check_gitea_lxc() -> tuple[bool, dict]:
 def check_mail_lxc() -> tuple[bool, dict]:
     running = _lxc_running("mail")
     if not running:
-        return False, {"lxc_state": "STOPPED"}
+        # Fenêtres planifiées (#3925) : entre deux, le conteneur dort. Normal seulement si la minuterie vit.
+        fenetre = _toml(MAIL_TOML).get("fenetre")
+        planifie = (isinstance(fenetre, dict) and fenetre.get("actif") is True
+                    and _systemd_active("secubox-mail-fenetre.timer"))
+        veille = planifie or _a_la_demande("mail")
+        return veille, {"lxc_state": "STOPPED", "veille_normale": veille}
     ports = {p: _tcp_open("10.100.0.10", p, timeout=2.0)
              for p in (25, 465, 587, 993)}
     ok = running and all(ports.values())

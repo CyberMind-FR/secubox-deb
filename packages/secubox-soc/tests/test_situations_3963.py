@@ -169,6 +169,39 @@ def test_population_phrase_serie_par_jour_jamais_par_heure(banc):
     assert x["geste"]["href"] == "/waf/#campaigns"
 
 
+def test_campagnes_homonymes_distinguees_et_operateur_nomme(banc):
+    """#3967."""
+    fb = [{"asn": 64500, "org": "Opérateur  exemple <b>", "classe": "inconnu", "adresses": 385}]
+    banc.rep[("waf", "/populations")]["populations"] = [
+        pop(id="a", reseaux=58), pop(id="b", reseaux=7), pop(id="c", reseaux=7, actives_24h=9), pop(id="d", reseaux=1, adresses=385, reseaux_top=fb),
+        pop(id="e", reseaux=0, famille="acces_distant"), pop(id="f", reseaux=9, adresses=1000, reseaux_top=fb, famille="messagerie")]
+    p = banc.calc()
+    t = {x["id"]: x["titre"].replace("\xa0", " ") for x in p["situations"]}
+    assert len(set(t.values())) == 6
+    base = t["population:a"].split(" · ")[0]
+    assert t["population:a"] == base + " · 58 réseaux"
+    assert t["population:b"] == base + " · 7 réseaux · 212 adresses" and t["population:c"] == base + " · 7 réseaux · 9 adresses"
+    assert t["population:d"] == base + " · Opérateur exemple <b>"
+    assert " · " not in t["population:e"] and " · " not in t["population:f"]          # 38 % : ne nomme pas la campagne
+    d = next(x for x in p["situations"] if x["id"] == "population:d")
+    assert "Toutes appartiennent à Opérateur exemple <b>." in d["phrase"] and "reseaux" not in d
+
+
+@pytest.mark.parametrize("top", [None, [], ["x"], [{"org": None, "adresses": 385}], [{"org": "X", "adresses": "385"}], [{"org": "  ", "adresses": 385}]])
+def test_operateur_illisible_ignore(banc, top):
+    banc.rep[("waf", "/populations")]["populations"] = [pop(id="d", adresses=385, reseaux_top=top)]
+    assert " · " not in banc.calc()["situations"][0]["titre"]
+
+
+def test_sonde_arretee_n_est_pas_une_source_en_panne(banc):
+    """#3967."""
+    banc.lents({"a.exemple.test": {"status": "slow", "latency_ms": 9000}}, recul=30 * 86400)
+    p = banc.calc()
+    s = src(p, "sante_sites")
+    assert s["ok"] is False and s["arret"] == int(T) - 30 * 86400 and p["complet"] is True
+    assert p["chiffres"]["en_cours"] == 0 and p["chiffres"]["en_cours_partiel"] is False and p["situations"] == []
+
+
 def test_accords_au_singulier(banc):
     banc.rep[("waf", "/populations")]["populations"] = [pop(adresses=1, reseaux=1, actives_24h=1, bannies_24h=1, etat="bannie", rotation=False, serie=[0] * 7)]
     x, = banc.calc()["situations"]

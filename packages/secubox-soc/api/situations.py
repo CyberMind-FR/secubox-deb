@@ -42,6 +42,7 @@ FILS, FILE_MAX = 2, 6    # fils dédiés (jamais ceux de to_thread) et calculs e
 PARIS = ZoneInfo("Europe/Paris")
 SITES_MAX, POPULATIONS_MAX, VITAUX_MAX, LENTS_MAX = 6, 12, 8, 8
 SANTE_FRAICHE_S = 600
+SONDE_ARRETEE_S = 24 * 3600   # sans relevé depuis un jour : la sonde est arrêtée
 TAILLE_MAX = 4 * 1024 * 1024
 POPULATIONS_FRAICHES_S = 2 * 3600
 DEFAUTS = {"SECUBOX_SOC_SANTE": "/var/cache/secubox/health-doctor.json",
@@ -64,6 +65,7 @@ VITAUX = {"haproxy": "L’entrée du site (HAProxy)", "nginx": "Le serveur web (
           "clamav": "L’antivirus"}
 
 _NOM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$")
+OPERATEUR_MIN = 60             # part des adresses au-delà de laquelle l'opérateur nomme la campagne
 _POP_ID = re.compile(r"^[A-Za-z0-9:_-]{1,96}$")
 _ADRESSE = re.compile(r"(?<![\w.])(?:\d{1,3}(?:\.\d{1,3}){3}|(?:[0-9a-fA-F]{0,4}:){3,7}[0-9a-fA-F]{0,4})(?![\w.])")
 
@@ -100,8 +102,11 @@ class Sources:
     def __init__(self):
         self.l: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 
-    def dire(self, ident: str, nom: str, erreur: Optional[str] = None) -> None:
+    def dire(self, ident: str, nom: str, erreur: Optional[str] = None, arret: Optional[int] = None) -> None:
+        """`arret` : date du dernier relevé d'une sonde qui ne tourne plus (ni lue, ni en panne)."""
         self.l[ident] = {"id": ident, "nom": nom, "ok": erreur is None, "erreur": erreur}
+        if arret is not None:
+            self.l[ident]["arret"] = int(arret)
 
     def ok(self, *idents: str) -> bool:
         return all(self.l.get(i, {}).get("ok") for i in idents)
@@ -176,6 +181,30 @@ def _cible(nom: Any, servies: Optional[set]) -> str:
     return nom if nom in servies and _NOM.match(nom) else "un nom non servi"
 
 
+def _operateur(p: Dict[str, Any]) -> Tuple[str, int]:
+    """(nom, part en %) de l'opérateur qui porte l'essentiel d'une population ; ("", 0) s'il n'y en a pas. Le nom vient de
+    l'annuaire des réseaux, pas de l'attaquant ; il est borné quand même."""
+    l, n = p.get("reseaux_top"), _n(p.get("adresses"))
+    if not isinstance(l, list) or not l or not isinstance(l[0], dict) or n < 1:
+        return "", 0
+    nom = " ".join(_texte(l[0].get("org"), 60).split())
+    part = min(100, 100 * _n(l[0].get("adresses")) // n)
+    return (nom, part) if nom and part >= OPERATEUR_MIN else ("", 0)
+
+
+def _distinguer(pops: List[Dict[str, Any]]) -> None:
+    """Deux campagnes de même titre : le nombre de réseaux les distingue, puis, au besoin, celui des adresses actives."""
+    reseaux = [x.pop("reseaux", 0) for x in pops]
+    for suffixe in (lambda i: pl(reseaux[i], "réseau", "réseaux") if reseaux[i] else "",
+                    lambda i: pl(pops[i]["poids"], "adresse", "adresses")):
+        vus: Dict[str, int] = {}
+        for x in pops:
+            vus[x["titre"]] = vus.get(x["titre"], 0) + 1
+        for i, x in enumerate(pops):
+            if vus[x["titre"]] > 1 and suffixe(i):
+                x["titre"] += f" · {suffixe(i)}"
+
+
 def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose: bool, servies: Optional[set], releve: Optional[int],
                 maintenant: float) -> Optional[Dict[str, Any]]:
     ident = p.get("id")
@@ -185,8 +214,10 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
     fam = fam if isinstance(fam, str) and fam in FAMILLES else "autre"
     cible = _cible(p.get("nom_cible"), servies) if fam not in ("messagerie", "acces_distant") else ""     # là, la cible est un compte
     nom = FAMILLES[fam] + (f" : {cible}" if cible else "")
+    operateur, part = _operateur(p)
     n, act, ban = _n(p.get("adresses")), _n(p.get("actives_24h")), _n(p.get("bannies_24h"))
     une, reseaux, tourne = _n(p.get("une")), _n(p.get("reseaux")), p.get("rotation") is True
+    nom += f" · {operateur}" if operateur else ""
     camp = rotation.get(ident)
     a_bannir = _n(camp.get("a_bannir")) if camp and propose else 0
     bannie = p.get("etat") == "bannie"
@@ -197,6 +228,8 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
     ou = f" sur {cible}" if cible else ""
     de = f" de {pl(reseaux, 'réseau', 'réseaux')}" if reseaux else ""
     phrase = [f"{GESTES_FAMILLE[fam]}{ou} depuis {pl(n, 'adresse', 'adresses')}{de} en sept jours."]
+    if operateur:
+        phrase.append(f"{'Toutes' if part >= 100 else f'{part} % des adresses'} appartiennent à {operateur}.")
     if tourne and une:
         phrase.append(f"{une} % des adresses n’ont été vues qu’une fois.")
     if ban >= act:
@@ -236,7 +269,7 @@ def _population(p: Dict[str, Any], rotation: Dict[str, Dict[str, Any]], propose:
                 {"nom": "Actives depuis 24 h", "n": act, "cle": "hostiles", "def": "Adresses revues depuis 24 h."},
                 {"nom": "Bannies depuis 24 h", "n": ban, "cle": "arrete", "def": "Adresses actives bannies depuis 24 h."}],
         origine={"unite": "%", "lignes": [{"cle": c, "nom": CLASSES[c], "n": _n(v)} for c, v in classes.items() if c in CLASSES]},
-        faits=faits, poids=act,
+        faits=faits, poids=act, reseaux=reseaux,
         geste=_geste(*_ACTOR) if a_bannir else _geste("Ouvrir la campagne dans le WAF", "/waf/#campaigns", "Le détail de la population vit dans le WAF."))
 
 
@@ -355,7 +388,11 @@ def _sante(s: Sources, maintenant: float, admin: bool) -> Tuple[List[Dict[str, A
         motif = "illisible"
     if motif is None and maintenant - ts > SANTE_FRAICHE_S:
         motif = "mesure périmée"
-    s.dire("sante_sites", "Temps de réponse des sites", motif)
+    # une sonde arrêtée depuis longtemps n'est pas une source en panne : rien n'est mesuré, c'est dit une fois, sans alerte
+    if motif == "mesure périmée" and maintenant - ts > SONDE_ARRETEE_S:
+        s.dire("sante_sites", "Temps de réponse des sites", "non mesuré, la sonde ne tourne plus", arret=ts)
+    else:
+        s.dire("sante_sites", "Temps de réponse des sites", motif)
     if motif is None:
         sites = [(n, v) for n, v in d["vhosts"].items() if isinstance(n, str) and _NOM.match(n) and isinstance(v, dict)]
         lents = sorted(((n, float(v["latency_ms"])) for n, v in sites if v.get("status") == "slow"
@@ -430,6 +467,7 @@ def calculer(entetes: Dict[str, str], maintenant: float, admin: bool = False, ec
             pops = [x for x in (_population(p, camps, propose, servies, releve, maintenant) for p in r["donnees"]["populations"]
                                 if isinstance(p, dict)) if x]
     pops.sort(key=lambda x: (-x["urgence"], -x["poids"]))
+    _distinguer(pops)
     out += pops[:POPULATIONS_MAX]
     couvertes = {x["id"].split(":", 1)[1] for x in pops}
     if propose:
@@ -457,7 +495,7 @@ def calculer(entetes: Dict[str, str], maintenant: float, admin: bool = False, ec
     series = ch.get("series") if isinstance(ch.get("series"), dict) else {}
     decideurs = s.ok("waf_sites", "sade") and rot.get("tronque") is not True
     a_decider = sum(1 for x in out if ["à décider", "r"] in x["etiquettes"])
-    complet = all(x["ok"] for x in s.l.values())
+    complet = all(x["ok"] for x in s.l.values() if "arret" not in x)
     autres = {"populations": max(0, len(pops) - POPULATIONS_MAX), "sites": max(0, len(attaques) - SITES_MAX), "vitaux": vitaux_tus}
     partiel = not complet or any(autres.values()) or rot.get("tronque") is True
     return {

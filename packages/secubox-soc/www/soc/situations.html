@@ -296,13 +296,14 @@ var TEXTES={titre:'Les situations',sousTitre:'Vigie SOC · de la plus urgente à
 var PAR_ID={};
 function CHARGER(id){return Promise.resolve(PAR_ID[id]||{id:id,erreur:'Cette situation est terminée.'});}
 function LISTE(c){
-  var k=c.chiffres||{},s=k.series||{},src=tab(c.sources),ko=src.filter(function(x){return x.ok!==true;}),items=tab(c.situations);
+  var k=c.chiffres||{},s=k.series||{},toutes=tab(c.sources),arr=toutes.filter(function(x){return nombre(x.arret);}),src=toutes.filter(function(x){return !nombre(x.arret);}),ko=src.filter(function(x){return x.ok!==true;}),items=tab(c.situations);
   PAR_ID={};items.forEach(function(x){PAR_ID[x.id]=x;});
   var al=ko.map(function(x){return 'Source « '+x.nom+' » : '+x.erreur+'.';});
   var au=c.autres||{};
   if(au.populations>0)al.push('Au moins '+pl(au.populations+12,'campagne active','campagnes actives')+' : '+pl(au.populations,'autre à lire','autres à lire')+' dans le WAF.');
   if(au.sites>0)al.push('Au moins '+pl(au.sites+6,'site sous attaque','sites sous attaque')+' : '+pl(au.sites,'autre à lire','autres à lire')+' dans le WAF.');
   if(au.vitaux>0)al.push('Au moins '+pl(au.vitaux+8,'contrôle vital en échec','contrôles vitaux en échec')+' : '+pl(au.vitaux,'autre à lire','autres à lire')+' dans la Santé.');
+  $('bas').textContent=TEXTES.bas+arr.map(function(x){return ' '+x.nom+' : non mesuré depuis le '+new Date(x.arret*1000).toLocaleDateString('fr-FR',{timeZone:TZ,day:'numeric',month:'long'})+', la sonde ne tourne plus.';}).join('');
   return {items:items,alertes:al,genere_le:c.genere_le,age_s:c.age_s,
     videTexte:ko.length?'Aucune situation visible, mais '+(ko.length<2?'une source ne répond pas.':pl(ko.length,'source','sources')+' ne répondent pas.'):'Aucune situation en cours.',
     chiffres:[{nom:TEXTES.chiffres[0],v:mes(k.a_decider),sous:k.a_decider_partiel?(nombre(k.a_decider)?'au moins : ':'')+'une source de décision ne répond pas':null,def:'Situations qui attendent une décision : bans proposés, gestes de SADE.'},

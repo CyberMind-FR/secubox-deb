@@ -1,3 +1,12 @@
+secubox-soc (1.15.1-1~trixie1) trixie; urgency=medium
+
+  * Situations (ref #3967) : une campagne porte le nom de l'opérateur qui en tient
+    l'essentiel ; si deux titres se confondent, leur nombre de réseaux puis
+    d'adresses les distingue ; sonde arrêtée depuis plus d'un jour dite en bas de page, sans
+    alerte permanente.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 25 Nov 2026 20:10:00 +0100
+
 secubox-soc (1.15.0-1~trixie1) trixie; urgency=medium
 
   * « Situations » (ref #3963), première vue de la Vigie (Guardian avant, il
