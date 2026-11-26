@@ -59,6 +59,7 @@
       <button data-p="p-dig">Digest du matin</button>
       <button data-p="p-plan">Planificateur</button>
       <button data-p="p-eval">Évaluation</button>
+      <button data-p="p-creer">Créer</button>
     </nav>
     <div id="p-conv" class="panneau" style="display:flex">
       <div id="fil"></div>
@@ -67,6 +68,8 @@
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="bouton" style="flex:1">Envoyer</button>
           <label><input type="checkbox" id="memoire" checked> mémoire</label>
+          <label title="Image gardée sur ce poste, lue par le modèle actif">📷 <input type="file" id="image" accept="image/png,image/jpeg,image/webp" style="width:110px"></label>
+          <select id="i-action"><option value="decrire">décrire</option><option value="lire">lire le texte</option><option value="question">question sur l'image</option></select>
         </div>
       </form>
     </div>
@@ -106,6 +109,17 @@
         Chaque échantillon et chaque retour 👍/👎 alimentent le routage appris, affiché en recommandation.</p>
       <div id="e-routage" class="meta"></div>
       <div id="e-histo"></div>
+    </div>
+    <div id="p-creer" class="panneau">
+      <form id="f-creer" class="ligne">
+        <input id="c-prompt" placeholder="Décrivez l'image à créer" minlength="3" maxlength="500" required>
+        <select id="c-modele"><option value="sd15|512">SD 1.5 — 512</option><option value="sdxl-turbo|512">SDXL Turbo — 512</option>
+          <option value="sdxl-turbo|1024">SDXL Turbo — 1024</option></select>
+        <button class="bouton">Créer</button>
+      </form>
+      <input id="c-negatif" placeholder="À éviter (facultatif)" maxlength="300" style="margin-top:6px;background:var(--carte);color:var(--texte);border:1px solid var(--bord);border-radius:6px;padding:8px">
+      <p class="meta">Une image à la fois, sur ce poste, sans réseau. Filtre de contenu actif ; demandes journalisées sans leur texte.</p>
+      <div id="c-liste"></div>
     </div>
     <div id="p-plan" class="panneau">
       <form id="f-plan" class="ligne">
@@ -174,6 +188,8 @@ document.getElementById("formulaire").onsubmit = async (e) => {
   const sortie = bulle("assistant", "");
   const meta = document.createElement("div");
   meta.className = "meta";
+  const fichierImage = document.getElementById("image").files[0];
+  if (fichierImage) { await envoyerImage(fichierImage, texte, sortie, meta); return; }
   const corps = { message: texte, memoire: document.getElementById("memoire").checked };
   if (conv) corps.conversation = conv;
   const r = await fetch(API + "/chat", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -235,6 +251,7 @@ for (const b of document.querySelectorAll(".onglets button")) {
     if (b.dataset.p === "p-dig") digest();
     if (b.dataset.p === "p-plan") taches();
     if (b.dataset.p === "p-eval") evaluation();
+    if (b.dataset.p === "p-creer") creations();
   };
 }
 
@@ -421,6 +438,79 @@ document.getElementById("e-demarrer").onclick = async () => {
   setTimeout(evaluation, 3000);
 };
 document.getElementById("e-arreter").onclick = async () => { await fetch(API2 + "/arreter", { method: "POST" }); evaluation(); };
+
+// --- comprendre une image --------------------------------------------------------------------------
+async function lireFlux(r, sortie, meta) {
+  const lecteur = r.body.getReader(); const dec = new TextDecoder(); let reste = "";
+  for (;;) {
+    const { value, done } = await lecteur.read();
+    if (done) break;
+    reste += dec.decode(value, { stream: true });
+    const blocs = reste.split("\n\n"); reste = blocs.pop();
+    for (const b of blocs) {
+      if (!b.startsWith("data: ")) continue;
+      const ev = JSON.parse(b.slice(6));
+      if (ev.morceau) sortie.textContent += ev.morceau;
+      if (ev.erreur) sortie.textContent += "\n[" + ev.erreur + "]";
+      if (ev.fin) { meta.textContent = "image · premier mot " + ev.premier_s + " s · " + ev.duree_s + " s"; sortie.appendChild(meta); }
+    }
+  }
+}
+
+async function envoyerImage(fichier, texte, sortie, meta) {
+  const b64 = await new Promise((ok, ko) => { const l = new FileReader();
+    l.onload = () => ok(String(l.result).split(",")[1]); l.onerror = ko; l.readAsDataURL(fichier); });
+  const vignette = document.createElement("img");
+  vignette.src = URL.createObjectURL(fichier); vignette.style.maxWidth = "220px"; vignette.style.display = "block";
+  sortie.before(vignette);
+  const action = document.getElementById("i-action").value;
+  const r = await fetch(API + "/image", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: b64, action, question: action === "question" ? texte : "" }) });
+  document.getElementById("image").value = "";
+  if (!r.ok) { sortie.textContent = (await jsonOu(r)).detail || ("Erreur " + r.status); return; }
+  await lireFlux(r, sortie, meta);
+}
+
+// --- créer des images ------------------------------------------------------------------------------
+let suiviCreer = null;
+async function creations() {
+  const r = await fetch(API + "/creations");
+  if (!r.ok) return;
+  const zone = document.getElementById("c-liste"); zone.replaceChildren();
+  let attente = false;
+  for (const c of (await r.json()).creations) {
+    const carte = el("div", undefined, "carte");
+    carte.appendChild(el("div", c.prompt));
+    const etat = { en_attente: "en attente", en_cours: "en cours…", fait: "faite", echec: "échec" }[c.etat] || c.etat;
+    carte.appendChild(el("div", c.modele + " · " + c.largeur + " px · " + etat +
+      (c.duree_s ? " · " + c.duree_s + " s sur " + c.peripherique + (c.vram_sd_mio ? " (+" + c.vram_sd_mio + " Mio carte)" : "") : "") +
+      (c.erreur ? " · " + c.erreur.join(" ") : ""), "meta"));
+    if (c.etat === "fait") {
+      const img = document.createElement("img");
+      img.src = API + "/creations/" + c.id + ".png"; img.style.maxWidth = "100%"; img.style.maxHeight = "512px";
+      carte.appendChild(img);
+    }
+    if (c.etat === "en_attente") {
+      const b = el("button", "Annuler", "petit");
+      b.onclick = async () => { await fetch(API + "/creations/" + c.id, { method: "DELETE" }); creations(); };
+      carte.appendChild(b);
+    }
+    if (c.etat === "en_attente" || c.etat === "en_cours") attente = true;
+    zone.appendChild(carte);
+  }
+  clearTimeout(suiviCreer);
+  if (attente) suiviCreer = setTimeout(creations, 4000);
+}
+
+document.getElementById("f-creer").onsubmit = async (e) => {
+  e.preventDefault();
+  const [modele, taille] = document.getElementById("c-modele").value.split("|");
+  const r = await fetch(API + "/creations", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: document.getElementById("c-prompt").value.trim(), modele, taille: Number(taille),
+                           negatif: document.getElementById("c-negatif").value.trim() }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  creations();
+};
 </script>
 </body>
 </html>

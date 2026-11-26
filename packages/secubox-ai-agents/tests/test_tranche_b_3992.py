@@ -46,7 +46,8 @@ def test_jeu_et_notation_deterministe():
     from agents.evaluation import JeuSecubox, MotsAttendus
     j = JeuSecubox()
     j.load()
-    assert j.size() == 12 and {r.subject for r in j.iter_records()} == {"short", "general", "math", "code"}
+    assert j.size() == 21 and {r.subject for r in j.iter_records()} == {"short", "general", "math", "code",
+                                                                        "conversation", "raisonnement", "francais"}
     rec = EvalRecord(record_id="x", problem="q", reference=json.dumps([["web application firewall", "pare-feu applicatif"]]),
                      category="chat")
     assert MotsAttendus().score(rec, "C'est un Pare-feu APPLICATIF.")[0] is True

@@ -10,3 +10,12 @@
 {"id": "multiplication", "categorie": "math", "question": "Combien font 17 multiplié par 23 ? Donne le résultat.", "attendus": [["391"]]}
 {"id": "python-len", "categorie": "code", "question": "En Python, quelle fonction renvoie le nombre d'éléments d'une liste ? Écris def exemple(l): return ... avec la bonne fonction.", "attendus": [["len("]]}
 {"id": "nft-list", "categorie": "code", "question": "Quelle commande shell affiche toutes les règles nftables chargées ? Donne la commande exacte dans un bloc de code.", "attendus": [["nft list ruleset"]]}
+{"id": "conv-politesse", "categorie": "conversation", "question": "Un utilisateur te dit : « Merci beaucoup pour ton aide ! ». Réponds-lui en une phrase polie en français.", "attendus": [["de rien", "avec plaisir", "je vous en prie", "je t'en prie", "ravi", "heureux"]]}
+{"id": "conv-reformuler", "categorie": "conversation", "question": "Reformule plus poliment, en une phrase : « Donne-moi le mot de passe tout de suite. »", "attendus": [["pourriez", "pourrais", "s'il vous plait", "s'il te plait", "auriez", "serait-il possible"]]}
+{"id": "raison-train", "categorie": "raisonnement", "question": "Un train part à 14 h 10 et arrive à 16 h 45. Combien de minutes dure le trajet ? Donne le nombre.", "attendus": [["155"]]}
+{"id": "raison-syllogisme", "categorie": "raisonnement", "question": "Tous les routeurs de la salle sont des MOCHAbin. gk2 est un routeur de la salle. gk2 est-il un MOCHAbin ? Réponds par oui ou non puis justifie.", "attendus": [["oui"]]}
+{"id": "raison-suite", "categorie": "raisonnement", "question": "Quel nombre suit dans la suite 2, 6, 12, 20, 30 ? Donne le nombre.", "attendus": [["42"]]}
+{"id": "code-regex", "categorie": "code", "question": "En Python, écris une ligne qui teste avec le module re si la chaîne s ne contient que des chiffres.", "attendus": [["re.", "match", "fullmatch", "\\d"]]}
+{"id": "fr-accord", "categorie": "francais", "question": "Corrige la faute : « Les règles que j'ai écrit sont appliquées. » Donne la phrase corrigée.", "attendus": [["écrites"]]}
+{"id": "fr-traduction", "categorie": "francais", "question": "Traduis en français : « The firewall drops every packet by default. »", "attendus": [["pare-feu"], ["paquet"], ["defaut"]]}
+{"id": "fr-pluriel", "categorie": "francais", "question": "Quel est le pluriel de « un travail » ?", "attendus": [["travaux"]]}

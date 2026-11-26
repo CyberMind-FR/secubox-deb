@@ -7,6 +7,7 @@
 
 Tranche A : conversation en flux (SSE), conversations conservées, mémoire documentaire par agent.
 Tranche C : recherche approfondie, digest du matin, planificateur (`agents/travaux.py`).
+Tranche D : comprendre une image (`agents/vision.py`), créer des images (`agents/creation.py`).
 Tranche B : retours 👍/👎 et corrections, évaluation, routage appris en recommandation (`agents/evaluation.py`).
 Servi sur socket Unix ; nginx (box) ou le relais du POC (gk0) le montent sous `/api/v1/ai/agents/`.
 
@@ -28,7 +29,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from openjarvis.core.types import Message, Role, Trace
 from openjarvis.traces.store import TraceStore
 from openjarvis.security.capabilities import CapabilityPolicy
@@ -37,10 +38,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from agents import garde
 from agents.moteur import Mesure, Moteur
 from agents.stockage import AGENT_RE, Conversations, Memoires
+from agents import vision
+from agents.creation import Creations
 from agents.evaluation import Historique, recommandation
 from agents.travaux import Planificateur, Travaux, installer_consignes
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 log = logging.getLogger("secubox.ai.agents")
 
 HISTORIQUE_MAX = 12          # messages repris dans le contexte
@@ -130,6 +133,7 @@ async def cycle(app: FastAPI):
     app.state.mem = Memoires(d)
     installer_consignes(Path(os.environ.get("OPENJARVIS_HOME", str(d / "openjarvis"))))
     app.state.traces = TraceStore(str(d / "traces.db"))
+    app.state.creations = Creations(Path(os.environ.get("SECUBOX_AI_IMAGES_FILE", str(d / "creations"))))
     app.state.evaluations = Historique(d)
     app.state.travaux = Travaux(d, app.state.moteur, app.state.mem, app.state.traces, app.state.evaluations)
     app.state.plan = Planificateur(d, app.state.travaux)
@@ -409,6 +413,94 @@ async def lancer_evaluation(corps: Evaluation, request: Request):
     if corps.moteur == "second" and not tr.second_disponible():
         raise HTTPException(409, "second moteur arrêté : le démarrer depuis la page Évaluation")
     return _lancer(tr.demarrer_evaluation, corps.moteur, corps.echantillons)
+
+
+class Image(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    image: str = Field(min_length=16, max_length=8_500_000)     # base64
+    action: Literal["decrire", "lire", "question"] = "decrire"
+    question: str = Field(default="", max_length=1000)
+    max_tokens: int = Field(default=400, ge=16, le=1500)
+
+
+@routeur.get("/vision")
+async def vision_etat(request: Request):
+    return {"disponible": await asyncio.to_thread(vision.vision_disponible, request.app.state.moteur.socket)}
+
+
+@routeur.post("/image")
+async def image(corps: Image, request: Request, sub: str = Depends(_porteur)):
+    """Décrire une image, en lire le texte, ou répondre à une question sur elle. L'image reste sur ce poste."""
+    app = request.app
+    try:
+        octets, ext, mime = vision.decoder(corps.image)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    socket = app.state.moteur.socket
+    if not await asyncio.to_thread(vision.vision_disponible, socket):
+        raise HTTPException(409, "le modèle actif ne voit pas les images (projecteur absent)")
+    ident = await asyncio.to_thread(vision.garder, etat_dir(), octets, ext)
+    question = corps.question.strip() if corps.action == "question" and corps.question.strip() \
+        else vision.CONSIGNES["lire" if corps.action == "lire" else "decrire"]
+
+    async def flux():
+        mesure, rep = {}, []
+        yield _sse({"image": ident, "taille": len(octets)})
+        try:
+            async for m in vision.flux_image(socket, octets, mime, question, corps.max_tokens, mesure):
+                rep.append(m)
+                yield _sse({"morceau": m})
+        except Exception as exc:  # noqa: BLE001
+            log.warning("image : %s", type(exc).__name__)
+            yield _sse({"erreur": "lecture de l'image interrompue"})
+        log.info("image octets=%d car_r=%d premier_s=%s duree_s=%s", len(octets), len("".join(rep)),
+                 mesure.get("premier_s"), mesure.get("duree_s"))
+        yield _sse({"fin": True, **mesure})
+
+    return StreamingResponse(flux(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+class Creation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prompt: str = Field(min_length=3, max_length=500)
+    negatif: str = Field(default="", max_length=300)
+    modele: Literal["sd15", "sdxl-turbo"] = "sd15"
+    taille: Literal[512, 1024] = 512
+    graine: int | None = Field(default=None, ge=0, lt=2**31)
+
+
+@routeur.post("/creations")
+async def creer(corps: Creation, request: Request):
+    try:
+        return await asyncio.to_thread(request.app.state.creations.demander, corps.prompt, corps.modele, corps.taille,
+                                       corps.negatif, corps.graine)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(429, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@routeur.get("/creations")
+async def creations(request: Request):
+    return {"creations": await asyncio.to_thread(request.app.state.creations.lister)}
+
+
+@routeur.get("/creations/{ident}.png")
+async def creation_png(ident: str, request: Request):
+    f = request.app.state.creations.fichier(ident)
+    if f is None:
+        raise HTTPException(404, "image introuvable")
+    return FileResponse(f, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@routeur.delete("/creations/{ident}")
+async def annuler_creation(ident: str, request: Request):
+    if not await asyncio.to_thread(request.app.state.creations.annuler, ident):
+        raise HTTPException(404, "aucune demande en attente sous ce nom")
+    return {"annulee": ident}
 
 
 # Ni /docs, ni /openapi.json (comme secubox-ai).

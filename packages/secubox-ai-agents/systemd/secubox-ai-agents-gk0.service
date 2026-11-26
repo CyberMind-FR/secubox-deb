@@ -18,6 +18,7 @@ Environment=SECUBOX_AI_AGENTS_MOTEUR=%h/poc-secubox-ai/run/llama.sock
 Environment=SECUBOX_AI_AGENTS_PONT=%t/secubox-ai-pont/searxng.sock
 # Second moteur d'évaluation (#3992), démarré par le relais seulement ; lu ici, jamais piloté.
 Environment=SECUBOX_AI_AGENTS_MOTEUR2=%t/secubox-ai-eval/moteur.sock
+Environment=SECUBOX_AI_IMAGES_FILE=%S/secubox-ai-images
 Environment=SECUBOX_AI_AGENTS_ETAT=%S/secubox-ai-agents
 # Télémétrie : désactivée par défaut dans OpenJarvis ; on le redit, et le réseau est fermé de toute façon.
 Environment=OPENJARVIS_HOME=%S/secubox-ai-agents/openjarvis
@@ -41,6 +42,8 @@ PrivateUsers=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%S/secubox-ai-agents %t/secubox-ai-agents
+# File du travailleur d'images (#3995) : le service dépose les demandes et lit les images faites.
+ReadWritePaths=-%S/secubox-ai-images
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

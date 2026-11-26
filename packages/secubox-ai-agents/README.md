@@ -10,7 +10,7 @@
 OpenJarvis (amont `open-jarvis/OpenJarvis`, commit `556ddf32`, Apache-2.0) utilisé comme **bibliothèque**,
 derrière l'API FastAPI de SecuBox, sur socket Unix (#3986). Plan : `docs/superpowers/plans/2026-11-26-secubox-ai-agents.md`.
 
-État : **tranches A, C et B, sur gk0 seulement** (poste du propriétaire, POC). Pas encore de paquet Debian (tranche E).
+État : **tranches A, C, B et D, sur gk0 seulement** (poste du propriétaire, POC). Pas encore de paquet Debian (tranche E).
 
 ## API (socket `$XDG_RUNTIME_DIR/secubox-ai-agents/agents.sock` sur gk0)
 
@@ -52,6 +52,27 @@ Second moteur d'évaluation : unité utilisateur `secubox-ai-eval-moteur` (CPU, 
 `poc-llama`), démarrée et arrêtée par le relais (`/api/v1/ai/jarvis-moteur2/*`) avec une garde de mémoire
 (taille du modèle + 1,5 Go). Non fourni ici : `LLMOptimizer` (modèle infonuagique), dspy/gepa (absents), LoRA/SFT/GRPO
 (entraînement de poids : accord du propriétaire).
+
+Tranche D (#3995) :
+
+| Route | Rôle |
+|---|---|
+| `GET /vision`, `POST /image` `{image (base64), action: decrire|lire|question, question?}` | l'image (PNG, JPEG, WebP reconnus par leurs octets, 6 Mo au plus) est gardée dans l'état du service (0600) et lue par le moteur actif et son projecteur ; flux SSE |
+| `POST /creations` `{prompt, negatif?, modele: sd15|sdxl-turbo, taille: 512|1024, graine?}`, `GET /creations`, `GET /creations/{id}.png`, `DELETE /creations/{id}` | création d'images : filtre de contenu par défaut, file (20 au plus), journal sans le texte des demandes ; générée par le travailleur `secubox-ai-images` |
+
+- Projecteur vision : téléchargé par le relais (`/api/v1/ai/jarvis-medias/projecteur`, `mmproj-…` d'un modèle installé, SHA-256 de Hugging Face vérifié par la fonction `telecharger` du relais).
+- Création : `sbin/secubox-ai-images` (bibliothèque standard), unité `secubox-ai-images` (sans réseau, sans lien avec `poc-llama`), stable-diffusion.cpp `52491bd` (MIT) compilé en Vulkan dans `~/poc-secubox-ai/sdcpp` ; une image à la fois ; carte NVIDIA si sa mémoire libre suffit (sinon CPU) ; arrêt propre = demande remise en file. Modèles par `sbin/secubox-ai-images-modeles` (empreintes figées) : SD 1.5 (CreativeML OpenRAIL-M), SDXL Turbo (**Stability AI Non-Commercial Community : pas d'usage commercial**).
+
+### Comparaison des modèles (gk0, 2026-11-26, 21 questions, `EvalRunner`)
+
+| Modèle | Justes | Latence moy. | Premier mot | j/s | GPU | RAM du moteur |
+|---|---|---|---|---|---|---|
+| Gemma 3 4B Q4_K_M | 19/21 | 1,35 s | 0,43 s | 12,4 | 2,7 Go | 1,9 Go |
+| Qwen3.5-9B non censuré Q5_K_M | 18/21 | 56,6 s | 43,0 s | 2,7 | 2,5 Go | 10,6 Go |
+| DeepSeek-Coder-V2-Lite Q4_K_M | 12/21 (dont 4 erreurs « serveur déconnecté ») | 14,4 s | 5,7 s | 4,0 | 2,7 Go | 11,6 Go |
+
+Moteur du POC en mode mixte (`--fit`) sur la RTX 3050 4 Go : ce qui ne tient pas sur la carte reste sur le CPU. Qwen3.5 raisonne
+avant de répondre (premier mot visible tardif).
 
 ## Environnement
 
