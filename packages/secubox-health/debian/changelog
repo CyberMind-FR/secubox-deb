@@ -1,3 +1,10 @@
+secubox-health (1.4.6-1~trixie1) trixie; urgency=medium
+
+  * Auto-test du WAF : le témoin a sa propre adresse simulée ; celle des canaris,
+    bannie dès la première touche, faisait refuser le témoin (faux échec vital).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 08:10:00 +0100
+
 secubox-health (1.4.5-1~trixie1) trixie; urgency=medium
 
   * Sonde des sites : la page de veille ou de réveil d'un module à la demande

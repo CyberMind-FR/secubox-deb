@@ -29,6 +29,9 @@ from typing import Callable
 WAF_ADDR = ("127.0.0.1", 8085)
 ROUTES = Path("/etc/secubox/waf/haproxy-routes.json")
 IP_SIMULEE = "198.51.100.77"                    # TEST-NET-2 : jamais routée
+# Le témoin a sa propre adresse : les canaris font bannir IP_SIMULEE (catégories à ban dès la 1re touche), et un témoin
+# venu de la même adresse serait refusé au passage suivant, faux échec du contrôle vital (26/11).
+IP_TEMOIN = "198.51.100.78"
 UA = "SecuBox-WAF-SelfTest/1 (health-doctor)"
 VALIDITE_S = 300
 # Le témoin traverse le WAF JUSQU'À L'AMONT : sous charge (gk2 : charge ~14, mémoire 94 %) l'amont dépasse 5 s. Les canaris, eux, sont refusés par le WAF seul.
@@ -91,7 +94,7 @@ def choisir_host(routes: dict, domaine: str | None = None) -> str | None:
 def _requete(host: str, chemin: str, timeout: float = DELAI_TEMOIN_S) -> int:
     c = http.client.HTTPConnection(*WAF_ADDR, timeout=timeout)
     try:
-        c.request("GET", chemin, headers={"Host": host, "X-Forwarded-For": IP_SIMULEE,
+        c.request("GET", chemin, headers={"Host": host, "X-Forwarded-For": IP_TEMOIN if chemin == TEMOIN[2] else IP_SIMULEE,
                                           "User-Agent": UA, "Connection": "close"})
         return c.getresponse().status
     finally:
