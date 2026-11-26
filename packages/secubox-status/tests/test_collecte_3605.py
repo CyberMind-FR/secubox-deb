@@ -306,4 +306,4 @@ def test_disponibilite_par_jour_de_paris_3970(tmp_path):
         ("gk2", 3, "2026-11-20T11:00:00+00:00", "unknown", "{}"),
         ("autre", 4, "2026-11-20T11:00:00+00:00", "operational", "{}")])
     r = _h.par_jour(cx, "gk2", 35, datetime(2026, 11, 21, tzinfo=timezone.utc))
-    assert r == {"2026-11-20": {"connus": 2, "operationnels": 1}}
+    assert r == {"2026-11-20": {"connus": 2, "operationnels": 1, "pannes": 1}}

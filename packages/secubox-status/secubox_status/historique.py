@@ -121,8 +121,9 @@ def par_jour(cx: sqlite3.Connection, noeud: str, jours: int = 35, maintenant: Op
             j = datetime.fromisoformat(quand).astimezone(tz).date().isoformat()
         except (TypeError, ValueError):
             continue
-        d = out.setdefault(j, {"connus": 0, "operationnels": 0})
+        d = out.setdefault(j, {"connus": 0, "operationnels": 0, "pannes": 0})
         if overall not in ("unknown", "maintenance"):
             d["connus"] += 1
             d["operationnels"] += overall == "operational"
+            d["pannes"] += overall == "outage"
     return out

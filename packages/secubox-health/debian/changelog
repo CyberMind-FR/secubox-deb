@@ -1,3 +1,11 @@
+secubox-health (1.4.5-1~trixie1) trixie; urgency=medium
+
+  * Sonde des sites : la page de veille ou de réveil d'un module à la demande
+    (marque de secubox-profiles) est l'état « veille », compté disponible, jamais
+    « down » (ref #3970).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 16:00:00 +0100
+
 secubox-health (1.4.4-1~trixie1) trixie; urgency=medium
 
   * Diagnostic (ref #3967) : conteneurs lus par leur cgroup (la sonde tourne sans

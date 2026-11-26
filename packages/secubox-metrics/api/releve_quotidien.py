@@ -523,11 +523,73 @@ def lire_dispo(chemin: Path = DISPO_JOURS, jours: Iterable[str] = (), noeud: Opt
     for j in jours:
         e = d["jours"].get(j)
         connus = int(e.get("connus") or 0) if isinstance(e, dict) else 0
-        out[j] = round(100.0 * int(e.get("operationnels") or 0) / connus, 3) if connus >= DISPO_RELEVES_MIN else None
+        pannes = e.get("pannes") if isinstance(e, dict) else None
+        # Disponible = relevé connu qui n'est pas une panne (« outage ») ; « degraded » (un site qui refuse, un module en veille) reste
+        # un service rendu. Sans le compte des pannes (secubox-status < 0.1.6), le jour n'est pas mesuré : jamais déduit d'« operational ».
+        ok = isinstance(pannes, int) and not isinstance(pannes, bool) and 0 <= pannes <= connus
+        out[j] = round(100.0 * (connus - pannes) / connus, 3) if ok and connus >= DISPO_RELEVES_MIN else None
     return out
 
 
 # ── sonde des temps de réponse et contrôles de santé (instantanés) ────────
+MODULES_D = Path("/etc/secubox/modules.d")
+
+
+def domaines_a_la_demande(dossier: Optional[Path] = None) -> set:
+    """Domaines des modules `lifecycle = "on-demand"` (modules.d, même lecture que la sonde de secubox-health) : leur sommeil est
+    voulu, ils ne sont jamais injoignables. Illisible : ensemble vide."""
+    import tomllib
+    out: set = set()
+    try:
+        fichiers = sorted((dossier or MODULES_D).glob("*.toml"))[:500]
+    except OSError:
+        return out
+    for f in fichiers:
+        try:
+            m = tomllib.loads(f.read_text(encoding="utf-8")[:65536])
+        except (OSError, ValueError):
+            continue
+        dom = (m.get("portal") or {}).get("domain") if isinstance(m.get("portal"), dict) else None
+        if str(m.get("lifecycle", "")).strip() == "on-demand" and isinstance(dom, str) and dom:
+            out.add(nom_site(dom))
+    return out
+
+
+def _code(v: Any) -> int:
+    return v if isinstance(v, int) and not isinstance(v, bool) else 0
+
+
+def confirmer_injoignables(premier: Optional[dict], second: Optional[dict]) -> Optional[dict]:
+    """Un site n'est injoignable que s'il l'est à deux relevés CONSÉCUTIFS de la sonde (instants différents) ; sans second relevé
+    plus récent, la liste n'est pas confirmée (vide), jamais supposée."""
+    if premier is None:
+        return None
+    r = dict(premier)
+    if not premier.get("injoignables"):
+        return r
+    if not second or second.get("instant") is None or second.get("instant") == premier.get("instant"):
+        r["injoignables"] = []
+        r["injoignables_non_confirmes"] = len(premier["injoignables"])
+        return r
+    deux = set(second.get("injoignables") or [])
+    r["injoignables"] = [x for x in premier["injoignables"] if x in deux]
+    return r
+
+
+def latence_confirmee(maintenant: Optional[float] = None, attendre: Callable[[float], None] = time.sleep, essais: int = 6) -> Optional[dict]:
+    """Lit la sonde ; si des sites semblent injoignables, attend le relevé suivant (au plus 6 × 15 s) pour confirmer."""
+    a = lire_latence(maintenant=maintenant)
+    if not a or not a.get("injoignables"):
+        return a
+    b = None
+    for _ in range(essais):
+        attendre(15)
+        b = lire_latence()
+        if b and b.get("instant") != a.get("instant"):
+            break
+    return confirmer_injoignables(a, b)
+
+
 def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Optional[dict]:
     """Médiane des temps de réponse des sites joints, sites lents et injoignables, au moment du relevé. Sonde périmée : None."""
     d = lire_json(chemin)
@@ -537,22 +599,28 @@ def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Op
     maintenant = time.time() if maintenant is None else maintenant
     if t is None or maintenant - t > SONDE_PERIMEE_S:
         return None
-    lat, lents, bas = [], [], []
+    lat, lents, bas, veilles = [], [], [], 0
+    a_la_demande = domaines_a_la_demande()
     for nom, v in d["vhosts"].items():
         if not isinstance(v, dict):
             continue
         st = v.get("status")
+        if st == "veille" or nom_site(nom) in a_la_demande:
+            veilles += 1                      # module en veille ou à la demande : réponse voulue, disponible
+            continue
         if st in ("ok", "slow") and isinstance(v.get("latency_ms"), (int, float)):
             lat.append(float(v["latency_ms"]))
             if st == "slow":
                 lents.append((nom_site(nom), float(v["latency_ms"])))
-        elif st == "down":
+        elif st == "down" and (v.get("error") == "timeout" or _code(v.get("status_code")) >= 500):
+            # Même règle que les situations du SOC : « down » compte aussi les refus voulus (401, 403, 404) et les
+            # redirections ; seuls un délai dépassé ou une erreur 5xx disent une panne.
             bas.append(nom_site(nom))
-    if not lat and not bas:
+    if not lat and not bas and not veilles:
         return None
     lat.sort()
     med = (lat[len(lat) // 2] if len(lat) % 2 else (lat[len(lat) // 2 - 1] + lat[len(lat) // 2]) / 2) if lat else None
-    return {"mediane_ms": None if med is None else round(med, 1), "sites": len(lat) + len(bas), "lents": sorted(lents, key=lambda x: -x[1])[:5],
+    return {"mediane_ms": None if med is None else round(med, 1), "sites": len(lat) + len(bas) + veilles, "en_veille": veilles, "lents": sorted(lents, key=lambda x: -x[1])[:5],
             "injoignables": sorted(bas)[:10], "instant": t}
 
 
@@ -792,7 +860,7 @@ def releve(jours: Optional[list[str]] = None, maintenant: Optional[float] = None
             jours.append(h)
     c = collecter_jours(sorted(jours), maintenant, sources=sources)
     inst = instantanes if instantanes is not None else {
-        "latence": lire_latence(maintenant=maintenant), "sante": lire_sante(maintenant=maintenant), "acteurs": None, "attente": None}
+        "latence": latence_confirmee(maintenant=maintenant), "sante": lire_sante(maintenant=maintenant), "acteurs": None, "attente": None}
     if instantanes is None:
         a = lire_acteurs()
         inst["acteurs"] = None if a is None else {"suivis": a["suivis"], "a_bloquer": a["a_bloquer"]}
