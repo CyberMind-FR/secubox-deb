@@ -255,8 +255,10 @@ def calculer_stats7j(chemins: List[str], maintenant: datetime, blanche: set) -> 
                 cat = e.get("category")
                 if quand < debut or not isinstance(cat, str) or not cat:
                     continue
-                c = cats.setdefault(cat, {"touches": 0, "faux_positifs_estimes": 0, "par_action": {}})
+                c = cats.setdefault(cat, {"touches": 0, "faux_positifs_estimes": 0, "par_action": {}, "par_jour": [0] * 7})
                 c["touches"] += 1
+                # #3980 : mini-série de la page Modes, calculée dans la même passe (index 0 = le plus ancien jour)
+                c["par_jour"][min(6, max(0, (quand - debut).days))] += 1
                 if _local(str(e.get("client_ip") or ""), blanche):
                     c["faux_positifs_estimes"] += 1
                 a = str(e.get("action") or "?")[:20]

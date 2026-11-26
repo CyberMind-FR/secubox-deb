@@ -11,6 +11,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-26 — WAF Modes lisible (en revue)
+
+- **#3980 (ref #3980, PR ouverte, non déployé)** : waf-ng 1.52.0, page Modes en trois onglets pleine largeur (Catégories par famille
+  avec mini-série 7 j et filtre « avec touches », Leurres en cartes, Sites PHP), barre d'attente collante ; `stats7j` gagne `par_jour`.
+
 ## 2026-11-25 (19:45) — bannir un acteur, SOC et WAF en dossiers, enregistreur en boucle
 
 - **#3960 (PR #3962, #3964, déployé gk2)** : fiche Actor, aperçu puis ban 24 h sur geste, levée du geste (waf-ng 1.48.0, 1.48.1). Essai au banc :
