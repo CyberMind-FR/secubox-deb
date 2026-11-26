@@ -704,7 +704,7 @@ async def health():
     return {"status": "healthy"}
 
 
-@app.post("/v1/chat/completions")
+@app.post("/v1/chat/completions", dependencies=[Depends(require_jwt)])   # #3984 : jamais un relais ouvert
 async def chat_completions(request: ChatCompletionRequest, req: Request):
     """OpenAI-compatible chat completions endpoint."""
     request_data = request.model_dump()
