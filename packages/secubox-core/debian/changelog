@@ -1,3 +1,9 @@
+secubox-core (1.8.47-1~trixie1) trixie; urgency=medium
+
+  * Accueil de nœud (ref #3938) : faces orange et bleue du dé permutées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 07:00:00 +0100
+
 secubox-core (1.8.46-1~trixie1) trixie; urgency=medium
 
   * Comptes admin sans mot de passe (ref #3708) : règle commune
