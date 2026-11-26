@@ -24,7 +24,7 @@ def test_scripts_relatifs_avant_le_script_de_la_page():
 
 
 def test_section_en_tete_et_contenu_existant_dessous():
-    assert HTML.index("Campagnes et populations</h2>") < HTML.index("Campagnes d’attaque</h2>") < HTML.index('id="frise"') < HTML.index('id="cartes"')
+    assert HTML.index("Campagnes et populations</h2>") < HTML.index("Campagnes d’attaque</h2>") < HTML.index('id="frise"') < HTML.index('id="liste"')   # #3969 : tableau + détail
     assert HTML.index('id="populations"') < HTML.index('id="tuiles"')
 
 
@@ -162,8 +162,8 @@ def test_campagnes_sans_alerte_recente_repliees_en_lignes(nav):
     al = [{"timestamp": datetime.now(timezone.utc).isoformat(), "client_ip": "203.0.113.1", "host": "app.example.test", "category": "scanners", "severity": "high", "country": "FR"}]
     p = _ouvre(nav, {"/api/v1/waf/campaigns": {"available": True, "attaquants": 4, "campagnes": camps}, "/api/v1/waf/alerts": {"alerts": al},
                      "/api/v1/waf/bans": {"bans": [{"ip": "198.51.100.2"}]}}, largeur=400)
-    assert p.locator("#cartes .camp").count() == 1 and "app.example.test" in p.inner_text("#cartes .camp")
-    d = p.locator("#cartes details.campsans")
+    assert p.locator("#liste .cl").count() == 1 and "app.example.test" in p.inner_text("#detail")   # #3969 : une ligne + le détail
+    d = p.locator("#sans details.campsans")
     assert d.count() == 1 and d.locator("summary").inner_text() == "Campagnes sans alerte récente (2)" and not d.locator("li").first.is_visible()
     d.locator("summary").click()
     lignes = d.locator("li").all_inner_texts()
@@ -171,7 +171,7 @@ def test_campagnes_sans_alerte_recente_repliees_en_lignes(nav):
     assert "GET /a → GET /b → GET /c → …" in lignes[0] and "2 adresses · bannies 1/2" in lignes[0]
     assert "séquence non relevée" in lignes[1] and "1 adresse · bannies 0/1" in lignes[1]
     assert "—" not in "".join(lignes)
-    assert p.evaluate("window.xss") is None and p.locator("#cartes img").count() == 0 and not p.erreurs
+    assert p.evaluate("window.xss") is None and p.locator("#bas img").count() == 0 and not p.erreurs
     assert p.evaluate("document.documentElement.scrollWidth") <= 400
     p.click("#rafraichir")                    # un nouveau relevé ne referme pas le groupe ouvert
     p.wait_for_timeout(400)
@@ -181,6 +181,6 @@ def test_campagnes_sans_alerte_recente_repliees_en_lignes(nav):
 
 def test_bans_inconnus_jamais_zero(nav):
     p = _ouvre(nav, {"/api/v1/waf/campaigns": {"available": True, "attaquants": 1, "campagnes": [{"signature": "dd", "attaquants": ["198.51.100.1"], "nb_attaquants": 1, "exemple_sequence": ["GET /"]}]}})
-    p.locator("#cartes .campsans summary").click()
-    assert "bannies —" in p.locator("#cartes .campsans li").inner_text()
+    p.locator("#sans .campsans summary").click()
+    assert "bannies —" in p.locator("#sans .campsans li").inner_text()
     p.context.close()

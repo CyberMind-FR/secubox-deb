@@ -5,11 +5,15 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — « SBXWAF », mémoire des leurres de service (#3734, maquette approuvée le 2026-11-15).
+  SecuBox — « SBXWAF », mémoire des leurres de service (#3734, maquette approuvée le 2026-11-15 ; liste refaite #3969).
   DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/leurres/{resume,attaquants,attaquant/<ip>,dictionnaire,rejeux}, en session
   d'administrateur (les mots de passe tentés par les robots sont affichés EN CLAIR : aucun compte réel derrière un leurre).
+  Agrégats repris sans les recopier (#3969) : mode de chaque leurre (GET /leurres-service/modes, page Modes) et population
+  « Balayage des leurres de service » (GET /populations, famille acces_distant, 7 jours). La couche « détourné » par site et
+  par heure reste dans l'onglet Sites : un lien y mène.
   Gestes : POST /api/v1/waf/leurres/{ban,unban}. Une mesure absente s'affiche « — », jamais 0.
   TOUT texte venu du journal (compte, mot de passe, client) est choisi par un attaquant : posé en textContent, jamais en HTML.
+  Classement compact (10 puis « Afficher plus »), UN détail ; adresses masquées hors du détail. ?demo=1 : données fictives annoncées.
 -->
 <html lang="fr">
 <meta charset="utf-8">
@@ -17,55 +21,92 @@
 <title>SBXWAF — leurres</title>
 <style>
   :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#8296b8;
-    --cyan:#29b6f6;--vert:#a5e0a9;--corail:#ffb199;--ambre:#ffa726}
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#a5e0a9;--corail:#ffb199;--ambre:#ffa726;--rouge:#ff4d5e;--violet:#a78bfa}
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   html,body{margin:0;min-height:0}
   body{background:radial-gradient(900px 520px at 50% 0%,rgba(41,182,246,.13),transparent 70%),var(--fond);color:var(--texte);
        font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35;font-variant-numeric:tabular-nums}
   body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
-  .cadre{padding:14px;display:flex;flex-direction:column;gap:12px}
+  .cadre{container-type:inline-size;container-name:a;padding:14px;display:flex;flex-direction:column;gap:12px}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--doux)}
-  .tete .droite{margin-left:auto;color:var(--doux);font-size:.78rem;text-align:right}
+  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--doux);font-size:.85rem}
+  .tete .droite{margin-left:auto;color:var(--doux);font-size:.85rem;text-align:right}
   .bandeau{border-radius:10px;padding:8px 14px;font-size:.85rem;border:1px solid var(--cyan);color:var(--texte);background:rgba(41,182,246,.12)}
-  .bandeau.err{border-color:var(--corail);background:rgba(255,138,101,.12)}
-  .tuiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .bandeau.err{border-color:var(--corail);background:rgba(255,138,101,.12)} .bandeau.demo{border-color:var(--ambre);background:var(--ambre);color:#1a1000;font-weight:700;text-align:center}
+  .tuiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
   .tuile{border:1px solid var(--trait2);border-radius:14px;padding:11px 14px;background:rgba(12,24,48,.7);min-width:0}
-  .tuile .l{color:var(--doux);font-size:.76rem} .tuile .v{font-size:1.7rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--doux);font-size:.74rem}
+  .tuile .l{color:var(--doux);font-size:.85rem} .tuile .v{font-size:1.7rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--doux);font-size:.85rem}
   .tuile.chaud{border-color:rgba(255,138,101,.45);background:rgba(48,20,12,.5)} .tuile.chaud .v{color:var(--corail)}
   .tuile.calme{border-color:rgba(102,187,106,.4);background:rgba(12,40,24,.5)} .tuile.calme .v{color:var(--vert)}
-  .pan{border:1px solid var(--trait2);border-radius:14px;padding:13px 15px;background:rgba(12,24,48,.7);min-width:0;display:flex;flex-direction:column;gap:9px}
-  .pan h2{margin:0;font-size:.98rem;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .pan h2 i{font-style:normal;font-weight:400;color:var(--doux);font-size:.76rem}
-  .pan.chaud{border-color:rgba(255,138,101,.4);background:rgba(48,20,12,.35)}
-  .leurres{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
-  .leurre{border:1px solid var(--trait);border-radius:10px;padding:7px 10px} .leurre.partiel{border-style:dashed}
-  .leurre b{display:flex;justify-content:space-between;gap:8px} .leurre span{color:var(--doux);font-size:.74rem}
-  .deux{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
-  .deux>.large{flex:999 1 700px} .deux>.etroit{flex:1 1 330px}
-  .filtres{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+  .tuile svg{display:block;width:100%;height:26px;margin-top:4px} .tuile svg rect{fill:var(--cyan)} .tuile svg rect.z{fill:var(--doux);fill-opacity:.5}
+  .pan{border:1px solid var(--trait2);border-radius:14px;padding:13px 15px;background:rgba(12,24,48,.7);min-width:0;display:grid;gap:9px;align-content:start}
+  .pan h2{margin:0;font-size:.98rem;display:flex;gap:2px 10px;align-items:baseline;flex-wrap:wrap} .pan h2 i{font-style:normal;font-weight:400;color:var(--doux);font-size:.85rem}
   input,select,button{font:inherit;color:var(--texte)}
-  input,select{min-height:36px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
-  label{color:var(--doux);font-size:.76rem}
-  button{min-height:36px;padding:0 11px;border-radius:8px;border:1px solid var(--trait2);background:transparent;cursor:pointer}
+  input,select{min-height:40px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%;font-size:.85rem}
+  button{min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--trait2);background:transparent;cursor:pointer;font-size:.85rem}
   button:hover{border-color:var(--cyan)} button:disabled{opacity:.5;cursor:default}
   button.fort{border-color:rgba(255,138,101,.6);background:rgba(255,138,101,.14);color:#ffd3c5}
-  :focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
-  .table{overflow-x:auto} table{width:100%;min-width:780px;border-collapse:collapse;font-size:.84rem}
-  th{color:var(--doux);font-weight:500;text-align:left;padding:5px 8px} td{padding:7px 8px;vertical-align:top;border-top:1px solid rgba(86,150,255,.18)}
-  tr.rejeu>td{background:rgba(255,138,101,.07)}
-  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem;overflow-wrap:anywhere}
-  .sous{color:var(--doux);font-size:.76rem} .rj{color:var(--corail);font-size:.76rem}
-  .pastille{display:inline-block;padding:1px 8px;border-radius:6px;border:1px solid rgba(102,187,106,.5);background:rgba(102,187,106,.16);color:var(--vert);white-space:nowrap}
-  .pastille.non{border-color:var(--trait2);background:transparent;color:var(--doux)}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  a{color:var(--cyan)}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;overflow-wrap:anywhere}
+  .note,.vide{color:var(--doux);font-size:.85rem;margin:0}
+  .filtres{display:flex;flex-wrap:wrap;gap:6px} .filtres input{flex:1 1 220px}
+  /* bas (#3969) : par leurre, frise bornée, classement compact + un détail, ce que tentent les robots. Texte ≥ .85rem ; cibles ≥ 40 px. */
+  .lig{display:grid;grid-template-columns:minmax(0,10em) minmax(30px,1fr) minmax(3em,auto);gap:8px;align-items:center;min-height:26px;font-size:.88rem}
+  .lig span{overflow-wrap:anywhere;min-width:0} .lig b{text-align:right;font-weight:600}
+  .lig em{height:10px;background:rgba(159,179,214,.14);border-radius:0 4px 4px 0;overflow:hidden} .lig em i{display:block;height:100%}
+  .lig.l4{grid-template-columns:minmax(0,9em) 5.4em minmax(30px,1fr) minmax(3em,auto)}
+  .md{font-size:.85rem;color:var(--doux)} .md.bannir{color:#ffb199}
+  .fr{display:grid;gap:2px;min-width:0}
+  .fr-r,.fr-a{display:grid;grid-template-columns:minmax(0,1fr);gap:2px 10px;align-items:center;width:100%;min-width:0}
+  .fr-r{min-height:40px;padding:3px 6px;font-size:.85rem;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px}
+  .fr-r:hover{background:rgba(59,130,246,.10)} .fr-r[aria-current=true]{border-color:var(--cyan);background:rgba(41,182,246,.12)}
+  .fr-a{padding:0 7px} .fr-a>span:first-child{display:none}
+  .fr-n{display:flex;align-items:center;gap:8px;min-width:0} .fr-n b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .piste{position:relative;display:block;height:14px;border-radius:3px;background:rgba(159,179,214,.05);overflow:hidden}
+  .piste i{position:absolute;top:0;bottom:0;display:block}
+  .piste .gr{width:1px;background:rgba(159,179,214,.18)} .piste .sg{top:3px;bottom:3px;border-radius:3px;background:var(--corail)}
+  .piste .mk{width:3px;margin-left:-1px;background:var(--texte)} .piste .mt{width:2px;margin-left:-2px;background:var(--cyan)}
+  .axe{position:relative;display:block;height:1.4em;font-size:.85rem;color:var(--doux)} .axe>span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+  .axe>span:first-child{transform:none} .axe>span:last-child{transform:translateX(-100%)}
+  .lecture{margin:0;color:var(--doux);font-size:.85rem;min-height:1.4em}
+  .ld{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start} .ld>*{min-width:0}
+  .lst{container-type:inline-size;container-name:l;display:grid;gap:5px;align-content:start} .rangs{display:grid;gap:5px;min-width:0} .pile{display:grid;gap:8px;min-width:0}
+  .cl,.th{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nom etat" "chif chif";gap:3px 10px;align-items:center}
+  .th{display:none;padding:0 11px 0 13px;font-size:.85rem;color:var(--doux)}
+  .cl{width:100%;min-height:44px;padding:6px 10px;font-size:.85rem;text-align:left;background:rgba(18,40,78,.45);border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:9px}
+  .cl.rejeu{border-left-color:var(--corail)} .cl[aria-current=true]{background:rgba(41,182,246,.16);border-color:var(--cyan)}
+  .c-nom{grid-area:nom;display:flex;align-items:center;gap:8px;min-width:0} .c-nom b{font-weight:600;font-family:"IBM Plex Mono",ui-monospace,monospace;overflow-wrap:anywhere;min-width:0}
+  .c-e{grid-area:etat;justify-self:end} .c-ch{grid-area:chif;display:flex;flex-wrap:wrap;gap:2px 12px;color:var(--doux);min-width:0}
+  .c-ch [data-u]::after{content:" " attr(data-u)} .ban{font-size:.85rem;color:var(--doux);white-space:nowrap} .ban.on{color:var(--vert)}
+  @container l (min-width:640px){
+    .cl,.th{grid-template-columns:minmax(0,1fr) 9em 7em 4.6em 4.6em 7.4em 6.4em;grid-template-areas:none;gap:2px 8px}
+    .th{display:grid} .th span:nth-child(4),.th span:nth-child(5){text-align:right}
+    .c-nom,.c-e,.c-ch{grid-area:auto} .c-ch{display:contents} .c-ch>span:nth-child(3),.c-ch>span:nth-child(4){text-align:right} .c-ch [data-u]::after{content:none}
+    .c-e{order:9} .cl{min-height:40px}
+  }
+  .det{border:1px solid var(--trait);border-radius:12px;background:rgba(6,13,27,.45);padding:12px 14px;display:grid;gap:12px;align-content:start;font-size:.9rem}
+  .det>*{min-width:0} .det h3{margin:0;font-size:1.1rem;overflow-wrap:anywhere;font-family:"IBM Plex Mono",ui-monospace,monospace} .det h4{margin:0 0 6px;font-size:.9rem;font-weight:600}
+  .det p{margin:0} .ph{color:var(--doux)}
+  .dl{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr);gap:3px 10px;font-size:.88rem} .dl>span:nth-child(odd){color:var(--doux)} .dl span{overflow-wrap:anywhere}
+  .ess{display:grid;gap:3px;font-size:.88rem} .rj{color:var(--corail);font-size:.88rem}
   .gestes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-  .lien{background:none;border:0;padding:0;min-height:0;color:var(--cyan);text-decoration:underline;cursor:pointer}
-  .fiche td{background:rgba(6,13,27,.6)} .fiche .v{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:3px 14px;font-size:.8rem}
-  .dico{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:5px 12px;font-size:.84rem;align-items:baseline}
-  .dico .t{color:var(--doux);font-size:.74rem}
-  .puces{display:flex;gap:6px;flex-wrap:wrap} .puce{padding:2px 9px;border-radius:8px;border:1px solid var(--trait2)}
-  .cartes{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-  .carte{border:1px solid rgba(255,138,101,.35);border-radius:12px;padding:10px 13px;display:flex;flex-direction:column;gap:5px;min-width:0}
-  .vide{color:var(--faible);font-size:.84rem;padding:6px 0}
+  details summary{cursor:pointer;color:var(--doux);font-size:.88rem;min-height:40px;display:flex;align-items:center}
+  .vis{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:.85rem} .vis span{overflow-wrap:anywhere}
+  .vise{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)} .vise>div{min-width:0} .vise h3{margin:0 0 6px;font-size:.9rem} .vise h3 i{font-style:normal;font-weight:400}
+  .rejeu-l{display:grid;gap:6px;font-size:.88rem} .rejeu-l>div{border-left:3px solid rgba(255,138,101,.5);padding-left:8px;overflow-wrap:anywhere}
+  .rejeu-l small{display:block;color:var(--doux);font-size:.85rem}
+  .puces{display:flex;gap:6px;flex-wrap:wrap} .puce{padding:2px 9px;border-radius:8px;border:1px solid var(--trait2);font-size:.85rem}
+  #retour{display:none}
+  @container a (min-width:600px){.fr-r,.fr-a{grid-template-columns:minmax(0,15em) minmax(0,1fr)} .fr-r{min-height:28px;padding:2px 6px} .fr-a>span:first-child{display:block}}
+  @media (pointer:coarse){.fr-r{min-height:40px}}
+  @container a (min-width:900px){.vise{grid-template-columns:repeat(3,minmax(0,1fr))} .duo{display:grid;gap:12px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+  .duo{display:grid;gap:12px} .duo>*{min-width:0}
+  @container a (min-width:1100px){.ld{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}}
+  @container a (max-width:1099px){#retour{display:inline-flex}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+  /* fin du bas */
 </style>
 <body>
 <div class="cadre" id="cadre">
@@ -73,7 +114,8 @@
     <div><b>Leurres</b><br><small>Mémoire des attaquants · faux services ouverts sur Internet</small></div>
     <div class="droite" id="releve">—</div>
   </div>
-  <div class="bandeau" id="session" hidden>Session d'administrateur requise. <a href="/login.html" target="_top" style="color:var(--cyan)">Se connecter</a></div>
+  <div class="bandeau demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune mesure réelle, gestes inertes</div>
+  <div class="bandeau" id="session" hidden>Session d'administrateur requise. <a href="/login.html" target="_top">Se connecter</a></div>
   <div class="bandeau err" id="erreur" hidden role="alert"></div>
 
   <div class="tuiles">
@@ -82,77 +124,152 @@
     <div class="tuile chaud"><div class="l">Rejeux repérés</div><div class="v" id="tR">—</div><div class="s">même mot de passe, plusieurs comptes ou adresses</div></div>
     <div class="tuile"><div class="l">Touches</div><div class="v" id="tT">—</div><div class="s">connexions à un leurre</div></div>
     <div class="tuile calme"><div class="l">Bans actifs</div><div class="v" id="tB">—</div><div class="s">attaquants de la mémoire encore bannis</div></div>
+    <div class="tuile" id="tPop" title="Population « Balayage des leurres de service » du relevé de fond (onglet Campagnes)"><div class="l">Balayage des leurres, 7 j</div><div class="v" id="tP">—</div><div class="s" id="tPs">adresses, relevé des populations</div><div id="tPm"></div></div>
   </div>
 
-  <div class="pan"><h2>Par leurre <i>touches · ce que le leurre sait capter</i></h2><div class="leurres" id="leurres"></div></div>
+  <div class="duo">
+    <section class="pan" aria-labelledby="hPar"><h2 id="hPar">Par leurre <i>touches sur 30 jours · mode réglé dans <a href="/waf/#modes" target="_top">Modes</a></i></h2><div id="leurres"></div></section>
+    <section class="pan" aria-labelledby="hFr"><h2 id="hFr">Frise <i>7 derniers jours · première → dernière visite</i></h2><div class="fr" id="frise"></div><p class="lecture" id="frLecture" aria-live="polite"></p><p class="note" id="frBas"></p></section>
+  </div>
 
-  <div class="deux">
-    <div class="pan large">
-      <h2>Attaquants mémorisés
-        <span class="filtres">
-          <label for="fq">Filtrer</label><input id="fq" type="search" placeholder="adresse, compte, mot de passe, client" style="width:250px">
-          <label for="fp">Profil</label><select id="fp"><option value="">tous</option><option value="force-brute">force brute</option><option value="sondeur">sondeur</option><option value="balayeur">balayeur</option></select>
-        </span>
-      </h2>
-      <div class="table"><table>
-        <thead><tr><th>Adresse</th><th>Leurres</th><th>Profil · client</th><th>Essais</th><th>Vu</th><th>Ban</th><th>Geste</th></tr></thead>
-        <tbody id="att"></tbody>
-      </table></div>
-      <div class="vide" id="attVide" hidden>Aucun attaquant en mémoire pour ce filtre.</div>
-      <div class="sous">Une ligne par adresse, toutes ses visites regroupées. L'adresse ouvre sa fiche : chaque connexion, chaque couple tenté.</div>
+  <section class="pan" aria-labelledby="hAtt"><h2 id="hAtt">Attaquants mémorisés <i id="nbAff"></i></h2>
+    <div class="filtres">
+      <input id="fq" type="search" placeholder="adresse, compte, mot de passe, client" aria-label="Filtrer : adresse, compte, mot de passe, client">
+      <select id="fp" aria-label="Profil"><option value="">tous profils</option><option value="force-brute">force brute</option><option value="sondeur">sondeur</option><option value="balayeur">balayeur</option></select>
     </div>
+    <div class="ld"><div class="lst"><div class="th" aria-hidden="true"><span>Attaquant</span><span>Leurres</span><span>Profil</span><span>Essais</span><span>Visites</span><span>Dernière</span><span>Ban</span></div>
+      <div id="att" class="rangs" role="group" aria-label="Attaquants mémorisés, du plus récent au plus ancien"></div>
+      <button type="button" id="plus" hidden></button></div>
+    <div class="pile"><button type="button" id="retour">← Revenir à la liste</button><article class="det" id="detail" tabindex="-1" aria-label="Détail de l’attaquant choisi"></article></div></div>
+  </section>
 
-    <div class="pan etroit">
-      <h2>Dictionnaire des robots <i>en clair</i></h2>
-      <div class="dico" id="dico"></div>
-      <div class="vide" id="dicoVide" hidden>Aucun identifiant tenté pour l'instant.</div>
-      <div class="sous">Comptes les plus visés</div>
-      <div class="puces" id="comptes"></div>
-      <div><button type="button" id="export">Exporter le dictionnaire</button></div>
+  <section class="pan" aria-labelledby="hDico"><h2 id="hDico">Ce que tentent les robots <i>en clair · 30 jours</i></h2>
+    <div class="vise">
+      <div><h3>Mots de passe <i class="note">essais</i></h3><div id="dico"></div></div>
+      <div><h3>Comptes <i class="note">essais</i></h3><div id="comptes"></div></div>
+      <div><h3>Rejeux <i class="note">ce qui relie les attaquants</i></h3><div id="rejeux" class="rejeu-l"></div></div>
     </div>
-  </div>
-
-  <div class="pan chaud"><h2>Rejeux <i>ce qui relie les attaquants</i></h2>
-    <div class="cartes" id="rejeux"></div>
-    <div class="vide" id="rejVide" hidden>Aucun rejeu repéré pour l'instant.</div>
-  </div>
+    <div><button type="button" id="export">Exporter le dictionnaire</button></div>
+  </section>
+  <p class="note">Ce que les leurres détournent, site par site et heure par heure : onglet <a href="/waf/#sites" target="_top">Sites</a> (couche « détourné »). La population « Balayage des leurres de service » : onglet <a href="/waf/#campaigns" target="_top">Campagnes</a>.</p>
 </div>
 
 <script>
 (function(){
   'use strict';
-  var API='/api/v1/waf/leurres/';
+  var API='/api/v1/waf/leurres/',DEMO=/[?&]demo=1/.test(location.search);
   var LEURRES=[['telnet','Telnet 23','compte + mot de passe, 5 essais'],['rdp','RDP 3389','compte, protocoles'],['vnc','VNC 5900','version du client'],
     ['redis','Redis 6379','AUTH, commandes'],['postgres','Postgres 5432','compte + mot de passe, appli'],['elasticsearch','Elastic 9200','Basic, User-Agent'],
-    ['mongodb','Mongo 27017','pilote, version'],['mysql','MySQL 3306','première trame seulement',1],['mssql','MSSQL 1433','première trame seulement',1]];
+    ['mongodb','Mongo 27017','pilote, version'],['mysql','MySQL 3306','première trame seulement'],['mssql','MSSQL 1433','première trame seulement']];
   var PROFIL={'force-brute':'force brute','sondeur':'sondeur','balayeur':'balayeur'};
-  var DICO=null, OUVERTE='';
+  var ETAT={liste:[],sel:null,lim:10,fiche:null,ficheIp:null,ouv:false,modes:null};
+  var PAS=10,MAXFR=12,J=86400;
   function el(i){return document.getElementById(i);}
-  function cree(tag,cls,texte){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;return e;}
-  function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function cree(tag,cls,texte,titre){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;if(titre)e.title=titre;return e;}
+  function add(p){for(var i=1;i<arguments.length;i++){if(arguments[i]!=null)p.appendChild(arguments[i]);}return p;}
+  function vide(n){while(n.firstChild)n.removeChild(n.firstChild);return n;}
   function nb(v){return typeof v==='number'?v.toLocaleString('fr-FR'):'—';}
+  function pl(n,s,p){return nb(n)+' '+(n>1?p:s);}
   function quand(t){if(!t)return '—';var d=new Date(t*1000);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
-  function duree(s){if(typeof s!=='number')return 'actif';if(s>=86400)return Math.round(s/86400)+' j';if(s>=3600)return Math.round(s/3600)+' h';return Math.max(1,Math.round(s/60))+' min';}
+  function rel(t){if(!t)return '—';var s=Math.max(0,Date.now()/1000-t);return s<90?'à l’instant':s<3600?'il y a '+Math.round(s/60)+' min':s<J?'il y a '+Math.round(s/3600)+' h':'il y a '+Math.round(s/J)+' j';}
+  function duree(s){if(typeof s!=='number')return 'actif';if(s>=J)return Math.round(s/J)+' j';if(s>=3600)return Math.round(s/3600)+' h';return Math.max(1,Math.round(s/60))+' min';}
+  function masque(ip){if(ip==='local')return 'LAN';var m=/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(ip);if(m)return m[1]+'.'+m[2]+'.•.•';
+    return ip.indexOf(':')>=0?ip.split(':').slice(0,2).join(':')+':…':'•••';}
+  function couple(x){return (x.compte||'(sans compte)')+' / '+(x.mot_de_passe===''?'(vide)':x.mot_de_passe);}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function entetes(json){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;if(json)h['Content-Type']='application/json';return h;}
-  function jget(chemin){return fetch(API+chemin,{headers:entetes(),credentials:'same-origin',cache:'no-store'}).then(function(r){
-    if(r.status===401||r.status===403){el('session').hidden=false;return null;} return r.ok?r.json():null;}).catch(function(){return null;});}
-  function jpost(chemin,corps){return fetch(API+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',body:JSON.stringify(corps)}).then(function(r){
+  function jget(chemin,discret){if(DEMO)return Promise.resolve(demo(chemin));
+    return fetch((chemin.charAt(0)==='/'?'/api/v1/waf':API)+(chemin.charAt(0)==='/'?chemin:chemin),{headers:entetes(),credentials:'same-origin',cache:'no-store'}).then(function(r){
+    if(!discret&&(r.status===401||r.status===403)){el('session').hidden=false;return null;} return r.ok?r.json():null;}).catch(function(){return null;});}
+  function jpost(chemin,corps){if(DEMO)return Promise.resolve({ok:false,statut:0,corps:{detail:{message:'démonstration : geste inerte'}}});
+    return fetch(API+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',body:JSON.stringify(corps)}).then(function(r){
     return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,statut:r.status,corps:j};});}).catch(function(){return {ok:false,statut:0,corps:{}};});}
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'leurres'},location.origin);}catch(e){}}}
   function erreur(msg){var e=el('erreur');e.textContent=msg||'';e.hidden=!msg;hauteur();}
-  function couple(x){return (x.compte||'(sans compte)')+' / '+(x.mot_de_passe===''?'(vide)':x.mot_de_passe);}
+  function barres(items,coul,videTxt){
+    var box=cree('div'),m=Math.max.apply(null,items.map(function(x){return x[1];}).concat([1]));
+    if(!items.length){add(box,cree('p','vide',videTxt||'—'));return box;}
+    items.forEach(function(x){var l=cree('div','lig',null,x[2]||(x[0]+' : '+nb(x[1]))),e=cree('em'),i=cree('i');i.style.width=Math.max(3,100*x[1]/m)+'%';i.style.background=coul;
+      add(box,add(l,cree('span','mono',x[0]),add(e,i),cree('b',null,nb(x[1]))));});
+    return box;
+  }
 
   function resume(r){
     if(!r)return;
     el('tA').textContent=nb(r.attaquants);el('tC').textContent=nb(r.couples);el('tR').textContent=nb(r.rejeux);el('tT').textContent=nb(r.touches);el('tB').textContent=nb(r.bans_actifs);
     el('tAs').textContent='adresses distinctes, '+(r.fenetre_jours||30)+' jours';
     el('releve').textContent=r.premiere?'mémoire depuis le '+quand(r.premiere):'aucune touche en mémoire';
-    var z=el('leurres');vide(z);
-    LEURRES.forEach(function(l){var d=cree('div','leurre'+(l[3]?' partiel':''));var b=cree('b');b.appendChild(cree('span','',l[1])).style.color='inherit';
-      b.lastChild.style.fontSize='inherit';b.appendChild(document.createTextNode(nb((r.par_leurre||{})[l[0]]||0)));d.appendChild(b);d.appendChild(cree('span','',l[2]));z.appendChild(d);});
+    var z=vide(el('leurres')),par=r.par_leurre||{},modes=Object.create(null),m;
+    ((ETAT.modes&&ETAT.modes.leurres)||[]).forEach(function(x){if(x&&typeof x.service==='string')modes[x.service]=x.mode;});
+    var L=LEURRES.map(function(l){return [l,typeof par[l[0]]==='number'?par[l[0]]:0];}).sort(function(a,b){return b[1]-a[1];});
+    m=Math.max.apply(null,L.map(function(x){return x[1];}).concat([1]));
+    L.forEach(function(x){var l=x[0],mo=modes[l[0]],d=cree('div','lig l4',null,l[1]+' : '+nb(x[1])+' touches · capte : '+l[2]),e=cree('em'),i=cree('i');
+      i.style.width=(x[1]?Math.max(3,100*x[1]/m):0)+'%';i.style.background='var(--corail)';
+      add(z,add(d,cree('span',null,l[1]),cree('span','md'+(mo==='bannir'?' bannir':''),mo==='bannir'?'bannit':mo==='observer'?'observe':'—',mo?'Mode réglé dans Modes':'Mode illisible'),add(e,i),cree('b',null,nb(x[1]))));});
+  }
+  // Population « Balayage des leurres de service » (famille acces_distant), relevé de fond refait toutes les 30 min.
+  function population(r){
+    var p=r&&Array.isArray(r.populations)?r.populations.filter(function(x){return x&&x.id==='famille:acces_distant';})[0]:null,z=vide(el('tPm'));
+    if(!p){el('tP').textContent='—';el('tPs').textContent=r?'aucune population de ce type':'relevé indisponible';return;}
+    el('tP').textContent=nb(p.adresses);el('tPs').textContent='adresses · '+(p.etat==='bannie'?'bannie':p.etat==='observee'?'observée':p.etat==='inactive'?'inactive':'état —');
+    var s=(Array.isArray(p.serie)?p.serie:[]).slice(-7),mx=Math.max.apply(null,s.filter(function(v){return typeof v==='number';}).concat([1]));
+    if(!s.some(function(v){return typeof v==='number';}))return;
+    var g=document.createElementNS('http://www.w3.org/2000/svg','svg');g.setAttribute('viewBox','0 0 76 26');g.setAttribute('preserveAspectRatio','none');g.setAttribute('aria-hidden','true');
+    s.forEach(function(v,i){if(typeof v!=='number')return;var h=v>0?Math.max(2,v/mx*25):1,b=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      b.setAttribute('x',i*11);b.setAttribute('y',26-h);b.setAttribute('width',9);b.setAttribute('height',h);if(!v)b.setAttribute('class','z');
+      var t=document.createElementNS('http://www.w3.org/2000/svg','title');t.textContent='J-'+(s.length-1-i)+' : '+nb(v)+' tentatives';b.appendChild(t);g.appendChild(b);});
+    z.appendChild(g);
   }
 
+  function frise(){
+    var box=vide(el('frise')),fin=Date.now()/1000,deb=fin-7*J,x=function(t){return Math.max(0,Math.min(100,(t-deb)/(fin-deb)*100));};
+    el('frLecture').textContent='';
+    var T=ETAT.liste.filter(function(a){return a.derniere&&a.derniere>=deb;}),vus=T.slice(0,MAXFR),avant=ETAT.liste.length-T.length;
+    if(!vus.length){add(box,cree('p','vide',ETAT.liste.length?'Aucune visite sur les 7 derniers jours.':'Aucun attaquant en mémoire.'));}
+    else{
+      var ax=cree('div','fr-a'),pa=cree('span','axe');ax.setAttribute('aria-hidden','true');
+      [7,5,3,0].forEach(function(k){var s=cree('span',null,k?'−'+k+' j':'maintenant');s.style.left=((7-k)/7*100)+'%';add(pa,s);});
+      add(box,add(ax,cree('span'),pa));
+      vus.forEach(function(a){
+        var b=cree('button','fr-r'),n=cree('span','fr-n'),p=cree('span','piste'),z,x1=x(a.premiere||a.derniere),x2=Math.max(x(a.derniere),x1+.6),txt;
+        b.type='button';b.setAttribute('data-k',a.ip);b.setAttribute('aria-current',String(a.ip===ETAT.sel));p.setAttribute('aria-hidden','true');
+        add(n,cree('b',null,masque(a.ip)),cree('span','md',PROFIL[a.profil]||a.profil));
+        for(var k=1;k<7;k++){z=cree('i','gr');z.style.left=(k/7*100)+'%';add(p,z);}
+        txt=masque(a.ip)+' : de '+quand(a.premiere)+(a.premiere&&a.premiere<deb?' (avant la fenêtre)':'')+' à '+quand(a.derniere)+' · '+pl(a.visites,'visite','visites');
+        z=cree('i','sg',null,txt);z.style.left=x1+'%';z.style.width=(x2-x1)+'%';z.setAttribute('data-l',txt);add(p,z);
+        z=cree('i','mk',null,'Dernière visite : '+quand(a.derniere));z.style.left=x(a.derniere)+'%';add(p,z);
+        z=cree('i','mt',null,'Maintenant');z.style.left='100%';add(p,z);
+        b.setAttribute('aria-label',masque(a.ip)+', '+(PROFIL[a.profil]||a.profil)+' : '+pl(a.visites,'visite','visites')+', dernière '+rel(a.derniere)+'. Afficher le détail.');
+        b.addEventListener('click',function(){choisir(a.ip,true);});
+        add(box,add(b,n,p));
+      });
+      if(T.length>MAXFR) add(box,cree('p','note','+ '+pl(T.length-MAXFR,'attaquant','attaquants')+' dans le classement ci-dessous.'));
+    }
+    el('frBas').textContent='Une ligne par adresse, de la première à la dernière visite (la barre ne dit pas si les visites étaient continues).'+(avant>0?' '+pl(avant,'attaquant n’a','attaquants n’ont')+' rien fait depuis 7 jours.':'');
+  }
+
+  function ligne(a){
+    var b=cree('button','cl'+(a.rejeu?' rejeu':'')),ch=cree('span','c-ch'),e=cree('span','c-e');
+    b.type='button';b.setAttribute('data-k',a.ip);b.setAttribute('aria-current',String(a.ip===ETAT.sel));
+    var es=cree('span',null,nb(a.nb_essais));es.setAttribute('data-u',a.nb_essais>1?'essais':'essai');
+    var vi=cree('span',null,nb(a.visites));vi.setAttribute('data-u',a.visites>1?'visites':'visite');
+    add(ch,cree('span',null,a.services.join(', ')),cree('span',null,PROFIL[a.profil]||a.profil),es,vi,cree('span',null,rel(a.derniere),quand(a.derniere)));
+    add(e,cree('span','ban'+(a.ban&&a.ban.actif?' on':''),!a.ban?'LAN':a.ban.actif===null?'—':a.ban.actif?'banni '+duree(a.ban.expire_dans):'non banni'));
+    add(b,add(cree('span','c-nom'),cree('b',null,masque(a.ip),a.rejeu?'Rejeu : un mot de passe sur plusieurs comptes':null)),ch,e);
+    b.setAttribute('aria-label',masque(a.ip)+(a.rejeu?', rejeu':'')+', '+a.services.join(', ')+', '+(PROFIL[a.profil]||a.profil)+', '+pl(a.nb_essais,'essai','essais')+', dernière visite '+rel(a.derniere)+'. Afficher le détail.');
+    b.addEventListener('click',function(){choisir(a.ip,false);});
+    return b;
+  }
+  function liste(){
+    var box=el('att'),foc=document.activeElement&&box.contains(document.activeElement)?document.activeElement.getAttribute('data-k'):null,L=ETAT.liste,reste;
+    vide(box);
+    el('nbAff').textContent=L.length?pl(L.length,'adresse','adresses'):'';
+    if(!L.length)add(box,cree('p','vide',ETAT.charge?'Aucun attaquant en mémoire pour ce filtre.':'—'));
+    L.slice(0,ETAT.lim).forEach(function(a){add(box,ligne(a));});
+    reste=L.length-ETAT.lim;el('plus').hidden=reste<=0;
+    if(reste>0)el('plus').textContent='Afficher '+Math.min(PAS,reste)+' de plus ('+pl(reste,'restante','restantes')+')';
+    if(foc)[].some.call(box.querySelectorAll('[data-k]'),function(b){if(b.getAttribute('data-k')!==foc)return false;b.focus({preventScroll:true});return true;});
+  }
   function geste(ip,chemin,corps,bouton){
     bouton.disabled=true;erreur('');
     jpost(chemin,corps).then(function(r){
@@ -160,79 +277,118 @@
       charger();
     });
   }
-
-  function ligneFiche(tr,ip){
-    var f=cree('tr','fiche');var td=cree('td');td.colSpan=7;td.textContent='Lecture de la fiche…';f.appendChild(td);tr.parentNode.insertBefore(f,tr.nextSibling);
-    jget('attaquant/'+encodeURIComponent(ip)).then(function(d){
-      vide(td);if(!d||!d.visites||!d.visites.length){td.textContent='Fiche indisponible.';hauteur();return;}
-      var g=cree('div','v');
-      d.visites.forEach(function(v){g.appendChild(cree('span','',quand(v.ts)));g.appendChild(cree('span','',v.service+' · '+(PROFIL[v.profil]||v.profil)+(v.action==='banned'?' · banni':'')));
-        var c=cree('span','mono');c.textContent=(v.client||'')+(v.essais.length?(v.client?' — ':'')+v.essais.map(couple).join(', '):'');g.appendChild(c);});
-      td.appendChild(g);if(d.tronquee)td.appendChild(cree('div','sous','Fiche limitée aux 500 dernières visites.'));hauteur();
-    });
+  function detail(){
+    var box=el('detail'),a=ETAT.liste.filter(function(x){return x.ip===ETAT.sel;})[0],dedans=box.contains(document.activeElement);
+    vide(box);
+    if(!a){add(box,cree('p','vide',ETAT.charge?'Aucun attaquant à détailler.':'Session d’administrateur requise.'));return;}
+    add(box,add(cree('div'),cree('h3',null,a.ip==='local'?'LAN':a.ip),cree('p','ph',(PROFIL[a.profil]||a.profil)+(a.client?' · client '+a.client:''))));
+    var dl=cree('div','dl');
+    [['Leurres',a.services.join(', ')],['Visites',nb(a.visites)],['Première',a.premiere?rel(a.premiere)+' · '+quand(a.premiere):'—'],['Dernière',rel(a.derniere)+' · '+quand(a.derniere)],
+     ['Ban',!a.ban?'jamais (LAN)':a.ban.actif===null?'— (bannissements illisibles)':a.ban.actif?'actif, reste '+duree(a.ban.expire_dans):'non banni']]
+      .forEach(function(x){add(dl,cree('span',null,x[0]),cree('span',null,x[1]));});
+    add(box,dl);
+    var es=cree('div','ess');
+    if(!a.nb_essais)add(es,cree('span','vide','aucun identifiant tenté'));
+    a.essais.forEach(function(x){add(es,cree('span','mono',couple(x)));});
+    if(a.nb_essais>a.essais.length)add(es,cree('span','note','+ '+(a.nb_essais-a.essais.length)+' autres (fiche ci-dessous)'));
+    if(a.rejeu)add(es,cree('span','rj','rejeu : un mot de passe sur plusieurs comptes'));
+    add(box,add(cree('div'),cree('h4',null,'Couples tentés'),es));
+    if(a.ban){var g=cree('div','gestes'),sel=cree('select');sel.setAttribute('aria-label','Durée du ban');
+      [['4h','4 h'],['24h','24 h'],['7d','7 j']].forEach(function(o){var op=cree('option','',o[1]);op.value=o[0];if(o[0]==='24h')op.selected=true;sel.appendChild(op);});
+      var b=cree('button',a.ban.actif===false?'fort':'',a.ban.actif===false?'Bannir':'Prolonger');b.type='button';b.addEventListener('click',function(){geste(a.ip,'ban',{ip:a.ip,duree:sel.value},b);});
+      add(g,sel,b);
+      if(a.ban.actif){var l=cree('button','','Lever');l.type='button';l.addEventListener('click',function(){geste(a.ip,'unban',{ip:a.ip},l);});add(g,l);}
+      add(box,g);}
+    var d=cree('details');d.open=ETAT.ouv;
+    add(d,cree('summary',null,'Toutes les visites ('+nb(a.visites)+')'));
+    var z=cree('div','vis');add(d,z);
+    function remplir(f){vide(z);if(!f||!f.visites||!f.visites.length){add(z,cree('span','vide','Fiche indisponible.'));return;}
+      f.visites.forEach(function(v){add(z,cree('span',null,quand(v.ts)),cree('span','mono',v.service+' · '+(PROFIL[v.profil]||v.profil)+(v.action==='banned'?' · banni':'')+(v.client?' · '+v.client:'')+(v.essais&&v.essais.length?' — '+v.essais.map(couple).join(', '):'')));});
+      if(f.tronquee)add(z,cree('span','note','Fiche limitée aux 500 dernières visites.'));hauteur();}
+    function lire(){if(ETAT.ficheIp===a.ip&&ETAT.fiche){remplir(ETAT.fiche);return;}add(z,cree('span','note','Lecture de la fiche…'));
+      jget('attaquant/'+encodeURIComponent(a.ip)).then(function(f){ETAT.fiche=f;ETAT.ficheIp=a.ip;if(ETAT.sel===a.ip)remplir(f);});}
+    d.addEventListener('toggle',function(){ETAT.ouv=d.open;if(d.open)lire();hauteur();});
+    if(d.open)lire();
+    add(box,d);
+    if(dedans)box.focus({preventScroll:true});
   }
-
+  function choisir(ip,deFrise){
+    ETAT.sel=ip;
+    var i=ETAT.liste.map(function(a){return a.ip;}).indexOf(ip);if(i>=ETAT.lim)ETAT.lim=Math.ceil((i+1)/PAS)*PAS;
+    liste();detail();
+    [].forEach.call(el('frise').querySelectorAll('.fr-r'),function(b){b.setAttribute('aria-current',String(b.getAttribute('data-k')===ip));});
+    if(deFrise||el('retour').offsetParent!==null){el('detail').focus({preventScroll:true});el('detail').scrollIntoView({block:'start'});}
+    hauteur();
+  }
   function attaquants(d){
-    var tb=el('att');vide(tb);var liste=(d&&d.attaquants)||[];el('attVide').hidden=liste.length>0||!d;
-    liste.forEach(function(a){
-      var tr=cree('tr',a.rejeu?'rejeu':'');
-      var td=cree('td');var lien=cree('button','lien mono',a.ip==='local'?'LAN':a.ip);lien.type='button';lien.setAttribute('aria-expanded','false');
-      lien.addEventListener('click',function(){var s=tr.nextSibling;if(s&&s.className==='fiche'){s.parentNode.removeChild(s);OUVERTE='';lien.setAttribute('aria-expanded','false');hauteur();return;}
-        OUVERTE=a.ip;lien.setAttribute('aria-expanded','true');ligneFiche(tr,a.ip);});
-      td.appendChild(lien);tr.appendChild(td);
-      tr.appendChild(cree('td','',a.services.join(', ')));
-      td=cree('td','',PROFIL[a.profil]||a.profil);if(a.client)td.appendChild(cree('div','sous mono',a.client));tr.appendChild(td);
-      td=cree('td');if(!a.nb_essais)td.appendChild(cree('span','sous','aucun'));
-      a.essais.forEach(function(x){td.appendChild(cree('div','mono',couple(x)));});
-      if(a.nb_essais>a.essais.length)td.appendChild(cree('div','sous','+ '+(a.nb_essais-a.essais.length)+' autres'));
-      if(a.rejeu)td.appendChild(cree('div','rj','rejeu : un mot de passe sur plusieurs comptes'));tr.appendChild(td);
-      td=cree('td','',quand(a.derniere));td.appendChild(cree('div','sous',a.visites+(a.visites>1?' visites':' visite')));tr.appendChild(td);
-      td=cree('td');if(!a.ban)td.appendChild(cree('span','sous','jamais (LAN)'));
-      else td.appendChild(cree('span','pastille'+(a.ban.actif?'':' non'),a.ban.actif===null?'—':a.ban.actif?duree(a.ban.expire_dans):'non banni'));tr.appendChild(td);
-      td=cree('td');
-      if(a.ban){var g=cree('div','gestes');var sel=cree('select');sel.setAttribute('aria-label','Durée du ban pour '+a.ip);
-        [['4h','4 h'],['24h','24 h'],['7d','7 j']].forEach(function(o){var op=cree('option','',o[1]);op.value=o[0];if(o[0]==='24h')op.selected=true;sel.appendChild(op);});
-        var b=cree('button',a.ban.actif===false?'fort':'',a.ban.actif===false?'Bannir':'Prolonger');b.type='button';b.addEventListener('click',function(){geste(a.ip,'ban',{ip:a.ip,duree:sel.value},b);});
-        g.appendChild(sel);g.appendChild(b);
-        if(a.ban.actif){var l=cree('button','','Lever');l.type='button';l.addEventListener('click',function(){geste(a.ip,'unban',{ip:a.ip},l);});g.appendChild(l);}
-        td.appendChild(g);}
-      tr.appendChild(td);tb.appendChild(tr);
-      if(a.ip===OUVERTE){lien.setAttribute('aria-expanded','true');ligneFiche(tr,a.ip);}
-    });
+    ETAT.charge=!!d;ETAT.liste=(d&&Array.isArray(d.attaquants)?d.attaquants:[]).filter(function(a){return a&&typeof a.ip==='string';}).map(function(a){
+      return {ip:a.ip,services:Array.isArray(a.services)?a.services.map(String):[],profil:String(a.profil||''),client:a.client?String(a.client):'',visites:+a.visites||0,
+        premiere:+a.premiere||null,derniere:+a.derniere||null,nb_essais:+a.nb_essais||0,essais:Array.isArray(a.essais)?a.essais:[],rejeu:!!a.rejeu,ban:a.ban||null};});
+    if(!ETAT.liste.some(function(a){return a.ip===ETAT.sel;})){ETAT.sel=ETAT.liste.length?ETAT.liste[0].ip:null;ETAT.ouv=false;}
+    if(ETAT.ficheIp!==ETAT.sel)ETAT.fiche=null;
+    frise();liste();detail();
   }
-
   function dictionnaire(d){
-    DICO=d;var z=el('dico');vide(z);var m=(d&&d.mots_de_passe)||[];el('dicoVide').hidden=m.length>0||!d;
-    if(m.length){['mot de passe','essais','comptes','adresses'].forEach(function(t){z.appendChild(cree('span','t',t));});}
-    m.slice(0,15).forEach(function(x){z.appendChild(cree('span','mono',x.mot_de_passe===''?'(vide)':x.mot_de_passe));z.appendChild(cree('span','',nb(x.essais)));z.appendChild(cree('span','',nb(x.comptes)));z.appendChild(cree('span','',nb(x.adresses)));});
-    var c=el('comptes');vide(c);((d&&d.comptes)||[]).slice(0,12).forEach(function(x){c.appendChild(cree('span','puce mono',x.compte));});
+    var m=(d&&d.mots_de_passe)||[],c=(d&&d.comptes)||[];
+    add(vide(el('dico')),barres(m.slice(0,10).map(function(x){return [x.mot_de_passe===''?'(vide)':x.mot_de_passe,x.essais,(x.mot_de_passe||'(vide)')+' : '+nb(x.essais)+' essais, '+pl(x.comptes,'compte','comptes')+', '+pl(x.adresses,'adresse','adresses')];}),'var(--corail)',d?'Aucun identifiant tenté pour l’instant.':'—'));
+    add(vide(el('comptes')),barres(c.slice(0,10).map(function(x){return [x.compte,x.essais,x.compte+' : '+nb(x.essais)+' essais, '+pl(x.adresses,'adresse','adresses')];}),'var(--violet)',d?'Aucun compte visé.':'—'));
     el('export').disabled=!m.length;el('export').textContent='Exporter le dictionnaire'+(d&&d.total_mots_de_passe?' ('+nb(d.total_mots_de_passe)+')':'');
   }
-
   function rejeux(r){
-    var z=el('rejeux');vide(z);var n=0;
-    function carte(titre,ligne,note){var c=cree('div','carte');c.appendChild(cree('b','',titre));c.appendChild(cree('div','mono',ligne));c.appendChild(cree('div','sous',note));z.appendChild(c);n++;}
+    var z=vide(el('rejeux')),tous=[];
     if(r){
-      (r.mot_de_passe_plusieurs_comptes||[]).slice(0,6).forEach(function(x){carte('Un mot de passe, plusieurs comptes',x.mot_de_passe+' → '+x.comptes.join(', '),x.adresses+(x.adresses>1?' adresses':' adresse'));});
-      (r.couple_plusieurs_adresses||[]).slice(0,6).forEach(function(x){carte('Un même couple, plusieurs adresses',couple(x)+' ← '+x.adresses.length+' adresses',x.blocs+(x.blocs>1?' blocs /24':' bloc /24')+' : même outil, même liste');});
-      (r.client_plusieurs_leurres||[]).slice(0,6).forEach(function(x){carte('Un même client, plusieurs leurres',x.client+' → '+x.services.join(', '),x.adresses+(x.adresses>1?' adresses':' adresse'));});
+      (r.mot_de_passe_plusieurs_comptes||[]).forEach(function(x){tous.push(['Un mot de passe, plusieurs comptes',x.mot_de_passe+' → '+x.comptes.join(', '),pl(x.adresses,'adresse','adresses')]);});
+      (r.couple_plusieurs_adresses||[]).forEach(function(x){tous.push(['Un même couple, plusieurs adresses',couple(x)+' ← '+x.adresses.length+' adresses',pl(x.blocs,'bloc /24','blocs /24')+' : même outil, même liste']);});
+      (r.client_plusieurs_leurres||[]).forEach(function(x){tous.push(['Un même client, plusieurs leurres',x.client+' → '+x.services.join(', '),pl(x.adresses,'adresse','adresses')]);});
     }
-    el('rejVide').hidden=n>0||!r;
+    function carte(x){var d=cree('div');add(d,cree('b',null,x[0]),cree('span','mono',' '+x[1]),cree('small',null,x[2]));return d;}
+    if(!tous.length){add(z,cree('p','vide',r?'Aucun rejeu repéré pour l’instant.':'—'));return;}
+    tous.slice(0,4).forEach(function(x){add(z,carte(x));});
+    if(tous.length>4){var d=cree('details');add(d,cree('summary',null,tous.length-4>1?'Les '+(tous.length-4)+' autres rejeux':'L’autre rejeu'));var w=cree('div','rejeu-l');tous.slice(4,60).forEach(function(x){add(w,carte(x));});add(z,add(d,w));}
   }
 
   function charger(){
     var q='attaquants?filtre='+encodeURIComponent(el('fq').value)+'&profil='+encodeURIComponent(el('fp').value);
-    return Promise.all([jget('resume'),jget(q),jget('dictionnaire'),jget('rejeux')]).then(function(t){resume(t[0]);attaquants(t[1]);dictionnaire(t[2]);rejeux(t[3]);hauteur();});
+    return Promise.all([jget('resume'),jget(q),jget('dictionnaire'),jget('rejeux'),jget('/leurres-service/modes',true),jget('/populations',true)]).then(function(t){
+      ETAT.modes=t[4];resume(t[0]);attaquants(t[1]);dictionnaire(t[2]);rejeux(t[3]);population(t[5]);hauteur();});
+  }
+
+  // Démonstration : adresses de documentation (RFC 5737), comptes et mots de passe fictifs, aucun appel.
+  function demo(chemin){
+    var n=Math.floor(Date.now()/1000),S=['telnet','rdp','vnc','redis','postgres','elasticsearch','mongodb','mysql','mssql'],P=['force-brute','sondeur','balayeur'],A=[];
+    for(var i=0;i<23;i++){var e=i%3===0?[{compte:'admin',mot_de_passe:'admin'},{compte:'root',mot_de_passe:'123456'}]:i%3===1?[{compte:'user',mot_de_passe:'password'}]:[];
+      A.push({ip:(i<12?'192.0.2.':'198.51.100.')+(10+i),services:[S[i%9]].concat(i%4===0?[S[(i+3)%9]]:[]),profil:P[i%3],client:i%5===0?'libssh_0.9.6':'',visites:3+(i*7)%40,
+        premiere:n-((i*13)%9+1)*J,derniere:n-((i*5)%60)*3600-120,nb_essais:e.length*(1+i%4),essais:e,rejeu:i%6===0,ban:{actif:i%2===0,expire_dans:i%2===0?3600*(1+i):null}});}
+    if(chemin==='resume')return {attaquants:23,couples:58,rejeux:5,touches:412,bans_actifs:12,fenetre_jours:30,premiere:n-29*J,par_leurre:{telnet:160,rdp:92,vnc:41,redis:38,postgres:30,elasticsearch:22,mongodb:15,mysql:9,mssql:5}};
+    if(chemin.indexOf('attaquants')===0)return {attaquants:A,total:A.length};
+    if(chemin.indexOf('attaquant/')===0)return {ip:'',visites:[{ts:n-3600,service:'telnet',profil:'force-brute',action:'warning',client:'',essais:[{compte:'admin',mot_de_passe:'admin'}]},{ts:n-7200,service:'rdp',profil:'sondeur',action:'banned',client:'',essais:[]}],tronquee:false};
+    if(chemin.indexOf('dictionnaire')===0)return {couples:58,total_mots_de_passe:41,mots_de_passe:[['123456',88,6,30],['admin',61,4,22],['password',40,5,18],['',22,3,9],['root',19,2,7],['qwerty',11,2,5]].map(function(x){return {mot_de_passe:x[0],essais:x[1],comptes:x[2],adresses:x[3]};}),
+      comptes:[['root',120,34],['admin',96,30],['user',40,12],['postgres',22,8],['sa',9,4]].map(function(x){return {compte:x[0],essais:x[1],adresses:x[2]};})};
+    if(chemin==='rejeux')return {mot_de_passe_plusieurs_comptes:[{mot_de_passe:'123456',comptes:['root','admin','user'],adresses:6},{mot_de_passe:'admin',comptes:['admin','root'],adresses:4}],
+      couple_plusieurs_adresses:[{compte:'root',mot_de_passe:'123456',adresses:['192.0.2.10','192.0.2.13','198.51.100.22'],blocs:2},{compte:'admin',mot_de_passe:'admin',adresses:['192.0.2.16','192.0.2.19'],blocs:1}],
+      client_plusieurs_leurres:[{client:'libssh_0.9.6',services:['telnet','rdp','vnc'],adresses:3}]};
+    if(chemin==='/leurres-service/modes')return {leurres:S.map(function(s,i){return {service:s,mode:i%3?'bannir':'observer'};})};
+    if(chemin==='/populations')return {disponible:true,genere_le:n,populations:[{id:'famille:acces_distant',adresses:2433,etat:'bannie',serie:[160,110,210,150,190,240,120]}]};
+    return null;
   }
 
   var minuterie=null;
-  el('fq').addEventListener('input',function(){clearTimeout(minuterie);minuterie=setTimeout(charger,300);});
-  el('fp').addEventListener('change',charger);
+  el('fq').addEventListener('input',function(){clearTimeout(minuterie);minuterie=setTimeout(function(){ETAT.lim=PAS;charger();},300);});
+  el('fp').addEventListener('change',function(){ETAT.lim=PAS;charger();});
+  el('plus').addEventListener('click',function(){var avant=ETAT.lim;ETAT.lim+=PAS;liste();var b=el('att').querySelectorAll('.cl')[avant];if(b)b.focus();hauteur();});
+  el('retour').addEventListener('click',function(){var b=el('att').querySelector('[aria-current=true]')||el('att').querySelector('.cl');if(b){b.focus();b.scrollIntoView({block:'center'});}});
+  [['att','.cl'],['frise','.fr-r']].forEach(function(x){el(x[0]).addEventListener('keydown',function(e){
+    var p={ArrowDown:1,ArrowUp:-1,Home:-1e6,End:1e6}[e.key];if(!p)return;
+    var l=[].slice.call(this.querySelectorAll(x[1])),i=l.indexOf(document.activeElement);if(i<0)return;
+    e.preventDefault();l[Math.max(0,Math.min(l.length-1,i+p))].focus();});});
+  el('frise').addEventListener('pointerover',function(e){var t=e.target&&e.target.closest?e.target.closest('[data-l]'):null;if(t)el('frLecture').textContent=t.getAttribute('data-l');});
   el('export').addEventListener('click',function(){
     jget('dictionnaire?limite=100000').then(function(d){if(!d)return;var lignes=d.mots_de_passe.map(function(x){return x.mot_de_passe;}).join('\n')+'\n';
       var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lignes],{type:'text/plain'}));a.download='dictionnaire-des-robots.txt';document.body.appendChild(a);a.click();a.remove();});});
   if(/[?&]embed=1/.test(location.search))document.body.className='emb';
-  charger();setInterval(function(){if(!document.hidden&&!OUVERTE)charger();},60000);
+  el('demo').hidden=!DEMO;
+  window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
+  charger();if(!DEMO)setInterval(function(){if(!document.hidden&&!ETAT.ouv)charger();},60000);
 })();
 </script>
 </body>

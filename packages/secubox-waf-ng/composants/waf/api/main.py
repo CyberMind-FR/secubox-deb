@@ -81,6 +81,10 @@ try:
 except ImportError:  # standalone
     import dossiers as _dossiers
 try:
+    from api import activite as _activite
+except ImportError:  # standalone
+    import activite as _activite
+try:
     from api.application import application as _application, lire_etat as _lire_etat_nft
 except ImportError:  # standalone
     from application import application as _application, lire_etat as _lire_etat_nft
@@ -1088,7 +1092,8 @@ async def _warm_loop():
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
     dernier_sites_php = dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = dernier_dossiers = 0.0
-    _leurres_panne = _dossiers_panne = ""
+    _leurres_panne = _dossiers_panne = _activite_panne = ""
+    dernier_activite = 0.0
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
@@ -1105,6 +1110,16 @@ async def _warm_loop():
             else:
                 _dossiers_panne = ""
             dernier_dossiers = time.time()
+        if time.time() - dernier_activite >= _activite.PERIODE_S:   # #3969 : activité des campagnes, octets neufs seulement
+            try:
+                await asyncio.to_thread(_activite.rafraichir)
+            except Exception as e:  # noqa: BLE001 — la vue précédente reste servie avec son âge
+                if str(e) != _activite_panne:
+                    log.warning("activité des campagnes : calcul en échec : %s", e)
+                    _activite_panne = str(e)
+            else:
+                _activite_panne = ""
+            dernier_activite = time.time()
         if time.time() - dernier_leurres >= LEURRES_PERIODE:
             try:
                 await asyncio.to_thread(_leurres.ingerer)       # la mémoire se remplit même sans visiteur
@@ -1200,6 +1215,13 @@ async def waf_campaigns(limite: int = Query(20, ge=1, le=1000)):
         c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
         c["nb_attaquants"] = len(c.get("attaquants", []))
     return {"available": True, "attaquants": data.get("attaquants", 0), "campagnes": camps}
+
+
+@app.get("/campaigns/activite", dependencies=[Depends(require_lecture_ai)])
+async def waf_campaigns_activite():
+    """Activité des campagnes sur 7 jours, par tranche de 6 h (#3969) : agrégat de la tâche de fond, jamais calculé
+    ici. Tranche non mesurée = null ; aucune adresse. Rien de mesuré → `{"disponible": False}`."""
+    return await asyncio.to_thread(_activite.vue)
 
 
 @app.get("/populations", dependencies=[Depends(require_lecture_ai)])
@@ -2589,3 +2611,4 @@ app.include_router(_filtres_ia_vue.router)
 # ── Dossiers par site (#3963) : l'agrégat est tenu par `_warm_loop`, les routes ne lisent que son résultat ──
 _dossiers.configurer(journal=THREATS_LOG, populations=POPULATIONS_CACHE, vie=NFT_ETAT, **ETATS_BAN)
 app.include_router(_dossiers.router)
+_activite.configurer(journal=THREATS_LOG, campagnes=CAMPAIGNS_FILE, vie=NFT_ETAT)

@@ -426,6 +426,7 @@
         // son cadre (jamais le document) : sa hauteur ne dépend pas de celle de l'iframe, une borne plus haute ne la fait pas grandir.
         const HAUTEUR_MAX = { campagnes: 16000 };
         HAUTEUR_MAX.sites = 16000;   // #3963 : liste puis dossier, empilés sur un téléphone
+        HAUTEUR_MAX.attaquants = HAUTEUR_MAX.leurres = 16000;   // #3969 : frise, classement puis détail, empilés sur un téléphone
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
             const px = (h, onglet) => Math.min(Object.prototype.hasOwnProperty.call(HAUTEUR_MAX, onglet) ? HAUTEUR_MAX[onglet] : 4000, Math.max(300, +h + 4)) + 'px';
