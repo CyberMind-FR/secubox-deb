@@ -18,6 +18,12 @@ secubox-waf-ng (1.50.0-1~trixie1) trixie; urgency=medium
   * API : GET/POST /php-sites, POST /php-sites/detecter ; POST /php-hotes
     retiré (wafctl php-hotes ecrire refusé tant que php-sites est en place),
     sudoers : php-sites lister|ecrire|detecter au lieu de php-hotes ecrire.
+  * Relecture : retour arrière tenu (marqueur « rétabli », détection
+    suspendue jusqu'à « reactiver ») ; sondes bornées à 18 s par fils démons
+    et « timeout 25 » côté root ; journal nginx suivi par curseur inode +
+    position, 32 Mio au plus par passage ; verrou O_NOFOLLOW partagé avec
+    php-hotes ecrire ; « contrôlé » lu dans php_hotes réellement écrit
+    (relu à chaud par sbxwaf, commentaire du postinst corrigé).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 10:00:00 +0100
 

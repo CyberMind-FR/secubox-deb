@@ -143,10 +143,103 @@ def test_retrait_tout_couvrir_et_retour_arriere(ctl):
     rc, d = ctl("php-hotes", "ecrire", entree={"hotes": []})                           # ancien verbe : refusé
     assert rc == 3
     rc, d = ctl("php-sites", "retablir")
-    assert rc == 0 and ctl.profils() == origine and not (ctl.dossier / "php-sites.json").exists()
-    assert list(ctl.dossier.glob("php-sites.json.retabli-*"))
+    assert rc == 0 and ctl.profils() == origine
     rc, d = ctl("php-sites", "retablir")
     assert rc == 4
+
+
+def test_retour_arriere_tenu_jusqu_a_reactivation(ctl):
+    """Relecture 1 : la détection horaire suivante ne refait pas la migration après un retour arrière."""
+    origine = ctl.profils()
+    ctl("php-sites", "detecter")
+    assert ctl("php-sites", "retablir")[0] == 0
+    for _ in range(2):
+        rc, d = ctl("php-sites", "detecter")
+        assert rc == 0 and d["suspendu"] is True and ctl.profils() == origine
+    rc, d = ctl("php-sites", "lister")
+    assert d["etat"]["retabli"]["le"] and d["explicites"] == ["ancien.ex.fr"]          # vérité : php_hotes écrit
+    rc, d = ctl("php-sites", "ecrire", entree={"acteur": "admin", "forcer": ["blog.ex.fr"]})
+    assert rc == 3                                                                     # rien sans réactivation
+    rc, d = ctl("php-hotes", "ecrire", entree={"hotes": ["blog.ex.fr"]})               # l'ancien verbe revit
+    assert rc == 0 and "^blog\\.ex\\.fr$" in ctl.profils()
+    rc, d = ctl("php-sites", "ecrire", entree={"acteur": "admin", "reactiver": True})
+    assert rc == 0 and "retabli" not in d["etat"] and "^boutique\\.ex\\.fr$" in ctl.profils()
+    assert d["etat"]["sauvegarde_php_hotes"][-1] == "^blog\\.ex\\.fr$"
+    assert ctl("php-hotes", "ecrire", entree={"hotes": []})[0] == 3
+
+
+def test_verrou_jamais_au_travers_d_un_lien(ctl):
+    cible = ctl.dossier / "cible"
+    cible.write_text("intact")
+    (ctl.dossier / "php-sites.json.lock").symlink_to(cible)
+    rc, d = ctl("php-sites", "detecter")
+    assert rc == 3 and "verrou" in d["erreur"] and cible.read_text() == "intact"
+    assert ctl("php-hotes", "ecrire", entree={"hotes": []})[0] == 3
+
+
+def test_journal_suivi_par_curseur(ctl):
+    """Relecture 4 : un passage ne relit que les octets neufs ; rotation (nouvel inode) reprise depuis le début."""
+    ctl("php-sites", "detecter")
+    etat = json.loads((ctl.dossier / "php-sites.json").read_text())
+    log = ctl.dossier / "hosts.log"
+    assert etat["journal"]["curseur"]["pos"] == log.stat().st_size
+    with log.open("a") as f:                     # un hit neuf pour blog (déjà 0 bon) puis un second au tour suivant
+        f.write(ACCES.format(h="blog.ex.fr", n=1, m="GET", p="/index.php", s=200, o=900))
+    ctl("php-sites", "detecter")
+    etat = json.loads((ctl.dossier / "php-sites.json").read_text())
+    assert "blog.ex.fr" not in etat["detectes"] and etat["journal"]["candidats"]["blog.ex.fr"]
+    log.unlink()                                                                       # rotation
+    log.write_text(ACCES.format(h="blog.ex.fr", n=2, m="GET", p="/index.php", s=200, o=901))
+    ctl("php-sites", "detecter")
+    etat = json.loads((ctl.dossier / "php-sites.json").read_text())
+    assert etat["detectes"]["blog.ex.fr"]["preuve"] == "/index.php servi en 2xx (2 fois)"
+
+
+def test_plafond_d_octets(tmp_path, monkeypatch):
+    import importlib.machinery
+    import importlib.util
+    chargeur = importlib.machinery.SourceFileLoader("waf_php_sites", str(ICI / "scripts" / "waf-php-sites"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("waf_php_sites", chargeur))
+    chargeur.exec_module(mod)
+    monkeypatch.setattr(mod, "PLAFOND_OCTETS", 1000)
+    j = tmp_path / "j.log"
+    j.write_text("x" * 5000 + "\n" + "ligne\n" * 10)
+    lignes, cur = mod._lignes(str(j), None)
+    assert lignes == ["ligne"] * 10 and cur["pos"] == j.stat().st_size
+    assert mod._lignes(str(j), cur)[0] == []
+
+
+class _Lent(BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        import time
+        self.wfile.write(b"HTTP/1.1 200 OK\r\n")
+        for _ in range(60):                          # en-têtes en goutte-à-goutte
+            self.wfile.write(b"X-A: b\r\n")
+            self.wfile.flush()
+            time.sleep(0.5)
+
+    def log_message(self, *a):
+        pass
+
+
+def test_budget_des_sondes_tenu(tmp_path):
+    """Relecture 2 : 30 origines lentes, budget 2 s : rendu en ~2 s, sans attendre les retardataires."""
+    import importlib.machinery
+    import importlib.util
+    import time
+    chargeur = importlib.machinery.SourceFileLoader("waf_php_sites2", str(ICI / "scripts" / "waf-php-sites"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("waf_php_sites2", chargeur))
+    chargeur.exec_module(mod)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), _Lent)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        routes = {f"s{i}.ex.fr": ("127.0.0.1", srv.server_address[1]) for i in range(30)}
+        t = time.monotonic()
+        assert mod.preuves_entetes(routes, set(), budget=2.0) == {}
+        assert time.monotonic() - t < 3.0
+    finally:
+        srv.shutdown()
 
 
 def test_routes_illisibles_rien_n_est_retire(ctl):
@@ -173,6 +266,12 @@ LISTER = {"ok": True, "present": True, "routes": ["nc.ex.fr", "boutique.ex.fr", 
 def test_api_vue_sans_liste_brute(c):  # noqa: F811
     c.ctl.reponses[("wafctl", "php-sites", "lister")] = (0, LISTER)
     v = c.get("/php-sites").json()
+    assert v["suspendu"] is False
+    c.ctl.reponses[("wafctl", "php-sites", "lister")] = (0, {**LISTER, "explicites": [],
+                                                           "etat": {**LISTER["etat"], "retabli": {"le": "x"}}})
+    s = c.get("/php-sites").json()
+    assert s["suspendu"] is True and {d["hote"]: d["couvert"] for d in s["detectes"]}["boutique.ex.fr"] is None
+    c.ctl.reponses[("wafctl", "php-sites", "lister")] = (0, LISTER)
     assert [d["hote"] for d in v["detectes"]] == ["boutique.ex.fr", "nc.ex.fr"]          # « parti » non servi : caché
     assert {d["hote"]: d["couvert"] for d in v["detectes"]} == {"boutique.ex.fr": "site", "nc.ex.fr": "service"}
     assert v["forcer"][0] == {"hote": "vieux.ex.fr", "le": None, "par": "migration", "servi": False, "couvert": "site"}
@@ -191,6 +290,8 @@ def test_api_ecritures_exactes(c):  # noqa: F811
     assert c.post("/php-sites", json={"forcer": ["a;b"]}).status_code == 422
     assert c.post("/php-sites", json={}).status_code == 422
     assert c.post("/php-sites", json={"tous": True}).status_code == 422                  # plus de tout-ou-rien
+    c.post("/php-sites", json={"reactiver": True})
+    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-sites", "ecrire"], {"acteur": "admin", "reactiver": True}) in c.ctl.appels
     r = c.post("/php-sites/detecter")
     assert r.status_code == 200 and (["sudo", "-n", "/usr/sbin/wafctl", "php-sites", "detecter"], {}) in c.ctl.appels
     c.ctl.reponses[("wafctl", "php-sites", "ecrire")] = (2, {"ok": False, "erreur": "exclure : nc.ex.fr reste couvert"})
@@ -203,4 +304,16 @@ def test_api_ecritures_exactes(c):  # noqa: F811
 def test_paquet_installe_le_detecteur():
     rules = (ICI.parents[1] / "debian" / "rules").read_text()
     assert "composants/waf/scripts/waf-php-sites debian/secubox-waf-ng/usr/lib/secubox/waf/waf-php-sites" in rules
-    assert "wafctl php-sites detecter" in (ICI.parents[1] / "debian" / "postinst").read_text()
+    postinst = (ICI.parents[1] / "debian" / "postinst").read_text()
+    assert "wafctl php-sites detecter" in postinst and "qu'au démarrage" not in postinst   # relecture 3 : à chaud
+    wafctl = (ICI / "scripts" / "wafctl").read_text()
+    assert 'timeout -k 2 25 python3 -I "$WAF_PHP_SITES"' in wafctl
+    go = (ICI.parents[2] / "secubox-toolbox-ng" / "cmd" / "sbxwaf" / "vhostprofiles.go").read_text()
+    assert "func surveillerVhostProfiles" in go
+
+
+def test_un_seul_declencheur_horaire():
+    """Le déclenchement horaire est la tâche de fond de l'API, pas une unité .timer."""
+    main = (ICI / "api" / "main.py").read_text()
+    assert "SITES_PHP_PERIODE = 3600" in main and "_modes.detecter_sites" in main
+    assert not [p for p in (ICI.parents[1]).rglob("*.timer") if "php" in p.read_text(errors="ignore")]

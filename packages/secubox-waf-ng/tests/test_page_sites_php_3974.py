@@ -105,3 +105,22 @@ def test_demo_inerte(nav, largeur):
     if CAPTURES:
         p.locator("#panSites").screenshot(path=f"{CAPTURES}/php-hotes-{largeur}.png")
     p.close()
+
+
+def test_suspendu_bandeau_et_reactivation(nav):
+    SITES.update(suspendu=True, suspendu_le="2026-11-26T08:00:00Z")
+    try:
+        p = ouvrir(nav, 400)
+        assert p.is_visible("#sitesSuspendu") and "Détection suspendue" in p.inner_text("#sitesSuspendu")
+        p.click("#sitesReactiver")
+        p.wait_for_timeout(200)
+        assert p.postes[-1] == ("/api/v1/waf/php-sites", {"reactiver": True})
+        p.close()
+    finally:
+        SITES.update(suspendu=False, suspendu_le=None)
+
+
+def test_tout_texte_de_l_api_en_textcontent():
+    bloc = PAGE[PAGE.index("function rendreSites"):PAGE.index("function rendre(){")]
+    assert "innerHTML" not in PAGE and "insertAdjacentHTML" not in PAGE and "outerHTML" not in PAGE
+    assert "textContent" in bloc and "cree(" in bloc

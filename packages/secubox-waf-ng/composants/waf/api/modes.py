@@ -403,6 +403,7 @@ def _sites(etat: dict) -> dict:
     return {"detectes": detectes, "forcer": exc("forcer"), "exclure": exc("exclure"),
             "autres": len(autres), "servis": sorted(servis), "routes_lisibles": routes is not None,
             "derniere_detection": e.get("derniere_detection"), "migre": bool(etat.get("present")),
+            "suspendu": bool(e.get("retabli")), "suspendu_le": (e.get("retabli") or {}).get("le"),
             "tout_couvrir_herite": TOUS in gardes, "motifs_livres": [m for m in gardes if m != TOUS]}
 
 
@@ -419,6 +420,7 @@ class ExceptionsPHP(BaseModel):
     forcer: Optional[List[str]] = Field(default=None, max_length=200)
     exclure: Optional[List[str]] = Field(default=None, max_length=200)
     retirer_tout_couvrir: Optional[bool] = None
+    reactiver: Optional[bool] = None      # lève la suspension posée par « wafctl php-sites retablir »
 
 
 def _noms(v: Optional[List[str]]) -> Optional[List[str]]:
@@ -435,7 +437,7 @@ def php_sites_ecrire(corps: ExceptionsPHP, user: dict = Depends(require_jwt)):
     """Exceptions de l'administrateur (listes complètes) et retrait de l'ancien « tout couvrir ». La couverture des
     sites détectés n'est jamais écrite ici : wafctl la recalcule."""
     forcer, exclure = _noms(corps.forcer), _noms(corps.exclure)
-    if forcer is None and exclure is None and not corps.retirer_tout_couvrir:
+    if forcer is None and exclure is None and not corps.retirer_tout_couvrir and not corps.reactiver:
         raise HTTPException(422, detail={"motif": "vide"})
     entree: dict = {"acteur": _acteur(user)}
     detail = []
@@ -448,6 +450,9 @@ def php_sites_ecrire(corps: ExceptionsPHP, user: dict = Depends(require_jwt)):
     if corps.retirer_tout_couvrir:
         entree["retirer_tout_couvrir"] = True
         detail.append("tout couvrir hérité retiré")
+    if corps.reactiver:
+        entree["reactiver"] = True
+        detail.append("détection réactivée")
     return _sites(_ecrire([WAFCTL, "php-sites", "ecrire"], entree, "waf-php-sites", " ; ".join(detail), user))
 
 

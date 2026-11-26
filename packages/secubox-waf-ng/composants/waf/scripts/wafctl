@@ -483,8 +483,28 @@ except (OSError, ValueError) as e:
     if verbe == "lister":
         print(json.dumps({"ok": False, "code": 3, "erreur": f"profils illisibles : {e}"})); sys.exit(3)
     sortir("waf-php-hotes", 3, f"profils illisibles : {e}", acteur)
-if verbe == "ecrire" and os.path.exists(os.environ.get("PHP_SITES", "")):
-    sortir("waf-php-hotes", 3, "remplacé par « wafctl php-sites » (#3974) ; « wafctl php-sites retablir » pour revenir", acteur)
+if verbe == "ecrire":
+    # Même verrou que « wafctl php-sites » (#3974) : pas d'écriture croisée pendant une migration ou une détection.
+    import fcntl
+    sites = os.environ.get("PHP_SITES", "")
+    try:
+        vfd = os.open(sites + ".lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        if not stat.S_ISREG(os.fstat(vfd).st_mode):
+            raise OSError("pas un fichier régulier")
+        fcntl.flock(vfd, fcntl.LOCK_EX)
+    except OSError as e:
+        sortir("waf-php-hotes", 3, f"verrou impossible : {e}", acteur)
+    try:
+        with open(sites, encoding="utf-8") as f:
+            actif = not (json.load(f) or {}).get("retabli")
+    except FileNotFoundError:
+        actif = False
+    except (OSError, ValueError):
+        actif = True
+    if actif:
+        sortir("waf-php-hotes", 3, "remplacé par « wafctl php-sites » (#3974) ; « wafctl php-sites retablir » pour revenir", acteur)
+    with open(chemin, encoding="utf-8") as f:      # relu sous verrou
+        profils = json.load(f)
 if verbe == "lister":
     try:
         with open(routes, encoding="utf-8") as f:
@@ -541,7 +561,9 @@ cmd_php_sites() {
     esac
     local journaux=()
     [ "$1" = detecter ] && journaux=("$JOURNAL_HOTES_NGINX.1" "$JOURNAL_HOTES_NGINX")
-    python3 -I "$WAF_PHP_SITES" "$1" "$PHP_SITES" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$AUDIT_SECUBOX" "${journaux[@]}"
+    # Échéance côté root (#3974) : le détecteur borne ses sondes à 18 s ; « timeout » coupe tout reste avant le
+    # délai de 30 s de l'API, pour qu'un détecteur root ne survive jamais à son appelant en tenant le verrou.
+    timeout -k 2 25 python3 -I "$WAF_PHP_SITES" "$1" "$PHP_SITES" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$AUDIT_SECUBOX" "${journaux[@]}"
 }
 
 NFT_TABLE="secubox"

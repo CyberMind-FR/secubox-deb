@@ -31,7 +31,8 @@ import stat
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+import queue
+import threading
 
 HOTE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$")
 EXPLICITE = re.compile(r"^\^[a-z0-9_-]+(\\\.[a-z0-9_-]+)+\$$")
@@ -41,6 +42,7 @@ MAX_SONDES = 300
 DELAI_SONDE_S = 2.0
 BUDGET_SONDES_S = 18.0          # wafctl est appelé avec un délai de 30 s par l'API
 MIN_FICHIERS = 2
+PLAFOND_OCTETS = 32 * 1024 * 1024   # au plus 32 Mio relus par passage
 LIGNE = re.compile(r'^(?P<hote>[A-Za-z0-9._:-]+) \S+ \S+ \S+ \[[^\]]+\] "(?P<m>[A-Z]+) (?P<chemin>[^" ]*)[^"]*" '
                    r'(?P<statut>\d{3}) (?P<octets>\d+|-) ')
 CHEMIN_PHP = re.compile(r"\.php(/|$)", re.I)
@@ -205,30 +207,62 @@ def appliquer(c, etat, profils, routes, retirer_tous=False):
 
 # ── détection ─────────────────────────────────────────────────────────────
 
-def preuves_journal(chemins, routes):
-    """{hôte: (chemin, nombre)} des .php servis en 2xx, attrape-tout écarté (taille identique à « / »)."""
-    accueil, php = {}, {}
+def _lignes(chemin, curseur):
+    """Lignes neuves du journal : depuis le curseur (même inode, fichier non tronqué), sinon les PLAFOND_OCTETS
+    derniers octets (première ligne partielle sautée). Rend (lignes, nouveau curseur)."""
+    try:
+        f = open(chemin, "rb")   # noqa: SIM115
+    except OSError:
+        return [], curseur
+    with f:
+        st = os.fstat(f.fileno())
+        cur = curseur if isinstance(curseur, dict) else {}
+        if cur.get("ino") == st.st_ino and isinstance(cur.get("pos"), int) and 0 <= cur["pos"] <= st.st_size:
+            debut = max(cur["pos"], st.st_size - PLAFOND_OCTETS)
+        else:
+            debut = max(0, st.st_size - PLAFOND_OCTETS)
+        f.seek(debut)
+        if debut and debut != cur.get("pos"):
+            f.readline()
+        donnees = f.read(PLAFOND_OCTETS + 65536)
+        fin = donnees.rfind(b"\n") + 1                # une ligne en cours d'écriture sera lue au tour suivant
+        return donnees[:fin].decode("utf-8", "replace").splitlines(), {"ino": st.st_ino, "pos": f.tell() - len(donnees) + fin}
+
+
+def preuves_journal(chemins, routes, etat):
+    """{hôte: (chemin, nombre)} des .php servis en 2xx, attrape-tout écarté (taille identique à « / »).
+
+    Lecture incrémentale (#3974, relecture) : seul le journal courant est suivi par un curseur inode+position ; à la
+    première lecture ou après rotation, au plus PLAFOND_OCTETS sont relus, la rotation `.1` seulement la première fois.
+    Les tailles de « / » et les hits pas encore probants sont gardés, bornés, dans l'état."""
+    mem = etat.setdefault("journal", {})
+    accueil = {h: set(v) for h, v in (mem.get("accueil") or {}).items() if isinstance(v, list)}
+    php = {h: [tuple(x) for x in v if isinstance(x, list) and len(x) == 2] for h, v in (mem.get("candidats") or {}).items()
+           if isinstance(v, list)}
+    courant = chemins[-1] if chemins else None
+    lectures = []
     for p in chemins:
-        try:
-            f = open(p, encoding="utf-8", errors="replace")
-        except OSError:
+        if p != courant:
+            if mem.get("curseur") is None:
+                lectures.extend(_lignes(p, None)[0])
             continue
-        with f:
-            for ligne in f:
-                if '" 2' not in ligne:
-                    continue
-                m = LIGNE.match(ligne)
-                if not m or not m["statut"].startswith("2"):
-                    continue
-                h = m["hote"].lower().rsplit(":", 1)[0]
-                if routes is not None and h not in routes:
-                    continue
-                chemin = m["chemin"].split("?", 1)[0]
-                taille = m["octets"]
-                if chemin == "/":
-                    accueil.setdefault(h, set()).add(taille)
-                elif CHEMIN_PHP.search(chemin) and m["m"] in ("GET", "POST", "HEAD"):
-                    php.setdefault(h, []).append((chemin, taille))
+        lignes, mem["curseur"] = _lignes(p, mem.get("curseur"))
+        lectures.extend(lignes)
+    for ligne in lectures:
+        if '" 2' not in ligne:
+            continue
+        m = LIGNE.match(ligne)
+        if not m or not m["statut"].startswith("2"):
+            continue
+        h = m["hote"].lower().rsplit(":", 1)[0]
+        if routes is not None and h not in routes:
+            continue
+        chemin = m["chemin"].split("?", 1)[0]
+        taille = m["octets"]
+        if chemin == "/":
+            accueil.setdefault(h, set()).add(taille)
+        elif CHEMIN_PHP.search(chemin) and m["m"] in ("GET", "POST", "HEAD"):
+            php.setdefault(h, []).append((CHEMIN_SUR.sub("", chemin)[:80], taille))
     out = {}
     for h, vus in php.items():
         bons = [c for c, t in vus if t not in accueil.get(h, set())]
@@ -236,16 +270,22 @@ def preuves_journal(chemins, routes):
             freq = {}
             for c in bons:
                 freq[c] = freq.get(c, 0) + 1
-            chemin = max(sorted(freq), key=lambda k: freq[k])
-            out[h] = (CHEMIN_SUR.sub("", chemin)[:80], len(bons))
+            out[h] = (max(sorted(freq), key=lambda k: freq[k]), len(bons))
+    mem["accueil"] = {h: sorted(v)[:8] for h, v in sorted(accueil.items())[:2000]}
+    mem["candidats"] = {h: [list(x) for x in v[-10:]] for h, v in sorted(php.items())[:2000] if h not in out}
     return out
 
 
-def sonder(h, cible):
-    """En-têtes de « GET / » du serveur d'origine : 'X-Powered-By: PHP/8.2' ou 'cookie PHPSESSID', sinon None."""
+def sonder(h, cible, echeance):
+    """En-têtes de « GET / » du serveur d'origine : 'X-Powered-By: PHP/8.2' ou 'cookie PHPSESSID', sinon None.
+    Chaque lecture est bornée par le temps restant avant `echeance` ; http.client borne les en-têtes (100 lignes,
+    64 Kio la ligne) ; le corps n'est jamais lu."""
+    reste = echeance - time.monotonic()
+    if reste <= 0.05:
+        return None
     ip, port = cible
     try:
-        cx = http.client.HTTPConnection(ip, port, timeout=DELAI_SONDE_S)
+        cx = http.client.HTTPConnection(ip, port, timeout=min(DELAI_SONDE_S, reste))
         cx.request("GET", "/", headers={"Host": h, "User-Agent": "secubox-waf-php-sites", "Connection": "close"})
         r = cx.getresponse()
         xpb = r.getheader("X-Powered-By") or ""
@@ -253,28 +293,44 @@ def sonder(h, cible):
         cx.close()
     except (OSError, http.client.HTTPException, ValueError):
         return None
+    if time.monotonic() > echeance:          # réponse en goutte-à-goutte : hors délai, ignorée
+        return None
     if re.match(r"\s*PHP\b", xpb, re.I):
         return "X-Powered-By: " + re.sub(r"[^A-Za-z0-9./ -]", "", xpb)[:40]
     c = COOKIES_PHP.search(cookies)
     return f"cookie {c.group(2)}" if c else None
 
 
-def preuves_entetes(routes, deja):
+def preuves_entetes(routes, deja, budget=None):
+    """Sondes en fils DÉMONS (8 au plus) : passé le budget, on rend ce qu'on a sans attendre les retardataires,
+    qui meurent avec le processus (un ThreadPoolExecutor les attendrait à la sortie)."""
     if not routes:
         return {}
-    candidats = [(h, c) for h, c in sorted(routes.items()) if c and h not in deja][:MAX_SONDES]
-    out, debut = {}, time.monotonic()
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        futurs = {h: ex.submit(sonder, h, c) for h, c in candidats}
-        for h, fu in futurs.items():
-            reste = BUDGET_SONDES_S - (time.monotonic() - debut)
+    budget = BUDGET_SONDES_S if budget is None else budget
+    file = queue.Queue()
+    for h, c in sorted(routes.items()):
+        if c and h not in deja and file.qsize() < MAX_SONDES:
+            file.put((h, c))
+    echeance = time.monotonic() + budget
+    out, verrou = {}, threading.Lock()
+
+    def ouvrier():
+        while time.monotonic() < echeance:
             try:
-                p = fu.result(timeout=max(0.01, reste))
-            except Exception:  # noqa: BLE001 — délai global dépassé : les suivants ne sont pas attendus
-                p = None
+                h, c = file.get_nowait()
+            except queue.Empty:
+                return
+            p = sonder(h, c, echeance)
             if p:
-                out[h] = p
-    return out
+                with verrou:
+                    out[h] = p
+    fils = [threading.Thread(target=ouvrier, daemon=True) for _ in range(8)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join(max(0.0, echeance - time.monotonic()))
+    with verrou:
+        return dict(out)
 
 
 def noter(etat, h, type_, texte, maintenant):
@@ -292,7 +348,7 @@ def detecter(c, etat, profils, routes, maintenant):
         if (routes is None or h in routes) and noter(etat, h, "appli", f"appli {s} (module installé)", maintenant):
             nouveaux.append(h)
     if routes is not None:
-        for h, (chemin, n) in sorted(preuves_journal(c["journaux"], routes).items()):
+        for h, (chemin, n) in sorted(preuves_journal(c["journaux"], routes, etat).items()):
             if noter(etat, h, "fichier", f"{chemin} servi en 2xx ({n} fois)", maintenant):
                 nouveaux.append(h)
         for h, texte in sorted(preuves_entetes(routes, set(etat["detectes"])).items()):
@@ -303,6 +359,19 @@ def detecter(c, etat, profils, routes, maintenant):
 
 
 # ── verbes ────────────────────────────────────────────────────────────────
+
+def prendre_verrou(chemin):
+    """Verrou exclusif, partagé avec `wafctl php-hotes ecrire` : jamais au travers d'un lien, fichier régulier 0600."""
+    try:
+        fd = os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except OSError as e:
+        raise Sortie(3, f"verrou impossible : {e}") from None
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise Sortie(3, "verrou : pas un fichier régulier")
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
 
 def lire_entree():
     brut = sys.stdin.buffer.read(65537)
@@ -328,8 +397,17 @@ def verbe_ecrire(entree, etat, profils, routes, acteur, maintenant, c):
     retirer = entree.get("retirer_tout_couvrir")
     if retirer is not None and not isinstance(retirer, bool):
         raise Sortie(2, "retirer_tout_couvrir : vrai ou faux attendu")
-    if forcer is None and exclure is None and not retirer:
+    reactiver = entree.get("reactiver")
+    if reactiver is not None and not isinstance(reactiver, bool):
+        raise Sortie(2, "reactiver : vrai ou faux attendu")
+    if etat.get("retabli") and not reactiver:
+        raise Sortie(3, "détection suspendue par un retour arrière : réactiver d'abord")
+    if forcer is None and exclure is None and not retirer and not reactiver:
         raise Sortie(2, "rien à écrire")
+    if reactiver:
+        # Repart des php_hotes actuels (ceux remis par le retour arrière, éventuellement retouchés) : nouvelle sauvegarde.
+        etat.pop("retabli", None)
+        etat["sauvegarde_php_hotes"] = [m for m in profils.get("php_hotes") or [] if isinstance(m, str)]
     f = set(etat["forcer"]) if forcer is None else set(forcer)
     x = set(etat["exclure"]) if exclure is None else set(exclure)
     if f & x:
@@ -348,6 +426,8 @@ def verbe_ecrire(entree, etat, profils, routes, acteur, maintenant, c):
     detail = f"forcer {','.join(sorted(f)) or 'aucun'} ; exclure {','.join(sorted(x)) or 'aucun'}"
     if retirer:
         detail += " ; tout couvrir hérité retiré"
+    if reactiver:
+        detail += " ; détection réactivée"
     avant, apres = appliquer(c, etat, profils, routes, retirer_tous=bool(retirer))
     return detail, avant, apres
 
@@ -356,7 +436,10 @@ def vue(etat, profils, routes, present):
     return {"ok": True, "present": present, "etat": etat, "routes": None if routes is None else sorted(routes),
             "profils_vhosts": profils.get("vhosts") or {}, "php_services": profils.get("php_services") or [],
             "php_hotes": [m for m in profils.get("php_hotes") or [] if isinstance(m, str)],
-            "explicites": explicites(etat, routes)}
+            # Ce que sbxwaf applique (motifs réellement écrits), jamais ce qui devrait l'être : la page ne dit
+            # « contrôlé » que pour un site dont le motif est dans php_hotes.
+            "explicites": sorted(m[1:-1].replace("\\.", ".") for m in profils.get("php_hotes") or []
+                                 if isinstance(m, str) and EXPLICITE.fullmatch(m))}
 
 
 def main(argv):
@@ -382,21 +465,24 @@ def main(argv):
             etat, present = lire_etat(c["etat"], profils, maintenant)
             print(json.dumps(vue(etat, profils, routes, present), ensure_ascii=False))
             return 0
-        verrou = open(c["etat"] + ".lock", "a")      # noqa: SIM115 — tenu jusqu'à la fin du processus
-        fcntl.flock(verrou, fcntl.LOCK_EX)
+        _verrou = prendre_verrou(c["etat"] + ".lock")   # tenu jusqu'à la fin du processus
         profils = lire_json(c["profils"])             # relu sous verrou
         etat, present = lire_etat(c["etat"], profils, maintenant)
         if verbe == "retablir":
-            if not present:
-                raise Sortie(4, "aucun état php-sites à défaire")
+            if not present or etat.get("retabli"):
+                raise Sortie(4, "aucun état php-sites actif à défaire")
             profils["php_hotes"] = [m for m in etat.get("sauvegarde_php_hotes") or [] if isinstance(m, str)]
+            etat["retabli"] = {"le": maintenant, "par": acteur}     # la détection reste suspendue jusqu'à réactivation
             try:
                 ecrire_atomique(c["profils"], profils)
-                os.replace(c["etat"], c["etat"] + ".retabli-" + str(int(time.time())))
+                ecrire_atomique(c["etat"], etat, reference=c["profils"])
             except OSError as e:
                 raise Sortie(3, f"écriture impossible : {e}") from None
-            auditer(c["audit"], action, "ok", "retablir : php_hotes d'avant la migration remis", acteur)
+            auditer(c["audit"], action, "ok", "retablir : php_hotes d'avant la migration remis, détection suspendue", acteur)
             print(json.dumps({"ok": True, "php_hotes": profils["php_hotes"]}))
+            return 0
+        if etat.get("retabli") and verbe == "detecter":
+            print(json.dumps({"ok": True, "suspendu": True, "nouveaux": [], "explicites": []}))
             return 0
         if verbe == "detecter":
             nouveaux = detecter(c, etat, profils, routes, maintenant)

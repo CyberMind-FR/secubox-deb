@@ -75,6 +75,7 @@
   .site .preuve{flex-basis:100%;font-size:.74rem;color:var(--faible)} .site .preuve .mono{font-size:.72rem}
   .btn.mini{padding:3px 10px;min-height:28px;font-size:.74rem}
   .ajout{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px} .ajout input{flex:1 1 200px;min-width:0}
+  #sitesSuspendu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesSuspendu[hidden]{display:none}
   #sitesTous{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesTous[hidden]{display:none}
   input[type=search]{min-height:32px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
 </style>
@@ -124,6 +125,7 @@
       <div class="pan" id="panSites">
         <h2>Sites PHP <i>contrôles Roundcube, Nextcloud, PHP</i></h2>
         <div class="resume" id="sitesResume">—</div>
+        <div class="bandeau err" id="sitesSuspendu" hidden><span id="sitesSuspenduTxt"></span> <button class="btn" id="sitesReactiver" type="button">Réactiver la détection</button></div>
         <div class="bandeau demo" id="sitesTous" hidden><span id="sitesTousTxt"></span> <button class="btn" id="sitesTousRetirer" type="button">Retirer « tout couvrir »</button></div>
         <h3>Détectés par le WAF</h3>
         <div id="sitesDetectes"></div>
@@ -132,7 +134,7 @@
           <button class="btn" id="siteForcer" type="button">Forcer les contrôles</button><button class="btn" id="siteExclure" type="button">Exclure</button></div>
         <div id="sitesExceptions"></div>
         <div class="btns" style="margin-top:8px"><button class="btn" id="sitesDetecter" type="button">Relancer la détection</button></div>
-        <p class="note">Le WAF arme seul les contrôles PHP sur les sites servis qui font du PHP : appli PHP d’un module installé, fichier .php servi en 2xx (journal nginx, page d’accueil « attrape-tout » écartée), en-tête X-Powered-By: PHP ou cookie de session PHP du serveur d’origine. Détection toutes les heures ; un site détecté reste couvert tant que vous ne l’excluez pas. Motifs livrés, toujours actifs : <span class="mono" id="motifs">—</span></p>
+        <p class="note">Le WAF arme seul les contrôles PHP sur les sites servis qui font du PHP : appli PHP d’un module installé, fichier .php servi en 2xx (journal nginx, page d’accueil « attrape-tout » écartée), en-tête X-Powered-By: PHP ou cookie de session PHP du serveur d’origine. Détection toutes les heures (tâche de fond de l’API) ; « contrôlé » = motif écrit, relu à chaud par sbxwaf. Un site détecté reste couvert tant que vous ne l’excluez pas. Motifs livrés, toujours actifs : <span class="mono" id="motifs">—</span></p>
       </div>
     </div>
   </div>
@@ -270,6 +272,8 @@
     var r=el('sitesResume'),d=el('sitesDetectes'),x=el('sitesExceptions'),dl=el('sitesServis');vide(r);vide(d);vide(x);vide(dl);
     el('motifs').textContent=SITES&&SITES.motifs_livres&&SITES.motifs_livres.length?SITES.motifs_livres.join('  '):'—';
     el('sitesTous').hidden=!(SITES&&SITES.tout_couvrir_herite);
+    el('sitesSuspendu').hidden=!(SITES&&SITES.suspendu);
+    el('sitesSuspenduTxt').textContent='Détection suspendue depuis le retour arrière du '+date(SITES&&SITES.suspendu_le)+' : l’ancien réglage s’applique, la liste ci-dessous n’est pas armée.';
     if(!SITES){r.textContent='Sites PHP indisponibles';return;}
     var actifs=SITES.detectes.filter(function(s){return !s.exclu;}).length;
     function chiffre(n,t){var s=cree('span');s.appendChild(cree('b','',nb(n)));s.appendChild(document.createTextNode(' '+t));r.appendChild(s);}
@@ -344,6 +348,7 @@
     exceptions(noms(SITES.forcer).concat([h]),noms(SITES.exclure).filter(function(x){return x!==h;}),'Contrôles PHP forcés sur '+h+'.');});
   el('siteExclure').addEventListener('click',function(){var h=siteChoisi();if(!h)return;
     exceptions(noms(SITES.forcer).filter(function(x){return x!==h;}),noms(SITES.exclure).concat([h]),h+' exclu des contrôles PHP.');});
+  el('sitesReactiver').addEventListener('click',function(){poster('/php-sites',{reactiver:true},'Détection réactivée : les sites PHP détectés et forcés sont de nouveau contrôlés.');});
   el('sitesTousRetirer').addEventListener('click',function(){poster('/php-sites',{retirer_tout_couvrir:true},'« Tout couvrir » retiré : seuls les sites PHP détectés et forcés restent contrôlés.');});
   el('sitesDetecter').addEventListener('click',function(){var b=el('sitesDetecter');b.disabled=true;
     if(DEMO){b.disabled=false;message('succes','Démonstration : action inerte.');return;}
