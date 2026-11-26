@@ -188,10 +188,12 @@ def test_dns_nginx_dispo(tmp_path):
     assert RQ.nginx_jour(ng, "2026-11-21")["requetes"] == 0          # dans le suivi : 0 réel
     assert RQ.nginx_jour(ng, "2026-11-22") is None and RQ.nginx_jour(ng, "2026-11-14") is None
     st = tmp_path / "disponibilite.json"
-    st.write_text(json.dumps({"noeud": "gk", "jours": {"2026-11-20": {"connus": 1440, "operationnels": 1437},
-                                                       "2026-11-21": {"connus": 100, "operationnels": 100}}}))
-    d = RQ.lire_dispo(st, ["2026-11-20", "2026-11-21", "2026-11-22"], noeud="gk")
-    assert d == {"2026-11-20": round(100 * 1437 / 1440, 3), "2026-11-21": None, "2026-11-22": None}   # trop peu de relevés : non mesuré
+    st.write_text(json.dumps({"noeud": "gk", "jours": {"2026-11-20": {"connus": 1440, "operationnels": 0, "pannes": 3},
+                                                       "2026-11-21": {"connus": 100, "operationnels": 100, "pannes": 0},
+                                                       "2026-11-19": {"connus": 1440, "operationnels": 0}}}))
+    d = RQ.lire_dispo(st, ["2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"], noeud="gk")
+    # « degraded » toute la journée (operationnels = 0) n'est pas 0 % ; sans compte des pannes (forme 0.1.5) : non mesuré
+    assert d == {"2026-11-19": None, "2026-11-20": round(100 * 1437 / 1440, 3), "2026-11-21": None, "2026-11-22": None}   # trop peu de relevés : non mesuré
     assert RQ.lire_dispo(st, ["2026-11-20"], noeud="autre") is None and RQ.lire_dispo(tmp_path / "x.json", ["2026-11-20"]) is None
 
 
@@ -200,9 +202,10 @@ def test_instantanes_sonde_et_sante(tmp_path):
     s = tmp_path / "status.json"
     s.write_text(json.dumps({"timestamp": datetime.fromtimestamp(maintenant - 60, timezone.utc).isoformat(), "vhosts": {
         "a.test": {"status": "ok", "latency_ms": 80.0}, "b.test": {"status": "slow", "latency_ms": 900.0},
-        "c.test": {"status": "ok", "latency_ms": 100.0}, "d.test": {"status": "down", "latency_ms": None}}}))
+        "c.test": {"status": "ok", "latency_ms": 100.0}, "d.test": {"status": "down", "latency_ms": None, "error": "timeout"},
+        "e.test": {"status": "down", "status_code": 403}, "f.test": {"status": "down", "status_code": 301}, "g.test": {"status": "down", "status_code": 502}}}))
     r = RQ.lire_latence(s, maintenant)
-    assert r["mediane_ms"] == 100.0 and r["lents"] == [("b.test", 900.0)] and r["injoignables"] == ["d.test"]
+    assert r["mediane_ms"] == 100.0 and r["lents"] == [("b.test", 900.0)] and r["injoignables"] == ["d.test", "g.test"]      # refus voulus et redirections exclus
     assert RQ.lire_latence(s, maintenant + 3600) is None                  # sonde arrêtée : non mesuré
     dr = tmp_path / "doctor.json"
     dr.write_text(json.dumps({"generated_at": datetime.fromtimestamp(maintenant, timezone.utc).isoformat(), "checks": {
@@ -464,7 +467,7 @@ def test_unites_durcies_minuteur_pilotage_desactive_releve_active():
         assert f"systemd/secubox-metrics-{f}" in rules
     # l'ancien rapport du lundi est inchangé
     assert "OnCalendar=Mon *-*-* 07:00:00" in _unite("secubox-metrics-rapport.timer")
-    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.1-1~trixie1) trixie;")
+    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.2-1~trixie1) trixie;")
 
 
 def test_emojis_drapeaux_et_pays_des_populations():
@@ -494,3 +497,19 @@ def test_libelles_francais_et_niveaux_courts():
     d = RP.donnees_exemple()
     d["instant"]["acteurs"]["acteurs"][1]["action"] = "blocage temporaire réversible (ban 1 h, puis 24 h)"
     assert "acteur_a_bloquer" in [x["regle"] for x in RP.decisions(d)]                 # la décision suit le niveau, pas le texte
+
+
+def test_injoignable_seulement_a_deux_releves_consecutifs():
+    a = {"instant": 1.0, "injoignables": ["a.test", "b.test"]}
+    assert RQ.confirmer_injoignables(a, {"instant": 61.0, "injoignables": ["b.test"]})["injoignables"] == ["b.test"]
+    r = RQ.confirmer_injoignables(a, {"instant": 1.0, "injoignables": ["a.test"]})          # même relevé : rien de confirmé
+    assert r["injoignables"] == [] and r["injoignables_non_confirmes"] == 2
+    assert RQ.confirmer_injoignables(a, None)["injoignables"] == []
+
+
+def test_aucune_disponibilite_a_zero_dans_le_titre():
+    d = RP.donnees_exemple()
+    for j in d["jours"] + d["precedents"]:
+        d["par_jour"][j]["dispo"] = None
+    v = RP.verdict(d, RP.kpis(d), [])
+    assert "disponible" not in v and "0,00" not in v and "comprendre" not in str(RP.decisions(d)).lower()

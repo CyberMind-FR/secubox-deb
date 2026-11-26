@@ -475,7 +475,7 @@ def collecter(fin: str, maintenant: Optional[float] = None, dossier: Optional[Pa
     rel = RQ.lire_releves(dossier or RQ.dossier_releves(), tous)
     bb = c.get("bans_brut") or {}
     return {"jours": cur, "precedents": prec, "par_jour": fusionner(c["jours"], rel, tous), "genere": maintenant, "exemple": False,
-            "instant": {"latence": RQ.lire_latence(maintenant=maintenant), "sante": RQ.lire_sante(maintenant=maintenant),
+            "instant": {"latence": RQ.latence_confirmee(maintenant=maintenant), "sante": RQ.lire_sante(maintenant=maintenant),
                         "acteurs": RQ.lire_acteurs(), "populations": RQ.lire_populations(),
                         "attente": RQ.lire_attente(dernier_ban=bb.get("dernier_ban"), depuis=maintenant - 7 * 86400)}}
 

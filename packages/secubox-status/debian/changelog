@@ -1,3 +1,10 @@
+secubox-status (0.1.6-1~trixie1) trixie; urgency=medium
+
+  * disponibilite.json : compte aussi les relevés en panne (« outage ») par jour ; le
+    rapport de pilotage ne compte plus « degraded » comme indisponible (ref #3970).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 15:00:00 +0100
+
 secubox-status (0.1.5-1~trixie1) trixie; urgency=medium
 
   * Disponibilité par jour de Paris exportée une fois l'heure dans

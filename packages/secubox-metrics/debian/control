@@ -33,7 +33,7 @@ Recommends: geoipupdate,
  python3-matplotlib,
  python3-pil,
  fonts-noto-color-emoji,
- secubox-status (>= 0.1.5~),
+ secubox-status (>= 0.1.6~),
  python3-weasyprint | wkhtmltopdf,
  glances
 Replaces: secubox-metalogizer,

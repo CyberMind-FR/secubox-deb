@@ -523,11 +523,50 @@ def lire_dispo(chemin: Path = DISPO_JOURS, jours: Iterable[str] = (), noeud: Opt
     for j in jours:
         e = d["jours"].get(j)
         connus = int(e.get("connus") or 0) if isinstance(e, dict) else 0
-        out[j] = round(100.0 * int(e.get("operationnels") or 0) / connus, 3) if connus >= DISPO_RELEVES_MIN else None
+        pannes = e.get("pannes") if isinstance(e, dict) else None
+        # Disponible = relevé connu qui n'est pas une panne (« outage ») ; « degraded » (un site qui refuse, un module en veille) reste
+        # un service rendu. Sans le compte des pannes (secubox-status < 0.1.6), le jour n'est pas mesuré : jamais déduit d'« operational ».
+        ok = isinstance(pannes, int) and not isinstance(pannes, bool) and 0 <= pannes <= connus
+        out[j] = round(100.0 * (connus - pannes) / connus, 3) if ok and connus >= DISPO_RELEVES_MIN else None
     return out
 
 
 # ── sonde des temps de réponse et contrôles de santé (instantanés) ────────
+def _code(v: Any) -> int:
+    return v if isinstance(v, int) and not isinstance(v, bool) else 0
+
+
+def confirmer_injoignables(premier: Optional[dict], second: Optional[dict]) -> Optional[dict]:
+    """Un site n'est injoignable que s'il l'est à deux relevés CONSÉCUTIFS de la sonde (instants différents) ; sans second relevé
+    plus récent, la liste n'est pas confirmée (vide), jamais supposée."""
+    if premier is None:
+        return None
+    r = dict(premier)
+    if not premier.get("injoignables"):
+        return r
+    if not second or second.get("instant") is None or second.get("instant") == premier.get("instant"):
+        r["injoignables"] = []
+        r["injoignables_non_confirmes"] = len(premier["injoignables"])
+        return r
+    deux = set(second.get("injoignables") or [])
+    r["injoignables"] = [x for x in premier["injoignables"] if x in deux]
+    return r
+
+
+def latence_confirmee(maintenant: Optional[float] = None, attendre: Callable[[float], None] = time.sleep, essais: int = 6) -> Optional[dict]:
+    """Lit la sonde ; si des sites semblent injoignables, attend le relevé suivant (au plus 6 × 15 s) pour confirmer."""
+    a = lire_latence(maintenant=maintenant)
+    if not a or not a.get("injoignables"):
+        return a
+    b = None
+    for _ in range(essais):
+        attendre(15)
+        b = lire_latence()
+        if b and b.get("instant") != a.get("instant"):
+            break
+    return confirmer_injoignables(a, b)
+
+
 def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Optional[dict]:
     """Médiane des temps de réponse des sites joints, sites lents et injoignables, au moment du relevé. Sonde périmée : None."""
     d = lire_json(chemin)
@@ -546,7 +585,9 @@ def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Op
             lat.append(float(v["latency_ms"]))
             if st == "slow":
                 lents.append((nom_site(nom), float(v["latency_ms"])))
-        elif st == "down":
+        elif st == "down" and (v.get("error") == "timeout" or _code(v.get("status_code")) >= 500):
+            # Même règle que les situations du SOC : « down » compte aussi les refus voulus (401, 403, 404) et les
+            # redirections ; seuls un délai dépassé ou une erreur 5xx disent une panne.
             bas.append(nom_site(nom))
     if not lat and not bas:
         return None
@@ -792,7 +833,7 @@ def releve(jours: Optional[list[str]] = None, maintenant: Optional[float] = None
             jours.append(h)
     c = collecter_jours(sorted(jours), maintenant, sources=sources)
     inst = instantanes if instantanes is not None else {
-        "latence": lire_latence(maintenant=maintenant), "sante": lire_sante(maintenant=maintenant), "acteurs": None, "attente": None}
+        "latence": latence_confirmee(maintenant=maintenant), "sante": lire_sante(maintenant=maintenant), "acteurs": None, "attente": None}
     if instantanes is None:
         a = lire_acteurs()
         inst["acteurs"] = None if a is None else {"suivis": a["suivis"], "a_bloquer": a["a_bloquer"]}
