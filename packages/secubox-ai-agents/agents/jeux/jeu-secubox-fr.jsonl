@@ -1,0 +1,21 @@
+{"id": "port-ssh", "categorie": "short", "question": "Quel est le port TCP par défaut de SSH ? Réponds par le nombre seul.", "attendus": [["22"]]}
+{"id": "port-https", "categorie": "short", "question": "Quel est le port TCP par défaut de HTTPS ? Réponds par le nombre seul.", "attendus": [["443"]]}
+{"id": "port-dns", "categorie": "short", "question": "Sur quel port écoute un serveur DNS par défaut ?", "attendus": [["53"]]}
+{"id": "waf", "categorie": "short", "question": "Que signifie le sigle WAF en sécurité informatique ?", "attendus": [["web application firewall", "pare-feu applicatif", "pare-feu d'application"]]}
+{"id": "nftables", "categorie": "general", "question": "Sous Linux, quel cadre de filtrage réseau remplace iptables dans les distributions récentes comme Debian ?", "attendus": [["nftables", "nft"]]}
+{"id": "cspn", "categorie": "short", "question": "Quel organisme français délivre la certification CSPN ?", "attendus": [["anssi"]]}
+{"id": "debian13", "categorie": "short", "question": "Quel est le nom de code de Debian 13 ?", "attendus": [["trixie"]]}
+{"id": "wireguard", "categorie": "general", "question": "Quel protocole de transport WireGuard utilise-t-il pour ses tunnels : TCP ou UDP ?", "attendus": [["udp"]]}
+{"id": "ipv6", "categorie": "short", "question": "Combien de bits comporte une adresse IPv6 ?", "attendus": [["128"]]}
+{"id": "multiplication", "categorie": "math", "question": "Combien font 17 multiplié par 23 ? Donne le résultat.", "attendus": [["391"]]}
+{"id": "python-len", "categorie": "code", "question": "En Python, quelle fonction renvoie le nombre d'éléments d'une liste ? Écris def exemple(l): return ... avec la bonne fonction.", "attendus": [["len("]]}
+{"id": "nft-list", "categorie": "code", "question": "Quelle commande shell affiche toutes les règles nftables chargées ? Donne la commande exacte dans un bloc de code.", "attendus": [["nft list ruleset"]]}
+{"id": "conv-politesse", "categorie": "conversation", "question": "Un utilisateur te dit : « Merci beaucoup pour ton aide ! ». Réponds-lui en une phrase polie en français.", "attendus": [["de rien", "avec plaisir", "je vous en prie", "je t'en prie", "ravi", "heureux"]]}
+{"id": "conv-reformuler", "categorie": "conversation", "question": "Reformule plus poliment, en une phrase : « Donne-moi le mot de passe tout de suite. »", "attendus": [["pourriez", "pourrais", "s'il vous plait", "s'il te plait", "auriez", "serait-il possible"]]}
+{"id": "raison-train", "categorie": "raisonnement", "question": "Un train part à 14 h 10 et arrive à 16 h 45. Combien de minutes dure le trajet ? Donne le nombre.", "attendus": [["155"]]}
+{"id": "raison-syllogisme", "categorie": "raisonnement", "question": "Tous les routeurs de la salle sont des MOCHAbin. gk2 est un routeur de la salle. gk2 est-il un MOCHAbin ? Réponds par oui ou non puis justifie.", "attendus": [["oui"]]}
+{"id": "raison-suite", "categorie": "raisonnement", "question": "Quel nombre suit dans la suite 2, 6, 12, 20, 30 ? Donne le nombre.", "attendus": [["42"]]}
+{"id": "code-regex", "categorie": "code", "question": "En Python, écris une ligne qui teste avec le module re si la chaîne s ne contient que des chiffres.", "attendus": [["re.", "match", "fullmatch", "\\d"]]}
+{"id": "fr-accord", "categorie": "francais", "question": "Corrige la faute : « Les règles que j'ai écrit sont appliquées. » Donne la phrase corrigée.", "attendus": [["écrites"]]}
+{"id": "fr-traduction", "categorie": "francais", "question": "Traduis en français : « The firewall drops every packet by default. »", "attendus": [["pare-feu"], ["paquet"], ["defaut"]]}
+{"id": "fr-pluriel", "categorie": "francais", "question": "Quel est le pluriel de « un travail » ?", "attendus": [["travaux"]]}

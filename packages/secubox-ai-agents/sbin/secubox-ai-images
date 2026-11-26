@@ -1,0 +1,163 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Travailleur de création d'images de secubox-ai-agents (#3995) : stable-diffusion.cpp, une image à la fois.
+
+- File : `<racine>/file/*.json` (déposées par le service des agents), traitées par ordre d'arrivée ; la demande
+  passe dans `en_cours/` le temps de la génération, puis `fait/` (+ `<id>.png`) ou `echec/`.
+- Une génération à la fois ; arrêt propre (SIGTERM) : le processus `sd` est arrêté et la demande REVIENT dans la
+  file (reprise au redémarrage) ; une demande trouvée dans `en_cours/` au démarrage y revient aussi.
+- Carte graphique PARTAGÉE avec llama-server : avant chaque image, la mémoire libre de la carte NVIDIA est lue
+  (nvidia-smi) ; si elle ne suffit pas au modèle demandé (`BESOIN_MIO`), l'image est faite sur le CPU plutôt
+  que de faire tomber le moteur du POC. La mémoire graphique est relevée chaque seconde pendant la génération.
+- Aucun réseau (unité : AF_UNIX seulement). Aucune donnée ne sort ; le texte de la demande n'est pas journalisé.
+Bibliothèque standard seule.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+RACINE = Path(os.environ.get("SECUBOX_AI_IMAGES_RACINE", Path.home() / ".local/state/secubox-ai-images"))
+SD = Path(os.environ.get("SECUBOX_AI_IMAGES_SD", Path.home() / "poc-secubox-ai/sdcpp/build/bin/sd-cli"))
+MODELES_DIR = Path(os.environ.get("SECUBOX_AI_IMAGES_MODELES", Path.home() / "poc-secubox-ai/sd-models"))
+FICHIERS = {"sd15": "v1-5-pruned-emaonly.safetensors", "sdxl-turbo": "sd_xl_turbo_1.0_fp16.safetensors"}
+# Mémoire graphique demandée (Mio) avec les options ci-dessous (q8_0, CLIP et VAE hors de la carte) ; mesurée.
+BESOIN_MIO = {"sd15": 1100, "sdxl-turbo": 3200}
+DELAI_S = 900
+VULKAN_NVIDIA = os.environ.get("SECUBOX_AI_IMAGES_VULKAN", "1")   # même carte que llama-server (Vulkan1)
+
+arret = threading.Event()
+courant: dict = {}
+
+
+def vram() -> tuple[int, int]:
+    """(utilisée, libre) en Mio sur la carte NVIDIA, (0, 0) si illisible."""
+    try:
+        r = subprocess.run(["nvidia-smi", "--query-gpu=memory.used,memory.free", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=10, check=True)
+        u, f = (int(x) for x in r.stdout.strip().splitlines()[0].split(","))
+        return u, f
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return 0, 0
+
+
+def journal(**champs) -> None:
+    ligne = json.dumps({"quand": time.strftime("%Y-%m-%dT%H:%M:%S"), "par": "travailleur", **champs}, ensure_ascii=False)
+    fd = os.open(RACINE / "journal.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        f.write(ligne + "\n")
+
+
+def commande(d: dict, sortie: Path, sur_carte: bool) -> tuple[list[str], dict]:
+    modele = MODELES_DIR / FICHIERS[d["modele"]]
+    cmd = [str(SD), "-m", str(modele), "-p", d["prompt"], "-W", str(int(d["largeur"])), "-H", str(int(d["hauteur"])),
+           "--steps", str(int(d["etapes"])), "--cfg-scale", str(float(d["cfg"])), "-s", str(int(d["graine"])),
+           "--sampling-method", "euler_a", "-o", str(sortie), "--type", "q8_0", "--vae-tiling"]
+    if d.get("negatif"):
+        cmd += ["-n", d["negatif"]]
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "LANG": "C.UTF-8"}
+    if sur_carte:
+        # Seule la carte NVIDIA est visible (vulkan0 pour sd) ; l'encodeur de texte reste sur le CPU.
+        env["GGML_VK_VISIBLE_DEVICES"] = VULKAN_NVIDIA
+        cmd += ["--backend", "te=cpu,diffusion=vulkan0,vae=vulkan0"]
+    else:
+        cmd += ["--backend", "cpu", "-t", "8"]
+    return cmd, env
+
+
+def traiter(f: Path) -> None:
+    d = json.loads(f.read_text(encoding="utf-8"))
+    ident = d["id"]
+    en_cours = RACINE / "en_cours" / f.name
+    f.rename(en_cours)
+    u0, libre = vram()
+    sur_carte = libre >= BESOIN_MIO[d["modele"]] + 200
+    png = RACINE / "en_cours" / f"{ident}.png"
+    cmd, env = commande(d, png, sur_carte)
+    pic = [u0]
+    debut = time.monotonic()
+    p = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
+    courant.update(p=p, fichier=en_cours)
+
+    def relever():
+        while p.poll() is None:
+            pic.append(vram()[0])
+            time.sleep(1)
+
+    threading.Thread(target=relever, daemon=True).start()
+    try:
+        _, err = p.communicate(timeout=DELAI_S)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        _, err = p.communicate()
+        err = b"delai depasse"
+    courant.clear()
+    duree = round(time.monotonic() - debut, 1)
+    if arret.is_set() and p.returncode != 0:
+        en_cours.rename(RACINE / "file" / f.name)         # arrêt propre : la demande sera reprise
+        png.unlink(missing_ok=True)
+        journal(evenement="interrompue", id=ident)
+        return
+    d.update(peripherique="nvidia" if sur_carte else "cpu", duree_s=duree, vram_avant_mio=u0,
+             vram_pic_mio=max(pic), vram_sd_mio=max(pic) - u0, fini_le=time.time())
+    if p.returncode == 0 and png.is_file():
+        png.rename(RACINE / "fait" / f"{ident}.png")
+        d["prompt"] = d["prompt"]                        # reste dans la fiche locale (page), pas au journal
+        (RACINE / "fait" / f.name).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        en_cours.unlink()
+        journal(evenement="faite", id=ident, modele=d["modele"], taille=d["largeur"], duree_s=duree,
+                peripherique=d["peripherique"], vram_sd_mio=d["vram_sd_mio"])
+    else:
+        d["erreur"] = (err or b"").decode(errors="replace").strip().splitlines()[-1:] or ["échec"]
+        (RACINE / "echec" / f.name).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        en_cours.unlink()
+        png.unlink(missing_ok=True)
+        journal(evenement="echec", id=ident, modele=d["modele"], duree_s=duree)
+
+
+def arreter(*_):
+    arret.set()
+    p = courant.get("p")
+    if p and p.poll() is None:
+        os.killpg(p.pid, signal.SIGTERM)
+
+
+def main() -> int:
+    for d in ("file", "en_cours", "fait", "echec"):
+        (RACINE / d).mkdir(mode=0o700, parents=True, exist_ok=True)
+    for f in (RACINE / "en_cours").glob("*.json"):       # reprise après un arrêt brutal
+        f.rename(RACINE / "file" / f.name)
+    for f in (RACINE / "en_cours").glob("*.png"):
+        f.unlink()
+    signal.signal(signal.SIGTERM, arreter)
+    signal.signal(signal.SIGINT, arreter)
+    if not SD.is_file() or not shutil.which("nvidia-smi"):
+        print("stable-diffusion.cpp ou nvidia-smi absent", file=sys.stderr)
+    while not arret.is_set():
+        demandes = sorted((RACINE / "file").glob("*.json"))
+        if not demandes:
+            arret.wait(2)
+            continue
+        try:
+            traiter(demandes[0])
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"demande illisible : {type(exc).__name__}", file=sys.stderr)
+            try:
+                demandes[0].rename(RACINE / "echec" / demandes[0].name)
+            except OSError:
+                pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

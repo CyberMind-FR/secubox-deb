@@ -1,0 +1,130 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Pont SearXNG de secubox-ai-agents (#3990, tranche C).
+
+Le service des agents n'a AUCUN réseau (RestrictAddressFamilies=AF_UNIX). Sa seule recherche web passe par ce
+pont : il écoute un socket Unix et n'interroge qu'UNE adresse, codée en dur, la SearXNG locale du POC
+(127.0.0.1:8888). Aucune autre destination n'est possible : ni hôte, ni port, ni chemin ne viennent de la
+requête.
+
+Accepté : `GET /search?q=<300 car. au plus>[&categories=general|news][&time_range=day|week|month]`.
+Rendu : `{"resultats": [{"titre", "url", "extrait", "date"}]}`, 10 au plus, liens http(s) seulement (les
+redirections internes des moteurs, sans hôte, sont écartées). Bibliothèque standard seule (`python3 -I`).
+Le journal ne reçoit ni la requête ni les résultats : la taille et la durée.
+"""
+from __future__ import annotations
+
+import json
+import os
+import socketserver
+import sys
+import time
+import urllib.parse
+import urllib.request
+from http.server import BaseHTTPRequestHandler
+
+SEARXNG = "http://127.0.0.1:8888/search"
+REPONSE_MAX = 2 * 1024 * 1024
+DELAI_S = 20
+CATEGORIES = {"general", "news"}
+PERIODES = {"", "day", "week", "month"}
+RESULTATS_MAX = 10
+
+
+def _propre(r: dict) -> dict | None:
+    url = str(r.get("url") or "")
+    p = urllib.parse.urlsplit(url)
+    if p.scheme not in ("http", "https") or not p.netloc:
+        return None
+    return {"titre": str(r.get("title") or "")[:200], "url": url[:500],
+            "extrait": str(r.get("content") or "")[:600], "date": str(r.get("publishedDate") or "")[:40]}
+
+
+def interroger(q: str, categories: str, periode: str) -> list[dict]:
+    params = {"q": q, "format": "json", "language": "fr", "categories": categories}
+    if periode:
+        params["time_range"] = periode
+    req = urllib.request.Request(SEARXNG + "?" + urllib.parse.urlencode(params),
+                                 headers={"Accept": "application/json", "User-Agent": "secubox-ai-pont"})
+    # Pas de proxy hérité de l'environnement : l'adresse est locale et fixe.
+    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with ouvreur.open(req, timeout=DELAI_S) as rep:
+        corps = rep.read(REPONSE_MAX + 1)
+    if len(corps) > REPONSE_MAX:
+        raise ValueError("réponse trop grande")
+    vus, sortie = set(), []
+    for r in json.loads(corps).get("results", []):
+        e = _propre(r) if isinstance(r, dict) else None
+        if e and e["url"] not in vus:
+            vus.add(e["url"])
+            sortie.append(e)
+        if len(sortie) >= RESULTATS_MAX:
+            break
+    return sortie
+
+
+class Gestion(BaseHTTPRequestHandler):
+    server_version = "secubox-ai-pont"
+    sys_version = ""
+
+    def address_string(self):  # socket Unix : pas d'adresse cliente
+        return "local"
+
+    def log_message(self, *args):  # aucun contenu au journal
+        pass
+
+    def _rendre(self, code: int, objet: dict) -> None:
+        corps = json.dumps(objet, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(corps)))
+        self.end_headers()
+        self.wfile.write(corps)
+
+    def do_GET(self):  # noqa: N802
+        debut = time.monotonic()
+        u = urllib.parse.urlsplit(self.path)
+        if u.path != "/search":
+            return self._rendre(404, {"erreur": "introuvable"})
+        p = urllib.parse.parse_qs(u.query, max_num_fields=8)
+        q = (p.get("q") or [""])[0].strip()
+        cat = (p.get("categories") or ["general"])[0]
+        per = (p.get("time_range") or [""])[0]
+        if not q or len(q) > 300 or cat not in CATEGORIES or per not in PERIODES:
+            return self._rendre(422, {"erreur": "requête refusée"})
+        try:
+            res = interroger(q, cat, per)
+        except Exception as exc:  # noqa: BLE001 — SearXNG absente ou illisible
+            print(f"echec {type(exc).__name__} duree_s={time.monotonic() - debut:.2f}", file=sys.stderr, flush=True)
+            return self._rendre(502, {"erreur": "SearXNG injoignable"})
+        print(f"ok resultats={len(res)} duree_s={time.monotonic() - debut:.2f}", file=sys.stderr, flush=True)
+        return self._rendre(200, {"resultats": res})
+
+    def do_POST(self):  # noqa: N802
+        self._rendre(405, {"erreur": "GET seulement"})
+
+    do_PUT = do_DELETE = do_POST
+
+
+class Serveur(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+
+
+def main() -> int:
+    chemin = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.environ["XDG_RUNTIME_DIR"],
+                                                                "secubox-ai-pont", "searxng.sock")
+    try:
+        os.unlink(chemin)
+    except FileNotFoundError:
+        pass
+    os.umask(0o077)
+    with Serveur(chemin, Gestion) as s:
+        s.serve_forever()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

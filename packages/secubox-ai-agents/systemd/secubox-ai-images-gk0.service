@@ -1,0 +1,43 @@
+# Travailleur de création d'images de secubox-ai-agents sur gk0 (#3995) : unité UTILISATEUR, jamais root.
+# Installation : ~/.config/systemd/user/secubox-ai-images.service ; script /opt/secubox-ai-agents/images/.
+# AUCUNE relation avec poc-llama (ni After=, ni Wants=) : elle partage la carte, pas le cycle de vie.
+# Aucun réseau. Accès à la carte graphique (pas de PrivateDevices). Une image à la fois ; arrêt propre (SIGTERM).
+[Unit]
+Description=SecuBox AI agents — création d'images (stable-diffusion.cpp, gk0)
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -I /opt/secubox-ai-agents/images/secubox-ai-images
+Environment=SECUBOX_AI_IMAGES_RACINE=%S/secubox-ai-images
+StateDirectory=secubox-ai-images
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=mixed
+Nice=12
+MemoryMax=10G
+TasksMax=128
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%S/secubox-ai-images
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=default.target

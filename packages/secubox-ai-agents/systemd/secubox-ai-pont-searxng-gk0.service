@@ -1,0 +1,49 @@
+# Pont SearXNG de secubox-ai-agents sur gk0 (#3990, tranche C) : unité UTILISATEUR, jamais root.
+# Installation : ~/.config/systemd/user/secubox-ai-pont-searxng.service ; le script dans
+# /opt/secubox-ai-agents/pont/secubox-ai-pont-searxng (root, lecture seule).
+# Seul processus de la suite des agents à avoir AF_INET ; sa seule destination est codée en dur (127.0.0.1:8888).
+[Unit]
+Description=SecuBox AI agents — pont SearXNG local (gk0)
+
+[Service]
+Type=exec
+RuntimeDirectory=secubox-ai-pont
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/python3 -I /opt/secubox-ai-agents/pont/secubox-ai-pont-searxng %t/secubox-ai-pont/searxng.sock
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+TasksMax=32
+UMask=0077
+NoNewPrivileges=yes
+PrivateUsers=yes
+ProtectSystem=strict
+# ProtectHome=yes masquerait aussi /run/user (le socket du pont) : lecture seule.
+ProtectHome=read-only
+ReadWritePaths=%t/secubox-ai-pont
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @debug @cpu-emulation @obsolete
+RestrictAddressFamilies=AF_UNIX AF_INET
+# Filtre d'adresses : effectif seulement si le gestionnaire utilisateur peut poser le filtre eBPF (à vérifier
+# par `systemctl --user show -p IPAddressDeny` et un essai) ; la destination unique codée en dur reste la garde.
+IPAddressDeny=any
+IPAddressAllow=127.0.0.1/32
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=default.target
