@@ -75,7 +75,18 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 | `POST /api/v1/waf/category/{cat}/mode` | `require_jwt` | un seul changement |
 | `GET /api/v1/waf/categories/stats7j` | `require_lecture` | touches 7 j par catégorie, faux positifs estimés (« local » = LAN + maillage, adresses privées, liste blanche) ; `robots_verifies: null` (absent du journal) ; journal absent → `categories: null` ; tâche de fond toutes les 15 min, cache écrit atomiquement, la requête lit seulement (`etat: calcul en cours` avant le premier passage) |
 | `GET/POST /api/v1/waf/leurres-service/modes` | lecture / `require_jwt` | `observer` ou `bannir` par leurre, messagerie comprise (#3924 : `submission`, `imap`, `pop3`, `observer` par défaut ; `smtp`, `smtps`, `imaps`, `pop3s` fixés à `observer`) → `wafctl leurres-modes`, relu à chaud par sbx-authwatch |
-| `GET/POST /api/v1/waf/php-hotes` | lecture / `require_jwt` | vhosts, « conteneur PHP » `oui` (service PHP déclaré) ou `inconnu`, couvert, explicite ; l'écriture pose des motifs `^nom\.domaine$` dans `php_hotes` (`wafctl php-hotes`), jamais de cochage automatique |
+| `GET /api/v1/waf/php-hotes` | lecture | ancienne vue brute (#3741), gardée en lecture ; plus d'écriture (#3974) |
+| `GET /api/v1/waf/php-sites` | lecture | sites PHP **détectés** parmi les sites servis (preuve, première et dernière date), exceptions `forcer`/`exclure`, compte `autres` des sites servis non PHP, `tout_couvrir_herite` ; jamais d'adresse ni de nom non servi |
+| `POST /api/v1/waf/php-sites` | `require_jwt` | listes complètes `forcer`, `exclure` et/ou `retirer_tout_couvrir: true` → `wafctl php-sites ecrire` ; exclure un site couvert par un service PHP ou un motif livré : 422 |
+| `POST /api/v1/waf/php-sites/detecter` | `require_jwt` | relance la détection (sinon toutes les heures par la tâche de fond) |
+
+Sites PHP (#3974) : `wafctl php-sites detecter` (root, `/usr/lib/secubox/waf/waf-php-sites`) relève trois preuves sur les
+sites servis (`haproxy-routes.json`) : appli d'un service déclaré PHP ; au moins 2 réponses 2xx à un chemin `.php` dans
+`/var/log/nginx/secubox-hosts.log` (+ `.1`), taille différente de celle de « / » (attrape-tout écarté) ; `X-Powered-By: PHP`
+ou cookie de session PHP rendu par le serveur d'origine à `GET /`. Les signaux d'attaque ne sont pas une preuve. État dans
+`/etc/secubox/waf/php-sites.json` ; `php_hotes` = motifs livrés gardés + `^site$` des (détectés servis ∪ forcés) − exclus.
+Première exécution (postinst) : les anciens motifs explicites deviennent des exceptions `forcer`, `^.*$` reste jusqu'au
+retrait explicite. Retour arrière : `wafctl php-sites retablir` (root) remet les `php_hotes` d'avant et met l'état de côté.
 
 Écritures : l'API audite l'intention avant et l'issue après ; `wafctl leurres-modes|php-hotes ecrire` audite lui-même chaque issue (ok, refus, échec), appel sudo direct compris. Une bascule ne touche jamais `enabled`. Le mode choisi est marqué `mode_choisi: true` : `waf-rules-sync` le garde aux mises à jour du paquet. Un contrôle
 structurel en `block` bannit l'adresse au premier constat (analyse après relais : ban immédiat, requêtes suivantes

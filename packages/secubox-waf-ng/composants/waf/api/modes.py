@@ -10,8 +10,9 @@ root à lignes sudoers EXACTES, l'entrée en JSON sur STDIN :
 
 - `secubox-cvectl waf-modes lister|appliquer` (secubox-security-posture) : écriture de waf-rules.json par
   `leurres.ecrire_regles` (verrou, copie de retour, validation, relecture, rollback, audit) ;
-- `wafctl leurres-modes|php-hotes lister|ecrire` : leurres-modes.json (relu à chaud par sbx-authwatch) et
-  php_hotes de vhost_profiles.json (relu à chaud par sbxwaf).
+- `wafctl leurres-modes lister|ecrire` : leurres-modes.json (relu à chaud par sbx-authwatch) ;
+- `wafctl php-sites lister|ecrire|detecter` (#3974) : sites PHP détectés et exceptions, qui calculent php_hotes de
+  vhost_profiles.json (relu à chaud par sbxwaf). `GET /php-hotes` reste en lecture (ancienne vue).
 
 Codes des commandes : 0 → 200, 2 → 422, 3 → 409, 4 → 404, autre ou délai → 503 `ctl`. Toute écriture réussie
 est auditée avec `lever=True` : un changement fait dont l'audit manque rend 500, jamais caché.
@@ -358,28 +359,110 @@ def php_hotes():
     return _hotes(_ctl([WAFCTL, "php-hotes", "lister"]))
 
 
-class HotesPHP(BaseModel):
+# ── sites PHP détectés (#3974) ────────────────────────────────────────────
+
+def _sites(etat: dict) -> dict:
+    """Vue de la page : sites PHP détectés (preuve, dates), exceptions, compte des autres sites servis.
+
+    Jamais la liste brute : seuls les sites SERVIS (haproxy-routes.json) comptent ; adresses et noms non servis
+    n'apparaissent pas (une exception ancienne non servie est rendue marquée `servi: false`)."""
+    e = etat.get("etat") or {}
+    routes = etat.get("routes")
+    servis = set(routes or [])
+    explicites = set(etat.get("explicites") or [])
+    profils = etat.get("profils_vhosts") or {}
+    services = set(etat.get("php_services") or [])
+    gardes = [m for m in etat.get("php_hotes") or [] if isinstance(m, str) and not _EXPLICITE.fullmatch(m)]
+    compiles = []
+    for m in gardes:
+        if m == TOUS:              # « tout couvrir » hérité : signalé à part, il ne fait pas d'un site un site PHP
+            continue
+        with contextlib.suppress(re.error):
+            compiles.append((m, re.compile(m)))
+
+    def couvert(h: str) -> Optional[str]:
+        if profils.get(h) in services:
+            return "service"
+        if h in explicites:
+            return "site"
+        return next(("motif" for _, r in compiles if r.search(h)), None)
+
+    detectes = []
+    for h, d in sorted((e.get("detectes") or {}).items()):
+        if routes is not None and h not in servis:
+            continue
+        d = d if isinstance(d, dict) else {}
+        detectes.append({"hote": h, "type": d.get("type"), "preuve": d.get("preuve"), "premiere": d.get("premiere"),
+                         "derniere": d.get("derniere"), "exclu": h in (e.get("exclure") or {}), "couvert": couvert(h)})
+    def exc(nom: str) -> List[dict]:
+        return [{"hote": h, "le": (v or {}).get("le"), "par": (v or {}).get("par"),
+                 "servi": routes is None or h in servis, "couvert": couvert(h)}
+                for h, v in sorted((e.get(nom) or {}).items())]
+    php = {d["hote"] for d in detectes} | set(e.get("forcer") or {})
+    autres = [h for h in sorted(servis) if h not in php and not couvert(h)]
+    return {"detectes": detectes, "forcer": exc("forcer"), "exclure": exc("exclure"),
+            "autres": len(autres), "servis": sorted(servis), "routes_lisibles": routes is not None,
+            "derniere_detection": e.get("derniere_detection"), "migre": bool(etat.get("present")),
+            "suspendu": bool(e.get("retabli")), "suspendu_le": (e.get("retabli") or {}).get("le"),
+            "tout_couvrir_herite": TOUS in gardes, "motifs_livres": [m for m in gardes if m != TOUS]}
+
+
+TOUS = "^.*$"
+
+
+@router.get("/php-sites", dependencies=[Depends(require_lecture)])
+def php_sites():
+    return _sites(_ctl([WAFCTL, "php-sites", "lister"]))
+
+
+class ExceptionsPHP(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    hotes: Optional[List[str]] = Field(default=None, max_length=200)
-    tous: Optional[bool] = None       # « Tout couvrir » : motif ^.*$, vhosts futurs compris
+    forcer: Optional[List[str]] = Field(default=None, max_length=200)
+    exclure: Optional[List[str]] = Field(default=None, max_length=200)
+    retirer_tout_couvrir: Optional[bool] = None
+    reactiver: Optional[bool] = None      # lève la suspension posée par « wafctl php-sites retablir »
 
 
-@router.post("/php-hotes")
-def php_hotes_ecrire(corps: HotesPHP, user: dict = Depends(require_jwt)):
-    """Liste EXPLICITE des hôtes cochés (motifs ^nom\\.domaine$) ; les autres motifs restent. Jamais de cochage
-    automatique : seule cette route, sur geste de l'administrateur, écrit."""
-    if corps.hotes is None and corps.tous is None:
+def _noms(v: Optional[List[str]]) -> Optional[List[str]]:
+    if v is None:
+        return None
+    noms = sorted({h.strip().lower() for h in v})
+    if any(not _HOTE.fullmatch(h) for h in noms):
+        raise HTTPException(422, detail={"motif": "hote"})
+    return noms
+
+
+@router.post("/php-sites")
+def php_sites_ecrire(corps: ExceptionsPHP, user: dict = Depends(require_jwt)):
+    """Exceptions de l'administrateur (listes complètes) et retrait de l'ancien « tout couvrir ». La couverture des
+    sites détectés n'est jamais écrite ici : wafctl la recalcule."""
+    forcer, exclure = _noms(corps.forcer), _noms(corps.exclure)
+    if forcer is None and exclure is None and not corps.retirer_tout_couvrir and not corps.reactiver:
         raise HTTPException(422, detail={"motif": "vide"})
     entree: dict = {"acteur": _acteur(user)}
     detail = []
-    if corps.hotes is not None:
-        hotes = sorted({h.strip().lower() for h in corps.hotes})
-        if any(not _HOTE.fullmatch(h) for h in hotes):
-            raise HTTPException(422, detail={"motif": "hote"})
-        entree["hotes"] = hotes
-        detail.append("explicites " + (",".join(hotes) or "aucun"))
-    if corps.tous is not None:
-        entree["tous"] = corps.tous
-        detail.append("tous " + ("oui" if corps.tous else "non"))
-    _ecrire([WAFCTL, "php-hotes", "ecrire"], entree, "waf-php-hotes", " ; ".join(detail), user)
-    return _hotes(_ctl([WAFCTL, "php-hotes", "lister"]))
+    if forcer is not None:
+        entree["forcer"] = forcer
+        detail.append("forcer " + (",".join(forcer) or "aucun"))
+    if exclure is not None:
+        entree["exclure"] = exclure
+        detail.append("exclure " + (",".join(exclure) or "aucun"))
+    if corps.retirer_tout_couvrir:
+        entree["retirer_tout_couvrir"] = True
+        detail.append("tout couvrir hérité retiré")
+    if corps.reactiver:
+        entree["reactiver"] = True
+        detail.append("détection réactivée")
+    return _sites(_ecrire([WAFCTL, "php-sites", "ecrire"], entree, "waf-php-sites", " ; ".join(detail), user))
+
+
+def detecter_sites() -> dict:
+    """Relance de la détection (tâche de fond horaire, ou bouton). wafctl audite lui-même tout changement."""
+    return _ctl([WAFCTL, "php-sites", "detecter"], {})
+
+
+@router.post("/php-sites/detecter")
+def php_sites_detecter(user: dict = Depends(require_jwt)):
+    _auditer("waf-php-sites", "detecter demandé", user)
+    d = detecter_sites()
+    return {**_sites(_ctl([WAFCTL, "php-sites", "lister"])), "nouveaux": d.get("nouveaux") or []}

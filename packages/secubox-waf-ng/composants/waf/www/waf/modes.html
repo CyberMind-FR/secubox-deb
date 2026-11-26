@@ -6,9 +6,9 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox — « SBXWAF », onglet Modes (#3741, maquette approuvée le 2026-11-16).
-  Lecture : GET /api/v1/waf/{categories,categories/stats7j,leurres-service/modes,php-hotes}.
+  Lecture : GET /api/v1/waf/{categories,categories/stats7j,leurres-service/modes,php-sites}.
   Écriture (session d'administrateur) : POST /categories/modes (lot, bouton « Appliquer »),
-  /leurres-service/modes, /php-hotes. ?demo=1 : données d'exemple, aucune écriture.
+  /leurres-service/modes, /php-sites, /php-sites/detecter. ?demo=1 : données d'exemple, aucune écriture.
   Une mesure absente s'affiche « — », jamais 0. Tout texte venu de l'API est posé en textContent.
 -->
 <html lang="fr">
@@ -68,12 +68,21 @@
   .btn{cursor:pointer;padding:7px 14px;border-radius:9px;font-size:.82rem;font-weight:600;border:1px solid var(--trait2);background:transparent;min-height:36px}
   .btn.prim{background:var(--bleu);border-color:var(--bleu)} .btn:disabled{opacity:.5;cursor:default}
   .vide{color:var(--faible);font-size:.84rem;padding:6px 0}
+  .resume{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.84rem;color:var(--doux)} .resume b{color:var(--texte);font-size:1.05rem}
+  .pan h3{margin:12px 0 4px;font-size:.78rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .site{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.14);font-size:.84rem}
+  .site:first-child{border-top:0} .site .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .site .act{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .site .preuve{flex-basis:100%;font-size:.74rem;color:var(--faible)} .site .preuve .mono{font-size:.72rem}
+  .btn.mini{padding:3px 10px;min-height:28px;font-size:.74rem}
+  .ajout{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px} .ajout input{flex:1 1 200px;min-width:0}
+  #sitesSuspendu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesSuspendu[hidden]{display:none}
+  #sitesTous{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesTous[hidden]{display:none}
   input[type=search]{min-height:32px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
 </style>
 <body>
 <div class="cadre" id="cadre">
   <div class="tete">
-    <div><b>Modes</b><br><small>Catégories, leurres de service, hôtes PHP</small></div>
+    <div><b>Modes</b><br><small>Catégories, leurres de service, sites PHP</small></div>
     <div class="droite"><span id="releve">—</span><button class="btn" id="rafraichir" type="button">Rafraîchir</button></div>
   </div>
   <div class="bandeau demo" id="demo" hidden>Démonstration : données d'exemple, aucune action n'est envoyée.</div>
@@ -113,11 +122,19 @@
         <p class="note">Bannir : ban à la fin du dialogue (règle actuelle, #3728). Observer : identifiants journalisés, aucun ban. Messagerie (submission, imap, pop3 ; #3924) : « observer » par défaut, jamais de mot de passe ; « bannir » ne vise qu’un compte inexistant. smtp, smtps, imaps et pop3s observent toujours. Effet immédiat (relu à chaud).</p>
       </div>
 
-      <div class="pan">
-        <h2>Hôtes PHP <i>contrôles Roundcube, Nextcloud, PHP</i></h2>
-        <div id="hotes"></div>
-        <div class="btns" style="margin-top:8px"><button class="btn" id="hotesOk" type="button" disabled>Enregistrer les hôtes cochés</button> <button class="btn" id="hotesTous" type="button">Tout couvrir</button></div>
-        <p class="note">Conteneur PHP : « oui » quand le service du vhost est déclaré PHP, sinon « inconnu » (non détectable sans privilège). Rien n'est coché automatiquement ; les motifs existants restent : <span class="mono" id="motifs">—</span></p>
+      <div class="pan" id="panSites">
+        <h2>Sites PHP <i>contrôles Roundcube, Nextcloud, PHP</i></h2>
+        <div class="resume" id="sitesResume">—</div>
+        <div class="bandeau err" id="sitesSuspendu" hidden><span id="sitesSuspenduTxt"></span> <button class="btn" id="sitesReactiver" type="button">Réactiver la détection</button></div>
+        <div class="bandeau demo" id="sitesTous" hidden><span id="sitesTousTxt"></span> <button class="btn" id="sitesTousRetirer" type="button">Retirer « tout couvrir »</button></div>
+        <h3>Détectés par le WAF</h3>
+        <div id="sitesDetectes"></div>
+        <h3>Vos exceptions</h3>
+        <div class="ajout"><input type="search" id="siteCherche" list="sitesServis" placeholder="Chercher un site servi…" aria-label="Site servi" autocomplete="off"><datalist id="sitesServis"></datalist>
+          <button class="btn" id="siteForcer" type="button">Forcer les contrôles</button><button class="btn" id="siteExclure" type="button">Exclure</button></div>
+        <div id="sitesExceptions"></div>
+        <div class="btns" style="margin-top:8px"><button class="btn" id="sitesDetecter" type="button">Relancer la détection</button></div>
+        <p class="note">Le WAF arme seul les contrôles PHP sur les sites servis qui font du PHP : appli PHP d’un module installé, fichier .php servi en 2xx (journal nginx, page d’accueil « attrape-tout » écartée), en-tête X-Powered-By: PHP ou cookie de session PHP du serveur d’origine. Détection toutes les heures (tâche de fond de l’API) ; « contrôlé » = motif écrit, relu à chaud par sbxwaf. Un site détecté reste couvert tant que vous ne l’excluez pas. Motifs livrés, toujours actifs : <span class="mono" id="motifs">—</span></p>
       </div>
     </div>
   </div>
@@ -129,7 +146,7 @@
   var DEMO=/[?&]demo=1\b/.test(location.search);
   var MODES=[['detect','Détection','d'],['escalate','Après N','e'],['block','Immédiat','b']];
   var LIB={detect:'détection',escalate:'après N touches',block:'immédiat'};
-  var CATS=null, STATS=null, LEURRES=null, HOTES=null, ATTENTE={};
+  var CATS=null, STATS=null, LEURRES=null, SITES=null, ATTENTE={};
   function el(i){return document.getElementById(i);}
   function cree(tag,cls,texte){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;return e;}
   function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
@@ -156,9 +173,13 @@
     STATS={categories:{nextcloud:{touches:14,faux_positifs_estimes:2},roundcube:{touches:9,faux_positifs_estimes:0},sqli:{touches:57,faux_positifs_estimes:0}}};
     LEURRES={leurres:[['rdp',3389],['vnc',5900],['telnet',23],['smb',445],['mysql',3306],['postgres',5432],['redis',6379],['mongodb',27017],['elasticsearch',9200],['mssql',1433],['submission',587],['imap',143],['pop3',110],['smtp',25],['smtps',465],['imaps',993],['pop3s',995]]
       .map(function(x){var fixe=/^(smtp|smtps|imaps|pop3s)$/.test(x[0]);return {service:x[0],port:x[1],mode:fixe||/^(postgres|submission|imap|pop3)$/.test(x[0])?'observer':'bannir',fixe:fixe};})};
-    HOTES={hotes:[{hote:'nc.exemple.fr',service:'nextcloud',conteneur_php:'oui',couvert:true,explicite:false},
-      {hote:'webmail.exemple.fr',service:'roundcube',conteneur_php:'oui',couvert:true,explicite:false},
-      {hote:'wp.exemple.fr',service:null,conteneur_php:'inconnu',couvert:false,explicite:false}],motifs:['^(nc|nextcloud|cloud)\\.','^(webmail|roundcube)\\.']};
+    SITES={detectes:[{hote:'nc.exemple.fr',type:'appli',preuve:'appli nextcloud (module installé)',premiere:'2026-11-20T08:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:false,couvert:'service'},
+      {hote:'webmail.exemple.fr',type:'appli',preuve:'appli roundcube (module installé)',premiere:'2026-11-20T08:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:false,couvert:'service'},
+      {hote:'boutique.exemple.fr',type:'fichier',preuve:'/index.php servi en 2xx (41 fois)',premiere:'2026-11-24T13:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:false,couvert:'site'},
+      {hote:'wiki.exemple.fr',type:'entete',preuve:'X-Powered-By: PHP/8.2.20',premiere:'2026-11-25T10:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:true,couvert:null}],
+      forcer:[{hote:'ancien.exemple.fr',le:'2026-11-26T08:00:00Z',par:'migration',servi:true,couvert:'site'}],exclure:[{hote:'wiki.exemple.fr',le:'2026-11-26T08:30:00Z',par:'admin',servi:true,couvert:null}],
+      autres:212,servis:['nc.exemple.fr','webmail.exemple.fr','boutique.exemple.fr','wiki.exemple.fr','ancien.exemple.fr','blog.exemple.fr','www.exemple.fr'],routes_lisibles:true,
+      derniere_detection:'2026-11-26T09:00:00Z',migre:true,tout_couvrir_herite:true,motifs_livres:['^(nc|nextcloud|cloud)\\.','^(webmail|roundcube)\\.']};
   }
 
   function etat(id){var c=CATS.categories[id],a=ATTENTE[id];return a?a:{mode:c.mode,ban_seuil:c.ban_seuil,ban_duree:c.ban_duree};}
@@ -243,26 +264,54 @@
       d.appendChild(selecteur([['observer','Observer','d'],['bannir','Bannir','b']],x.mode,!!x.fixe,function(m){if(m!==x.mode)ecrireLeurre(x.service,m);}));z.appendChild(d);});
   }
 
-  function rendreHotes(){
-    var z=el('hotes');vide(z);
-    el('motifs').textContent=HOTES&&HOTES.motifs&&HOTES.motifs.length?HOTES.motifs.join('  '):'—';
-    el('hotesTous').textContent=HOTES&&HOTES.tous?'Retirer « tout couvrir »':'Tout couvrir';
-    if(!HOTES){z.appendChild(cree('div','vide','—'));return;}
-    if(!HOTES.hotes.length){z.appendChild(cree('div','vide','Aucun vhost connu'));return;}
-    HOTES.hotes.forEach(function(h){var lb=cree('label','chk'),i=cree('input');i.type='checkbox';i.checked=!!h.explicite;i.dataset.hote=h.hote;
-      i.addEventListener('change',function(){el('hotesOk').disabled=false;});
-      lb.appendChild(i);lb.appendChild(cree('span','',h.hote));
-      var p=h.couvert?cree('span','pill p-cyan',(h.service?h.service+' · ':'')+'couvert'):cree('span','pill p-orange','non couvert');
-      p.title='conteneur PHP : '+h.conteneur_php;lb.appendChild(p);
-      lb.appendChild(cree('span','pill p-gris','PHP : '+h.conteneur_php));z.appendChild(lb);});
+  var TYPES={appli:'appli connue',fichier:'fichier .php',entete:'en-tête'};
+  function date(v){if(!v)return '—';var d=new Date(v);return isNaN(d)?'—':d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+  function noms(l){return (l||[]).map(function(x){return x.hote;});}
+  function bouton(txt,fn){var b=cree('button','btn mini',txt);b.type='button';b.addEventListener('click',fn);return b;}
+  function rendreSites(){
+    var r=el('sitesResume'),d=el('sitesDetectes'),x=el('sitesExceptions'),dl=el('sitesServis');vide(r);vide(d);vide(x);vide(dl);
+    el('motifs').textContent=SITES&&SITES.motifs_livres&&SITES.motifs_livres.length?SITES.motifs_livres.join('  '):'—';
+    el('sitesTous').hidden=!(SITES&&SITES.tout_couvrir_herite);
+    el('sitesSuspendu').hidden=!(SITES&&SITES.suspendu);
+    el('sitesSuspenduTxt').textContent='Détection suspendue depuis le retour arrière du '+date(SITES&&SITES.suspendu_le)+' : l’ancien réglage s’applique, la liste ci-dessous n’est pas armée.';
+    if(!SITES){r.textContent='Sites PHP indisponibles';return;}
+    var actifs=SITES.detectes.filter(function(s){return !s.exclu;}).length;
+    function chiffre(n,t){var s=cree('span');s.appendChild(cree('b','',nb(n)));s.appendChild(document.createTextNode(' '+t));r.appendChild(s);}
+    chiffre(actifs,'site'+(actifs>1?'s':'')+' PHP détecté'+(actifs>1?'s':''));
+    chiffre(SITES.forcer.length+SITES.exclure.length,'exception'+(SITES.forcer.length+SITES.exclure.length>1?'s':''));
+    chiffre(SITES.autres,'autre'+(SITES.autres>1?'s':'')+' site'+(SITES.autres>1?'s':'')+' servi'+(SITES.autres>1?'s':'')+' : non PHP, contrôles inutiles');
+    r.appendChild(cree('span','',SITES.routes_lisibles?'détection : '+date(SITES.derniere_detection):'routes illisibles : rien n’est retiré'));
+    el('sitesTousTxt').textContent='Ancien réglage « tout couvrir » encore actif : les contrôles PHP s’appliquent aussi aux '+nb(SITES.autres)+' sites non PHP.';
+    if(!SITES.detectes.length)d.appendChild(cree('div','vide','Aucun site PHP détecté pour l’instant'));
+    SITES.detectes.forEach(function(s){var l=cree('div','site');l.appendChild(cree('span','nom',s.hote));
+      l.appendChild(cree('span','pill p-gris',TYPES[s.type]||s.type||'?'));
+      var a=cree('span','act');
+      if(s.exclu){a.appendChild(cree('span','pill p-orange','exclu, sans contrôle'));a.appendChild(bouton('Réarmer',function(){exceptions(null,noms(SITES.exclure).filter(function(h){return h!==s.hote;}),'Contrôles PHP réarmés sur '+s.hote+'.');}));}
+      else{a.appendChild(cree('span','pill p-cyan','contrôlé'));
+        if(s.couvert==='service'||s.couvert==='motif'){var p=cree('span','pill p-gris','non excluable');p.title=s.couvert==='service'?'service déclaré PHP':'motif livré';a.appendChild(p);}
+        else a.appendChild(bouton('Exclure',function(){exceptions(null,noms(SITES.exclure).concat([s.hote]),s.hote+' exclu des contrôles PHP.');}));}
+      l.appendChild(a);
+      var pv=cree('span','preuve');pv.appendChild(document.createTextNode('preuve : '));pv.appendChild(cree('span','mono',s.preuve||'—'));
+      pv.appendChild(document.createTextNode(' · vu le '+date(s.derniere)+(s.premiere&&s.premiere!==s.derniere?' (depuis le '+date(s.premiere)+')':'')));l.appendChild(pv);
+      d.appendChild(l);});
+    var ex=SITES.forcer.map(function(e){return [e,'forcer'];}).concat(SITES.exclure.map(function(e){return [e,'exclure'];}));
+    if(!ex.length)x.appendChild(cree('div','vide','Aucune exception'));
+    ex.forEach(function(p){var e=p[0],l=cree('div','site');l.appendChild(cree('span','nom',e.hote));
+      l.appendChild(cree('span',p[1]==='forcer'?'pill p-cyan':'pill p-orange',p[1]==='forcer'?'forcé':'exclu'));
+      if(!e.servi)l.appendChild(cree('span','pill p-gris','non servi'));
+      var a=cree('span','act');a.appendChild(bouton('Retirer',function(){
+        if(p[1]==='forcer')exceptions(noms(SITES.forcer).filter(function(h){return h!==e.hote;}),null,'Exception retirée : '+e.hote+'.');
+        else exceptions(null,noms(SITES.exclure).filter(function(h){return h!==e.hote;}),'Exception retirée : '+e.hote+'.');}));l.appendChild(a);
+      l.appendChild(cree('span','preuve',(e.par==='migration'?'repris de l’ancien réglage':'posé par '+(e.par||'?'))+' le '+date(e.le)));x.appendChild(l);});
+    (SITES.servis||[]).forEach(function(h){var o=cree('option');o.value=h;dl.appendChild(o);});
   }
 
-  function rendre(){tuiles();rendreCats();rendreAttente();rendreLeurres();rendreHotes();hauteur();}
+  function rendre(){tuiles();rendreCats();rendreAttente();rendreLeurres();rendreSites();hauteur();}
 
   function charger(){
     if(DEMO){exemple();el('releve').textContent='démonstration';rendre();return;}
-    Promise.all([jget('/categories'),jget('/categories/stats7j'),jget('/leurres-service/modes'),jget('/php-hotes')]).then(function(r){
-      CATS=r[0]&&r[0].categories?r[0]:null;STATS=r[1];LEURRES=r[2]&&r[2].leurres?r[2]:null;HOTES=r[3]&&r[3].hotes?r[3]:null;
+    Promise.all([jget('/categories'),jget('/categories/stats7j'),jget('/leurres-service/modes'),jget('/php-sites')]).then(function(r){
+      CATS=r[0]&&r[0].categories?r[0]:null;STATS=r[1];LEURRES=r[2]&&r[2].leurres?r[2]:null;SITES=r[3]&&r[3].detectes?r[3]:null;
       Object.keys(ATTENTE).forEach(function(id){if(!CATS||!CATS.categories[id])delete ATTENTE[id];});
       el('releve').textContent=(CATS&&CATS.source==='paquet'?'règles du paquet (état de la box indisponible) · ':'')+(STATS&&STATS.etat?'touches 7 j : '+STATS.etat+' · ':'')+'relevé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       rendre();});
@@ -283,26 +332,29 @@
     jpost('/leurres-service/modes',{modes:modes}).then(function(r){
       if(r.ok){LEURRES=r.corps;message('succes','Leurre '+service+' : '+mode+'.');rendre();}else message('erreur','Changement refusé : '+motif(r));});
   }
-  function ecrireHotes(){
-    var h=[];document.querySelectorAll('#hotes input[type=checkbox]').forEach(function(i){if(i.checked)h.push(i.dataset.hote);});
+  function poster(chemin,corps,ok){
     if(DEMO){message('succes','Démonstration : action inerte.');return;}
-    jpost('/php-hotes',{hotes:h}).then(function(r){
-      if(r.ok){HOTES=r.corps;el('hotesOk').disabled=true;message('succes','Hôtes PHP enregistrés ('+h.length+').');rendre();}else message('erreur','Enregistrement refusé : '+motif(r));});
+    jpost(chemin,corps).then(function(r){
+      if(r.ok&&r.corps&&r.corps.detectes){SITES=r.corps;message('erreur','');message('succes',typeof ok==='function'?ok(r.corps):ok);rendre();}
+      else message('erreur','Refusé : '+motif(r));});
   }
-
+  function exceptions(forcer,exclure,ok){var c={};if(forcer)c.forcer=forcer;if(exclure)c.exclure=exclure;poster('/php-sites',c,ok);}
+  function siteChoisi(){var h=el('siteCherche').value.trim().toLowerCase();
+    if(!SITES||(SITES.servis||[]).indexOf(h)<0){message('erreur','Choisissez un site servi dans la liste.');return null;}return h;}
   if(DEMO)el('demo').hidden=false;
   el('appliquer').addEventListener('click',appliquer);
   el('annuler').addEventListener('click',function(){ATTENTE={};rendre();});
-  el('hotesOk').addEventListener('click',ecrireHotes);
-  function ecrireTous(){
-    var actif=!!(HOTES&&HOTES.tous);
-    if(DEMO){message('succes','Démonstration : action inerte.');return;}
-    el('hotesTous').disabled=true;
-    jpost('/php-hotes',{tous:!actif}).then(function(r){el('hotesTous').disabled=false;
-      if(r.ok){HOTES=r.corps;message('succes',actif?'« Tout couvrir » retiré : seuls les hôtes cochés restent couverts.':'Tous les sites sont couverts, y compris ceux ajoutés plus tard.');rendre();}
-      else message('erreur','Enregistrement refusé : '+motif(r));});
-  }
-  el('hotesTous').addEventListener('click',ecrireTous);
+  el('siteForcer').addEventListener('click',function(){var h=siteChoisi();if(!h)return;
+    exceptions(noms(SITES.forcer).concat([h]),noms(SITES.exclure).filter(function(x){return x!==h;}),'Contrôles PHP forcés sur '+h+'.');});
+  el('siteExclure').addEventListener('click',function(){var h=siteChoisi();if(!h)return;
+    exceptions(noms(SITES.forcer).filter(function(x){return x!==h;}),noms(SITES.exclure).concat([h]),h+' exclu des contrôles PHP.');});
+  el('sitesReactiver').addEventListener('click',function(){poster('/php-sites',{reactiver:true},'Détection réactivée : les sites PHP détectés et forcés sont de nouveau contrôlés.');});
+  el('sitesTousRetirer').addEventListener('click',function(){poster('/php-sites',{retirer_tout_couvrir:true},'« Tout couvrir » retiré : seuls les sites PHP détectés et forcés restent contrôlés.');});
+  el('sitesDetecter').addEventListener('click',function(){var b=el('sitesDetecter');b.disabled=true;
+    if(DEMO){b.disabled=false;message('succes','Démonstration : action inerte.');return;}
+    jpost('/php-sites/detecter',{}).then(function(r){b.disabled=false;
+      if(r.ok&&r.corps&&r.corps.detectes){SITES=r.corps;var n=(r.corps.nouveaux||[]).length;message('succes',n?n+' nouveau(x) site(s) PHP : '+r.corps.nouveaux.join(', '):'Détection faite, aucun nouveau site PHP.');rendre();}
+      else message('erreur','Détection refusée : '+motif(r));});});
   el('cherche').addEventListener('input',rendreCats);
   el('rafraichir').addEventListener('click',charger);
   if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));

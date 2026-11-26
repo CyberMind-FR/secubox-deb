@@ -95,7 +95,9 @@ Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
 Cmnd_Alias SBX_WAF_MODES = /usr/sbin/wafctl leurres-modes lister, \
                            /usr/sbin/wafctl leurres-modes ecrire, \
                            /usr/sbin/wafctl php-hotes lister, \
-                           /usr/sbin/wafctl php-hotes ecrire
+                           /usr/sbin/wafctl php-sites lister, \
+                           /usr/sbin/wafctl php-sites ecrire, \
+                           /usr/sbin/wafctl php-sites detecter
 
 Cmnd_Alias SBX_WAF_BLOCS = /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl ban-bloc *, \
                            /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl unban-bloc *, \

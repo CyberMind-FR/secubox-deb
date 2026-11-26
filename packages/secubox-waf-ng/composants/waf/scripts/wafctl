@@ -366,6 +366,10 @@ LEURRES_MODES="/etc/secubox/authwatch/leurres-modes.json"
 ROUTES_HAPROXY="/etc/secubox/waf/haproxy-routes.json"
 
 AUDIT_SECUBOX="/var/log/secubox/audit.log"
+# Sites PHP détectés (#3974) : état à côté de vhost_profiles.json, détecteur livré par le paquet, journal nginx commun.
+PHP_SITES="/etc/secubox/waf/php-sites.json"
+WAF_PHP_SITES="/usr/lib/secubox/waf/waf-php-sites"
+JOURNAL_HOTES_NGINX="/var/log/nginx/secubox-hosts.log"
 
 # Préambule Python commun : audit de CHAQUE issue d'écriture (ok, refus, échec), écrit par wafctl lui-même pour
 # qu'un appel sudo direct soit tracé aussi. Ajout seul, jamais créé ici, jamais au travers d'un lien.
@@ -455,7 +459,7 @@ cmd_php_hotes() {
         lister|ecrire) ;;
         *) error "Usage: wafctl php-hotes <lister|ecrire>  (ecrire : JSON sur stdin)"; return 1 ;;
     esac
-    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
+    PHP_SITES="$PHP_SITES" WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
 import json, os, re, stat, sys, tempfile
 verbe, chemin, routes = sys.argv[1], sys.argv[2], sys.argv[3]
 exec(sys.argv[4])
@@ -479,6 +483,28 @@ except (OSError, ValueError) as e:
     if verbe == "lister":
         print(json.dumps({"ok": False, "code": 3, "erreur": f"profils illisibles : {e}"})); sys.exit(3)
     sortir("waf-php-hotes", 3, f"profils illisibles : {e}", acteur)
+if verbe == "ecrire":
+    # Même verrou que « wafctl php-sites » (#3974) : pas d'écriture croisée pendant une migration ou une détection.
+    import fcntl
+    sites = os.environ.get("PHP_SITES", "")
+    try:
+        vfd = os.open(sites + ".lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        if not stat.S_ISREG(os.fstat(vfd).st_mode):
+            raise OSError("pas un fichier régulier")
+        fcntl.flock(vfd, fcntl.LOCK_EX)
+    except OSError as e:
+        sortir("waf-php-hotes", 3, f"verrou impossible : {e}", acteur)
+    try:
+        with open(sites, encoding="utf-8") as f:
+            actif = not (json.load(f) or {}).get("retabli")
+    except FileNotFoundError:
+        actif = False
+    except (OSError, ValueError):
+        actif = True
+    if actif:
+        sortir("waf-php-hotes", 3, "remplacé par « wafctl php-sites » (#3974) ; « wafctl php-sites retablir » pour revenir", acteur)
+    with open(chemin, encoding="utf-8") as f:      # relu sous verrou
+        profils = json.load(f)
 if verbe == "lister":
     try:
         with open(routes, encoding="utf-8") as f:
@@ -524,6 +550,20 @@ except OSError as e:
 auditer("waf-php-hotes", "ok", detail, acteur)
 print(json.dumps({"ok": True, "explicites": sorted(set(hotes)), "tous": TOUS in profils["php_hotes"], "php_hotes": profils["php_hotes"]}))
 PY
+}
+
+# Sites PHP (#3974) : le WAF détecte les sites servis qui font du PHP et y arme les contrôles PHP ; l'administrateur
+# pose des exceptions (forcer, exclure). Entrée de « ecrire » en JSON sur STDIN ; « retablir » = retour arrière.
+cmd_php_sites() {
+    case "${1:-}" in
+        lister|ecrire|detecter|retablir) ;;
+        *) error "Usage: wafctl php-sites <lister|ecrire|detecter|retablir>  (ecrire : JSON sur stdin)"; return 1 ;;
+    esac
+    local journaux=()
+    [ "$1" = detecter ] && journaux=("$JOURNAL_HOTES_NGINX.1" "$JOURNAL_HOTES_NGINX")
+    # Échéance côté root (#3974) : le détecteur borne ses sondes à 18 s ; « timeout » coupe tout reste avant le
+    # délai de 30 s de l'API, pour qu'un détecteur root ne survive jamais à son appelant en tenant le verrou.
+    timeout -k 2 25 python3 -I "$WAF_PHP_SITES" "$1" "$PHP_SITES" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$AUDIT_SECUBOX" "${journaux[@]}"
 }
 
 NFT_TABLE="secubox"
@@ -1625,6 +1665,7 @@ case "${1:-}" in
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
     leurres-modes) cmd_leurres_modes "${2:-}" ;;
     php-hotes)  cmd_php_hotes "${2:-}" ;;
+    php-sites)  cmd_php_sites "${2:-}" ;;
     ban)        [ "$#" -le 4 ] || { error "Usage : wafctl ban <ip> [durée] [--exiger-protegees]"; exit 1; }
                 cmd_ban "${2:-}" "${3:-}" "${4:-}" ;;
     ban-lot)    shift; cmd_ban_lot "$@" ;;
@@ -1701,7 +1742,8 @@ Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
 
 Page Modes (#3741, JSON sur stdin pour ecrire) :
   leurres-modes lister|ecrire  Mode observer|bannir des leurres de service
-  php-hotes lister|ecrire      Hôtes PHP cochés (motifs ^nom\.domaine$ de php_hotes)
+  php-hotes lister|ecrire      Hôtes PHP cochés (ancien réglage, refusé une fois php-sites en place)
+  php-sites lister|ecrire|detecter|retablir  Sites PHP détectés et exceptions (#3974)
 
 Operations:
   logs [n]      Show last n log lines (default 50)

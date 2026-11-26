@@ -322,9 +322,9 @@ PROTEGEES
     # ajoute les SEULS services et vhosts livrés qui manquent ; aucune valeur de
     # l'opérateur n'est touchée, et rien n'est écrit (ni audité) s'il ne manque rien.
     #
-    # sbxwaf ne lit ce fichier qu'au démarrage (SIGHUP ne répare que nft) : la
-    # fusion se fait AVANT la section 6, dont le redémarrage inconditionnel le lui
-    # fait relire. Pas de redémarrage de plus ici : il en ferait deux.
+    # sbxwaf relit ce fichier à chaud (surveillerVhostProfiles, mtime, #3741) ; la
+    # fusion se fait quand même AVANT la section 6, dont le redémarrage
+    # inconditionnel le relit aussi. Pas de redémarrage de plus ici.
     if [ -x /usr/sbin/waf-profils-fusion ] && command -v python3 >/dev/null 2>&1; then
       sbx_fusion=0
       /usr/sbin/waf-profils-fusion || sbx_fusion=$?
@@ -332,6 +332,14 @@ PROTEGEES
         0|10) ;;
         *) echo "secubox-waf-ng: fusion des profils de vhost refusée (code $sbx_fusion) — /etc/secubox/waf/vhost_profiles.json laissé intact" >&2 ;;
       esac
+    fi
+
+    # ── 5b bis. Sites PHP détectés (#3974) : première détection, qui reprend les anciens hôtes PHP cochés comme
+    # exceptions « forcer » (rien n'est retiré de la couverture). Avant la relance de la section 6. Échec non bloquant :
+    # l'ancien réglage reste en place, la tâche de fond de l'API refait la détection.
+    if [ -x /usr/lib/secubox/waf/waf-php-sites ] && [ -f /etc/secubox/waf/vhost_profiles.json ]; then
+      /usr/sbin/wafctl php-sites detecter </dev/null >/dev/null \
+        || echo "secubox-waf-ng: détection des sites PHP non faite (wafctl php-sites detecter), ancien réglage gardé" >&2
     fi
 
     # ── 5c. Règles du WAF (#1858, #3932) : AVANT l'unique relance de la section 6.
