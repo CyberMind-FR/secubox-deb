@@ -70,6 +70,38 @@ PAYS_FR = {"AD": "Andorre", "AE": "Émirats arabes unis", "AL": "Albanie", "AM":
            "SG": "Singapour", "SI": "Slovénie", "SK": "Slovaquie", "TH": "Thaïlande", "TN": "Tunisie", "TR": "Turquie", "TW": "Taïwan",
            "UA": "Ukraine", "US": "États-Unis", "UZ": "Ouzbékistan", "VE": "Venezuela", "VN": "Viêt Nam", "ZA": "Afrique du Sud",
            "autres": "Autres pays"}
+# Noms des catégories du WAF, comme les pages web (table CATEGORIES de composants/waf/api/dossiers.py, secubox-waf-ng ; recopiée :
+# un autre paquet). Une catégorie inconnue garde son nom brut, nettoyé.
+CATEGORIES_FR = {
+    "sqli": "Injection SQL", "xss": "Script injecté", "lfi": "Lecture de fichiers interdits", "rce": "Exécution de code",
+    "cve_2024": "Failles connues", "scanners": "Outils de balayage", "webmail": "Attaque du webmail",
+    "api_abuse": "Abus d'API", "voip": "Attaque de la téléphonie", "xmpp": "Attaque de la messagerie instantanée",
+    "cve_voip": "Failles de téléphonie", "cve_xmpp": "Failles de messagerie instantanée",
+    "router_botnet": "Robots de prise de contrôle", "waf_fingerprint": "Sonde du pare-feu", "honeypot": "Pièges touchés",
+    "recon_crawler": "Exploration", "credential_harvest": "Recherche de mots de passe",
+    "product_absent_probes": "Logiciels absents d'ici", "roundcube": "Failles de Roundcube",
+    "nextcloud": "Failles de Nextcloud", "php_requete": "Requêtes PHP anormales", "aspirateur_ua": "Outil d'aspiration",
+    "php2shell": "Envoi de code PHP", "leurre_redirige": "Détournées vers un leurre", "robots": "Robots",
+    "rotation": "Adresses tournantes", "host_anomaly:unrouted": "Noms non servis", "host_anomaly:empty": "Nom absent",
+    "host_anomaly:ip_literal": "Accès par adresse IP", "host_anomaly:dga": "Nom fabriqué", "autres": "Autres motifs",
+    "auth_smtp": "Mots de passe sur la messagerie", "auth_imap": "Mots de passe sur la messagerie",
+    "auth_ssh": "Mots de passe SSH", "leurre_ssh": "Leurre SSH touché", "leurre_smtp": "Leurre de messagerie touché",
+}
+
+
+def libelle_categorie(cat: Any) -> str:
+    """Nom français d'une catégorie du WAF : exact, puis sans le suffixe « |… », puis le préfixe avant « : »."""
+    c = str(cat or "?").split("|", 1)[0]
+    if c in CATEGORIES_FR:
+        return CATEGORIES_FR[c]
+    base = c.split(":", 1)[0]
+    if base in CATEGORIES_FR:
+        return CATEGORIES_FR[base]
+    if base.startswith("leurre"):
+        return "Leurre touché"
+    return c.replace("_", " ")
+
+
 NIVEAU_FR = {"BLOCK": "Bloquer", "MITIGATE": "Freiner", "OBSERVE": "Observer"}
 MESURE_FR = {"DELAY": "Ralenti", "CHALLENGE": "Défi", "TARPIT": "Englué", "DENY": "Refusé", "QUARANTINE": "Quarantaine", "OBSERVE": "Observé"}
 FAMILLE_FR = {"collecte": "Collecte", "messagerie": "Messagerie", "acces_distant": "Accès distant", "balayage_web": "Balayage web"}
@@ -235,13 +267,21 @@ def couches(data: dict) -> dict:
     return c
 
 
-def parts(cs: dict) -> list[tuple[str, Optional[float]]]:
-    """Part de chaque couche sur la semaine ; une couche non mesurée les 7 jours rend toutes les parts non mesurées."""
+def parts(cs: dict) -> list[tuple[str, Optional[float], str]]:
+    """Part de chaque couche sur la semaine, avec son texte. Toutes les couches complètes : la part en %. Sinon, une couche complète
+    donne son total, une couche incomplète dit sur combien de jours elle n'est pas mesurée (jamais une part sur un total partiel)."""
     tot = {k: somme(v) for k, v in cs.items()}
-    if any(v is None for v in tot.values()):
-        return [(k, None) for k in cs]
-    t = sum(tot.values())
-    return [(k, (100.0 * v / t) if t else None) for k, v in tot.items()]
+    if all(v is not None for v in tot.values()) and sum(tot.values()):
+        t = sum(tot.values())
+        return [(k, 100.0 * v / t, fpct(100.0 * v / t, 1)) for k, v in tot.items()]
+    out = []
+    for k, v in cs.items():
+        manque = 7 - mesures(v)
+        if tot[k] is not None:
+            out.append((k, None, fn(tot[k])))
+        else:
+            out.append((k, None, f"{NON_MESURE} sur {manque} {pl(manque, 'jour', 'jours')}"))
+    return out
 
 
 def pic(s: list[Optional[float]], jours: list[str]) -> Optional[dict]:
@@ -336,8 +376,9 @@ def decisions(data: dict, ks: Optional[list[dict]] = None) -> list[dict]:
     if lat and lat.get("injoignables"):
         n = len(lat["injoignables"])
         out.append({"regle": "site_injoignable", "horizon": "Cette semaine",
-                    "titre": f"Rétablir {pl(n, 'le site', 'les sites')} {', '.join(lat['injoignables'][:3])}",
-                    "raison": f"{n} {pl(n, 'site ne répond', 'sites ne répondent')} plus à la sonde de santé ({heure_paris(lat.get('instant'))}).",
+                    "titre": f"Rétablir {n} {pl(n, 'site injoignable', 'sites injoignables')}",
+                    "raison": f"{pl(n, 'Il ne répond', 'Ils ne répondent')} plus à la sonde de santé ({heure_paris(lat.get('instant'))}) : "
+                              + ", ".join(lat["injoignables"][:10]) + ".",
                     "effet": f"{pl(n, 'Le site répond', 'Les sites répondent')} de nouveau à la sonde."})
     att = inst.get("attente")
     if att and (att.get("en_attente") or 0) >= SEUIL_ATTENTE:
@@ -349,7 +390,7 @@ def decisions(data: dict, ks: Optional[list[dict]] = None) -> list[dict]:
     act = inst.get("acteurs")
     if act:
         for i, a in enumerate(act.get("acteurs") or []):
-            if a.get("action") == "BLOCK" and not a.get("mesure"):
+            if a.get("niveau") == "BLOCK" and not a.get("mesure"):
                 na = a.get("adresses")
                 out.append({"regle": "acteur_a_bloquer", "horizon": "Cette semaine", "titre": f"Décider du blocage de l'acteur {lettre(i).split()[-1]}",
                             "raison": f"Risque {fn(a.get('risque'))} sur 100, blocage proposé par Actor Intelligence et aucune mesure en cours"
@@ -388,18 +429,25 @@ def decisions(data: dict, ks: Optional[list[dict]] = None) -> list[dict]:
 def verdict(data: dict, ks: list[dict], decs: list[dict]) -> str:
     """Le titre de la synthèse, fait des mesures de la semaine (jamais d'une estimation)."""
     K = {k["cle"]: k for k in ks}
-    bouts = []
-    if K["dispo"]["valeur"] is not None:
-        bouts.append(f"Service disponible à {fpct(K['dispo']['valeur'], 2)}")
-    b = K["bloquees"]["valeur"]
-    if b is not None:
-        bouts.append(f"{fn(b)} {pl(b, 'requête hostile arrêtée', 'requêtes hostiles arrêtées')}")
+    phrases = {"dispo": lambda v: f"Service disponible à {fpct(v, 2)}",
+               "servies": lambda v: f"{fn(v)} {pl(v, 'requête servie', 'requêtes servies')}",
+               "bloquees": lambda v: f"{fn(v)} {pl(v, 'requête hostile arrêtée', 'requêtes hostiles arrêtées')}",
+               "bans": lambda v: f"{fn(v)} {pl(v, 'adresse mise au ban', 'adresses mises au ban')}",
+               "dns": lambda v: f"{fn(v)} {pl(v, 'requête DNS filtrée', 'requêtes DNS filtrées')}"}
+    # Ce qui est mesuré d'abord, deux chiffres au plus ; ce qui manque va dans le sous-titre (`manques`).
+    bouts = [f(K[c]["valeur"]) for c, f in phrases.items() if K[c]["valeur"] is not None][:2]
     if not bouts:
         bouts.append("Semaine incomplètement mesurée")
     n = len(decs)
     fin = f"{n} {pl(n, 'décision', 'décisions')} à prendre" if n else "rien à décider"
     t = ", ".join(bouts) + f" ; {fin}"
     return t[0].upper() + t[1:]
+
+
+def manques(ks: list[dict]) -> str:
+    """Le sous-titre des chiffres non mesurés de la semaine (vide si tout est mesuré)."""
+    m = [k["libelle"].lower() for k in ks if k["valeur"] is None]
+    return ("Non mesuré cette semaine : " + ", ".join(m) + ".") if m else ""
 
 
 # ── collecte ──────────────────────────────────────────────────────────────
@@ -731,7 +779,7 @@ class _Doc:
 def _f1(D: _Doc, ks: list[dict], decs: list[dict]) -> None:
     d = D.d
     y = D.feuille(verdict(d, ks, decs), f"Votre relais SecuBox, semaine {libelle_periode(d['jours'])}. Sept jours de service, de trafic "
-                  "et de défense, comparés aux sept précédents quand ceux-ci sont mesurés.", grand=True)
+                  "et de défense, comparés aux sept précédents quand ceux-ci sont mesurés. " + manques(ks), grand=True)
     y = max(y, 52)
     cw, ch = 189 / 3, 64
     for i, k in enumerate(ks):
@@ -826,9 +874,10 @@ def _f2(D: _Doc) -> None:
     xr, wr = 185, 98
     D.ecrit(xr, y, wr, 5, "Part de chaque couche sur la semaine", 9.5, gras=True)
     pr = parts(cs)
-    yy = D.barres(xr, y + 7, wr, [(k, v, fpct(v, 1) if v is not None else NON_MESURE, coul[k]) for k, v in pr], lw_part=0.45, icone=ICONES_COUCHE.get)
-    if any(v is None for _, v in pr):
-        yy = D.para(xr, yy, wr, "Une part n'est donnée que si les quatre couches sont mesurées les sept jours.", 7.5)
+    yy = D.barres(xr, y + 7, wr, [(k, v, t, coul[k]) for k, v, t in pr], lw_part=0.42, vw=34, icone=ICONES_COUCHE.get)
+    if any(v is None for _, v, _ in pr):
+        yy = D.para(xr, yy, wr, "Une part n'est donnée que si les quatre couches sont mesurées les sept jours ; sinon le total de la "
+                    "semaine, ou les jours qui manquent.", 7.5)
     yy += 5
     sites, k = RQ_cumul_sites(d)
     D.ecrit(xr, yy, wr, 5, "Requêtes servies par site" + (f" ({k} {pl(k, 'jour mesuré', 'jours mesurés')} sur 7)" if k < 7 else ""), 9.5, gras=True)
@@ -895,15 +944,19 @@ def _f4(D: _Doc, ks: list[dict]) -> None:
     D.para(14, yy, 125, "Reçues = servies par nginx + bloquées + détournées. Les bans comptent des adresses, pas des requêtes.", 7.5)
     yy += 12
     cats, k = cumul_dict(d, cur, ("waf", "categories"))
+    fr: dict = {}
+    for c, n in cats.items():
+        fr[libelle_categorie(c)] = fr.get(libelle_categorie(c), 0) + n
+    cats = fr
     D.ecrit(14, yy, 125, 5, "Ce qui a été bloqué" + (f" ({k} {pl(k, 'jour mesuré', 'jours mesurés')} sur 7)" if 0 < k < 7 else ""), 9.5, gras=True)
     top = sorted(cats.items(), key=lambda kv: -kv[1])[:6]
     yy = D.barres(14, yy + 7, 125, [(c, n) for c, n in top], C4, pas=7, icone=icone_categorie) if top else D.rien(14, yy + 7, 125, NON_MESURE)
     yy += 4
     D.ecrit(14, yy, 125, 5, "Ce que le WAF a fait des requêtes hostiles", 9.5, gras=True)
-    rep = [(lib, somme(serie(d, cur, lambda r, c=c: _v(r, "waf", "couches", c))), None, col) for lib, c, col in
+    rep_ = [(lib, somme(serie(d, cur, lambda r, c=c: _v(r, "waf", "couches", c))), None, col) for lib, c, col in
            (("Arrêtées (adresse au ban)", "arrete", C4), ("Refusées", "refuse", C4), ("Détournées vers un leurre", "detourne", C3),
             ("Laissées passer, surveillées", "passe", C2))]
-    D.barres(14, yy + 7, 125, rep, C4, pas=7, icone=ICONES_COUCHE.get)
+    D.barres(14, yy + 7, 125, rep_, C4, pas=7, icone=ICONES_COUCHE.get)
     xr, wr = 152, 131
     D.ecrit(xr, y, wr, 5, "Quand ? Requêtes bloquées par jour et par heure (Paris)", 9.5, gras=True)
     ch = chaleur(d)
@@ -958,15 +1011,15 @@ def _f5(D: _Doc) -> None:
                 reste = m.get("reste_s")
                 etat = MESURE_FR.get(str(m.get("niveau")), str(m.get("niveau"))) + (f", encore {_duree(reste)}" if reste else "")
                 ce = OK
-            elif a.get("action") == "BLOCK":
+            elif a.get("niveau") == "BLOCK":
                 etat, ce = "À décider", C4
             else:
                 etat, ce = "Observé", C3
-            vals = (lettre(i), D.court(comp, 68, 8.5), NIVEAU_FR.get(str(a.get("action")), str(a.get("action") or "—")), fn(a.get("risque")),
+            vals = (lettre(i), D.court(comp, 68, 8.5), NIVEAU_FR.get(str(a.get("niveau")), "—"), fn(a.get("risque")),
                     fn(a.get("adresses")), fn(a.get("bans")))
             for (dx, w, _, al), v in zip(cols[:6], vals):
                 D.ecrit(x0 + dx, ry + 2, w, 5, v, 8.5, gras=dx == 0, align=al, coul=TEXTE if v != NON_MESURE else DOUX)
-            D.mini_serie(x0 + 176, ry, 48, 9, serie_acteur(a, d["jours"]), C4 if a.get("action") == "BLOCK" else C2 if a.get("action") == "MITIGATE" else C3)
+            D.mini_serie(x0 + 176, ry, 48, 9, serie_acteur(a, d["jours"]), C4 if a.get("niveau") == "BLOCK" else C2 if a.get("niveau") == "MITIGATE" else C3)
             D.pastille(x0 + 230, ry + 2, etat, ce, 7.5, emoji=ICONES_ETAT.get(etat.split(",")[0]))
             yy += 12
             D.filet(x0, yy, 283)

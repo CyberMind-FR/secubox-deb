@@ -47,7 +47,7 @@ MESURES = Path("/var/lib/secubox/waf/mesures.jsonl")
 POPULATIONS = Path("/var/lib/secubox/waf/populations.json")
 DNSTV = Path("/var/lib/secubox/ad-guard/dnstv/dnstv.db")
 NGINX_JOURS = Path("/var/cache/secubox/metrics/vhost-jours.json")
-STATUS_DB = Path("/var/lib/secubox-status/status.db")
+DISPO_JOURS = Path("/var/lib/secubox-status/disponibilite.json")
 SONDE = Path("/var/cache/secubox/health/status.json")
 DOCTEUR = Path("/var/cache/secubox/health-doctor.json")
 ACTOR_SOCK = "/run/secubox/actor.sock"
@@ -509,26 +509,21 @@ def nginx_jour(d: Optional[dict], jour: str) -> Optional[dict]:
 
 
 # ── disponibilité (Status Live) ───────────────────────────────────────────
-def lire_dispo(chemin: Path = STATUS_DB, jours: Iterable[str] = (), noeud: Optional[str] = None) -> Optional[dict]:
-    """Part des relevés « operational » parmi les relevés connus, par jour de Paris ; un jour n'est mesuré qu'avec au moins
-    DISPO_RELEVES_MIN relevés connus. Base absente ou non lisible par ce service : None."""
+def lire_dispo(chemin: Path = DISPO_JOURS, jours: Iterable[str] = (), noeud: Optional[str] = None) -> Optional[dict]:
+    """Part des relevés « operational » parmi les relevés connus, par jour de Paris, d'après le résumé exporté par Status Live
+    (`disponibilite.json`, une fois l'heure). Un jour n'est mesuré qu'avec au moins DISPO_RELEVES_MIN relevés connus. Résumé
+    absent ou d'un autre nœud que `noeud` (s'il est donné) : None."""
     jours = list(jours)
-    if not jours or not Path(chemin).exists():
+    d = lire_json(chemin)
+    if not jours or not isinstance(d, dict) or not isinstance(d.get("jours"), dict):
         return None
-    noeud = noeud or socket.gethostname()
+    if noeud and d.get("noeud") != noeud:
+        return None
     out: dict[str, Optional[float]] = {}
-    try:
-        with closing(_sqlite_ro(Path(chemin))) as cx:
-            for j in jours:
-                t0, t1 = bornes(j)
-                a = datetime.fromtimestamp(t0, timezone.utc).isoformat()
-                b = datetime.fromtimestamp(t1, timezone.utc).isoformat()
-                r = cx.execute("SELECT SUM(overall = 'operational'), SUM(overall NOT IN ('unknown', 'maintenance')) FROM snapshots "
-                               "WHERE node_id = ? AND collected_at >= ? AND collected_at < ?", (noeud, a, b)).fetchone()
-                connus = int((r or (0, 0))[1] or 0)
-                out[j] = round(100.0 * int(r[0] or 0) / connus, 3) if connus >= DISPO_RELEVES_MIN else None
-    except (sqlite3.Error, OSError):
-        return None
+    for j in jours:
+        e = d["jours"].get(j)
+        connus = int(e.get("connus") or 0) if isinstance(e, dict) else 0
+        out[j] = round(100.0 * int(e.get("operationnels") or 0) / connus, 3) if connus >= DISPO_RELEVES_MIN else None
     return out
 
 
@@ -630,7 +625,7 @@ def lire_acteurs(lire: Callable[[str], Any] = actord, n: int = 6) -> Optional[di
                     "adresses": (fiche.get("src") or {}).get("ips") if fiche else None, "bans": fiche.get("bans") if fiche else None,
                     "tags": [t[0] for t in (fiche.get("tags") or []) if isinstance(t, (list, tuple)) and t][:3],
                     "jours": jours})
-    return {"suivis": len(tries), "a_bloquer": sum(1 for a in tries if a.get("action_proposee") == "BLOCK" and not a.get("mesure")),
+    return {"suivis": len(tries), "a_bloquer": sum(1 for a in tries if a.get("niveau") == "BLOCK" and not a.get("mesure")),
             "acteurs": out, "genere_le": radar.get("genere_le")}
 
 

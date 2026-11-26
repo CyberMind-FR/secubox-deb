@@ -292,3 +292,18 @@ def test_valeurs_aberrantes_revalidees(lieux):
     assert n["counts"]["modules_total"] is None and n["counts"]["modules_ok"] is None
     assert n["hours"] == [{"hour": T0.isoformat(), "status": "unknown"}] and n["components"] == {"services": "unknown"}
     assert "<script>" not in json.dumps(pub) and "../" not in json.dumps(pub)
+
+
+def test_disponibilite_par_jour_de_paris_3970(tmp_path):
+    """#3970 : résumé par jour de Paris pour le rapport de pilotage (relevés connus et au vert)."""
+    import sqlite3 as _sq
+    from secubox_status import historique as _h
+    cx = _sq.connect(":memory:")
+    cx.execute("CREATE TABLE snapshots(node_id TEXT, sequence INT, collected_at TEXT, overall TEXT, document TEXT)")
+    cx.executemany("INSERT INTO snapshots VALUES (?,?,?,?,?)", [
+        ("gk2", 1, "2026-11-19T23:30:00+00:00", "operational", "{}"),     # 00:30 à Paris le 20
+        ("gk2", 2, "2026-11-20T10:00:00+00:00", "outage", "{}"),
+        ("gk2", 3, "2026-11-20T11:00:00+00:00", "unknown", "{}"),
+        ("autre", 4, "2026-11-20T11:00:00+00:00", "operational", "{}")])
+    r = _h.par_jour(cx, "gk2", 35, datetime(2026, 11, 21, tzinfo=timezone.utc))
+    assert r == {"2026-11-20": {"connus": 2, "operationnels": 1}}

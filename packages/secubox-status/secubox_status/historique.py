@@ -104,3 +104,25 @@ def disponibilite(cx: sqlite3.Connection, noeud: str, jours: int,
     if not r or not r[1]:
         return None
     return round(100.0 * (r[0] or 0) / r[1], 2)
+
+
+PARIS = "Europe/Paris"
+
+
+def par_jour(cx: sqlite3.Connection, noeud: str, jours: int = 35, maintenant: Optional[datetime] = None) -> Dict[str, Dict[str, int]]:
+    """Relevés connus et « operational » par jour de Paris, sur `jours` jours (#3970 : résumé exporté pour le rapport de pilotage)."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(PARIS)
+    m = maintenant or datetime.now(timezone.utc)
+    debut = (m - timedelta(days=jours)).isoformat()
+    out: Dict[str, Dict[str, int]] = {}
+    for quand, overall in cx.execute("SELECT collected_at, overall FROM snapshots WHERE node_id = ? AND collected_at >= ?", (noeud, debut)):
+        try:
+            j = datetime.fromisoformat(quand).astimezone(tz).date().isoformat()
+        except (TypeError, ValueError):
+            continue
+        d = out.setdefault(j, {"connus": 0, "operationnels": 0})
+        if overall not in ("unknown", "maintenance"):
+            d["connus"] += 1
+            d["operationnels"] += overall == "operational"
+    return out

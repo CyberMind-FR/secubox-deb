@@ -97,6 +97,15 @@ def collecter(cfg: Dict[str, Any], etat: Path, maintenant: Optional[datetime] = 
         ecrire_atomique(etat / "snapshot.json", releve)
         historique.inscrire(cx, releve, detail)
         historique.purger(cx, int(cfg["history"].get("retention_days", 90)), maintenant)
+        # #3970 : disponibilité par jour de Paris pour le rapport de pilotage (secubox-metrics, groupe secubox), une fois l'heure :
+        # le rapport ne peut pas lire la base WAL sous ProtectSystem=strict.
+        dj = etat / "disponibilite.json"
+        try:
+            vieux = maintenant.timestamp() - dj.stat().st_mtime > 3600
+        except OSError:
+            vieux = True
+        if vieux:
+            ecrire_atomique(dj, {"noeud": noeud, "genere_le": quand, "jours": historique.par_jour(cx, noeud, 35, maintenant)})
         public = projection.flotte(
             [projection.noeud_public(releve, cfg["public"], historique.heures(cx, noeud, 24, maintenant),
                                      historique.disponibilite(cx, noeud, 30, maintenant), detail,

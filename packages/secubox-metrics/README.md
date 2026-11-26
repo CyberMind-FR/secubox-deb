@@ -149,7 +149,7 @@ python3 -m api.releve_quotidien [--jour AAAA-MM-JJ]          # relevé (minuteri
 
 Sources (lecture seule, en flux, bornées) : `waf-threats.log` et ses rotations `.N.gz` (couches, catégories, heures, sites, pays par
 GeoLite2-Country si présente), `bans.jsonl`, `mesures.jsonl` (adresses proposées au ban sans suite), `dnstv.db` d'ad-guard (jours
-UTC), `vhost-jours.json` (résumé léger écrit par ce service, sans adresse), `status.db` de Status Live (si lisible par `secubox`),
+UTC), `vhost-jours.json` (résumé léger écrit par ce service, sans adresse), `disponibilite.json` exporté par Status Live (secubox-status ≥ 0.1.5),
 sonde `health/status.json` et `health-doctor.json` (instantanés), actord (vue réduite), `populations.json`.
 
 Règles : une mesure absente est « non mesuré » ; un chiffre de la semaine exige ses 7 jours mesurés, l'écart exige aussi la semaine
