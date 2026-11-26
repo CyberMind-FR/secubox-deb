@@ -332,7 +332,8 @@ def test_motifs_lisibles_a_douze_poses_aucune_face_blanche(nav):
     """Pour chaque face vue d'assez près de face : le motif (pixels colorés de l'image source) se distingue de son fond, et la
     face n'est pas lavée de blanc. Géométrie : même caméra que le shader."""
     alea = random.Random(3938)
-    textures = {k: Image.open(HALL / f"dice/face-{k}.jpg").convert("RGB") for k in range(6)}
+    ordre = [5, 1, 2, 3, 4, 0]                    # faces orange et bleue permutées sur l'accueil (26/11)
+    textures = {k: Image.open(HALL / f"dice/face-{ordre[k]}.jpg").convert("RGB") for k in range(6)}
     oeil, vise = [0, 4.25, -6.6], [0, .78, .15]
     f = _unit([vise[i] - oeil[i] for i in range(3)])
     x = _unit(_vect([0, 1, 0], f))

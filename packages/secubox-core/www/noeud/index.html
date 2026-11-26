@@ -161,7 +161,8 @@ h1{font-family:"Unbounded","Arial Black",system-ui,sans-serif;font-weight:900;le
     var s=document.createElement('script'); s.src='/_noeud/sbx-dice.js'; document.body.appendChild(s);
   }
   if(!window.SbxDe3d){ repli('moteur absent'); return; }
-  var faces=[0,1,2,3,4,5].map(function(k){ return '/_noeud/dice/face-'+k+'.jpg'; });
+  // faces orange (SecuBox) et bleue (globe) permutées, demande du propriétaire (26/11)
+  var faces=[5,1,2,3,4,0].map(function(k){ return '/_noeud/dice/face-'+k+'.jpg'; });
   window.SbxDe3d.demarrer(cv,faces,{repli:repli,
     pret:function(aise){ cv.classList.add('pret'); racine.classList.toggle('vif',aise); },
     charge:function(){ racine.classList.remove('vif'); }});
