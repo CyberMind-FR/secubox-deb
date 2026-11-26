@@ -12,15 +12,15 @@ Base : `master` au commit `6f4e5f855` (2026-11-26). Les numéros de ligne renvoi
 
 ## 0. Limites de cet audit (à lire d'abord)
 
-- **OpenJarvis n'a PAS pu être cloné.** Au moment de l'audit, le poste n'avait aucun accès réseau
-  (`gh` et `git ls-remote` : *network is unreachable*, `ssh github.com` idem). Aucune copie locale n'existe
-  (recherche `*jarvis*` sur le disque : rien). Ni le fork `gkerma` ni l'amont n'ont été lus.
-- Tout ce qui est dit d'OpenJarvis en § 3 est donc **non vérifié** : c'est une grille de questions et des
-  souvenirs publics de l'auteur du document, marqués comme tels. **Aucune décision d'intégration ne doit
-  s'appuyer sur § 3 avant la phase 1 bis** (§ 7) : clone en lecture seule, lecture des fichiers cités.
-- L'issue #3981 n'a pas pu être relue (`gh issue view` hors ligne) : le cadrage vient du texte du
-  propriétaire transmis à l'agent. Le worktree a été créé à la main (`git worktree add`, même convention
-  que `scripts/agent-worktree.sh`, qui exige `gh`).
+- OpenJarvis a été cloné **en lecture seule** (rien installé, rien exécuté) dans le scratchpad de la session :
+  amont `open-jarvis/OpenJarvis` au commit `556ddf32` (2026-11-26), fork `gkerma/OpenJarvis` au `86f75ef7`.
+  Le réseau était coupé au début de la session ; il est revenu avant la rédaction de § 3.
+- Lecture **ciblée** (≈ 181 000 lignes Python, 691 fichiers ; 27 700 lignes Rust) : `pyproject.toml`,
+  `rust/Cargo.toml`, `_rust_bridge.py`, `core/config.py`, `core/paths.py`, `security/`, `tools/`,
+  `sandbox/`, `server/auth_middleware.py`, `agents/`, workflows CI. Le reste n'est pas relu : les
+  affirmations hors de ces fichiers sont marquées « non vérifié ». Aucun test d'OpenJarvis n'a été lancé.
+- L'issue #3981 a été relue tardivement (`gh` revenu) ; le worktree a été créé à la main
+  (`git worktree add`, convention de `scripts/agent-worktree.sh`, qui exigeait `gh` hors ligne).
 - L'état **déployé** des box (gk0, gk2, gk3) n'a pas été relevé (consigne : pas de SSH). L'inventaire
   ci-dessous est celui des **sources** ; seul le POC de gk0 (ce poste) a été listé, sans lire ses secrets.
 
@@ -139,48 +139,58 @@ processus utilisateur (POC gk0). La demande « LXC non privilégié » est donc 
 securite,micro}.html`, `secubox-ai-gateway/www/ai-gateway/{index,multimodal}.html`, pages localrecall et
 mcp-server. Le « tableau ZIA dans le Hall » a une base (`zia/index.html`, Aurora #2646).
 
-## 3. OpenJarvis — grille d'audit (NON VÉRIFIÉE)
+## 3. OpenJarvis — audit du code (lecture seule)
 
-Ce que l'auteur croit savoir, **à confirmer ligne à ligne** au clone : projet public d'un laboratoire
-universitaire (Stanford) présenté début 2026 comme cadre d'agents personnels « local-first », organisé en
-primitives (moteur d'inférence, agents, outils et mémoire, apprentissage, évaluation/mesure d'énergie),
-capable de parler à Ollama, vLLM, SGLang, llama.cpp et à des API compatibles OpenAI ; licence supposée
-permissive (Apache-2.0 ?). **Rien de cela n'a été lu dans le code.** Le fork `gkerma` est inconnu.
+Chemins relatifs à la racine du dépôt amont (`556ddf32`).
 
-Questions à trancher au clone (chaque réponse avec fichier et ligne) :
+| # | Question | Constat | Preuve |
+|---|---|---|---|
+| Q1 | Licence | **Apache-2.0** (compatible avec une livraison séparée ; NOTICE et licence à conserver dans le `.deb`). Licences des ~25 dépendances directes non relues une à une | `LICENSE:1-3`, `pyproject.toml` `license` |
+| Q2 | Fork ↔ amont | le fork `gkerma` n'a **aucun** commit propre ; il est **en retard de 14** commits. C'est un miroir | `git log up/main..HEAD` vide, `HEAD..up/main` = 14 |
+| Q3 | Langages, Rust | Python ≥ 3.11 **< 3.14** (trixie : 3.13, compatible), Rust (17 crates, PyO3), TypeScript (frontend, desktop Tauri). Rust **exige 1.89** (`rust/Cargo.toml` `rust-version`). Le paquet PyPI est construit par `uv build` (hatchling) **sans** l'extension Rust (`.github/workflows/pypi-publish.yml:109`) ; l'extension se compile à part par `maturin develop` (`Makefile:9`). Rust n'est **pas facultatif** pour la mémoire : `tools/storage/bm25.py:13` appelle `get_rust_module()` à l'import, `tools/storage/sqlite.py:49-54` lève une erreur sans Rust ; sécurité (`security/ssrf.py:102-105`, `injection_scanner.py:137-144`, `capabilities.py:89-93`) a un repli Python | fichiers cités |
+| Q4 | Dépendances | dépendances **de base** lourdes et hors sujet pour une box : `datasets` (Hugging Face, tire pandas/numpy/pyarrow), `nvidia-ml-py`, `posthog`, `python-telegram-bot`, `ddgs`, `aiohttp`, `openai` ; ~60 extras (vLLM, torch, faiss, canaux de messagerie, minage). Aucun torch en base | `pyproject.toml` `dependencies` |
+| Q5 | Sans GPU | moteurs par HTTP OpenAI-compatible : `llamacpp` (`localhost:8080`), `vllm`, `sglang`, `lmstudio` (`engine/openai_compat_engines.py:9-13`), `ollama.py`, `cloud.py`, `litellm.py`. Le runtime lui-même n'exige pas de GPU ; il délègue l'inférence | `engine/` |
+| Q6 | Docker | **le bac à sable d'agents est Docker/Podman** (`sandbox/runner.py:1-5,43,56,105-111`) ; outils `docker_shell_exec.py`, `code_interpreter_docker.py` ; extra `sandbox-docker`, minage `mining/_docker.py`. Alternative interne : `sandbox/wasm_runner.py` (wasmtime) et `security/subprocess_sandbox.py` (environnement filtré, pas d'isolation noyau). → **à écarter entièrement** chez nous | fichiers cités |
+| Q7 | Télémétrie | analytique PostHog **désactivée par défaut** (`enabled=False`) mais hôte et clé **codés en dur** (`core/config.py:1211-1231`), et `posthog` est une dépendance de base ; contrôle de version vers `pypi.org` (`cli/_version_check.py:18`) ; traces locales SQLite activées par défaut (`core/config.py:1234-1238`). → à neutraliser par configuration **et** par `IPAddressDeny` | fichiers cités |
+| Q8 | Outils d'exécution | `tools/shell_exec.py:94-97` : `subprocess.Popen(command, shell=True)` (« confirmed shell commands ») ; `code_interpreter.py:128-217` (Python après validation AST, sous-processus) ; `file_write.py`, `apply_patch.py`, `git_tool.py`, `browser.py` (playwright), `http_request.py`, `db_query.py`. → **aucun de ces outils ne doit être chargé** | fichiers cités |
+| Q9 | Permissions | un vrai mécanisme en code : RBAC de capacités (`security/capabilities.py:1`, motifs `*`), `approval_store.py`, `server/approval_routes.py`, `security/guardrails.py`, `taint.py`, `audit.py`, `signing.py`. Leur solidité **n'a pas été éprouvée** ici | fichiers cités |
+| Q10 | MCP, A2A | implémentés : `mcp/{client,server,transport,protocol,loader}.py`, `a2a/{client,server,protocol,tool}.py`, crates `openjarvis-mcp`, `openjarvis-a2a`. Conformité au protocole non testée | `src/openjarvis/mcp`, `a2a` |
+| Q11 | Stockage | racine unique `$OPENJARVIS_HOME` > `$XDG_DATA_HOME/openjarvis` > `~/.openjarvis` (`core/paths.py:82-90`) : **déplaçable** sous `/var/lib/…`, compatible `ProtectHome` ; bases propres (traces, mémoire SQLite par Rust) — **seconde mémoire** si on les garde | fichiers cités |
+| Q12 | Maturité | « Development Status :: 3 - Alpha » (`pyproject.toml`), versions `v1.0.5.devNNNN` (une étiquette par commit, 1 396 commits depuis le 2026-03-12), 732 fichiers de tests, CI de sécurité (`security-sast.yml`). Rythme très rapide → API instable | `git tag`, `.github/workflows/` |
 
-| # | Question | Pourquoi c'est bloquant |
-|---|---|---|
-| Q1 | Licence exacte de l'amont et du fork, licences des dépendances (`pyproject`, `Cargo.toml`) | compatibilité avec CMSD-1.0 et la livraison en `.deb` ; **accord du propriétaire** |
-| Q2 | Différences fork ↔ amont (`git log upstream/main..`) | qui maintient quoi ; dette de rebase |
-| Q3 | Langages ; part Rust ; Rust facultatif ou obligatoire ; roues arm64 disponibles | build arm64 sous Debian 13 sans réseau au postinst |
-| Q4 | Dépendances Python : nombre, épinglage, torch/CUDA obligatoires ou non | taille sur une box 8 Go ; conflit avec `python3-fastapi` Debian |
-| Q5 | Ce qui marche sans GPU (moteur llama.cpp/Ollama CPU) | profils EDGE et MESH |
-| Q6 | Ce qui exige Docker (bacs à sable d'outils, services annexes) | **Docker interdit** : tout composant qui l'exige est écarté |
-| Q7 | Télémétrie, appels sortants par défaut, téléchargements de modèles implicites | CSPN, souveraineté, `IPAddressDeny` |
-| Q8 | Exécution d'outils : shell, code Python arbitraire, navigateur, fichiers | **aucun shell sur l'hôte** ; à désactiver ou confiner |
-| Q9 | Modèle de permissions réel (liste blanche d'outils, approbation humaine), ou seulement des conventions de prompt | la sécurité doit être du code, pas une consigne |
-| Q10 | MCP client/serveur, A2A : implémentés ou annoncés ; tests | ne rien simuler |
-| Q11 | Stockage (mémoire, traces) : SQLite ? emplacements codés en dur (`~/.…`) ? | pas de base dupliquée ; `ProtectHome` |
-| Q12 | Maturité : version, fréquence des versions, tests, CI, ruptures d'API | risque de régression |
+Autres constats :
+
+- **Serveur** : `127.0.0.1:8000` par défaut (`core/config.py:1165-1166`) ; authentification par clé
+  `Bearer` **seulement si une clé est définie** (`server/auth_middleware.py:39,49`) : sans
+  `OPENJARVIS_API_KEY`, l'API n'est pas protégée. Chez nous : socket Unix ou clé obligatoire, jamais exposé.
+- Agents présents : `NativeReActAgent`, `DeepResearchAgent`, `MorningDigestAgent`, `OrchestratorAgent`,
+  `ProactiveAgent`, `MonitorOperativeAgent`, `RLMAgent`, et des enveloppes d'agents tiers
+  (`ClaudeCodeAgent`, `OpenHandsAgent`, `OpenCodeAgent`) (`agents/*.py`). ReAct, Deep Research et Morning
+  Digest **existent réellement** ; leur qualité avec un modèle ≤ 9B n'a pas été mesurée.
+- **Sous-système de minage de crypto-monnaie** « Pearl » (`src/openjarvis/mining/`, extras
+  `mining-pearl-*`, `mining/_docker.py`) dans le même paquet. Il ne s'active pas tout seul (extras), mais il
+  est livré dans les sources : **à exclure du venv et à signaler au propriétaire**.
+- Chemins sans Rust à vérifier : sans l'extension, la mémoire BM25/SQLite ne fonctionne pas ; avec
+  l'extension, il faut une chaîne Rust ≥ 1.89, plus récente que le `rustc` de Debian 13 (1.85 d'après la
+  connaissance de l'auteur, **non vérifié sur le poste**) → `rustup` en CI ou rétroportage.
 
 ## 4. Matrice existant ↔ OpenJarvis ↔ manque
 
-Colonne OpenJarvis = **annoncé, non vérifié**.
+Colonne OpenJarvis = présent dans le code (§ 3) ; qualité non mesurée.
 
 | Brique demandée | Existe chez SecuBox | OpenJarvis (à vérifier) | Manque réel |
 |---|---|---|---|
-| Runtime d'agents, ReAct | non (prompts fixes de l'analyste, `veille/analyste.py`) | oui, annoncé | boucle d'agent bornée, **sans** outil d'action |
-| Deep Research | partiel : `api/recherche.py` (584 l., recherche + lecture de pages, **garde SSRF R13** l.7-8 ; SearXNG au POC) | annoncé | orchestration multi-étapes |
-| Morning Digest | partiel : résumé des menaces (`menaces.py:569`), rapports metrics | annoncé | digest planifié |
-| Skills / tools | MCP `secubox-ai-gateway` ; outils du bus ZIA (`secubox-zia/api/tools.py`) | annoncé | registre unique, liste blanche |
-| Scheduler | `secubox-ai-veille` (boucles), timer Nuclei, `taches.py` | annoncé | — (garder systemd) |
-| Mémoire | `memoire.db` FTS5 (`memoire.py:62-67`) | annoncé | vecteurs optionnels |
-| Routeur de moteurs | `moteurs.py` (local/distant, sonde, repli), gateway (classes) | annoncé | découverte par le maillage, latence, quotas |
-| Passerelle de sécurité | ctl + demandes, exécuteur `ai-ban`, Pydantic strict, gk2 fait foi | à vérifier (Q8, Q9) | relecture des outils MCP ; garde de la gateway |
-| AI Mesh | maillage WireGuard + annuaire (`secubox-annuaire`, specs maillage 2026-10-24) | non (hors périmètre supposé) | annonce de capacités IA, heartbeat |
-| Évaluation | tests unitaires ; essai arm64 manuel du 25/11 | annoncé (mesures) | banc de requêtes reproductible |
-| Learning | `veille/apprentissage.py` (668 l., filtres) | annoncé | — (à ne pas brancher sur l'action) |
+| Runtime d'agents, ReAct | non (prompts fixes de l'analyste, `veille/analyste.py`) | `agents/native_react.py:132` | boucle d'agent bornée, **sans** outil d'action |
+| Deep Research | partiel : `api/recherche.py` (584 l., recherche + lecture de pages, **garde SSRF R13** l.7-8 ; SearXNG au POC) | `agents/deep_research.py:159` (outils utilisés non relus) | orchestration multi-étapes |
+| Morning Digest | partiel : résumé des menaces (`menaces.py:569`), rapports metrics | `agents/morning_digest.py:42` | digest planifié |
+| Skills / tools | MCP `secubox-ai-gateway` ; outils du bus ZIA (`secubox-zia/api/tools.py`) | `skills/`, `tools/` (dont shell, code, fichiers : **à exclure**) | registre unique, liste blanche |
+| Scheduler | `secubox-ai-veille` (boucles), timer Nuclei, `taches.py` | `scheduler/` (croniter) | — (garder systemd) |
+| Mémoire | `memoire.db` FTS5 (`memoire.py:62-67`) | `tools/storage/` (BM25/SQLite **Rust obligatoire**), faiss/colbert en extras | vecteurs optionnels |
+| Routeur de moteurs | `moteurs.py` (local/distant, sonde, repli), gateway (classes) | `engine/multi.py`, `_discovery.py`, `cloud_router.py` | découverte par le maillage, latence, quotas |
+| Passerelle de sécurité | ctl + demandes, exécuteur `ai-ban`, Pydantic strict, gk2 fait foi | RBAC, approbations, garde SSRF, scanner d'injection (Q9) — mais outils shell et Docker livrés | relecture des outils MCP ; garde de la gateway |
+| AI Mesh | maillage WireGuard + annuaire (`secubox-annuaire`, specs maillage 2026-10-24) | A2A (`a2a/`) entre instances ; pas de découverte maillée | annonce de capacités IA, heartbeat |
+| Évaluation | tests unitaires ; essai arm64 manuel du 25/11 | `evals/`, `bench/`, `telemetry/` (énergie, FLOPs) | banc de requêtes reproductible |
+| Learning | `veille/apprentissage.py` (668 l., filtres) | `learning/` (dspy, gepa en extras) | — (à ne pas brancher sur l'action) |
 | Tableau ZIA du Hall | `secubox-zia/www/zia/index.html` | non | vue des moteurs et agents |
 
 ## 5. Conflits
@@ -194,14 +204,19 @@ Colonne OpenJarvis = **annoncé, non vérifié**.
    postinst → pour OpenJarvis, **roues construites en CI et livrées dans le `.deb`**, jamais `pip` en ligne.
 4. **Outils d'exécution** d'un runtime d'agents (shell, code) contre « aucun shell sur l'hôte », `ai-ban`
    unique chemin d'écriture et spec V2 § 12.
-5. **Nommage d'API** : `/api/v1/ai/` est déjà le préfixe de `secubox-ai` (`nginx/ai.conf:20`) ; les routes
+5. **Bac à sable Docker** : l'isolation d'agents d'OpenJarvis est Docker/Podman (§ 3, Q6), interdits ;
+   l'isolation doit venir de nous (unité systemd + AppArmor, ou LXC), avec les outils d'exécution non chargés.
+6. **Base de traces et mémoire Rust** d'OpenJarvis : troisième lieu de données conversationnelles ; à
+   désactiver (traces) ou rediriger vers l'API mémoire.
+7. **Nommage d'API** : `/api/v1/ai/` est déjà le préfixe de `secubox-ai` (`nginx/ai.conf:20`) ; les routes
    V3 demandées (`/chat`, `/agents`, …) s'ajoutent sans conflit de chemin, à condition de garder
    `/essai/flux`, `/memoire*`, `/moteur*` (page et POC les appellent).
 
 ## 6. Risques
 
-**arm64** : roues Rust/Python absentes pour aarch64 (Q3, Q4) ; torch impossible en 8 Go avec le reste de la
-box ; Python 3.13 de trixie vs versions exigées ; temps de build sur MOCHAbin. Et surtout : l'inférence
+**arm64** : aucune CI Linux arm64 en amont (seul `desktop.yml` teste Windows ARM64) ; extension Rust à
+compiler soi-même (Rust ≥ 1.89) ; `datasets`/pyarrow lourds en 8 Go ; Python 3.13 de trixie dans la plage
+admise (< 3.14). Et surtout : l'inférence
 arm64 est inutilisable (§ 1) — un runtime d'agents sur EDGE n'apporte rien s'il n'a pas de moteur distant.
 
 **Régression** : la page `ai/index.html` et le POC gk0 appellent les routes actuelles ; la veille V2 est en
@@ -209,8 +224,10 @@ production sur gk3 avec un chemin d'écriture vers gk2 ; `memoire.db` et `veille
 réelles ; `secubox-ai` dépend de `secubox-zia-llm`. Toute V3 qui remplace au lieu d'ajouter casse un de ces
 points. Le plus grave : un agent qui obtiendrait un accès, même indirect, à l'exécuteur `ai-ban`.
 
-## 7. Phase 1 bis (à faire dès que le réseau revient)
+## 7. Suites de l'audit
 
-1. `git clone --depth 50` amont et fork dans le scratchpad, **sans** installer ni exécuter (`python3 -I`
-   pour toute lecture scriptée) ; 2. répondre Q1-Q12 avec fichiers et lignes ; 3. corriger § 3 et § 4 ;
-4. relire `gh issue view 3981` et aligner. Aucune décision de phase 3 avant ce point.
+1. Lancer la suite de tests d'OpenJarvis dans un venv jetable **sur gk0** (pas sur une box), avec et sans
+   l'extension Rust, pour mesurer ce qui marche réellement sans Rust ni GPU ;
+2. relire `security/capabilities.py`, `approval_store.py`, `guardrails.py` en entier avant de s'y fier ;
+3. dresser la licence de chaque dépendance du venv retenu ;
+4. décision du propriétaire sur le sous-système de minage (exclusion) et sur la dépendance à un projet Alpha.

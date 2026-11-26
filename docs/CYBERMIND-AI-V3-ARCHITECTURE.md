@@ -7,8 +7,8 @@
 
 # CyberMind AI V3 — architecture cible et plan (#3981, phase 2)
 
-Suite de `docs/CYBERMIND-AI-V3-AUDIT.md`. **Proposition à arbitrer**, pas une décision. Tout ce qui touche à
-OpenJarvis est **conditionnel** à la phase 1 bis (clone et lecture, impossibles hors ligne le 2026-11-26).
+Suite de `docs/CYBERMIND-AI-V3-AUDIT.md`. **Proposition à arbitrer**, pas une décision. Les constats sur
+OpenJarvis (amont `556ddf32`, Apache-2.0, Alpha) sont au § 3 de l'audit ; ses tests n'ont pas été lancés.
 
 ## 1. Principe directeur
 
@@ -45,19 +45,24 @@ sinon absent) ; localrecall migré plus tard ou laissé en l'état (décision s�
 Pourquoi : isoler ses dépendances de `python3-fastapi` Debian. Alternatives : paquets Debian un à un (coût
 prohibitif) ; `pip` au postinst (réseau en install, non reproductible — précédent billets à ne pas
 copier). Conséquences : venv `/usr/lib/secubox/ai-agents/venv` construit en CI avec roues épinglées par
-empreinte, `Architecture: amd64` d'abord (gk0) ; arm64 seulement si un besoin EDGE réel apparaît.
+empreinte (`uv.lock` amont comme base), extension Rust compilée en CI (Rust ≥ 1.89 par `rustup`, le
+`rustc` Debian étant plus ancien — à confirmer) car la mémoire BM25 d'OpenJarvis l'exige ; extras
+`mining-*`, `sandbox-docker`, `browser`, canaux de messagerie **exclus** ; `Architecture: amd64` d'abord
+(gk0) ; arm64 seulement si un besoin EDGE réel apparaît (aucune CI Linux arm64 en amont).
 
 **ADR-4 — Le runtime d'agents tourne en service confiné, LXC en option.**
 Pourquoi : le confinement systemd + AppArmor du module est déjà fort (`secubox-ai-moteur` : `AF_UNIX`
 seul, `IPAddressDeny=any`). Alternatives : LXC non privilégié d'emblée (demandé) — retenu **si** l'audit
-montre des outils d'exécution impossibles à retirer (Q8) ; Docker : exclu. Conséquences : unité
+montre des outils d'exécution impossibles à retirer (Q8) ; Docker : exclu, donc le bac à sable d'OpenJarvis (`sandbox/runner.py`, Docker/Podman) n'est pas utilisé. Conséquences : unité
 `secubox-ai-agents.service`, compte `secubox-ai-agents`, `ProtectHome`, réseau limité au socket du
 routeur et à l'outil de recherche (lui-même derrière la garde SSRF R13 de `recherche.py`).
 
 **ADR-5 — Outils des agents = liste blanche en lecture ; actions = propositions.**
 Pourquoi : « l'IA propose, le code décide ». Conséquences : un agent peut créer une **proposition** dans
 `veille.db` (même table que la V2) ; elle suit le circuit existant (approbation humaine ou cas sûr codé,
-plafonds, SADE, revalidation, audit). Aucun outil shell, fichier, `sudo`, `systemd-run`, MCP d'écriture.
+plafonds, SADE, revalidation, audit). Aucun outil shell, fichier, `sudo`, `systemd-run`, MCP d'écriture : `shell_exec`, `code_interpreter*`,
+`file_write`, `apply_patch`, `git_tool`, `browser`, `docker_shell_exec`, `http_request` d'OpenJarvis ne sont
+**pas enregistrés** (registre construit par nous, test qui échoue si l'un apparaît).
 
 **ADR-6 — AI Mesh = annuaire existant + capacité « moteur IA ».**
 Pourquoi : maillage WireGuard et annuaire existent. Conséquences : chaque nœud publie `{moteurs, modèles,
@@ -108,6 +113,10 @@ explicitement** et sur accord.
   agents sont validées par Pydantic `extra="forbid"` ; une proposition issue d'un agent n'est jamais un
   « cas sûr » d'office (approbation humaine requise au début).
 - SSRF : la recherche passe par la garde R13 existante ; l'unité des agents n'a pas d'autre réseau.
+- Télémétrie : `analytics.enabled=false` imposé, contrôle de version coupé, traces locales désactivées ;
+  et surtout `IPAddressDeny=any` sauf le socket du routeur : la configuration n'est pas la garantie.
+- Serveur d'OpenJarvis non lancé en HTTP (son authentification est absente sans clé,
+  `server/auth_middleware.py:49`) : il est appelé comme bibliothèque par notre service, ou sur socket Unix.
 - Journal : chaque exécution d'agent (agent, outils appelés, durée, jetons ; ni question ni réponse, règle
   0.1.x) dans `audit.log` par le relais existant.
 - Comptes : `secubox-ai-agents` dédié ; corriger au passage `User=secubox` de `secubox-zia*` (issue à part).
@@ -126,7 +135,7 @@ Scripts de postinst idempotents (règle `postinst` préserve l'état).
 
 | Phase | Contenu | Critère de sortie | Accord du propriétaire |
 |---|---|---|---|
-| 1 bis | clone OpenJarvis, réponses Q1-Q12 | audit § 3 réécrit avec fichiers et lignes | **licence** |
+| 1 bis | tests d'OpenJarvis dans un venv jetable sur gk0, relecture complète de `security/`, licences des dépendances | rapport : ce qui marche sans Docker ni outil d'exécution | **licence, dépendance Alpha, minage exclu** |
 | 3 | garde de la gateway ; comptes ZIA dédiés | tests, déployé gk3 | non (correctifs) |
 | 4 | routeur étendu (ADR-1) + `/engines`, `/models`, `/mesh/nodes` + capacité annuaire | gk3 choisit gk0 quand il est là, se replie sinon ; mesuré | non |
 | 5 | `secubox-ai-agents` sur **gk0**, un agent lecture seule (Digest du matin à partir de `veille.db`), outils : mémoire + recherche | 7 jours sans appel hors liste, sorties validées | **oui** (nouveau paquet, venv tiers) |
