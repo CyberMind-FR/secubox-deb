@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import secrets
 import threading
@@ -74,8 +75,9 @@ def installer_consignes(oj_home: Path) -> None:
 
 
 class Travaux:
-    def __init__(self, etat: Path, moteur, memoires) -> None:
+    def __init__(self, etat: Path, moteur, memoires, traces=None, evaluations=None) -> None:
         self.etat, self.moteur, self.memoires = etat, moteur, memoires
+        self.traces, self.evaluations = traces, evaluations
         self._liste: dict[str, dict] = {}
         self._ctx: dict[str, Contexte] = {}
         self._verrou = threading.Lock()
@@ -208,6 +210,38 @@ class Travaux:
                      "qualite": d.quality_score} for d in s.history(limit=n)]
         finally:
             s.close()
+
+
+    # -- évaluation (#3992) -------------------------------------------------------------------------------
+    @staticmethod
+    def socket_second() -> str:
+        return os.environ.get("SECUBOX_AI_AGENTS_MOTEUR2", "/run/secubox-ai-eval/moteur.sock")
+
+    def second_disponible(self) -> bool:
+        return Path(self.socket_second()).is_socket()
+
+    def demarrer_evaluation(self, moteur: str, echantillons: int | None = None) -> str:
+        socket = self.moteur.socket if moteur == "actif" else self.socket_second()
+        ident, ctx = self._nouveau("evaluation", f"Évaluation — moteur {moteur}", "page")
+        threading.Thread(target=self._evaluation, args=(ident, ctx, socket, moteur, echantillons), daemon=True,
+                         name=f"evaluation-{ident}").start()
+        return ident
+
+    def _evaluation(self, ident: str, ctx: Contexte, socket: str, moteur: str, echantillons: int | None) -> None:
+        from agents.evaluation import evaluer
+        try:
+            verrou = self._moteur_libre if moteur == "actif" else threading.Lock()
+            with verrou:
+                r = evaluer(socket, moteur, self.traces, self.etat / "evaluations", max_echantillons=echantillons)
+            if ctx.annule.is_set():
+                return
+            self.evaluations.ajouter(r)
+            self._finir(ident, etat="fini", verifie=True,
+                        resultat=(f"{r['modele']} : {r['justes']}/{r['n']} justes, latence moyenne {r['latence_s']} s, "
+                                  f"premier mot {r['premier_s']} s, {r['debit_js']} j/s"))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("évaluation en échec : %s", type(exc).__name__)
+            self._finir(ident, etat="echec", erreur=type(exc).__name__)
 
 
 class Repartiteur:

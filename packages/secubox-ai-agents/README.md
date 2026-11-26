@@ -10,7 +10,7 @@
 OpenJarvis (amont `open-jarvis/OpenJarvis`, commit `556ddf32`, Apache-2.0) utilisé comme **bibliothèque**,
 derrière l'API FastAPI de SecuBox, sur socket Unix (#3986). Plan : `docs/superpowers/plans/2026-11-26-secubox-ai-agents.md`.
 
-État : **tranches A et C, sur gk0 seulement** (poste du propriétaire, POC). Pas encore de paquet Debian (tranche E).
+État : **tranches A, C et B, sur gk0 seulement** (poste du propriétaire, POC). Pas encore de paquet Debian (tranche E).
 
 ## API (socket `$XDG_RUNTIME_DIR/secubox-ai-agents/agents.sock` sur gk0)
 
@@ -39,6 +39,19 @@ Recherche web : UNIQUEMENT par `sbin/secubox-ai-pont-searxng` (socket Unix → `
 dur) ; le service des agents reste en `RestrictAddressFamilies=AF_UNIX`. En unité utilisateur, `IPAddressDeny`
 du pont N'EST PAS appliqué (essai du 2026-11-26) : sa seule garde est la destination fixe ; une unité système
 (tranche E) l'appliquera.
+
+Tranche B (#3992) :
+
+| Route | Rôle |
+|---|---|
+| `POST /chat` (suite) | l'événement `fin` porte `trace` (Trace d'OpenJarvis) ; le premier événement dit combien de `corrections` ont été reprises |
+| `POST /retour` `{trace, note: plus|moins, correction?}` | `TraceStore.update_feedback` (1,0 / 0,0) ; la correction d'un 👎 va en mémoire (agent `corrections`) et prévaut ensuite sur une question voisine |
+| `GET /evaluation`, `POST /evaluation` `{moteur: actif|second, echantillons?}` | `EvalRunner` d'OpenJarvis sur le jeu `agents/jeux/jeu-secubox-fr.jsonl` (12 questions, notation par mots attendus) : exactitude, latence, premier mot, j/s, historique ; routage appris (`LearnedRouterPolicy`) en recommandation |
+
+Second moteur d'évaluation : unité utilisateur `secubox-ai-eval-moteur` (CPU, une heure au plus, aucun lien avec
+`poc-llama`), démarrée et arrêtée par le relais (`/api/v1/ai/jarvis-moteur2/*`) avec une garde de mémoire
+(taille du modèle + 1,5 Go). Non fourni ici : `LLMOptimizer` (modèle infonuagique), dspy/gepa (absents), LoRA/SFT/GRPO
+(entraînement de poids : accord du propriétaire).
 
 ## Environnement
 
