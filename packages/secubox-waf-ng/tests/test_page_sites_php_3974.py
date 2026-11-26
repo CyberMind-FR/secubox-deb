@@ -59,7 +59,8 @@ def ouvrir(nav, largeur, demo=False):
                  "/api/v1/waf/categories": {"categories": {}, "source": "box"}}.get(u.split("?")[0], {})
         return r.fulfill(status=200, content_type="application/json", body=json.dumps(corps))
     p.route("http://sbx.test/**", sert)
-    p.goto("http://sbx.test/waf/modes.html" + ("?demo=1" if demo else ""))
+    # #3980 : la section est un onglet interne ; ?vue=php l'ouvre (comme #modes:php dans index.html)
+    p.goto("http://sbx.test/waf/modes.html?vue=php" + ("&demo=1" if demo else ""))
     p.wait_for_selector("#sitesDetectes .site")
     return p
 

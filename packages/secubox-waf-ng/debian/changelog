@@ -1,3 +1,29 @@
+secubox-waf-ng (1.52.0-1~trixie1) trixie; urgency=medium
+
+  * Page Modes refaite (ref #3980) : trois onglets internes pleine largeur,
+    Catégories, Leurres, Sites PHP, chacun avec son compteur ; fragment
+    #modes:categories|leurres|php dans index.html (?vue= passé au cadre).
+  * Catégories : une ligne par catégorie regroupée par famille (Attaques web,
+    Robots et balayeurs, Applications PHP, Messagerie et voix, Autres), triée
+    par touches 7 j, avec mini-série par jour, mode en sélecteur segmenté
+    (Après N : seuil et durée sur la même ligne), faux positifs en pastille.
+    Recherche, filtre « avec touches seulement » coché par défaut, catégories
+    fixées repliées à part. Les changements en attente deviennent une barre
+    collante en bas (Appliquer / Annuler), visible seulement s'il y en a.
+  * Leurres : grille de cartes (service, port, Observer/Bannir), messagerie à
+    part avec sa règle en une phrase.
+  * Sites PHP : contenu de #3975 en pleine largeur, bandeau « tout couvrir »
+    en tête, exceptions à droite des détectés.
+  * Notes longues repliées dans « En savoir plus » ; texte >= .85rem, cibles
+    >= 40 px, sans débordement à 400 px ; tout texte de l'API en textContent.
+  * API : /categories/stats7j porte par_jour (7 cases) calculé dans la même
+    passe de la tâche de fond ; aucune règle ni route d'écriture changée.
+  * Non repris : touches et bans par leurre (l'API ne les fournit pas) ; dans
+    le cadre de l'admin, la barre d'attente colle au bas du cadre, pas de
+    l'écran (le cadre prend la hauteur de la page).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.51.0-1~trixie1) trixie; urgency=medium
 
   * Campagnes, bas de page refait (ref #3969) ; le haut (populations, tuiles)

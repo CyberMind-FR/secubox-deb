@@ -7,6 +7,7 @@
 
   SecuBox — « SBXWAF », onglet Modes (#3741, maquette approuvée le 2026-11-16).
   Lecture : GET /api/v1/waf/{categories,categories/stats7j,leurres-service/modes,php-sites}.
+  #3980 : trois onglets internes pleine largeur (Catégories, Leurres, Sites PHP ; ?vue= ou #<vue>), catégories par famille.
   Écriture (session d'administrateur) : POST /categories/modes (lot, bouton « Appliquer »),
   /leurres-service/modes, /php-sites, /php-sites/detecter. ?demo=1 : données d'exemple, aucune écriture.
   Une mesure absente s'affiche « — », jamais 0. Tout texte venu de l'API est posé en textContent.
@@ -16,73 +17,107 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBXWAF — modes</title>
 <style>
-  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#8296b8;
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#a9bcdc;--faible:#8ea2c4;
     --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c}
   *{box-sizing:border-box}
   html,body{margin:0;min-height:0}
   body{background:radial-gradient(900px 520px at 50% 0%,rgba(41,182,246,.13),transparent 70%),var(--fond);color:var(--texte);
-       font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.4;font-variant-numeric:tabular-nums}
-  .cadre{container-type:inline-size;container-name:a;padding:14px;display:flex;flex-direction:column;gap:12px}
+       font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:.92rem;line-height:1.45;font-variant-numeric:tabular-nums}
+  .cadre{container-type:inline-size;container-name:a;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--doux)}
-  .tete .droite{margin-left:auto;color:var(--doux);font-size:.78rem;display:flex;gap:8px;align-items:center}
-  .bandeau{border-radius:10px;padding:8px 14px;font-size:.85rem;border:1px solid var(--cyan);background:rgba(41,182,246,.12)}
+  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--doux);font-size:.85rem}
+  .tete .droite{margin-left:auto;color:var(--doux);font-size:.85rem;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .bandeau{border-radius:10px;padding:8px 14px;font-size:.88rem;border:1px solid var(--cyan);background:rgba(41,182,246,.12);overflow-wrap:anywhere}
   .bandeau.err{border-color:var(--rouge);background:rgba(255,77,94,.12)} .bandeau.ok{border-color:var(--vert);background:rgba(46,204,113,.1)}
   .bandeau.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
-  .tuiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
-  .tuile{border:1px solid var(--trait2);border-radius:14px;padding:11px 14px;background:rgba(12,24,48,.7);min-width:0}
-  .tuile .l{color:var(--doux);font-size:.76rem} .tuile .v{font-size:1.6rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--doux);font-size:.72rem}
-  .grille{display:grid;gap:12px}
-  @container a (min-width:1000px){.grille{grid-template-columns:1.65fr 1fr}}
-  .col{display:grid;gap:12px;min-width:0;align-content:start}
-  .pan{border:1px solid var(--trait2);border-radius:14px;padding:13px 15px;background:rgba(12,24,48,.7);min-width:0}
-  .pan h2{margin:0 0 8px;font-size:.95rem;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .pan h2 i{font-style:normal;font-weight:400;color:var(--doux);font-size:.74rem;margin-left:auto}
-  .table{overflow-x:auto} table{width:100%;min-width:680px;border-collapse:collapse;font-size:.84rem}
-  th{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 8px}
-  td{padding:8px;vertical-align:middle;border-top:1px solid rgba(86,150,255,.14)} td small{display:block;color:var(--faible);font-size:.7rem}
-  tr.change td{background:rgba(255,159,28,.07)}
+  .tuiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  .tuile{border:1px solid var(--trait2);border-radius:14px;padding:10px 14px;background:rgba(12,24,48,.7);min-width:0}
+  .tuile .l{color:var(--doux);font-size:.85rem} .tuile .v{font-size:1.55rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--doux);font-size:.85rem}
   button,select,input{font:inherit;color:var(--texte)}
   :focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
-  .pas{display:inline-flex;border:1px solid var(--trait2);border-radius:999px;overflow:hidden}
-  .pas button{border:0;background:transparent;cursor:pointer;padding:4px 10px;font-size:.75rem;color:var(--doux);white-space:nowrap;min-height:30px}
-  .pas button[aria-pressed=true].d{background:rgba(41,182,246,.18);color:var(--cyan)}
-  .pas button[aria-pressed=true].e{background:rgba(255,159,28,.18);color:var(--orange)}
-  .pas button[aria-pressed=true].b{background:rgba(255,77,94,.18);color:var(--rouge)}
+  /* onglets internes */
+  .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait2)}
+  .onglets button{cursor:pointer;min-height:42px;padding:6px 16px;border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;background:transparent;color:var(--doux);font-weight:600;display:inline-flex;gap:8px;align-items:center}
+  .onglets button[aria-selected=true]{color:var(--texte);background:rgba(12,24,48,.85);border-color:var(--trait2);margin-bottom:-1px}
+  .onglets .n{font-size:.85rem;border-radius:999px;padding:0 8px;background:rgba(41,182,246,.16);color:var(--cyan)}
+  .pan{border:1px solid var(--trait2);border-radius:14px;padding:13px 15px;background:rgba(12,24,48,.7);min-width:0}
+  .pan[hidden]{display:none}
+  .pan h2{margin:0 0 6px;font-size:1rem} .pan h3{margin:14px 0 6px;font-size:.9rem;color:var(--doux);font-weight:600}
+  .outils{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:4px 0 8px}
+  .outils label{display:inline-flex;gap:8px;align-items:center;min-height:40px;font-size:.88rem;color:var(--doux);cursor:pointer}
+  .outils input[type=checkbox]{width:18px;height:18px;accent-color:var(--cyan)}
+  input[type=search]{min-height:40px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 10px;max-width:100%;min-width:0}
+  .outils input[type=search]{flex:1 1 220px}
+  /* catégories : une ligne par catégorie, grille qui se replie en dessous de 760 px */
+  .entete,.cat{display:grid;grid-template-columns:minmax(0,1.6fr) 6.5em minmax(0,2.2fr) 9.5em 7.5em;gap:6px 12px;align-items:center}
+  .entete{color:var(--faible);font-size:.85rem;font-weight:600;padding:4px 8px}
+  .famille{margin:12px 0 2px;font-size:.9rem;color:var(--cyan);font-weight:600;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:0 8px}
+  .famille i{font-style:normal;color:var(--faible);font-weight:400}
+  .cat{padding:8px;border-top:1px solid rgba(86,150,255,.14);border-radius:6px}
+  .cat.change{background:rgba(255,159,28,.08)} .cat.off{opacity:.7}
+  .cat .nom{font-weight:600;min-width:0;overflow-wrap:anywhere} .cat .nom small{display:block;font-weight:400;color:var(--faible);font-size:.85rem}
+  .cat .ctl{color:var(--doux);font-size:.88rem}
+  .cat .mode{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0}
+  .cat .tch{display:flex;gap:8px;align-items:center;justify-content:flex-end} .cat .tch b{min-width:3.2em;text-align:right}
+  .cat .fp{text-align:right}
+  @container a (max-width:759px){
+    .entete{display:none}
+    .cat{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nom tch" "mode mode" "ctl fp"}
+    .cat .nom{grid-area:nom} .cat .tch{grid-area:tch} .cat .mode{grid-area:mode} .cat .ctl{grid-area:ctl} .cat .fp{grid-area:fp}
+  }
+  .serie{display:inline-flex;align-items:flex-end;gap:2px;height:22px}
+  .serie i{display:block;width:6px;background:var(--cyan);opacity:.45;border-radius:1px;min-height:1px}
+  .serie i.pic{opacity:1} .serie i.zero{background:var(--faible);opacity:.35}
+  .pas{display:inline-flex;border:1px solid var(--trait2);border-radius:999px;overflow:hidden;max-width:100%}
+  .pas button{border:0;background:transparent;cursor:pointer;padding:4px 12px;font-size:.88rem;color:var(--doux);white-space:nowrap;min-height:40px}
+  .pas button[aria-pressed=true].d{background:rgba(41,182,246,.2);color:var(--cyan)}
+  .pas button[aria-pressed=true].e{background:rgba(255,159,28,.2);color:var(--orange)}
+  .pas button[aria-pressed=true].b{background:rgba(255,77,94,.2);color:var(--rouge)}
   .pas button:disabled{cursor:default;opacity:.6}
-  .seuil{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:.75rem;color:var(--doux);margin-top:4px}
-  .seuil select{background:#0a1630;border:1px solid var(--trait2);border-radius:6px;padding:1px 4px}
-  .pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.7rem;border:1px solid currentColor;white-space:nowrap}
+  .seuil{display:inline-flex;flex-wrap:wrap;gap:4px 6px;align-items:center;font-size:.88rem;color:var(--doux)}
+  .seuil select{background:#0a1630;border:1px solid var(--trait2);border-radius:6px;padding:0 6px;min-height:40px}
+  .pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.85rem;border:1px solid currentColor;white-space:nowrap}
   .p-vert{color:var(--vert);background:rgba(46,204,113,.12)} .p-cyan{color:var(--cyan);background:rgba(41,182,246,.12)}
   .p-orange{color:var(--orange);background:rgba(255,159,28,.12)} .p-gris{color:var(--faible);background:rgba(111,132,168,.12)}
-  .ligne{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.14)}
-  .ligne:first-child{border-top:0} .ligne .nom{min-width:7.5em;font-weight:600} .ligne .pas{margin-left:auto}
-  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.78rem;color:var(--doux);overflow-wrap:anywhere}
-  .note{font-size:.74rem;color:var(--faible);margin:8px 0 0}
-  .chk{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(86,150,255,.14);font-size:.82rem}
-  .chk:first-child{border-top:0} .chk input{accent-color:var(--cyan)} .chk .pill{margin-left:auto}
-  .attente{border:1px solid var(--orange);border-radius:14px;background:rgba(255,159,28,.07);padding:12px 15px;display:grid;gap:8px}
-  .attente h2{margin:0;font-size:.92rem;color:var(--orange)}
-  .attente ul{margin:0;padding-left:18px;font-size:.82rem;color:var(--doux)}
+  .p-rouge{color:var(--rouge);background:rgba(255,77,94,.12)}
+  .masquees{font-size:.88rem;color:var(--faible);padding:8px}
+  details{margin-top:10px} summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:8px;color:var(--doux);font-size:.88rem}
+  summary::before{content:'▸';transition:transform .15s} details[open]>summary::before{transform:rotate(90deg)} summary::-webkit-details-marker{display:none}
+  details.savoir{font-size:.88rem;color:var(--doux)} details.savoir p{margin:4px 0 0;max-width:90ch}
+  .une{margin:0 0 4px;color:var(--doux);font-size:.9rem}
+  /* barre d'attente collante */
+  .attente{position:sticky;bottom:0;z-index:5;border:1px solid var(--orange);border-radius:12px;background:#1a1408;padding:8px 12px;
+           display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;box-shadow:0 -6px 18px rgba(0,0,0,.45)}
+  .attente[hidden]{display:none}
+  .attente b{color:var(--orange)} .attente ul{margin:0;padding:0;list-style:none;font-size:.88rem;color:var(--doux);flex:1 1 300px;min-width:0;overflow-wrap:anywhere}
   .btns{display:flex;gap:8px;flex-wrap:wrap}
-  .btn{cursor:pointer;padding:7px 14px;border-radius:9px;font-size:.82rem;font-weight:600;border:1px solid var(--trait2);background:transparent;min-height:36px}
+  .btn{cursor:pointer;padding:7px 14px;border-radius:9px;font-size:.88rem;font-weight:600;border:1px solid var(--trait2);background:transparent;min-height:40px}
   .btn.prim{background:var(--bleu);border-color:var(--bleu)} .btn:disabled{opacity:.5;cursor:default}
-  .vide{color:var(--faible);font-size:.84rem;padding:6px 0}
-  .resume{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.84rem;color:var(--doux)} .resume b{color:var(--texte);font-size:1.05rem}
-  .pan h3{margin:12px 0 4px;font-size:.78rem;color:var(--faible);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .site{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.14);font-size:.84rem}
-  .site:first-child{border-top:0} .site .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .site .act{margin-left:auto;display:flex;gap:6px;align-items:center}
-  .site .preuve{flex-basis:100%;font-size:.74rem;color:var(--faible)} .site .preuve .mono{font-size:.72rem}
-  .btn.mini{padding:3px 10px;min-height:28px;font-size:.74rem}
+  .vide{color:var(--faible);font-size:.88rem;padding:6px 0}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.85rem;color:var(--doux);overflow-wrap:anywhere}
+  /* leurres : grille de cartes */
+  .cartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:8px}
+  .carte{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-width:0;background:rgba(6,13,27,.5)}
+  .carte .h{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;justify-content:space-between} .carte .h b{overflow-wrap:anywhere}
+  .carte.bannir{border-color:rgba(255,77,94,.45)}
+  .carte .pas,.carte .pill{align-self:flex-start} .carte .h .mono{white-space:nowrap}
+  /* sites PHP */
+  .resume{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.9rem;color:var(--doux)} .resume b{color:var(--texte);font-size:1.1rem}
+  .deux{display:grid;gap:14px} @container a (min-width:900px){.deux{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}
+  .deux>div{min-width:0}
+  .site{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:7px 0;border-top:1px solid rgba(86,150,255,.14);font-size:.9rem}
+  .site:first-of-type{border-top:0} .site .nom{font-weight:600;overflow-wrap:anywhere;min-width:0} .site .act{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .site .preuve{flex-basis:100%;font-size:.85rem;color:var(--faible);overflow-wrap:anywhere}
+  .btn.mini{padding:3px 12px;font-size:.85rem}
   .ajout{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px} .ajout input{flex:1 1 200px;min-width:0}
-  #sitesSuspendu{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesSuspendu[hidden]{display:none}
-  #sitesTous{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px} #sitesTous[hidden]{display:none}
-  input[type=search]{min-height:32px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
+  #sitesSuspendu,#sitesTous{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px} #sitesSuspendu[hidden],#sitesTous[hidden]{display:none}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 <body>
 <div class="cadre" id="cadre">
   <div class="tete">
-    <div><b>Modes</b><br><small>Catégories, leurres de service, sites PHP</small></div>
+    <div><b>Modes</b><br><small>Ce que le WAF fait quand une règle touche</small></div>
     <div class="droite"><span id="releve">—</span><button class="btn" id="rafraichir" type="button">Rafraîchir</button></div>
   </div>
   <div class="bandeau demo" id="demo" hidden>Démonstration : données d'exemple, aucune action n'est envoyée.</div>
@@ -97,46 +132,63 @@
     <div class="tuile" title="Motifs + contrôles structurels des catégories actives"><div class="l">Contrôles chargés</div><div class="v" id="tC">—</div><div class="s" id="tCs">—</div></div>
   </div>
 
-  <div class="grille">
-    <div class="pan">
-      <h2>Catégories <i>appliqué à la prochaine relecture de sbxwaf (quelques secondes)</i></h2>
+  <div class="onglets" role="tablist" aria-label="Sections de Modes">
+    <button type="button" role="tab" id="o-categories" data-vue="categories" aria-controls="panCats" aria-selected="true">Catégories <span class="n" id="nCats">—</span></button>
+    <button type="button" role="tab" id="o-leurres" data-vue="leurres" aria-controls="panLeurres" aria-selected="false">Leurres <span class="n" id="nLeurres">—</span></button>
+    <button type="button" role="tab" id="o-php" data-vue="php" aria-controls="panSites" aria-selected="false">Sites PHP <span class="n" id="nSites">—</span></button>
+  </div>
+
+  <div class="pan" id="panCats" role="tabpanel" aria-labelledby="o-categories">
+    <p class="une">Choisissez, catégorie par catégorie, entre noter, bannir après N touches ou bannir tout de suite.</p>
+    <details class="savoir"><summary>En savoir plus</summary>
+      <p>Immédiat : un motif répond 403 et compte vers le ban ; un contrôle structurel (analysé après relais) pose un <b>ban immédiat, requêtes suivantes bloquées</b>. Après N : ban après N touches dans la période d'escalade globale du WAF. Appliqué à la prochaine relecture de sbxwaf (quelques secondes).</p>
+      <p>Appliquer : écrit en double tampon, validé, puis relu ; retour à l'état précédent si la relecture échoue. Chaque changement va au journal d'audit.</p>
+      <p>Faux positifs estimés : touches venant du LAN ou du maillage (le journal les note « local »), d'adresses privées ou de la liste blanche, sur 7 jours ; les robots vérifiés ne sont pas écrits au journal et ne sont pas comptés.</p>
+    </details>
+    <div class="outils">
       <input type="search" id="cherche" placeholder="Rechercher une catégorie" aria-label="Rechercher une catégorie">
-      <div class="table"><table>
-        <thead><tr><th>Catégorie</th><th>Contrôles</th><th>Mode</th><th>Touches 7 j</th><th>Faux positifs estimés</th></tr></thead>
-        <tbody id="cats"></tbody>
-      </table></div>
-      <p class="note">Immédiat : un motif répond 403 et compte vers le ban ; un contrôle structurel (analysé après relais) pose un <b>ban immédiat, requêtes suivantes bloquées</b>. Après N : ban après N touches dans la fenêtre globale du WAF. Faux positifs estimés : touches venant du LAN ou du maillage (le journal les note « local »), d'adresses privées ou de la liste blanche, sur 7 jours ; les robots vérifiés ne sont pas écrits au journal et ne sont pas comptés.</p>
+      <label><input type="checkbox" id="avecTouches" checked> Avec touches seulement</label>
     </div>
+    <div class="entete" aria-hidden="true"><span>Catégorie</span><span>Contrôles</span><span>Mode</span><span style="text-align:right">Touches 7 j</span><span style="text-align:right">Faux positifs</span></div>
+    <div id="cats"></div>
+    <div class="masquees" id="masquees" hidden></div>
+    <details id="fixees" hidden><summary id="fixeesTitre">Catégories fixées</summary><div id="catsFixees"></div></details>
+  </div>
 
-    <div class="col">
-      <div class="attente" id="attente" hidden>
-        <h2 id="nAttente">Changements en attente</h2>
-        <ul id="lAttente"></ul>
-        <div class="btns"><button class="btn prim" id="appliquer" type="button">Appliquer</button><button class="btn" id="annuler" type="button">Annuler</button></div>
-        <p class="note" style="margin:0">Écrit en double tampon, validé, puis relu ; retour à l'état précédent si la relecture échoue. Chaque changement va au journal d'audit.</p>
-      </div>
+  <div class="pan" id="panLeurres" role="tabpanel" aria-labelledby="o-leurres" hidden>
+    <p class="une">Faux services ouverts sur le WAN (sbx-authwatch) : « Bannir » bannit à la fin du dialogue, « Observer » note seulement. Effet immédiat.</p>
+    <h3>Services</h3>
+    <div class="cartes" id="leurres"></div>
+    <h3>Messagerie</h3>
+    <p class="une" id="regleMail">Observer par défaut, jamais de mot de passe gardé ; « Bannir » ne vise qu'un compte inexistant. smtp, smtps, imaps et pop3s observent toujours.</p>
+    <div class="cartes" id="leurresMail"></div>
+    <details class="savoir"><summary>En savoir plus</summary>
+      <p>Bannir : ban à la fin du dialogue (règle actuelle, #3728). Observer : identifiants journalisés, aucun ban. Messagerie (submission, imap, pop3 ; #3924) : un vrai client mal configuré ne doit jamais se faire bannir. Les touches et bans par leurre ne sont pas encore fournis par l'API : voir l'onglet Leurres du WAF.</p>
+    </details>
+  </div>
 
-      <div class="pan">
-        <h2>Leurres de service <i>sbx-authwatch · ouverts sur le WAN</i></h2>
-        <div id="leurres"></div>
-        <p class="note">Bannir : ban à la fin du dialogue (règle actuelle, #3728). Observer : identifiants journalisés, aucun ban. Messagerie (submission, imap, pop3 ; #3924) : « observer » par défaut, jamais de mot de passe ; « bannir » ne vise qu’un compte inexistant. smtp, smtps, imaps et pop3s observent toujours. Effet immédiat (relu à chaud).</p>
-      </div>
-
-      <div class="pan" id="panSites">
-        <h2>Sites PHP <i>contrôles Roundcube, Nextcloud, PHP</i></h2>
-        <div class="resume" id="sitesResume">—</div>
-        <div class="bandeau err" id="sitesSuspendu" hidden><span id="sitesSuspenduTxt"></span> <button class="btn" id="sitesReactiver" type="button">Réactiver la détection</button></div>
-        <div class="bandeau demo" id="sitesTous" hidden><span id="sitesTousTxt"></span> <button class="btn" id="sitesTousRetirer" type="button">Retirer « tout couvrir »</button></div>
-        <h3>Détectés par le WAF</h3>
-        <div id="sitesDetectes"></div>
-        <h3>Vos exceptions</h3>
+  <div class="pan" id="panSites" role="tabpanel" aria-labelledby="o-php" hidden>
+    <div class="bandeau demo" id="sitesTous" hidden><span id="sitesTousTxt"></span> <button class="btn" id="sitesTousRetirer" type="button">Retirer « tout couvrir »</button></div>
+    <div class="bandeau err" id="sitesSuspendu" hidden><span id="sitesSuspenduTxt"></span> <button class="btn" id="sitesReactiver" type="button">Réactiver la détection</button></div>
+    <div class="resume" id="sitesResume">—</div>
+    <div class="deux">
+      <div><h3>Détectés par le WAF</h3><div id="sitesDetectes"></div>
+        <div class="btns" style="margin-top:8px"><button class="btn" id="sitesDetecter" type="button">Relancer la détection</button></div></div>
+      <div><h3>Vos exceptions</h3>
         <div class="ajout"><input type="search" id="siteCherche" list="sitesServis" placeholder="Chercher un site servi…" aria-label="Site servi" autocomplete="off"><datalist id="sitesServis"></datalist>
           <button class="btn" id="siteForcer" type="button">Forcer les contrôles</button><button class="btn" id="siteExclure" type="button">Exclure</button></div>
-        <div id="sitesExceptions"></div>
-        <div class="btns" style="margin-top:8px"><button class="btn" id="sitesDetecter" type="button">Relancer la détection</button></div>
-        <p class="note">Le WAF arme seul les contrôles PHP sur les sites servis qui font du PHP : appli PHP d’un module installé, fichier .php servi en 2xx (journal nginx, page d’accueil « attrape-tout » écartée), en-tête X-Powered-By: PHP ou cookie de session PHP du serveur d’origine. Détection toutes les heures (tâche de fond de l’API) ; « contrôlé » = motif écrit, relu à chaud par sbxwaf. Un site détecté reste couvert tant que vous ne l’excluez pas. Motifs livrés, toujours actifs : <span class="mono" id="motifs">—</span></p>
-      </div>
+        <div id="sitesExceptions"></div></div>
     </div>
+    <details class="savoir"><summary>En savoir plus</summary>
+      <p>Le WAF arme seul les contrôles PHP (Roundcube, Nextcloud, PHP) sur les sites servis qui font du PHP : appli PHP d’un module installé, fichier .php servi en 2xx (journal nginx, page d’accueil « attrape-tout » écartée), en-tête X-Powered-By: PHP ou cookie de session PHP du serveur d’origine. Détection toutes les heures (tâche de fond de l’API) ; « contrôlé » = motif écrit, relu à chaud par sbxwaf. Un site détecté reste couvert tant que vous ne l’excluez pas.</p>
+      <p>Motifs livrés, toujours actifs : <span class="mono" id="motifs">—</span></p>
+    </details>
+  </div>
+
+  <div class="attente" id="attente" hidden role="region" aria-label="Changements en attente">
+    <b id="nAttente">Changements en attente</b>
+    <ul id="lAttente"></ul>
+    <div class="btns"><button class="btn prim" id="appliquer" type="button">Appliquer</button><button class="btn" id="annuler" type="button">Annuler</button></div>
   </div>
 </div>
 <script>
@@ -169,8 +221,14 @@
       php2shell:{name:'PHP2Shell',mode:'detect',motifs:0,structurels:8,enabled:true,verrouille:false},
       recon_crawler:{name:'Robots de reconnaissance',mode:'detect',motifs:10,structurels:0,enabled:true,verrouille:false},
       product_absent_probes:{name:'Sondes de produits absents',mode:'detect',motifs:4,structurels:0,enabled:true,verrouille:true},
-      sqli:{name:'Injection SQL',mode:'block',motifs:7,structurels:0,enabled:true,verrouille:false}}};
-    STATS={categories:{nextcloud:{touches:14,faux_positifs_estimes:2},roundcube:{touches:9,faux_positifs_estimes:0},sqli:{touches:57,faux_positifs_estimes:0}}};
+      sqli:{name:'Injection SQL',mode:'block',motifs:7,structurels:0,enabled:true,verrouille:false},
+      xss:{name:'Cross-Site Scripting',mode:'block',motifs:9,structurels:0,enabled:true,verrouille:false},
+      scanners:{name:'Vulnerability Scanners',mode:'escalate',ban_seuil:3,ban_duree:'24h',motifs:11,structurels:0,enabled:true,verrouille:false},
+      webmail:{name:'Webmail Specific',mode:'detect',motifs:5,structurels:0,enabled:true,verrouille:false},
+      voip:{name:'VoIP/SIP Security',mode:'detect',motifs:6,structurels:0,enabled:false,verrouille:false}}};
+    STATS={categories:{nextcloud:{touches:14,faux_positifs_estimes:2,par_jour:[1,0,3,2,4,1,3]},roundcube:{touches:9,faux_positifs_estimes:0,par_jour:[0,0,2,1,3,1,2]},
+      sqli:{touches:57,faux_positifs_estimes:0,par_jour:[6,9,4,12,8,10,8]},scanners:{touches:1867,faux_positifs_estimes:0,par_jour:[240,310,198,280,301,260,278]},
+      recon_crawler:{touches:122,faux_positifs_estimes:4,par_jour:[14,20,11,25,18,16,18]}}};
     LEURRES={leurres:[['rdp',3389],['vnc',5900],['telnet',23],['smb',445],['mysql',3306],['postgres',5432],['redis',6379],['mongodb',27017],['elasticsearch',9200],['mssql',1433],['submission',587],['imap',143],['pop3',110],['smtp',25],['smtps',465],['imaps',993],['pop3s',995]]
       .map(function(x){var fixe=/^(smtp|smtps|imaps|pop3s)$/.test(x[0]);return {service:x[0],port:x[1],mode:fixe||/^(postgres|submission|imap|pop3)$/.test(x[0])?'observer':'bannir',fixe:fixe};})};
     SITES={detectes:[{hote:'nc.exemple.fr',type:'appli',preuve:'appli nextcloud (module installé)',premiere:'2026-11-20T08:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:false,couvert:'service'},
@@ -214,45 +272,74 @@
     rendre();
   }
 
-  function rendreCats(){
-    var tb=el('cats');vide(tb);
-    if(!CATS){var tr=cree('tr'),td=cree('td','vide','Catégories indisponibles');td.colSpan=5;tr.appendChild(td);tb.appendChild(tr);return;}
-    var q=el('cherche').value.trim().toLowerCase();
-    Object.keys(CATS.categories).sort().forEach(function(id){
-      var c=CATS.categories[id];
-      if(q&&(id+' '+(c.name||'')).toLowerCase().indexOf(q)<0)return;
-      var e=etat(id),tr=cree('tr',ATTENTE[id]?'change':'');
-      var t1=cree('td','',c.name||id);t1.appendChild(cree('small','',id+(c.enabled?'':' · désactivée')));tr.appendChild(t1);
-      tr.appendChild(cree('td','',c.structurels?(nb(c.motifs)+' + '+nb(c.structurels)+' structurels'):(nb(c.motifs)+' motifs')));
-      var t3=cree('td');
-      if(c.verrouille){var p=cree('span','pill p-gris',(LIB[c.mode]||c.mode)+' · fixé');p.title='Catégorie générée : son mode est fixé';t3.appendChild(p);}
-      else{
-        t3.appendChild(selecteur(MODES,e.mode,!c.enabled,function(m){changer(id,{mode:m});}));
-        if(e.mode==='escalate'){var s=cree('div','seuil');s.appendChild(document.createTextNode('ban après '));
-          s.appendChild(liste([1,2,3,4,5,6,7,8,9,10],e.ban_seuil||3,function(v){changer(id,{ban_seuil:+v});}));
-          s.appendChild(document.createTextNode(' touches, banni '));
-          s.appendChild(liste(['4h','24h','168h'],e.ban_duree||'24h',function(v){changer(id,{ban_duree:v});},function(v){return v==='168h'?'7 j':v.replace('h',' h');}));
-          t3.appendChild(s);}
-      }
-      tr.appendChild(t3);
-      var sc=STATS&&STATS.categories?(STATS.categories[id]||{touches:0,faux_positifs_estimes:0}):null;
-      tr.appendChild(cree('td','',sc?nb(sc.touches):'—'));
-      var t5=cree('td');
-      if(!sc)t5.textContent='—';
-      else if(!sc.faux_positifs_estimes)t5.appendChild(cree('span','pill p-vert','aucun'));
-      else t5.appendChild(cree('span','pill p-orange',nb(sc.faux_positifs_estimes)+' du LAN ou maillage'));
-      tr.appendChild(t5);
-      tb.appendChild(tr);
-    });
+  var FAMILLES=[['web','Attaques web',/^(sqli|xss|lfi|rce|cve_|api_abuse|credential_harvest)/],
+    ['robots','Robots et balayeurs',/^(scanners|recon_|product_absent|aspirateur|waf_fingerprint|honeypot|router_botnet|bot)/],
+    ['php','Applications PHP',/^(roundcube|nextcloud|php)/],
+    ['messagerie','Messagerie et voix',/^(webmail|voip|xmpp|cve_voip|cve_xmpp|mail|sip)/]];
+  function famille(id){if(/^cve_(voip|xmpp)/.test(id))return 'messagerie';for(var i=0;i<FAMILLES.length;i++)if(FAMILLES[i][2].test(id))return FAMILLES[i][0];return 'autres';}
+  function statCat(id){return STATS&&STATS.categories?(STATS.categories[id]||{touches:0,faux_positifs_estimes:0}):null;}
+  function serie(pj){
+    var s=cree('span','serie'),max=Math.max.apply(null,pj.concat([1])),pic=pj.indexOf(Math.max.apply(null,pj));
+    s.setAttribute('role','img');s.setAttribute('aria-label','touches par jour, du plus ancien au plus récent : '+pj.join(', '));
+    s.title='par jour (7 j, échelle propre à la ligne) : '+pj.map(nb).join(' · ')+' — pic '+nb(pj[pic]);
+    pj.forEach(function(v,i){var b=cree('i',v?(i===pic?'pic':''):'zero');b.style.height=(v?Math.max(12,Math.round(100*v/max)):6)+'%';s.appendChild(b);});
+    return s;
   }
-
+  function ligneCat(id){
+    var c=CATS.categories[id],e=etat(id),sc=statCat(id);
+    var r=cree('div','cat'+(ATTENTE[id]?' change':'')+(c.enabled?'':' off'));r.dataset.cat=id;
+    var n=cree('div','nom',c.name||id);n.appendChild(cree('small','',id+(c.enabled?'':' · désactivée')));r.appendChild(n);
+    r.appendChild(cree('div','ctl',c.structurels?(nb(c.motifs)+' + '+nb(c.structurels)+' struct.'):(nb(c.motifs)+' motifs')));
+    var m=cree('div','mode');
+    if(c.verrouille){var p=cree('span','pill p-gris',(LIB[c.mode]||c.mode)+' · fixé');p.title='Catégorie générée : son mode est fixé';m.appendChild(p);}
+    else{
+      m.appendChild(selecteur(MODES,e.mode,!c.enabled,function(v){changer(id,{mode:v});}));
+      if(e.mode==='escalate'){var s=cree('span','seuil');s.appendChild(document.createTextNode('ban après '));
+        var l1=liste([1,2,3,4,5,6,7,8,9,10],e.ban_seuil||3,function(v){changer(id,{ban_seuil:+v});});l1.setAttribute('aria-label','touches avant ban');s.appendChild(l1);
+        s.appendChild(document.createTextNode(' touches, pour '));
+        var l2=liste(['4h','24h','168h'],e.ban_duree||'24h',function(v){changer(id,{ban_duree:v});},function(v){return v==='168h'?'7 j':v.replace('h',' h');});l2.setAttribute('aria-label','durée du ban');s.appendChild(l2);
+        m.appendChild(s);}
+    }
+    r.appendChild(m);
+    var t=cree('div','tch');
+    if(sc&&Array.isArray(sc.par_jour)&&sc.par_jour.length===7)t.appendChild(serie(sc.par_jour));
+    t.appendChild(cree('b','',sc?nb(sc.touches):'—'));r.appendChild(t);
+    var f=cree('div','fp');
+    if(!sc)f.textContent='—';
+    else if(!sc.faux_positifs_estimes)f.appendChild(cree('span','pill p-vert','aucun'));
+    else{var q=cree('span','pill p-orange',nb(sc.faux_positifs_estimes)+' local');q.title=nb(sc.faux_positifs_estimes)+' touches du LAN, du maillage ou de la liste blanche';f.appendChild(q);}
+    r.appendChild(f);
+    return r;
+  }
+  function rendreCats(){
+    var z=el('cats'),zf=el('catsFixees');vide(z);vide(zf);
+    if(!CATS){z.appendChild(cree('div','vide','Catégories indisponibles'));el('fixees').hidden=true;el('masquees').hidden=true;return;}
+    var q=el('cherche').value.trim().toLowerCase(),seules=el('avecTouches').checked&&!!(STATS&&STATS.categories);
+    function tch(id){var x=statCat(id);return x?x.touches||0:0;}
+    var ids=Object.keys(CATS.categories).filter(function(id){var c=CATS.categories[id];return !q||(id+' '+(c.name||'')).toLowerCase().indexOf(q)>=0;});
+    ids.sort(function(a,b){return tch(b)-tch(a)||(a<b?-1:1);});
+    var fixes=ids.filter(function(id){return CATS.categories[id].verrouille;}),libres=ids.filter(function(id){return !CATS.categories[id].verrouille;});
+    var caches=0,groupes={};
+    libres.forEach(function(id){if(seules&&!tch(id)&&!ATTENTE[id]){caches++;return;}var f=famille(id);(groupes[f]=groupes[f]||[]).push(id);});
+    var ordre=FAMILLES.map(function(f){return [f[0],f[1]];}).concat([['autres','Autres']]);
+    ordre.sort(function(a,b){function s(k){return (groupes[k]||[]).reduce(function(t,id){return t+tch(id);},0);}return s(b[0])-s(a[0]);});
+    ordre.forEach(function(f){var l=groupes[f[0]];if(!l)return;
+      var h=cree('div','famille',f[1]);h.dataset.famille=f[0];
+      var tot=l.reduce(function(t,id){return t+tch(id);},0);h.appendChild(cree('i','',l.length+' catégorie'+(l.length>1?'s':'')+(STATS&&STATS.categories?' · '+nb(tot)+' touches':'')));
+      z.appendChild(h);l.forEach(function(id){z.appendChild(ligneCat(id));});});
+    if(!z.firstChild)z.appendChild(cree('div','vide',q?'Aucune catégorie ne correspond':'Aucune touche sur 7 jours'));
+    var mq=el('masquees');mq.hidden=!caches;mq.textContent=caches?caches+' catégorie'+(caches>1?'s':'')+' sans touche sur 7 jours masquée'+(caches>1?'s':'')+' : décochez « Avec touches seulement » pour les voir.':'';
+    el('fixees').hidden=!fixes.length;
+    el('fixeesTitre').textContent=fixes.length+' catégorie'+(fixes.length>1?'s':'')+' fixée'+(fixes.length>1?'s':'')+' (générées, mode non réglable) · '+nb(fixes.reduce(function(t,id){return t+tch(id);},0))+' touches';
+    fixes.forEach(function(id){zf.appendChild(ligneCat(id));});
+  }
   function rendreAttente(){
     var ids=Object.keys(ATTENTE),l=el('lAttente');vide(l);
     el('attente').hidden=!ids.length;
     el('nAttente').textContent=ids.length+' changement'+(ids.length>1?'s':'')+' en attente';
-    ids.forEach(function(id){var c=CATS.categories[id],a=ATTENTE[id];
+    ids.forEach(function(id){var c=CATS.categories[id],a=ATTENTE[id];if(!c)return;
       var t=(c.name||id)+' : '+(LIB[c.mode]||c.mode)+' → '+(LIB[a.mode]||a.mode);
-      if(a.mode==='escalate')t+=' ('+a.ban_seuil+' touches, ban '+a.ban_duree+')';
+      if(a.mode==='escalate')t+=' ('+a.ban_seuil+' touches, ban '+(a.ban_duree==='168h'?'7 j':String(a.ban_duree).replace('h',' h'))+')';
       if(a.mode==='block'&&c.structurels)t+=' — ban immédiat, requêtes suivantes bloquées';
       l.appendChild(cree('li','',t));});
   }
@@ -260,10 +347,17 @@
   function rendreLeurres(){
     var z=el('leurres');vide(z);
     if(!LEURRES){z.appendChild(cree('div','vide','—'));return;}
-    LEURRES.leurres.forEach(function(x){var d=cree('div','ligne');d.appendChild(cree('span','nom',x.service));d.appendChild(cree('span','mono',String(x.port)));
-      d.appendChild(selecteur([['observer','Observer','d'],['bannir','Bannir','b']],x.mode,!!x.fixe,function(m){if(m!==x.mode)ecrireLeurre(x.service,m);}));z.appendChild(d);});
+    var zm=el('leurresMail');vide(zm);
+    LEURRES.leurres.forEach(function(x){var d=cree('div','carte'+(x.mode==='bannir'?' bannir':''));d.dataset.service=x.service;
+      var h=cree('div','h');h.appendChild(cree('b','',x.service));h.appendChild(cree('span','mono','port '+String(x.port)));d.appendChild(h);
+      var g=selecteur([['observer','Observer','d'],['bannir','Bannir','b']],x.mode,!!x.fixe,function(m){if(m!==x.mode)ecrireLeurre(x.service,m);});
+      g.setAttribute('aria-label','Mode du leurre '+x.service);d.appendChild(g);
+      if(typeof x.touches_7j==='number'||typeof x.bans_7j==='number')d.appendChild(cree('span','mono',nb(x.touches_7j)+' touches · '+nb(x.bans_7j)+' bans (7 j)'));
+      if(x.fixe)d.appendChild(cree('span','pill p-gris','observe toujours'));
+      (MAIL.test(x.service)?zm:z).appendChild(d);});
   }
 
+  var MAIL=/^(submission|imap|pop3|smtp|smtps|imaps|pop3s)$/;
   var TYPES={appli:'appli connue',fichier:'fichier .php',entete:'en-tête'};
   function date(v){if(!v)return '—';var d=new Date(v);return isNaN(d)?'—':d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   function noms(l){return (l||[]).map(function(x){return x.hote;});}
@@ -306,7 +400,31 @@
     (SITES.servis||[]).forEach(function(h){var o=cree('option');o.value=h;dl.appendChild(o);});
   }
 
-  function rendre(){tuiles();rendreCats();rendreAttente();rendreLeurres();rendreSites();hauteur();}
+  function compteurs(){
+    el('nCats').textContent=CATS?nb(Object.keys(CATS.categories).length):'—';
+    el('nLeurres').textContent=LEURRES?nb(LEURRES.leurres.length):'—';
+    el('nSites').textContent=SITES?nb(SITES.detectes.filter(function(s){return !s.exclu;}).length):'—';
+  }
+  function rendre(){tuiles();compteurs();rendreCats();rendreAttente();rendreLeurres();rendreSites();hauteur();}
+
+  // Onglets internes (#3980) : ?vue= (passé par index.html depuis #modes:<vue>) ou #<vue> hors cadre.
+  var VUES={categories:'panCats',leurres:'panLeurres',php:'panSites'};
+  function montrer(v,annoncer){
+    if(!VUES[v])v='categories';
+    Object.keys(VUES).forEach(function(k){el(VUES[k]).hidden=k!==v;el('o-'+k).setAttribute('aria-selected',String(k===v));el('o-'+k).tabIndex=k===v?0:-1;});
+    if(annoncer){
+      if(window.parent!==window){try{window.parent.postMessage({sbxWafModes:v,onglet:'modes'},location.origin);}catch(e){}}
+      else{try{history.replaceState(null,'','#'+v);}catch(e){}}
+    }
+    hauteur();
+  }
+  document.querySelectorAll('.onglets button').forEach(function(b,i,tous){
+    b.addEventListener('click',function(){montrer(b.dataset.vue,true);});
+    b.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;
+      var n=tous[(i+d+tous.length)%tous.length];n.focus();montrer(n.dataset.vue,true);});
+  });
+  var vueDemandee=(/[?&]vue=([a-z]+)/.exec(location.search)||[])[1]||(location.hash||'').slice(1);
+  montrer(vueDemandee,false);
 
   function charger(){
     if(DEMO){exemple();el('releve').textContent='démonstration';rendre();return;}
@@ -355,7 +473,8 @@
     jpost('/php-sites/detecter',{}).then(function(r){b.disabled=false;
       if(r.ok&&r.corps&&r.corps.detectes){SITES=r.corps;var n=(r.corps.nouveaux||[]).length;message('succes',n?n+' nouveau(x) site(s) PHP : '+r.corps.nouveaux.join(', '):'Détection faite, aucun nouveau site PHP.');rendre();}
       else message('erreur','Détection refusée : '+motif(r));});});
-  el('cherche').addEventListener('input',rendreCats);
+  el('cherche').addEventListener('input',function(){rendreCats();hauteur();});
+  el('avecTouches').addEventListener('change',function(){rendreCats();hauteur();});
   el('rafraichir').addEventListener('click',charger);
   if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
   charger();
