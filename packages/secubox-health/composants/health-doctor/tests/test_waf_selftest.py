@@ -190,3 +190,26 @@ def test_verifier_utilise_le_domaine_de_la_box(tmp_path, monkeypatch):
     vus = []
     ws.verifier(maintenant=5000.0, requete=lambda h, p: (vus.append(h), 200 if p == "/robots.txt" else 403)[1], ecoute=lambda: True, cache=tmp_path / "c.json")
     assert set(vus) == {"hall.gk2.secubox.in"}
+
+
+def test_temoin_et_canaris_ont_des_adresses_distinctes(monkeypatch):
+    """Les canaris font bannir leur adresse : le témoin ne doit jamais la partager."""
+    vus = {}
+
+    class C:
+        def __init__(self, *a, **k):
+            pass
+
+        def request(self, m, chemin, headers):
+            vus[chemin] = headers["X-Forwarded-For"]
+
+        def getresponse(self):
+            return type("R", (), {"status": 200})()
+
+        def close(self):
+            pass
+    monkeypatch.setattr(ws.http.client, "HTTPConnection", C)
+    for _, _, chemin in (ws.TEMOIN, *ws.CANARIS):
+        ws._requete("hall.exemple.test", chemin)
+    assert vus[ws.TEMOIN[2]] == ws.IP_TEMOIN
+    assert all(vus[c] == ws.IP_SIMULEE for _, _, c in ws.CANARIS) and ws.IP_TEMOIN != ws.IP_SIMULEE
