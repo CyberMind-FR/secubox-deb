@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — relevé quotidien des chiffres du rapport de pilotage (13 mois gardés, #3970)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3970
+After=secubox-metrics.service
+
+[Service]
+# Une ligne JSON par jour de Paris dans /var/lib/secubox/metrics/releve/releve-AAAAMM.jsonl (écriture atomique,
+# ligne bornée, 13 mois gardés). Lecture seule des sources (journaux du WAF, bans, DNS, nginx, santé) ; seule
+# écriture : le dossier du relevé. Aucune adresse IP n'y est écrite.
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/metrics
+Nice=15
+IOSchedulingClass=idle
+StateDirectory=secubox/metrics
+Environment=SECUBOX_RELEVE_DIR=/var/lib/secubox/metrics/releve
+ExecStart=/usr/bin/python3 -m api.releve_quotidien
+TimeoutStartSec=15min
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+# Seule la socket d'actord (Unix) est jointe ; aucun réseau IP.
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+UMask=0027
+MemoryMax=192M

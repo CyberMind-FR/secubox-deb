@@ -136,5 +136,23 @@ override_dh_install:
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-memoire.service
 	install -D -m 0644 systemd/secubox-metrics-memoire.timer \
 	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-memoire.timer
+	# #3970 — releve quotidien (13 mois) et rapport de pilotage hebdomadaire (minuteur livre DESACTIVE).
+	install -D -m 0644 systemd/secubox-metrics-releve.service \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-releve.service
+	install -D -m 0644 systemd/secubox-metrics-releve.timer \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-releve.timer
+	install -D -m 0644 systemd/secubox-metrics-rapport-pilotage.service \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport-pilotage.service
+	install -D -m 0644 systemd/secubox-metrics-rapport-pilotage.timer \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport-pilotage.timer
 	# #2765 — historique des courbes (releve toutes les minutes, 7 jours ; remplace Grafana).
 	# secubox-metrics-serie.{service,timer} : passes a secubox-courbes (#2865, secubox-courbes-serie).
+
+# #3970 : le rapport de pilotage est livre DESACTIVE (l'ancien rapport du lundi reste tant qu'il n'est pas valide) :
+# ni active ni demarre par debhelper ; un `systemctl enable` de l'administrateur survit aux mises a jour
+# (postinst-systemd-dont-enable). Le service du releve (oneshot, jusqu'a 15 min) n'est pas lance par dpkg : rien de long
+# ni de synchrone dans un script de paquet ; sa minuterie s'en charge. Les autres unites gardent le traitement par defaut.
+override_dh_installsystemd:
+	dh_installsystemd -Xsecubox-metrics-rapport-pilotage.service -Xsecubox-metrics-rapport-pilotage.timer -Xsecubox-metrics-releve.service
+	dh_installsystemd --no-enable --no-start secubox-metrics-rapport-pilotage.service secubox-metrics-rapport-pilotage.timer
+	dh_installsystemd --no-start secubox-metrics-releve.service
