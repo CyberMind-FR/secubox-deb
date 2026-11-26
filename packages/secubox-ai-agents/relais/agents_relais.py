@@ -50,7 +50,7 @@ def brancher(app, local) -> None:
         local(request)
         return FileResponse(PAGE, headers={"Cache-Control": "no-store"})
 
-    @app.api_route(API + "/{chemin:path}", methods=["GET", "POST", "DELETE"])
+    @app.api_route(API + "/{chemin:path}", methods=["GET", "POST", "PUT", "DELETE"])
     async def relayer(chemin: str, request: Request):
         local(request)
         if not CHEMIN_RE.match(chemin) or ".." in chemin:

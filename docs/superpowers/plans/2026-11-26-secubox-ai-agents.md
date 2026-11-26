@@ -53,7 +53,13 @@ compétences déclaratives (`skills/`) sans outil interdit, apprentissage de pro
 **accord** avant tout ajout de dépendance). Sortie : un banc reproductible sur gk0 (questions SecuBox,
 réponses attendues), score publié, comparaison de modèles du POC.
 
-## Tranche C — Deep Research, Morning Digest, scheduler
+## Tranche C — Deep Research, Morning Digest, scheduler (#3990, livrée sur gk0)
+
+Fait : recherche par `NativeReActAgent` (et non `DeepResearchAgent` : Gemma 3 4B ne produit pas d'appel
+d'outil natif sur ce llama-server, essai du 2026-11-26), digest par `MorningDigestAgent` avec notre
+`digest_collect`, planificateur `TaskScheduler`, pont SearXNG sur socket Unix. Reste : `IPAddressDeny` du pont
+non appliqué en unité utilisateur (tranche E : unité système).
+
 
 `DeepResearchAgent`, `MorningDigestAgent`, `scheduler/` d'OpenJarvis. Recherche web : un outil À NOUS qui
 n'appelle que la SearXNG locale du POC (`127.0.0.1:8888`), derrière la garde SSRF de secubox-ai (R13) ;

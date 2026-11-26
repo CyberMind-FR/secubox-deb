@@ -29,6 +29,19 @@
              border-radius:6px; padding:8px; font:inherit; }
   .bouton { background:var(--accent); color:#06201d; border:0; border-radius:6px; padding:0 16px; font-weight:600; }
   label { color:var(--doux); font-size:13px; }
+  .onglets { display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--bord); flex-wrap:wrap; }
+  .onglets button { background:none; color:var(--doux); border:1px solid var(--bord); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .onglets button.actif { color:var(--texte); border-color:var(--accent); }
+  .panneau { display:none; flex:1; flex-direction:column; overflow:auto; padding:12px; min-height:0; }
+  #p-conv { padding:0; }
+  .ligne { display:flex; gap:8px; padding:0; border:0; flex-wrap:wrap; align-items:center; }
+  .ligne input, .ligne select { flex:1; min-width:160px; background:var(--carte); color:var(--texte);
+                                border:1px solid var(--bord); border-radius:6px; padding:8px; font:inherit; }
+  .ligne .bouton { padding:8px 14px; }
+  .carte { background:var(--carte); border:1px solid var(--bord); border-radius:8px; padding:10px 12px; margin:8px 0; }
+  .carte pre { white-space:pre-wrap; font:inherit; margin:6px 0; }
+  .carte a { color:var(--accent); word-break:break-all; }
+  .petit { background:none; color:var(--doux); border:1px solid var(--bord); border-radius:6px; padding:2px 8px; cursor:pointer; margin-right:4px; }
   @media (max-width: 700px) { main { grid-template-columns:1fr; } aside { display:none; } }
 </style>
 </head>
@@ -40,14 +53,51 @@
     <div id="liste"></div>
   </aside>
   <section>
-    <div id="fil"></div>
-    <form id="formulaire">
-      <textarea id="question" placeholder="Votre question" required></textarea>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <button class="bouton" style="flex:1">Envoyer</button>
-        <label><input type="checkbox" id="memoire" checked> mémoire</label>
-      </div>
-    </form>
+    <nav class="onglets">
+      <button data-p="p-conv" class="actif">Conversation</button>
+      <button data-p="p-rech">Recherche</button>
+      <button data-p="p-dig">Digest du matin</button>
+      <button data-p="p-plan">Planificateur</button>
+    </nav>
+    <div id="p-conv" class="panneau" style="display:flex">
+      <div id="fil"></div>
+      <form id="formulaire">
+        <textarea id="question" placeholder="Votre question" required></textarea>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="bouton" style="flex:1">Envoyer</button>
+          <label><input type="checkbox" id="memoire" checked> mémoire</label>
+        </div>
+      </form>
+    </div>
+    <div id="p-rech" class="panneau">
+      <form id="f-rech" class="ligne">
+        <input id="q-rech" placeholder="Question de recherche (web local + mémoire, sources citées)" minlength="3" required>
+        <button class="bouton">Chercher</button>
+      </form>
+      <p class="meta">Un travail à la fois, 10 minutes au plus. Le résultat vérifié est gardé en mémoire (agent « recherche »).</p>
+      <div id="travaux"></div>
+    </div>
+    <div id="p-dig" class="panneau">
+      <form id="f-dig" class="ligne">
+        <label><input type="checkbox" id="d-actif"> chaque jour à</label>
+        <input id="d-heure" type="time" required style="flex:0 0 120px">
+        <input id="d-themes" placeholder="thèmes, séparés par des virgules (6 au plus)" required>
+        <button class="bouton">Enregistrer</button>
+        <button type="button" id="d-maintenant" class="bouton">Maintenant</button>
+      </form>
+      <p class="meta">Lecture seule : actualités du jour des thèmes, par la SearXNG locale ; aucune action.</p>
+      <div id="digests"></div>
+    </div>
+    <div id="p-plan" class="panneau">
+      <form id="f-plan" class="ligne">
+        <input id="pl-q" placeholder="Recherche à refaire" minlength="3" required>
+        <select id="pl-freq"><option value="86400">chaque jour</option><option value="3600">chaque heure</option>
+          <option value="604800">chaque semaine</option></select>
+        <button class="bouton">Planifier</button>
+      </form>
+      <p class="meta">10 tâches actives au plus, une heure au moins entre deux passages.</p>
+      <div id="taches"></div>
+    </div>
   </section>
 </main>
 <script>
@@ -135,6 +185,150 @@ document.getElementById("formulaire").onsubmit = async (e) => {
 };
 
 etat(); liste();
+
+// --- onglets ---------------------------------------------------------------------------------------
+for (const b of document.querySelectorAll(".onglets button")) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll(".onglets button")) x.classList.toggle("actif", x === b);
+    for (const p of document.querySelectorAll(".panneau")) p.style.display = p.id === b.dataset.p ? "flex" : "none";
+    if (b.dataset.p === "p-rech") travaux();
+    if (b.dataset.p === "p-dig") digest();
+    if (b.dataset.p === "p-plan") taches();
+  };
+}
+
+function el(tag, texte, classe) {
+  const e = document.createElement(tag);
+  if (texte !== undefined) e.textContent = texte;
+  if (classe) e.className = classe;
+  return e;
+}
+
+function sources(liste) {
+  const d = el("div");
+  (liste || []).forEach((s, i) => {
+    const l = el("div", "[" + (i + 1) + "] ");
+    const a = el("a", s.titre || s.url);
+    a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    l.appendChild(a); d.appendChild(l);
+  });
+  return d;
+}
+
+async function jsonOu(r) { try { return await r.json(); } catch (e) { return {}; } }
+
+// --- recherche -------------------------------------------------------------------------------------
+let suivi = null;
+async function travaux() {
+  const r = await fetch(API + "/travaux");
+  if (!r.ok) return;
+  const zone = document.getElementById("travaux");
+  zone.replaceChildren();
+  let enCours = false;
+  for (const t of (await r.json()).travaux) {
+    const c = el("div", undefined, "carte");
+    const tete = el("div", (t.genre === "digest" ? "Digest — " : "Recherche — ") + t.titre);
+    tete.style.fontWeight = "600";
+    c.appendChild(tete);
+    const etat = { en_cours: "en cours…", fini: "fini", echec: "échec", annule: "annulé" }[t.etat] || t.etat;
+    const m = el("div", etat + (t.fin ? " · " + Math.round(t.fin - t.debut) + " s" : "") +
+                 (t.origine === "planificateur" ? " · planifié" : "") + (t.erreur ? " · " + t.erreur : ""), "meta");
+    c.appendChild(m);
+    if (t.etat === "en_cours") {
+      enCours = true;
+      const b = el("button", "Annuler", "petit");
+      b.onclick = async () => { await fetch(API + "/travaux/" + t.id + "/annuler", { method: "POST" }); travaux(); };
+      c.appendChild(b);
+    }
+    if (t.resultat) c.appendChild(el("pre", t.resultat));
+    if (t.sources && t.sources.length) c.appendChild(sources(t.sources));
+    zone.appendChild(c);
+  }
+  clearTimeout(suivi);
+  if (enCours) suivi = setTimeout(travaux, 3000);
+}
+
+document.getElementById("f-rech").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("q-rech");
+  const r = await fetch(API + "/recherche", { method: "POST", headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ question: q.value.trim() }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  q.value = "";
+  travaux();
+};
+
+// --- digest ----------------------------------------------------------------------------------------
+async function digest() {
+  const r = await fetch(API + "/digest");
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById("d-actif").checked = d.config.actif;
+  document.getElementById("d-heure").value = d.config.heure;
+  document.getElementById("d-themes").value = d.config.themes.join(", ");
+  const zone = document.getElementById("digests");
+  zone.replaceChildren();
+  for (const x of d.historique) {
+    const c = el("div", undefined, "carte");
+    c.appendChild(el("div", "Point du " + x.quand.replace("T", " à "), "meta"));
+    c.appendChild(el("pre", x.texte));
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-dig").onsubmit = async (e) => {
+  e.preventDefault();
+  const themes = document.getElementById("d-themes").value.split(",").map((s) => s.trim()).filter(Boolean);
+  const r = await fetch(API + "/digest", { method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actif: document.getElementById("d-actif").checked,
+                           heure: document.getElementById("d-heure").value, themes }) });
+  if (!r.ok) alert((await jsonOu(r)).detail || ("Erreur " + r.status));
+  digest();
+};
+
+document.getElementById("d-maintenant").onclick = async () => {
+  const r = await fetch(API + "/digest/maintenant", { method: "POST" });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.querySelector('.onglets button[data-p="p-rech"]').click();
+};
+
+// --- planificateur ---------------------------------------------------------------------------------
+async function taches() {
+  const r = await fetch(API + "/planificateur");
+  if (!r.ok) return;
+  const zone = document.getElementById("taches");
+  zone.replaceChildren();
+  for (const t of (await r.json()).taches) {
+    const c = el("div", undefined, "carte");
+    const genre = (t.metadata || {}).genre === "digest" ? "Digest du matin" : "Recherche : " + t.prompt;
+    c.appendChild(el("div", genre));
+    const freq = t.schedule_type === "interval" ? "toutes les " + Math.round(t.schedule_value / 3600) + " h"
+               : t.schedule_type === "cron" ? "chaque jour (" + t.schedule_value + ", heure de Paris)" : "une fois";
+    c.appendChild(el("div", t.status + " · " + freq + (t.next_run ? " · prochain : " + new Date(t.next_run).toLocaleString("fr-FR") : ""), "meta"));
+    for (const p of t.passages || []) {
+      c.appendChild(el("div", (p.success ? "✓ " : "✗ ") + (p.started_at || "").slice(0, 16).replace("T", " ") +
+                                (p.error ? " · " + p.error : ""), "meta"));
+    }
+    if ((t.metadata || {}).genre !== "digest") {
+      const g = el("button", t.status === "paused" ? "Reprendre" : "Pause", "petit");
+      g.onclick = async () => { await fetch(API + "/planificateur/" + t.id + "/" + (t.status === "paused" ? "reprendre" : "pause"), { method: "POST" }); taches(); };
+      const x = el("button", "Supprimer", "petit");
+      x.onclick = async () => { await fetch(API + "/planificateur/" + t.id, { method: "DELETE" }); taches(); };
+      c.appendChild(g); c.appendChild(x);
+    }
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-plan").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch(API + "/planificateur", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: document.getElementById("pl-q").value.trim(), type: "interval",
+                           valeur: document.getElementById("pl-freq").value }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.getElementById("pl-q").value = "";
+  taches();
+};
 </script>
 </body>
 </html>

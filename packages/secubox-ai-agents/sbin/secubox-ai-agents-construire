@@ -65,6 +65,9 @@ install -d "$neuf/agents-src"
 cp -r "$paquet/agents" "$neuf/agents-src/"
 find "$neuf" -name __pycache__ -type d -prune -exec rm -rf {} +
 "$neuf/bin/python" -I -m compileall -q "$neuf/agents-src" "$site" >/dev/null
+# Pont SearXNG (#3990) : bibliothèque standard, lancé par /usr/bin/python3 -I ; hors du venv.
+install -D -m 0755 "$paquet/sbin/secubox-ai-pont-searxng" "$prefixe/pont/secubox-ai-pont-searxng"
+chown -R root:root "$prefixe/pont"
 chown -R root:root "$neuf"
 chmod -R go-w "$neuf"
 

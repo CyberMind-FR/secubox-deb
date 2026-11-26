@@ -4,6 +4,7 @@
 # dossier le StateDirectory (lien de compatibilité) et le service pourrait réécrire son propre jeton.
 # Sur une box (tranche E), une unité système avec compte dédié secubox-ai-agents et AppArmor la remplacera.
 [Unit]
+Wants=secubox-ai-pont-searxng.service
 Description=SecuBox AI agents (OpenJarvis en bibliothèque) — gk0
 # Pas de After=poc-llama.service : poc-llama est une unité TRANSITOIRE (systemd-run du relais) ; une référence
 # la garde chargée après son arrêt et le relais ne peut plus la recréer (incident du 2026-11-26).
@@ -13,6 +14,8 @@ Type=exec
 Environment=SECUBOX_AI_AGENTS_GARDE=jeton-local
 Environment=SECUBOX_AI_AGENTS_JETON=%h/.config/secubox-ai-jeton/jeton
 Environment=SECUBOX_AI_AGENTS_MOTEUR=%h/poc-secubox-ai/run/llama.sock
+# Recherche web : SEULEMENT par le pont SearXNG (socket Unix) ; le service lui-même n'a toujours aucun réseau.
+Environment=SECUBOX_AI_AGENTS_PONT=%t/secubox-ai-pont/searxng.sock
 Environment=SECUBOX_AI_AGENTS_ETAT=%S/secubox-ai-agents
 # Télémétrie : désactivée par défaut dans OpenJarvis ; on le redit, et le réseau est fermé de toute façon.
 Environment=OPENJARVIS_HOME=%S/secubox-ai-agents/openjarvis
