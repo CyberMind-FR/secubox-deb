@@ -1,0 +1,27 @@
+# Outils d'OpenJarvis SUPPRIMÉS du venv livré (#3986) : shell, code, fichiers de l'hôte, navigateur, Docker,
+# réseau direct, canaux, données de l'utilisateur. openjarvis/tools/__init__.py tolère leur absence (ImportError).
+shell_exec
+docker_shell_exec
+code_interpreter
+code_interpreter_docker
+repl
+db_query
+file_read
+file_write
+apply_patch
+git_tool
+pdf_tool
+browser
+browser_axtree
+http_request
+web_search
+weather
+fx_macro
+image_tool
+audio_tool
+text_to_speech
+channel_tools
+proactive_tools
+apple_calendar
+user_profile_manage
+skill_manage

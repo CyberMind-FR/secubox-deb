@@ -1,0 +1,59 @@
+# secubox-ai-agents sur gk0 (#3986, tranche A) : unité UTILISATEUR (comme les services poc-* du POC), jamais root.
+# Installation : ~/.config/systemd/user/secubox-ai-agents.service ; `systemctl --user enable --now secubox-ai-agents`.
+# Jeton : ~/.config/secubox-ai-jeton/jeton (0600). JAMAIS ~/.config/secubox-ai-agents : systemd ferait de ce
+# dossier le StateDirectory (lien de compatibilité) et le service pourrait réécrire son propre jeton.
+# Sur une box (tranche E), une unité système avec compte dédié secubox-ai-agents et AppArmor la remplacera.
+[Unit]
+Description=SecuBox AI agents (OpenJarvis en bibliothèque) — gk0
+After=poc-llama.service
+
+[Service]
+Type=exec
+Environment=SECUBOX_AI_AGENTS_GARDE=jeton-local
+Environment=SECUBOX_AI_AGENTS_JETON=%h/.config/secubox-ai-jeton/jeton
+Environment=SECUBOX_AI_AGENTS_MOTEUR=%h/poc-secubox-ai/run/llama.sock
+Environment=SECUBOX_AI_AGENTS_ETAT=%S/secubox-ai-agents
+# Télémétrie : désactivée par défaut dans OpenJarvis ; on le redit, et le réseau est fermé de toute façon.
+Environment=OPENJARVIS_HOME=%S/secubox-ai-agents/openjarvis
+Environment=OPENJARVIS_NO_UPDATE_CHECK=1
+Environment=OPENJARVIS_ANALYTICS_HOST=http://127.0.0.1:9
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HOME=%S/secubox-ai-agents
+StateDirectory=secubox-ai-agents
+StateDirectoryMode=0700
+RuntimeDirectory=secubox-ai-agents
+RuntimeDirectoryMode=0700
+ExecStart=/opt/secubox-ai-agents/venv/bin/python -I -m uvicorn --app-dir /opt/secubox-ai-agents/venv/agents-src agents.app:app --uds %t/secubox-ai-agents/agents.sock --workers 1 --log-level warning --no-server-header
+Restart=on-failure
+RestartSec=5
+MemoryMax=1G
+TasksMax=64
+UMask=0077
+# Socle de durcissement (RULES-CODE § 10), dans ce qu'une unité utilisateur permet.
+NoNewPrivileges=yes
+PrivateUsers=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%S/secubox-ai-agents %t/secubox-ai-agents
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @debug @cpu-emulation @obsolete
+# AUCUN réseau : le moteur est un socket Unix, l'API aussi. Ni recherche web ni télémétrie possibles ici.
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=default.target

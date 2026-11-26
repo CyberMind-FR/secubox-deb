@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+httpx
+pydantic
+click
+opentelemetry-api
