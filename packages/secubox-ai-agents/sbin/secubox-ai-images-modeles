@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# Télécharge les modèles de création d'images de secubox-ai-agents (#3995), EMPREINTE SHA-256 vérifiée.
+#
+# Usage : secubox-ai-images-modeles <sd15|sdxl-turbo> [dossier=~/poc-secubox-ai/sd-models]
+#
+# Empreintes et tailles relevées sur l'API Hugging Face le 2026-11-26 (champ lfs.sha256), figées ici : un fichier
+# différent est refusé. Licences :
+#   sd15       stable-diffusion-v1-5/stable-diffusion-v1-5   CreativeML OpenRAIL-M (usage encadré, commercial permis)
+#   sdxl-turbo stabilityai/sdxl-turbo                         Stability AI Non-Commercial Community (PAS d'usage commercial)
+# Idempotent : un fichier déjà présent et juste n'est pas retéléchargé. Place disque : 5 Gio gardés libres.
+set -euo pipefail
+
+declare -A DEPOT=([sd15]="stable-diffusion-v1-5/stable-diffusion-v1-5" [sdxl-turbo]="stabilityai/sdxl-turbo")
+declare -A FICHIER=([sd15]="v1-5-pruned-emaonly.safetensors" [sdxl-turbo]="sd_xl_turbo_1.0_fp16.safetensors")
+declare -A SHA=([sd15]="6ce0161689b3853acaa03779ec93eafe75a02f4ced659bee03f50797806fa2fa"
+                [sdxl-turbo]="e869ac7d6942cb327d68d5ed83a40447aadf20e0c3358d98b2cc9e270db0da26")
+declare -A TAILLE=([sd15]=4265146304 [sdxl-turbo]=6938081905)
+declare -A LICENCE=([sd15]="creativeml-openrail-m" [sdxl-turbo]="sai-nc-community (non commercial)")
+
+modele="${1:?sd15 ou sdxl-turbo}"
+[[ -n "${DEPOT[$modele]:-}" ]] || { echo "modèle inconnu : $modele" >&2; exit 2; }
+dossier="${2:-$HOME/poc-secubox-ai/sd-models}"
+install -d -m 0750 "$dossier"
+final="$dossier/${FICHIER[$modele]}"
+part="$final.part"
+
+if [[ -f "$final" ]] && [[ "$(sha256sum "$final" | cut -d' ' -f1)" == "${SHA[$modele]}" ]]; then
+  echo "déjà présent et vérifié : $final"; exit 0
+fi
+libre=$(df --output=avail -B1 "$dossier" | tail -1)
+if (( libre - ${TAILLE[$modele]} < 5 * 1024 ** 3 )); then
+  echo "place insuffisante : 5 Gio doivent rester libres" >&2; exit 3
+fi
+curl --fail --location --proto '=https' --tlsv1.2 --max-filesize "${TAILLE[$modele]}" -o "$part" \
+  "https://huggingface.co/${DEPOT[$modele]}/resolve/main/${FICHIER[$modele]}"
+recu=$(sha256sum "$part" | cut -d' ' -f1)
+if [[ "$recu" != "${SHA[$modele]}" ]]; then
+  rm -f "$part"; echo "empreinte SHA-256 différente : refusé" >&2; exit 4
+fi
+mv -f "$part" "$final"
+printf '{"depot": "%s", "fichier": "%s", "sha256": "%s", "licence": "%s", "ajoute": "%s"}\n' \
+  "${DEPOT[$modele]}" "${FICHIER[$modele]}" "${SHA[$modele]}" "${LICENCE[$modele]}" "$(date -I)" > "$final.json"
+echo "vérifié : $final (${LICENCE[$modele]})"

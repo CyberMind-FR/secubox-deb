@@ -1,0 +1,45 @@
+# Second moteur d'ÉVALUATION de secubox-ai-agents sur gk0 (#3992, tranche B) : unité UTILISATEUR, jamais root.
+# Installation : ~/.config/systemd/user/secubox-ai-eval-moteur.service. Démarrée et arrêtée À LA DEMANDE par le
+# relais du POC (page /jarvis, onglet Évaluation), jamais au démarrage de la session (pas de [Install]).
+#
+# AUCUNE relation avec poc-llama (ni After=, ni Wants=, ni BindsTo=) : poc-llama est une unité TRANSITOIRE du
+# relais ; toute référence la garde chargée et empêche le relais de la recréer (incident du 2026-11-26).
+# Sur le CPU seulement (-ngl 0, --device none) : la carte graphique reste au moteur du POC.
+# Bornée : une heure au plus (RuntimeMaxSec), mémoire plafonnée, priorité basse.
+[Unit]
+Description=SecuBox AI agents — second moteur d'évaluation (gk0, CPU, à la demande)
+
+[Service]
+Type=exec
+EnvironmentFile=%h/.config/secubox-ai-eval/modele.env
+Environment=LD_LIBRARY_PATH=%h/poc-secubox-ai/build-vk/bin
+RuntimeDirectory=secubox-ai-eval
+RuntimeDirectoryMode=0700
+ExecStart=%h/poc-secubox-ai/build-vk/bin/llama-server -m ${MODELE} -c 4096 -np 1 -t 8 -ngl 0 --device none --jinja --no-webui --host %t/secubox-ai-eval/moteur.sock
+RuntimeMaxSec=3600
+TimeoutStopSec=10
+Restart=no
+Nice=15
+MemoryMax=9G
+TasksMax=64
+UMask=0077
+NoNewPrivileges=yes
+PrivateUsers=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%t/secubox-ai-eval
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=

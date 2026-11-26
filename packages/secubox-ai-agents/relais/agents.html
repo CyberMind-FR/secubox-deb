@@ -29,6 +29,19 @@
              border-radius:6px; padding:8px; font:inherit; }
   .bouton { background:var(--accent); color:#06201d; border:0; border-radius:6px; padding:0 16px; font-weight:600; }
   label { color:var(--doux); font-size:13px; }
+  .onglets { display:flex; gap:4px; padding:8px 12px; border-bottom:1px solid var(--bord); flex-wrap:wrap; }
+  .onglets button { background:none; color:var(--doux); border:1px solid var(--bord); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .onglets button.actif { color:var(--texte); border-color:var(--accent); }
+  .panneau { display:none; flex:1; flex-direction:column; overflow:auto; padding:12px; min-height:0; }
+  #p-conv { padding:0; }
+  .ligne { display:flex; gap:8px; padding:0; border:0; flex-wrap:wrap; align-items:center; }
+  .ligne input, .ligne select { flex:1; min-width:160px; background:var(--carte); color:var(--texte);
+                                border:1px solid var(--bord); border-radius:6px; padding:8px; font:inherit; }
+  .ligne .bouton { padding:8px 14px; }
+  .carte { background:var(--carte); border:1px solid var(--bord); border-radius:8px; padding:10px 12px; margin:8px 0; }
+  .carte pre { white-space:pre-wrap; font:inherit; margin:6px 0; }
+  .carte a { color:var(--accent); word-break:break-all; }
+  .petit { background:none; color:var(--doux); border:1px solid var(--bord); border-radius:6px; padding:2px 8px; cursor:pointer; margin-right:4px; }
   @media (max-width: 700px) { main { grid-template-columns:1fr; } aside { display:none; } }
 </style>
 </head>
@@ -40,14 +53,84 @@
     <div id="liste"></div>
   </aside>
   <section>
-    <div id="fil"></div>
-    <form id="formulaire">
-      <textarea id="question" placeholder="Votre question" required></textarea>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <button class="bouton" style="flex:1">Envoyer</button>
-        <label><input type="checkbox" id="memoire" checked> mémoire</label>
+    <nav class="onglets">
+      <button data-p="p-conv" class="actif">Conversation</button>
+      <button data-p="p-rech">Recherche</button>
+      <button data-p="p-dig">Digest du matin</button>
+      <button data-p="p-plan">Planificateur</button>
+      <button data-p="p-eval">Évaluation</button>
+      <button data-p="p-creer">Créer</button>
+    </nav>
+    <div id="p-conv" class="panneau" style="display:flex">
+      <div id="fil"></div>
+      <form id="formulaire">
+        <textarea id="question" placeholder="Votre question" required></textarea>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="bouton" style="flex:1">Envoyer</button>
+          <label><input type="checkbox" id="memoire" checked> mémoire</label>
+          <label title="Image gardée sur ce poste, lue par le modèle actif">📷 <input type="file" id="image" accept="image/png,image/jpeg,image/webp" style="width:110px"></label>
+          <select id="i-action"><option value="decrire">décrire</option><option value="lire">lire le texte</option><option value="question">question sur l'image</option></select>
+        </div>
+      </form>
+    </div>
+    <div id="p-rech" class="panneau">
+      <form id="f-rech" class="ligne">
+        <input id="q-rech" placeholder="Question de recherche (web local + mémoire, sources citées)" minlength="3" required>
+        <button class="bouton">Chercher</button>
+      </form>
+      <p class="meta">Un travail à la fois, 10 minutes au plus. Le résultat vérifié est gardé en mémoire (agent « recherche »).</p>
+      <div id="travaux"></div>
+    </div>
+    <div id="p-dig" class="panneau">
+      <form id="f-dig" class="ligne">
+        <label><input type="checkbox" id="d-actif"> chaque jour à</label>
+        <input id="d-heure" type="time" required style="flex:0 0 120px">
+        <input id="d-themes" placeholder="thèmes, séparés par des virgules (6 au plus)" required>
+        <button class="bouton">Enregistrer</button>
+        <button type="button" id="d-maintenant" class="bouton">Maintenant</button>
+      </form>
+      <p class="meta">Lecture seule : actualités du jour des thèmes, par la SearXNG locale ; aucune action.</p>
+      <div id="digests"></div>
+    </div>
+    <div id="p-eval" class="panneau">
+      <form id="f-eval" class="ligne">
+        <select id="e-moteur"><option value="actif">moteur actif</option><option value="second">second moteur</option></select>
+        <button class="bouton">Lancer la batterie</button>
+      </form>
+      <div class="carte" id="e-second">
+        <div>Second moteur (CPU, une heure au plus) : <span id="e-etat">…</span></div>
+        <div class="ligne" style="margin-top:6px">
+          <select id="e-modele"></select>
+          <button type="button" id="e-demarrer" class="petit">Démarrer</button>
+          <button type="button" id="e-arreter" class="petit">Arrêter</button>
+        </div>
       </div>
-    </form>
+      <p class="meta">Jeu SecuBox de 12 questions, notation par mots attendus (sans juge), EvalRunner d'OpenJarvis.
+        Chaque échantillon et chaque retour 👍/👎 alimentent le routage appris, affiché en recommandation.</p>
+      <div id="e-routage" class="meta"></div>
+      <div id="e-histo"></div>
+    </div>
+    <div id="p-creer" class="panneau">
+      <form id="f-creer" class="ligne">
+        <input id="c-prompt" placeholder="Décrivez l'image à créer" minlength="3" maxlength="500" required>
+        <select id="c-modele"><option value="sd15|512">SD 1.5 — 512</option><option value="sdxl-turbo|512">SDXL Turbo — 512</option>
+          <option value="sdxl-turbo|1024">SDXL Turbo — 1024</option></select>
+        <button class="bouton">Créer</button>
+      </form>
+      <input id="c-negatif" placeholder="À éviter (facultatif)" maxlength="300" style="margin-top:6px;background:var(--carte);color:var(--texte);border:1px solid var(--bord);border-radius:6px;padding:8px">
+      <p class="meta">Une image à la fois, sur ce poste, sans réseau. Filtre de contenu actif ; demandes journalisées sans leur texte.</p>
+      <div id="c-liste"></div>
+    </div>
+    <div id="p-plan" class="panneau">
+      <form id="f-plan" class="ligne">
+        <input id="pl-q" placeholder="Recherche à refaire" minlength="3" required>
+        <select id="pl-freq"><option value="86400">chaque jour</option><option value="3600">chaque heure</option>
+          <option value="604800">chaque semaine</option></select>
+        <button class="bouton">Planifier</button>
+      </form>
+      <p class="meta">10 tâches actives au plus, une heure au moins entre deux passages.</p>
+      <div id="taches"></div>
+    </div>
   </section>
 </main>
 <script>
@@ -105,6 +188,8 @@ document.getElementById("formulaire").onsubmit = async (e) => {
   const sortie = bulle("assistant", "");
   const meta = document.createElement("div");
   meta.className = "meta";
+  const fichierImage = document.getElementById("image").files[0];
+  if (fichierImage) { await envoyerImage(fichierImage, texte, sortie, meta); return; }
   const corps = { message: texte, memoire: document.getElementById("memoire").checked };
   if (conv) corps.conversation = conv;
   const r = await fetch(API + "/chat", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -125,16 +210,307 @@ document.getElementById("formulaire").onsubmit = async (e) => {
       if (ev.conversation) conv = ev.conversation;
       if (ev.morceau) { sortie.textContent += ev.morceau; fil.scrollTop = fil.scrollHeight; }
       if (ev.erreur) sortie.textContent += "\n[" + ev.erreur + "]";
+      if (ev.corrections) meta.dataset.corr = ev.corrections;
       if (ev.fin) {
-        meta.textContent = "premier mot " + ev.premier_s + " s · " + ev.duree_s + " s · " + ev.morceaux + " morceaux";
+        meta.textContent = "premier mot " + ev.premier_s + " s · " + ev.duree_s + " s · " + ev.morceaux + " morceaux" +
+                           (meta.dataset.corr ? " · " + meta.dataset.corr + " correction(s) reprise(s)" : "");
         sortie.appendChild(meta);
+        if (ev.trace) sortie.appendChild(boutonsRetour(ev.trace));
       }
     }
   }
   liste();
 };
 
+function boutonsRetour(trace) {
+  const d = document.createElement("div");
+  d.className = "meta";
+  const envoyer = async (note, correction) => {
+    const r = await fetch(API + "/retour", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: JSON.stringify({ trace, note, correction: correction || "" }) });
+    d.textContent = r.ok ? (note === "plus" ? "Merci : réponse notée 👍" :
+                            "Noté 👎" + (correction ? " ; la correction sera reprise dans les réponses suivantes" : ""))
+                         : "Retour refusé (" + r.status + ")";
+  };
+  const plus = document.createElement("button"); plus.className = "petit"; plus.textContent = "👍";
+  const moins = document.createElement("button"); moins.className = "petit"; moins.textContent = "👎";
+  plus.onclick = () => envoyer("plus");
+  moins.onclick = () => envoyer("moins", prompt("Quelle est la bonne réponse ? (facultatif, gardée en mémoire)") || "");
+  d.append(plus, moins);
+  return d;
+}
+
 etat(); liste();
+
+// --- onglets ---------------------------------------------------------------------------------------
+for (const b of document.querySelectorAll(".onglets button")) {
+  b.onclick = () => {
+    for (const x of document.querySelectorAll(".onglets button")) x.classList.toggle("actif", x === b);
+    for (const p of document.querySelectorAll(".panneau")) p.style.display = p.id === b.dataset.p ? "flex" : "none";
+    if (b.dataset.p === "p-rech") travaux();
+    if (b.dataset.p === "p-dig") digest();
+    if (b.dataset.p === "p-plan") taches();
+    if (b.dataset.p === "p-eval") evaluation();
+    if (b.dataset.p === "p-creer") creations();
+  };
+}
+
+function el(tag, texte, classe) {
+  const e = document.createElement(tag);
+  if (texte !== undefined) e.textContent = texte;
+  if (classe) e.className = classe;
+  return e;
+}
+
+function sources(liste) {
+  const d = el("div");
+  (liste || []).forEach((s, i) => {
+    const l = el("div", "[" + (i + 1) + "] ");
+    const a = el("a", s.titre || s.url);
+    a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    l.appendChild(a); d.appendChild(l);
+  });
+  return d;
+}
+
+async function jsonOu(r) { try { return await r.json(); } catch (e) { return {}; } }
+
+// --- recherche -------------------------------------------------------------------------------------
+let suivi = null;
+async function travaux() {
+  const r = await fetch(API + "/travaux");
+  if (!r.ok) return;
+  const zone = document.getElementById("travaux");
+  zone.replaceChildren();
+  let enCours = false;
+  for (const t of (await r.json()).travaux) {
+    const c = el("div", undefined, "carte");
+    const tete = el("div", ({ digest: "Digest — ", evaluation: "", recherche: "Recherche — " }[t.genre] || "") + t.titre);
+    tete.style.fontWeight = "600";
+    c.appendChild(tete);
+    const etat = { en_cours: "en cours…", fini: "fini", echec: "échec", annule: "annulé" }[t.etat] || t.etat;
+    const m = el("div", etat + (t.fin ? " · " + Math.round(t.fin - t.debut) + " s" : "") +
+                 (t.origine === "planificateur" ? " · planifié" : "") + (t.erreur ? " · " + t.erreur : ""), "meta");
+    c.appendChild(m);
+    if (t.etat === "en_cours") {
+      enCours = true;
+      const b = el("button", "Annuler", "petit");
+      b.onclick = async () => { await fetch(API + "/travaux/" + t.id + "/annuler", { method: "POST" }); travaux(); };
+      c.appendChild(b);
+    }
+    if (t.resultat) c.appendChild(el("pre", t.resultat));
+    if (t.sources && t.sources.length) c.appendChild(sources(t.sources));
+    zone.appendChild(c);
+  }
+  clearTimeout(suivi);
+  if (enCours) suivi = setTimeout(travaux, 3000);
+}
+
+document.getElementById("f-rech").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("q-rech");
+  const r = await fetch(API + "/recherche", { method: "POST", headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ question: q.value.trim() }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  q.value = "";
+  travaux();
+};
+
+// --- digest ----------------------------------------------------------------------------------------
+async function digest() {
+  const r = await fetch(API + "/digest");
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById("d-actif").checked = d.config.actif;
+  document.getElementById("d-heure").value = d.config.heure;
+  document.getElementById("d-themes").value = d.config.themes.join(", ");
+  const zone = document.getElementById("digests");
+  zone.replaceChildren();
+  for (const x of d.historique) {
+    const c = el("div", undefined, "carte");
+    c.appendChild(el("div", "Point du " + x.quand.replace("T", " à "), "meta"));
+    c.appendChild(el("pre", x.texte));
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-dig").onsubmit = async (e) => {
+  e.preventDefault();
+  const themes = document.getElementById("d-themes").value.split(",").map((s) => s.trim()).filter(Boolean);
+  const r = await fetch(API + "/digest", { method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actif: document.getElementById("d-actif").checked,
+                           heure: document.getElementById("d-heure").value, themes }) });
+  if (!r.ok) alert((await jsonOu(r)).detail || ("Erreur " + r.status));
+  digest();
+};
+
+document.getElementById("d-maintenant").onclick = async () => {
+  const r = await fetch(API + "/digest/maintenant", { method: "POST" });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.querySelector('.onglets button[data-p="p-rech"]').click();
+};
+
+// --- planificateur ---------------------------------------------------------------------------------
+async function taches() {
+  const r = await fetch(API + "/planificateur");
+  if (!r.ok) return;
+  const zone = document.getElementById("taches");
+  zone.replaceChildren();
+  for (const t of (await r.json()).taches) {
+    const c = el("div", undefined, "carte");
+    const genre = (t.metadata || {}).genre === "digest" ? "Digest du matin" : "Recherche : " + t.prompt;
+    c.appendChild(el("div", genre));
+    const freq = t.schedule_type === "interval" ? "toutes les " + Math.round(t.schedule_value / 3600) + " h"
+               : t.schedule_type === "cron" ? "chaque jour (" + t.schedule_value + ", heure de Paris)" : "une fois";
+    c.appendChild(el("div", t.status + " · " + freq + (t.next_run ? " · prochain : " + new Date(t.next_run).toLocaleString("fr-FR") : ""), "meta"));
+    for (const p of t.passages || []) {
+      c.appendChild(el("div", (p.success ? "✓ " : "✗ ") + (p.started_at || "").slice(0, 16).replace("T", " ") +
+                                (p.error ? " · " + p.error : ""), "meta"));
+    }
+    if ((t.metadata || {}).genre !== "digest") {
+      const g = el("button", t.status === "paused" ? "Reprendre" : "Pause", "petit");
+      g.onclick = async () => { await fetch(API + "/planificateur/" + t.id + "/" + (t.status === "paused" ? "reprendre" : "pause"), { method: "POST" }); taches(); };
+      const x = el("button", "Supprimer", "petit");
+      x.onclick = async () => { await fetch(API + "/planificateur/" + t.id, { method: "DELETE" }); taches(); };
+      c.appendChild(g); c.appendChild(x);
+    }
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-plan").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch(API + "/planificateur", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: document.getElementById("pl-q").value.trim(), type: "interval",
+                           valeur: document.getElementById("pl-freq").value }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.getElementById("pl-q").value = "";
+  taches();
+};
+
+// --- évaluation ------------------------------------------------------------------------------------
+const API2 = "/api/v1/ai/jarvis-moteur2";
+async function evaluation() {
+  const [r, s] = await Promise.all([fetch(API + "/evaluation"), fetch(API2 + "/etat")]);
+  if (s.ok) {
+    const e = await s.json();
+    document.getElementById("e-etat").textContent = e.pret ? "prêt (" + e.modele + ")" : e.actif ? "démarrage…" : "arrêté";
+    const sel = document.getElementById("e-modele");
+    sel.replaceChildren();
+    for (const m of e.modeles) {
+      const o = document.createElement("option");
+      o.value = m.nom;
+      o.textContent = m.nom + " — " + m.taille_mo + " Mo" + (m.tient ? "" : " (mémoire insuffisante : " + m.ram_disponible_mo + " Mo libres)");
+      o.disabled = !m.tient;
+      sel.appendChild(o);
+    }
+    if (!e.modeles.length) sel.appendChild(el("option", "aucun autre modèle installé"));
+  }
+  if (!r.ok) return;
+  const d = await r.json();
+  const carte = Object.entries(d.routage.carte || {});
+  document.getElementById("e-routage").textContent = "Routage appris (recommandation, non appliqué) : " +
+    (carte.length ? carte.map(([c, m]) => c + " → " + m).join(" ; ") : "pas encore assez d'échantillons (" + d.routage.echantillons_min + " par classe)");
+  const zone = document.getElementById("e-histo");
+  zone.replaceChildren();
+  for (const x of d.historique) {
+    const c = el("div", undefined, "carte");
+    c.appendChild(el("div", x.modele + " (" + x.moteur + ") — " + x.justes + "/" + x.n + " justes (" + Math.round(x.exactitude * 100) + " %)"));
+    c.appendChild(el("div", new Date(x.quand * 1000).toLocaleString("fr-FR") + " · latence moyenne " + x.latence_s +
+                            " s · premier mot " + x.premier_s + " s · " + x.debit_js + " j/s", "meta"));
+    const faux = x.details.filter((y) => !y.juste).map((y) => y.id + " : « " + y.reponse.slice(0, 60) + " »");
+    if (faux.length) c.appendChild(el("div", "Faux : " + faux.join(" ; "), "meta"));
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-eval").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch(API + "/evaluation", { method: "POST", headers: { "Content-Type": "application/json" },
+                                               body: JSON.stringify({ moteur: document.getElementById("e-moteur").value }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.querySelector('.onglets button[data-p="p-rech"]').click();
+};
+document.getElementById("e-demarrer").onclick = async () => {
+  const r = await fetch(API2 + "/demarrer", { method: "POST", headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ modele: document.getElementById("e-modele").value }) });
+  if (!r.ok) alert((await jsonOu(r)).detail || ("Erreur " + r.status));
+  setTimeout(evaluation, 3000);
+};
+document.getElementById("e-arreter").onclick = async () => { await fetch(API2 + "/arreter", { method: "POST" }); evaluation(); };
+
+// --- comprendre une image --------------------------------------------------------------------------
+async function lireFlux(r, sortie, meta) {
+  const lecteur = r.body.getReader(); const dec = new TextDecoder(); let reste = "";
+  for (;;) {
+    const { value, done } = await lecteur.read();
+    if (done) break;
+    reste += dec.decode(value, { stream: true });
+    const blocs = reste.split("\n\n"); reste = blocs.pop();
+    for (const b of blocs) {
+      if (!b.startsWith("data: ")) continue;
+      const ev = JSON.parse(b.slice(6));
+      if (ev.morceau) sortie.textContent += ev.morceau;
+      if (ev.erreur) sortie.textContent += "\n[" + ev.erreur + "]";
+      if (ev.fin) { meta.textContent = "image · premier mot " + ev.premier_s + " s · " + ev.duree_s + " s"; sortie.appendChild(meta); }
+    }
+  }
+}
+
+async function envoyerImage(fichier, texte, sortie, meta) {
+  const b64 = await new Promise((ok, ko) => { const l = new FileReader();
+    l.onload = () => ok(String(l.result).split(",")[1]); l.onerror = ko; l.readAsDataURL(fichier); });
+  const vignette = document.createElement("img");
+  vignette.src = URL.createObjectURL(fichier); vignette.style.maxWidth = "220px"; vignette.style.display = "block";
+  sortie.before(vignette);
+  const action = document.getElementById("i-action").value;
+  const r = await fetch(API + "/image", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: b64, action, question: action === "question" ? texte : "" }) });
+  document.getElementById("image").value = "";
+  if (!r.ok) { sortie.textContent = (await jsonOu(r)).detail || ("Erreur " + r.status); return; }
+  await lireFlux(r, sortie, meta);
+}
+
+// --- créer des images ------------------------------------------------------------------------------
+let suiviCreer = null;
+async function creations() {
+  const r = await fetch(API + "/creations");
+  if (!r.ok) return;
+  const zone = document.getElementById("c-liste"); zone.replaceChildren();
+  let attente = false;
+  for (const c of (await r.json()).creations) {
+    const carte = el("div", undefined, "carte");
+    carte.appendChild(el("div", c.prompt));
+    const etat = { en_attente: "en attente", en_cours: "en cours…", fait: "faite", echec: "échec" }[c.etat] || c.etat;
+    carte.appendChild(el("div", c.modele + " · " + c.largeur + " px · " + etat +
+      (c.duree_s ? " · " + c.duree_s + " s sur " + c.peripherique + (c.vram_sd_mio ? " (+" + c.vram_sd_mio + " Mio carte)" : "") : "") +
+      (c.erreur ? " · " + c.erreur.join(" ") : ""), "meta"));
+    if (c.etat === "fait") {
+      const img = document.createElement("img");
+      img.src = API + "/creations/" + c.id + ".png"; img.style.maxWidth = "100%"; img.style.maxHeight = "512px";
+      carte.appendChild(img);
+    }
+    if (c.etat === "en_attente") {
+      const b = el("button", "Annuler", "petit");
+      b.onclick = async () => { await fetch(API + "/creations/" + c.id, { method: "DELETE" }); creations(); };
+      carte.appendChild(b);
+    }
+    if (c.etat === "en_attente" || c.etat === "en_cours") attente = true;
+    zone.appendChild(carte);
+  }
+  clearTimeout(suiviCreer);
+  if (attente) suiviCreer = setTimeout(creations, 4000);
+}
+
+document.getElementById("f-creer").onsubmit = async (e) => {
+  e.preventDefault();
+  const [modele, taille] = document.getElementById("c-modele").value.split("|");
+  const r = await fetch(API + "/creations", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: document.getElementById("c-prompt").value.trim(), modele, taille: Number(taille),
+                           negatif: document.getElementById("c-negatif").value.trim() }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  creations();
+};
 </script>
 </body>
 </html>

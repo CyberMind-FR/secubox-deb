@@ -4,3 +4,4 @@ httpx
 pydantic
 click
 opentelemetry-api
+croniter

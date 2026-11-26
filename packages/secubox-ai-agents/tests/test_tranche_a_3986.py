@@ -42,11 +42,12 @@ def test_sans_jeton_ou_mauvais_jeton_401(client):
 
 def test_aucun_outil_et_politique_en_refus(client):
     import agents.app as m
-    assert m.OUTILS == ()
+    # Tranche C : trois outils de LECTURE, et eux seuls (#3990).
+    assert m.OUTILS == ("web_search", "memory_search", "digest_collect")
     for cap in ("code:execute", "file:write", "file:read", "network:fetch", "system:admin", "tool:invoke"):
         assert m.POLITIQUE.check("assistant", cap) is False
     s = client.get("/status").json()
-    assert s["outils"] == [] and s["politique"] == "refus par défaut"
+    assert s["outils"] == list(m.OUTILS) and s["politique"] == "refus par défaut"
     if not sys.prefix.startswith("/opt/secubox-ai-agents"):
         pytest.skip("modules d'outils interdits : vérifiés dans le venv livré seulement (ils y sont supprimés)")
     charges = [k for k in sys.modules if k.startswith("openjarvis.tools.") and k.split(".")[-1] in OUTILS_INTERDITS]
@@ -61,7 +62,7 @@ def test_minage_jamais_importe_et_absent_du_venv_dedie():
     Dans le venv livré (/opt), `openjarvis.mining` n'existe plus du tout."""
     code = ("import sys; sys.path.insert(0, sys.argv[1]); import os;"
             "os.environ.update(SECUBOX_AI_AGENTS_GARDE='jeton-local');"
-            "import agents.moteur, agents.stockage, agents.garde;"
+            "import agents.moteur, agents.stockage, agents.garde, agents.outils, agents.travaux;"
             "import openjarvis.security.capabilities;"
             "bad=[k for k in sys.modules if 'mining' in k or 'pearl' in k.lower() or k.startswith('openjarvis.server')"
             " or k.startswith('openjarvis.cli') or k in ('posthog','telegram','datasets')]; print(bad)")
