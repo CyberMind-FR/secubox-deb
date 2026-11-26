@@ -113,8 +113,8 @@
     <div id="p-creer" class="panneau">
       <form id="f-creer" class="ligne">
         <input id="c-prompt" placeholder="Décrivez l'image à créer" minlength="3" maxlength="500" required>
-        <select id="c-modele"><option value="sd15|512">SD 1.5 — 512</option><option value="sdxl-turbo|512">SDXL Turbo — 512</option>
-          <option value="sdxl-turbo|1024">SDXL Turbo — 1024</option></select>
+        <select id="c-modele"><option value="sd-turbo|512">SD-Turbo — 512 (le plus rapide)</option><option value="sd15|512">SD 1.5 — 512</option><option value="sdxl-turbo|512">SDXL Turbo — 512</option>
+          <option value="sdxl-turbo|1024">SDXL Turbo — 1024</option><option value="z-image-turbo|512">Z-Image Turbo — 512 (le plus fidèle, lent)</option><option value="z-image-turbo|1024">Z-Image Turbo — 1024 (très lent)</option></select>
         <button class="bouton">Créer</button>
       </form>
       <input id="c-negatif" placeholder="À éviter (facultatif)" maxlength="300" style="margin-top:6px;background:var(--carte);color:var(--texte);border:1px solid var(--bord);border-radius:6px;padding:8px">

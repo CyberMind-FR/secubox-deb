@@ -29,10 +29,18 @@ from pathlib import Path
 
 RACINE = Path(os.environ.get("SECUBOX_AI_IMAGES_RACINE", Path.home() / ".local/state/secubox-ai-images"))
 SD = Path(os.environ.get("SECUBOX_AI_IMAGES_SD", Path.home() / "poc-secubox-ai/sdcpp/build/bin/sd-cli"))
-MODELES_DIR = Path(os.environ.get("SECUBOX_AI_IMAGES_MODELES", Path.home() / "poc-secubox-ai/sd-models"))
-FICHIERS = {"sd15": "v1-5-pruned-emaonly.safetensors", "sdxl-turbo": "sd_xl_turbo_1.0_fp16.safetensors"}
-# Mémoire graphique demandée (Mio) avec les options ci-dessous (q8_0, CLIP et VAE hors de la carte) ; mesurée.
-BESOIN_MIO = {"sd15": 1100, "sdxl-turbo": 3200}
+# Modèles quantifiés déjà posés par l'exploitant pour le relais (catalogue fermé, jamais un chemin reçu).
+MODELES_DIR = Path(os.environ.get("SECUBOX_AI_IMAGES_MODELES", Path.home() / "AI/models/sd"))
+FICHIERS = {
+    "sd-turbo": [("-m", "checkpoints/sd_turbo-f16-q8_0.gguf")],
+    "sd15": [("-m", "checkpoints/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf")],
+    "sdxl-turbo": [("-m", "checkpoints/stable-diffusion-xl-1.0-turbo-Q4_0.gguf"),
+                   ("--vae", "vae/sdxl_vae_fp16_fix.safetensors")],
+    "z-image-turbo": [("--diffusion-model", "diffusion_models/z_image_turbo-Q4_0.gguf"),
+                      ("--llm", "text_encoders/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"), ("--vae", "vae/ae.safetensors")],
+}
+# Mémoire graphique demandée (Mio) ; sous ce seuil libre, l'image est faite sur le CPU (plus lent, jamais d'échec).
+BESOIN_MIO = {"sd-turbo": 1100, "sd15": 1100, "sdxl-turbo": 3200, "z-image-turbo": 3500}
 DELAI_S = 900
 VULKAN_NVIDIA = os.environ.get("SECUBOX_AI_IMAGES_VULKAN", "1")   # même carte que llama-server (Vulkan1)
 
@@ -59,10 +67,12 @@ def journal(**champs) -> None:
 
 
 def commande(d: dict, sortie: Path, sur_carte: bool) -> tuple[list[str], dict]:
-    modele = MODELES_DIR / FICHIERS[d["modele"]]
-    cmd = [str(SD), "-m", str(modele), "-p", d["prompt"], "-W", str(int(d["largeur"])), "-H", str(int(d["hauteur"])),
+    cmd = [str(SD)]
+    for option, fichier in FICHIERS[d["modele"]]:
+        cmd += [option, str(MODELES_DIR / fichier)]
+    cmd += ["-p", d["prompt"], "-W", str(int(d["largeur"])), "-H", str(int(d["hauteur"])),
            "--steps", str(int(d["etapes"])), "--cfg-scale", str(float(d["cfg"])), "-s", str(int(d["graine"])),
-           "--sampling-method", "euler_a", "-o", str(sortie), "--type", "q8_0", "--vae-tiling"]
+           "--sampling-method", "euler_a", "-o", str(sortie), "--vae-tiling"]
     if d.get("negatif"):
         cmd += ["-n", d["negatif"]]
     env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "LANG": "C.UTF-8"}

@@ -30,6 +30,8 @@ from pathlib import Path
 MODELES = {
     "sd15": {"tailles": (512,), "etapes": 20, "cfg": 7.0},
     "sdxl-turbo": {"tailles": (512, 1024), "etapes": 4, "cfg": 1.0},
+    "sd-turbo": {"tailles": (512,), "etapes": 1, "cfg": 1.0},
+    "z-image-turbo": {"tailles": (512, 1024), "etapes": 8, "cfg": 1.0},
 }
 FILE_MAX = 20
 INTERDITS = (
