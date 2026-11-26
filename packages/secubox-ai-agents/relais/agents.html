@@ -67,6 +67,8 @@
         <textarea id="question" placeholder="Votre question" required></textarea>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="bouton" style="flex:1">Envoyer</button>
+          <button type="button" class="bouton" id="micro" title="Parler : cliquer pour commencer, recliquer pour envoyer">🎤 Parler</button>
+          <label title="Les réponses sont lues à voix haute (Piper, sur ce poste)"><input type="checkbox" id="haut-parleur"> 🔊 lire les réponses</label>
           <label><input type="checkbox" id="memoire" checked> mémoire</label>
           <label title="Image gardée sur ce poste, lue par le modèle actif">📷 <input type="file" id="image" accept="image/png,image/jpeg,image/webp" style="width:110px"></label>
           <select id="i-action"><option value="decrire">décrire</option><option value="lire">lire le texte</option><option value="question">question sur l'image</option></select>
@@ -136,6 +138,59 @@
 <script>
 const API = "/api/v1/ai/jarvis";
 let conv = null;
+
+// ---- Voix (#3999) : micro → whisper.cpp local ; réponse → Piper local. Rien ne quitte ce poste. ----
+const HP = document.getElementById("haut-parleur");
+try { HP.checked = localStorage.getItem("jarvis-hp") === "1"; } catch (e) {}
+HP.onchange = () => { try { localStorage.setItem("jarvis-hp", HP.checked ? "1" : "0"); } catch (e) {} };
+let lecteurAudio = null;
+async function lireAVoixHaute(texte) {
+  texte = (texte || "").trim();
+  if (!HP.checked || !texte) return;
+  if (lecteurAudio) lecteurAudio.pause();
+  // Piper lit 600 caractères au plus par appel : la réponse est lue morceau par morceau, phrase entière.
+  const morceaux = texte.match(/[\s\S]{1,580}(?:[.!?…](?=\s)|$)|[\s\S]{1,580}/g) || [];
+  for (const m of morceaux) {
+    const r = await fetch("/api/v1/ai/voix", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ texte: m }) });
+    if (!r.ok) return;
+    const d = await r.json();
+    lecteurAudio = new Audio(d.audio);
+    await new Promise(fin => { lecteurAudio.onended = fin; lecteurAudio.onerror = fin; lecteurAudio.play().catch(fin); });
+    if (!HP.checked) return;
+  }
+}
+const MICRO = document.getElementById("micro");
+let enregistreur = null;
+MICRO.onclick = async () => {
+  if (enregistreur && enregistreur.state === "recording") { enregistreur.stop(); return; }
+  if (lecteurAudio) lecteurAudio.pause();
+  let flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { MICRO.textContent = "🎤 micro refusé"; return; }
+  const type = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
+  const bouts = [];
+  enregistreur = new MediaRecorder(flux, { mimeType: type });
+  enregistreur.ondataavailable = e => { if (e.data.size) bouts.push(e.data); };
+  enregistreur.onstop = async () => {
+    flux.getTracks().forEach(t => t.stop());
+    MICRO.textContent = "⏳ transcription…"; MICRO.disabled = true;
+    try {
+      const r = await fetch("/api/v1/ai/jarvis-medias/ecoute", { method: "POST",
+        headers: { "Content-Type": type, "X-SBX-Geste": "1" }, body: new Blob(bouts, { type }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { MICRO.textContent = "🎤 " + (d.detail || "erreur " + r.status); return; }
+      if (d.texte) {
+        document.getElementById("question").value = d.texte;
+        document.getElementById("formulaire").requestSubmit();
+      }
+      MICRO.textContent = "🎤 Parler";
+    } finally { MICRO.disabled = false; }
+  };
+  enregistreur.start();
+  MICRO.textContent = "⏹ Envoyer";
+  setTimeout(() => { if (enregistreur && enregistreur.state === "recording") enregistreur.stop(); }, 110000);
+};
 const fil = document.getElementById("fil");
 
 function bulle(role, texte) {
@@ -216,6 +271,7 @@ document.getElementById("formulaire").onsubmit = async (e) => {
                            (meta.dataset.corr ? " · " + meta.dataset.corr + " correction(s) reprise(s)" : "");
         sortie.appendChild(meta);
         if (ev.trace) sortie.appendChild(boutonsRetour(ev.trace));
+        lireAVoixHaute(sortie.firstChild ? sortie.firstChild.textContent : "");
       }
     }
   }
