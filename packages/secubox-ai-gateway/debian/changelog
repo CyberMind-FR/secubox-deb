@@ -1,3 +1,9 @@
+secubox-ai-gateway (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * POST /v1/chat/completions exige une session d'administrateur (ref #3984).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 26 Nov 2026 09:30:00 +0100
+
 secubox-ai-gateway (1.6.0-1~trixie1) trixie; urgency=medium
 
   * Entrées multimodales : images et vidéos (parties OpenAI image_url,
