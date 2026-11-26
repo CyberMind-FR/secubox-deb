@@ -5,7 +5,8 @@
 # Sur une box (tranche E), une unité système avec compte dédié secubox-ai-agents et AppArmor la remplacera.
 [Unit]
 Description=SecuBox AI agents (OpenJarvis en bibliothèque) — gk0
-After=poc-llama.service
+# Pas de After=poc-llama.service : poc-llama est une unité TRANSITOIRE (systemd-run du relais) ; une référence
+# la garde chargée après son arrêt et le relais ne peut plus la recréer (incident du 2026-11-26).
 
 [Service]
 Type=exec
