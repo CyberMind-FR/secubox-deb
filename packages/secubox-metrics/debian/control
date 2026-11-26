@@ -31,6 +31,8 @@ Recommends: geoipupdate,
  secubox-hub (>= 1.13.0~),
  python3-fpdf2 | python3-fpdf (>= 2),
  python3-matplotlib,
+ python3-pil,
+ fonts-noto-color-emoji,
  python3-weasyprint | wkhtmltopdf,
  glances
 Replaces: secubox-metalogizer,

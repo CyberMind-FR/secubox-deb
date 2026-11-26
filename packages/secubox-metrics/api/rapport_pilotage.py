@@ -212,7 +212,7 @@ def kpis(data: dict) -> list[dict]:
         e = ecart(v, vp, genre)
         k = mesures(s)
         if v is not None:
-            sous = (f"{e[0]} sur la semaine précédente" if e else "pas de comparaison : semaine précédente non mesurée")
+            sous = (f"{e[0]} sur la semaine précédente" if e else "sans comparaison (semaine préc. non mesurée)")
         else:
             sous = f"mesuré {k} {pl(k, 'jour', 'jours')} sur 7" if k else "aucun jour mesuré"
             if cle == "latence" and _v(data, "instant", "latence", "mediane_ms") is not None:
@@ -474,7 +474,8 @@ def donnees_exemple(fin: str = "2026-11-22", graine: int = 7) -> dict:
                    ("MITIGATE", "Chemins leurres", 64, 66, 5300, {"niveau": "DENY", "reste_s": 10 * 3600}, 21, 19),
                    ("OBSERVE", "Robot non déclaré", 41, 55, 3900, {"niveau": "DELAY", "reste_s": 3600}, 12, 0),
                    ("OBSERVE", "Balayage de ports", 30, 40, 1200, None, 7, 0)))]
-    pops = [{"famille": f, "nom_cible": t, "adresses": a, "rotation": r, "etat": e, "serie": [int(a * (0.5 + g.random())) for _ in range(7)]}
+    pops = [{"famille": f, "nom_cible": t, "adresses": a, "rotation": r, "etat": e, "serie": [int(a * (0.5 + g.random())) for _ in range(7)],
+             "pays_top": [["US", 34], ["CN", 21], ["NL", 9]] if f == "balayage_web" else [["RU", 40], ["BR", 22], ["IN", 15]]}
             for f, t, a, r, e in (("balayage_web", "www.exemple.test", 1320, True, "observee"), ("messagerie", "mail.exemple.test", 410, False, "bannie"),
                                   ("acces_distant", "ssh", 95, True, "observee"), ("collecte", "git.exemple.test", 60, False, "inactive"))]
     t = datetime.fromisoformat(fin + "T23:00:00+01:00").timestamp() + 7 * 3600
@@ -484,6 +485,53 @@ def donnees_exemple(fin: str = "2026-11-22", graine: int = 7) -> dict:
                         "acteurs": {"suivis": 27, "a_bloquer": 1, "acteurs": acteurs, "genere_le": t},
                         "populations": {"genere_le": t, "populations": pops},
                         "attente": {"en_attente": 14, "proposees": 31, "plus_ancienne": t - 3 * 86400}}}
+
+
+# ── emojis : petites images (police couleur Noto, rendue par Pillow) ─────
+# La police de base de fpdf ne connaît que latin-1 et la police couleur Noto (CBDT) ne s'insère pas comme texte : chaque emoji est
+# rendu une fois en PNG (taille native 109 de la police) puis posé comme image. Police ou Pillow absents : pas d'icône, rien d'autre.
+EMOJI_POLICE = Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
+_EMOJIS: dict = {}
+ICONES_KPI = {"dispo": "✅", "servies": "🌐", "latence": "⏱️", "bloquees": "🛡️", "bans": "🚫", "dns": "🔎"}
+ICONES_COUCHE = {"Visiteurs": "👤", "Robots déclarés": "🤖", "Détournées (leurres)": "🎯", "Bloquées": "🚫",
+                 "Arrêtées (adresse au ban)": "⛔", "Refusées": "🚫", "Détournées vers un leurre": "🎯", "Laissées passer, surveillées": "👁️",
+                 "Requêtes reçues": "🌐", "Requêtes hostiles reconnues": "⚠️", "Requêtes bloquées": "🛡️", "Bans posés": "⛔"}
+ICONES_ETAT = {"À décider": "⚠️", "Observé": "👁️", "Ralenti": "🐢", "Défi": "🧩", "Englué": "🕸️", "Refusé": "🚫", "Quarantaine": "🔒"}
+_ICONES_CAT = (("brute", "🔑"), ("mot de passe", "🔑"), ("auth", "🔑"), ("scan", "📡"), ("balay", "📡"), ("sql", "💉"), ("inject", "💉"),
+               ("xss", "🧪"), ("leurre", "🎯"), ("robot", "🤖"), ("aspir", "🕷️"), ("crawl", "🕷️"), ("form", "📝"), ("lfi", "📂"),
+               ("traversal", "📂"), ("rce", "💣"), ("faille", "🐛"), ("cve", "🐛"))
+
+
+def icone_categorie(cat: Any) -> str:
+    c = str(cat or "").lower()
+    return next((e for k, e in _ICONES_CAT if k in c), "🛡️")
+
+
+def drapeau(cc: Any) -> Optional[str]:
+    """Le drapeau d'un code pays ISO à deux lettres (indicateurs régionaux) ; None pour « autres » ou un code invalide."""
+    c = str(cc or "")
+    return "".join(chr(0x1F1E6 + ord(x) - 65) for x in c) if len(c) == 2 and c.isascii() and c.isalpha() and c.isupper() else None
+
+
+def emoji_png(e: str) -> Optional[bytes]:
+    if e in _EMOJIS:
+        return _EMOJIS[e]
+    png = None
+    try:
+        import io
+        from PIL import Image, ImageDraw, ImageFont
+        f = ImageFont.truetype(str(EMOJI_POLICE), 109)
+        im = Image.new("RGBA", (160, 160), (255, 255, 255, 0))
+        ImageDraw.Draw(im).text((10, 10), e, font=f, embedded_color=True)
+        bb = im.getbbox()
+        if bb:
+            t = io.BytesIO()
+            im.crop(bb).save(t, format="PNG")
+            png = t.getvalue()
+    except (ImportError, OSError, ValueError):
+        png = None
+    _EMOJIS[e] = png
+    return png
 
 
 # ── mise en page (fpdf2, A4 paysage, papier) ──────────────────────────────
@@ -536,15 +584,62 @@ class _Doc:
         self.pdf.set_line_width(0.25)
         self.pdf.line(x1, y, x2, y)
 
-    def pastille(self, x, y, texte, coul, taille=7.5):
+    def icone(self, x, y, h, e) -> float:
+        """Pose l'emoji `e` (hauteur `h` mm) ; rend la largeur occupée (0 si la police couleur manque)."""
+        png = emoji_png(e) if e else None
+        if not png:
+            return 0.0
+        import io
+        import struct
+        lg, ht = struct.unpack(">II", png[16:24])
+        w = h * lg / ht if ht else h
+        self.pdf.image(io.BytesIO(png), x=x, y=y, h=h)
+        return w + 1.2
+
+    def pastille(self, x, y, texte, coul, taille=7.5, emoji=None):
         p = self.pdf
         p.set_font("Helvetica", "", taille)
-        w = p.get_string_width(T(texte)) + 5
+        ic = 4.4 if emoji and emoji_png(emoji) else 0
+        w = p.get_string_width(T(texte)) + 5 + ic
         p.set_draw_color(*coul)
         p.set_line_width(0.35)
         p.rect(x, y, w, 5, style="D", round_corners=True, corner_radius=1.2)
-        self.ecrit(x, y, w, 5, texte, taille, coul=TEXTE, align="C")
+        if ic:
+            self.icone(x + 1.6, y + 0.9, 3.2, emoji)
+        self.ecrit(x + ic, y, w - ic, 5, texte, taille, coul=TEXTE, align="C")
         return w
+
+    def carte(self, x, y, ech, points, anneau=True, drapeaux=6, lignes=(3, 52)):
+        """Carte du monde papier : continents en aplat (cases pleines de la grille 120 × 60 de carte_monde), un cercle par pays
+        (surface proportionnelle à la valeur), anneau rouge = part bloquée, drapeau des plus gros. points : [(code, valeur, part%|None)]."""
+        import carte_monde as cm
+        p = self.pdf
+        l0, l1 = lignes
+        p.set_fill_color(214, 222, 235)
+        for gx, gy in cm.points_terre():
+            if l0 <= gy <= l1:
+                p.rect(x + (gx - 0.5) * ech, y + (gy - 0.5 - l0) * ech, ech + 0.02, ech + 0.02, "F")
+        pts = [(c, v, f) for c, v, f in points if c in cm.CENTRE and v]
+        if not pts:
+            return
+        fort = max(v for _, v, _ in pts)
+        rmax = ech * 4.6
+        for rang, (c, v, f) in enumerate(sorted(pts, key=lambda t: -t[1])):
+            lat, lon = cm.CENTRE[c]
+            cx, cy = x + (lon + 180) / 3 * ech, y + ((90 - lat) / 3 - l0) * ech
+            r = max(ech * 0.7, rmax * math.sqrt(v / fort))
+            with p.local_context(fill_opacity=0.7):
+                p.set_fill_color(*C1)
+                p.circle(x=cx, y=cy, radius=r, style="F")
+            if anneau and f:
+                k = min(1.0, f / 100.0)
+                arc = [(cx + (r + 0.8) * math.sin(2 * math.pi * k * t / 48), cy - (r + 0.8) * math.cos(2 * math.pi * k * t / 48)) for t in range(49)]
+                p.set_draw_color(*C4)
+                p.set_line_width(max(0.5, ech * 0.5))
+                p.polyline(arc)
+                p.set_line_width(0.25)
+            if rang < drapeaux and drapeau(c):
+                self.icone(cx - ech * 1.4, cy - ech * 1.0, ech * 2.0, drapeau(c))
 
     # feuille
     def feuille(self, titre, sous, grand=False):
@@ -605,7 +700,7 @@ class _Doc:
             for i, e in enumerate(etiquettes):
                 self.ecrit(x + i * pas, y + h + 0.6, pas, 3.5, e, 6.2, coul=DOUX, align="C")
 
-    def barres(self, x, y, w, lignes, couleur=C1, pas=7.2, lw_part=0.38, vw=24):
+    def barres(self, x, y, w, lignes, couleur=C1, pas=7.2, lw_part=0.38, vw=24, icone=None):
         """Lignes « nom · barre · valeur » ; une valeur None s'écrit « non mesuré », sans barre."""
         p = self.pdf
         vals = [lg[1] for lg in lignes if lg[1] is not None]
@@ -616,7 +711,8 @@ class _Doc:
             nom, v = lg[0], lg[1]
             txtv = lg[2] if len(lg) > 2 and lg[2] is not None else fn(v)
             c = lg[3] if len(lg) > 3 else couleur
-            self.ecrit(x, y, lw - 1, 5, self.court(nom, lw - 2, 8.5), 8.5)
+            ic = self.icone(x, y + 0.6, 3.8, icone(nom)) if icone else 0.0
+            self.ecrit(x + ic, y, lw - 1 - ic, 5, self.court(nom, lw - 2 - ic, 8.5), 8.5)
             p.set_fill_color(*CREUX)
             p.rect(x + lw, y + 1.2, bw, 3, "F")
             if v is not None and fort > 0:
@@ -637,11 +733,12 @@ def _f1(D: _Doc, ks: list[dict], decs: list[dict]) -> None:
     y = D.feuille(verdict(d, ks, decs), f"Votre relais SecuBox, semaine {libelle_periode(d['jours'])}. Sept jours de service, de trafic "
                   "et de défense, comparés aux sept précédents quand ceux-ci sont mesurés.", grand=True)
     y = max(y, 52)
-    cw, ch = 269 / 3, 64
+    cw, ch = 189 / 3, 64
     for i, k in enumerate(ks):
         cx, cy = 14 + (i % 3) * cw, y + (i // 3) * ch
         D.filet(cx, cy, cx + cw - 4)
-        D.ecrit(cx, cy + 2, cw - 6, 5, k["libelle"], 9, coul=DOUX)
+        ic = D.icone(cx, cy + 2.6, 3.8, ICONES_KPI.get(k["cle"]))
+        D.ecrit(cx + ic, cy + 2, cw - 6 - ic, 5, k["libelle"], 9, coul=DOUX)
         D.ecrit(cx, cy + 8, cw - 6, 10, k["texte"], 20 if k["valeur"] is not None else 15, gras=True, coul=TEXTE if k["valeur"] is not None else DOUX)
         e = k["ecart"]
         coul = DOUX
@@ -650,7 +747,23 @@ def _f1(D: _Doc, ks: list[dict], decs: list[dict]) -> None:
         D.ecrit(cx, cy + 19, cw - 6, 5, D.court(k["sous"], cw - 8, 8.5), 8.5, coul=coul)
         D.ecrit(cx, cy + 24, cw - 6, 4, D.court(k["definition"], cw - 8, 7), 7, coul=DOUX)
         D.mini_serie(cx, cy + 30, cw - 10, 24, k["serie"], k["couleur"], resserre=(k["cle"] == "dispo"),
-                     etiquettes=[jour_court(j) for j in d["jours"]])
+                     etiquettes=[jour_court(j).split()[0][0].upper() + jour_court(j).split()[1] for j in d["jours"]])
+    xm = 14 + 189 + 4
+    D.filet(xm, y, 283)
+    D.icone(xm, y + 2.6, 3.8, "🌍")
+    D.ecrit(xm + 5, y + 2, 72, 5, "Origines des requêtes hostiles", 9, coul=DOUX)
+    ps, kp = pays(d)
+    D.carte(xm, y + 12, 76 / 120, [(x["code"], x["hostiles"], x["part"]) for x in ps], drapeaux=4)
+    if ps:
+        yy = y + 46
+        for x in ps[:5]:
+            ic = D.icone(xm, yy + 0.7, 3.4, drapeau(x["code"]))
+            D.ecrit(xm + ic, yy, 46 - ic, 5, D.court(x["nom"], 44 - ic, 8.2), 8.2)
+            D.ecrit(xm + 44, yy, 32, 5, f"{fn(x['bloquees'])} bloquées", 8.2, align="R")
+            yy += 5.6
+        D.para(xm, yy + 1, 76, "Cercle : requêtes hostiles ; anneau rouge : part bloquée. Détail en feuille 3.", 7)
+    else:
+        D.rien(xm, y + 48, 76, f"Pays : {NON_MESURE}")
     yb = y + 2 * ch + 2
     ab = absentes(d)
     D.para(14, yb, 269, ("Mesures absentes cette semaine : " + " ; ".join(ab) + ".") if ab else "Toutes les mesures de la semaine sont présentes.", 7.8)
@@ -668,8 +781,10 @@ def _f2(D: _Doc) -> None:
     for nom, c in coul.items():
         D.pdf.set_fill_color(*c)
         D.pdf.rect(lx, y + 1, 3, 3, "F")
-        D.ecrit(lx + 4, y, 40, 5, nom, 8.2)
-        lx += D.pdf.get_string_width(T(nom)) + 10
+        ic = D.icone(lx + 4, y + 0.6, 3.6, ICONES_COUCHE.get(nom))
+        D.ecrit(lx + 4 + ic, y, 40, 5, nom, 8.2)
+        D.pdf.set_font("Helvetica", "", 8.2)
+        lx += D.pdf.get_string_width(T(nom)) + 10 + ic
     tots = []
     for i in range(7):
         vs = [cs[k][i] for k in cs]
@@ -711,7 +826,7 @@ def _f2(D: _Doc) -> None:
     xr, wr = 185, 98
     D.ecrit(xr, y, wr, 5, "Part de chaque couche sur la semaine", 9.5, gras=True)
     pr = parts(cs)
-    yy = D.barres(xr, y + 7, wr, [(k, v, fpct(v, 1) if v is not None else NON_MESURE, coul[k]) for k, v in pr])
+    yy = D.barres(xr, y + 7, wr, [(k, v, fpct(v, 1) if v is not None else NON_MESURE, coul[k]) for k, v in pr], lw_part=0.45, icone=ICONES_COUCHE.get)
     if any(v is None for _, v in pr):
         yy = D.para(xr, yy, wr, "Une part n'est donnée que si les quatre couches sont mesurées les sept jours.", 7.5)
     yy += 5
@@ -734,49 +849,30 @@ def _f3(D: _Doc) -> None:
     y = D.feuille("D'où viennent les requêtes hostiles", "Surface du cercle : requêtes hostiles vues par le WAF. Anneau rouge : part "
                   "bloquée. Pays déduit de l'adresse par la base GeoLite2 de la box ; les réseaux locaux ne sont pas placés.")
     import carte_monde as cm
-    p = D.pdf
-    ech = 1.45                              # la grille 120 × 60 de carte_monde, à 1,45 mm la case (lignes 3 à 52 dessinées)
-    x0, y0 = 14, y + max(4.0, (190 - y - 49 * ech - 14) / 2)
-    for gx, gy in cm.points_terre():
-        if 3 <= gy <= 52:
-            p.set_fill_color(200, 210, 226)
-            p.circle(x=x0 + gx * ech, y=y0 + (gy - 3) * ech, radius=0.32, style="F")
+    ech = 1.58                              # la grille 120 × 60 de carte_monde, à 1,58 mm la case (lignes 3 à 52 dessinées)
+    x0, y0 = 14, y + max(4.0, (190 - y - 49 * ech - 12) / 2)
+    D.carte(x0, y0, ech, [(x["code"], x["hostiles"], x["part"]) for x in ps])
     if not ps:
-        D.rien(x0 + 40, y0 + 35, 100, f"Pays des requêtes hostiles : {NON_MESURE} (base GeoIP absente ou journal illisible).")
-    else:
-        fort = max(x["hostiles"] for x in ps) or 1
-        for x in ps:
-            if x["code"] not in cm.CENTRE:
-                continue
-            lat, lon = cm.CENTRE[x["code"]]
-            cx, cy = x0 + (lon + 180) / 3 * ech, y0 + ((90 - lat) / 3 - 3) * ech
-            r = 1.2 + 6.0 * math.sqrt(x["hostiles"] / fort)
-            with p.local_context(fill_opacity=0.72):
-                p.set_fill_color(*C1)
-                p.circle(x=cx, y=cy, radius=r, style="F")
-            f = (x["part"] or 0) / 100.0
-            if f > 0:
-                pts = [(cx + (r + 0.9) * math.sin(2 * math.pi * f * t / 40), cy - (r + 0.9) * math.cos(2 * math.pi * f * t / 40)) for t in range(41)]
-                p.set_draw_color(*C4)
-                p.set_line_width(0.8)
-                p.polyline(pts)
-                p.set_line_width(0.25)
+        D.rien(x0 + 50, y0 + 35, 110, f"Pays des requêtes hostiles : {NON_MESURE} (base GeoIP absente ou journal illisible).")
     if ps:
         fort = max(x["hostiles"] for x in ps)
         hors = sum(1 for x in ps if x["code"] not in cm.CENTRE)
-        D.para(x0, y0 + 49 * ech + 3, 175, f"Le plus grand cercle : {fn(fort)} {pl(fort, 'requête hostile', 'requêtes hostiles')} sur la période. "
+        D.para(x0, y0 + 49 * ech + 3, 188, f"Le plus grand cercle : {fn(fort)} {pl(fort, 'requête hostile', 'requêtes hostiles')} sur la période. "
                f"{len(ps)} {pl(len(ps), 'pays identifié', 'pays identifiés')}" + (f", dont {hors} sans position sur la carte." if hors else "."), 7.8)
-    xr, wr = 196, 87
+    xr, wr = 206, 77
     D.ecrit(xr, y, wr, 5, "Pays, par volume bloqué" + (f" ({k} {pl(k, 'jour mesuré', 'jours mesurés')} sur 7)" if 0 < k < 7 else ""), 9.5, gras=True)
     yy = y + 8
-    cols = ((0, 34, "Pays", "L"), (34, 19, "Hostiles", "R"), (53, 19, "Bloquées", "R"), (72, 15, "Part", "R"))
+    cols = ((0, 31, "Pays", "L"), (31, 16, "Hostiles", "R"), (47, 17, "Bloquées", "R"), (64, 13, "Part", "R"))
     for dx, w, t, a in cols:
         D.ecrit(xr + dx, yy, w, 5, t, 8, coul=DOUX, align=a)
     yy += 6
     D.filet(xr, yy, xr + wr)
     for x in ps[:12]:
-        vals = (D.court(x["nom"], 33, 8.5), fn(x["hostiles"]), fn(x["bloquees"]), fpct(x["part"], 0))
-        for (dx, w, _, a), v in zip(cols, vals):
+        ic = D.icone(xr, yy + 1.5, 3.4, drapeau(x["code"]))
+        vals = (D.court(x["nom"], 30 - ic, 8.5), fn(x["hostiles"]), fn(x["bloquees"]), fpct(x["part"], 0))
+        for i, ((dx, w, _, a), v) in enumerate(zip(cols, vals)):
+            if i == 0:
+                dx, w = dx + ic, w - ic
             D.ecrit(xr + dx, yy + 0.8, w, 5, v, 8.5, align=a)
         yy += 6.6
         D.filet(xr, yy, xr + wr)
@@ -795,19 +891,19 @@ def _f4(D: _Doc, ks: list[dict]) -> None:
     vues = (servies + K["bloquees"]["valeur"] + somme(serie(d, cur, lambda r: _v(r, "waf", "couches", "detourne")))) if (servies is not None and K["bloquees"]["valeur"] is not None) else None
     D.ecrit(14, y, 125, 5, "De la requête au bannissement", 9.5, gras=True)
     yy = D.barres(14, y + 7, 125, [("Requêtes reçues", vues, None, C1), ("Requêtes hostiles reconnues", hostiles, None, C3),
-                                   ("Requêtes bloquées", K["bloquees"]["valeur"], None, C4), ("Bans posés", K["bans"]["valeur"], None, C4)], pas=8)
+                                   ("Requêtes bloquées", K["bloquees"]["valeur"], None, C4), ("Bans posés", K["bans"]["valeur"], None, C4)], pas=8, icone=ICONES_COUCHE.get)
     D.para(14, yy, 125, "Reçues = servies par nginx + bloquées + détournées. Les bans comptent des adresses, pas des requêtes.", 7.5)
     yy += 12
     cats, k = cumul_dict(d, cur, ("waf", "categories"))
     D.ecrit(14, yy, 125, 5, "Ce qui a été bloqué" + (f" ({k} {pl(k, 'jour mesuré', 'jours mesurés')} sur 7)" if 0 < k < 7 else ""), 9.5, gras=True)
     top = sorted(cats.items(), key=lambda kv: -kv[1])[:6]
-    yy = D.barres(14, yy + 7, 125, [(c, n) for c, n in top], C4, pas=7) if top else D.rien(14, yy + 7, 125, NON_MESURE)
+    yy = D.barres(14, yy + 7, 125, [(c, n) for c, n in top], C4, pas=7, icone=icone_categorie) if top else D.rien(14, yy + 7, 125, NON_MESURE)
     yy += 4
     D.ecrit(14, yy, 125, 5, "Ce que le WAF a fait des requêtes hostiles", 9.5, gras=True)
     rep = [(lib, somme(serie(d, cur, lambda r, c=c: _v(r, "waf", "couches", c))), None, col) for lib, c, col in
            (("Arrêtées (adresse au ban)", "arrete", C4), ("Refusées", "refuse", C4), ("Détournées vers un leurre", "detourne", C3),
             ("Laissées passer, surveillées", "passe", C2))]
-    D.barres(14, yy + 7, 125, rep, C4, pas=7)
+    D.barres(14, yy + 7, 125, rep, C4, pas=7, icone=ICONES_COUCHE.get)
     xr, wr = 152, 131
     D.ecrit(xr, y, wr, 5, "Quand ? Requêtes bloquées par jour et par heure (Paris)", 9.5, gras=True)
     ch = chaleur(d)
@@ -871,7 +967,7 @@ def _f5(D: _Doc) -> None:
             for (dx, w, _, al), v in zip(cols[:6], vals):
                 D.ecrit(x0 + dx, ry + 2, w, 5, v, 8.5, gras=dx == 0, align=al, coul=TEXTE if v != NON_MESURE else DOUX)
             D.mini_serie(x0 + 176, ry, 48, 9, serie_acteur(a, d["jours"]), C4 if a.get("action") == "BLOCK" else C2 if a.get("action") == "MITIGATE" else C3)
-            D.pastille(x0 + 230, ry + 2, etat, ce, 7.5)
+            D.pastille(x0 + 230, ry + 2, etat, ce, 7.5, emoji=ICONES_ETAT.get(etat.split(",")[0]))
             yy += 12
             D.filet(x0, yy, 283)
         n = act.get("suivis") or 0
@@ -888,12 +984,36 @@ def _f5(D: _Doc) -> None:
     if not pops:
         D.rien(x0, yy, 200, "Aucune population d'attaquants sur 7 jours.")
         return
-    for i, pp in enumerate(sorted(pops, key=lambda q: -(q.get("adresses") or 0))[:4]):
-        cx = x0 + i * 68
-        D.ecrit(cx, yy, 64, 5, f"{FAMILLE_FR.get(pp.get('famille'), pp.get('famille') or '?')} : {D.court(pp.get('nom_cible') or '', 30, 8.5)}", 8.5, gras=True)
+    tops = sorted(pops, key=lambda q: -(q.get("adresses") or 0))[:3]
+    for i, pp in enumerate(tops):
+        cx = x0 + i * 62
+        ic = D.icone(cx, yy + 0.6, 3.8, "🔁" if pp.get("rotation") else "🎯")
+        D.ecrit(cx + ic, yy, 58 - ic, 5, f"{FAMILLE_FR.get(pp.get('famille'), pp.get('famille') or '?')} : {D.court(pp.get('nom_cible') or '', 30, 8.5)}", 8.5, gras=True)
         D.ecrit(cx, yy + 5, 64, 5, f"{compte(pp.get('adresses'), 'adresse', 'adresses')}" + (", en rotation" if pp.get("rotation") else ""), 8, coul=DOUX)
         s = pp.get("serie") if isinstance(pp.get("serie"), list) else []
-        D.mini_serie(cx, yy + 11, 56, 12, [v if isinstance(v, (int, float)) else None for v in s[-7:]], C3)
+        D.mini_serie(cx, yy + 11, 52, 12, [v if isinstance(v, (int, float)) else None for v in s[-7:]], C3)
+    pts = pays_populations(pops)
+    xm = x0 + 3 * 62 + 4
+    D.icone(xm, yy - 8.4, 3.8, "🌍")
+    D.ecrit(xm + 5, yy - 9, 78, 5, "Pays des adresses des populations", 8.5, gras=True)
+    if pts:
+        D.carte(xm, yy - 2, 79 / 120, [(c, v, None) for c, v in pts], anneau=False, drapeaux=4)
+        D.para(xm, yy + 31, 79, "Adresses × part du pays déclarée par chaque population (trois premiers pays).", 7)
+    else:
+        D.rien(xm, yy + 10, 79, f"Pays : {NON_MESURE}")
+
+
+def pays_populations(pops: list) -> list[tuple[str, float]]:
+    """Adresses par pays d'après les parts `pays_top` [[code, %]] de chaque population (au plus trois pays chacune)."""
+    t: dict = {}
+    for pp in pops or []:
+        n = pp.get("adresses") if isinstance(pp, dict) else None
+        if not isinstance(n, (int, float)):
+            continue
+        for e in pp.get("pays_top") or []:
+            if isinstance(e, (list, tuple)) and len(e) == 2 and isinstance(e[1], (int, float)):
+                t[str(e[0])] = t.get(str(e[0]), 0) + n * e[1] / 100.0
+    return sorted(t.items(), key=lambda kv: -kv[1])
 
 
 def _duree(s) -> str:

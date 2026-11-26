@@ -462,3 +462,22 @@ def test_unites_durcies_minuteur_pilotage_desactive_releve_active():
     # l'ancien rapport du lundi est inchangé
     assert "OnCalendar=Mon *-*-* 07:00:00" in _unite("secubox-metrics-rapport.timer")
     assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.0-1~trixie1) trixie;")
+
+
+def test_emojis_drapeaux_et_pays_des_populations():
+    assert RP.drapeau("FR") == "\U0001F1EB\U0001F1F7" and RP.drapeau("autres") is None and RP.drapeau("fr") is None
+    assert RP.icone_categorie("ssh brute force") == "🔑" and RP.icone_categorie("inconnue") == "🛡️"
+    pops = [{"adresses": 100, "pays_top": [["US", 50], ["CN", 25]]}, {"adresses": 40, "pays_top": [["US", 50], "x"]}, {"adresses": None}]
+    assert RP.pays_populations(pops) == [("US", 70.0), ("CN", 25.0)]
+    if RP.EMOJI_POLICE.exists():
+        pytest.importorskip("PIL")
+        assert RP.emoji_png("🛡️").startswith(b"\x89PNG")
+
+
+def test_pdf_porte_des_images_d_emoji(tmp_path):
+    pytest.importorskip("fpdf")
+    pytest.importorskip("PIL")
+    if not RP.EMOJI_POLICE.exists():
+        pytest.skip("police couleur absente")
+    pdf = RP.construire_pdf(RP.donnees_exemple())
+    assert pdf.count(b"/Subtype /Image") > 20
