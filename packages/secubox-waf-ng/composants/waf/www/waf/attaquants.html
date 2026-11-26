@@ -10,6 +10,8 @@
     · TABLEAU DE BORD complet (largeur ≥ 900 px).
   DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/bans/history?hours=24 et GET /api/v1/waf/php/signaux (signature PHP par adresse, #3273), lues en session. L'API ne fournit ni pays ni série horaire par adresse :
   la page n'invente rien (pas de drapeau) ; la frise montre, pour chaque adresse, l'intervalle réel première vue → dernière vue.
+  Bas de page (#3969) : frise fine bornée (12 lignes), classement compact (10 puis « Afficher plus »), UN détail, répartitions
+  regroupées. Adresses masquées (57.141.•.•) hors du détail, où l'adresse complète reste repliée. Tout en textContent.
   Une mesure absente s'affiche « — », jamais 0. Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
 -->
 <meta charset="utf-8">
@@ -46,49 +48,78 @@
   .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
   .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
   .note{color:var(--faible);font-size:.66rem;margin-top:6px}
-  /* filtres */
-  .filtres{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-  .filtres input,.filtres select{font:inherit;font-size:.76rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;min-width:0}
-  .filtres input{flex:1 1 130px} .filtres select{flex:0 1 auto;max-width:100%}
-  .filtres input:focus,.filtres select:focus,.droite button:focus-visible,.plus:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
-  /* classement */
-  .rang{display:grid;gap:6px}
-  .att{display:grid;gap:4px 10px;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid rgba(86,150,255,.14);border-radius:10px;padding:7px 9px;background:rgba(14,30,60,.5);min-width:0}
-  .att:hover{border-color:var(--trait2)}
-  .att .id{display:flex;align-items:center;gap:7px;min-width:0}
-  .att .nat{font-size:1.15rem;flex:none} .att code{font-size:.84rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .att .intent{color:var(--faible);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .att .jauge{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
-  .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;border-radius:3px}
-  .jauge b{font-variant-numeric:tabular-nums;font-size:.78rem} .jauge b small{color:var(--faible);font-weight:500;font-size:.64rem}
-  .att .pas{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--doux);font-size:.7rem}
-  .pas span{white-space:nowrap}
-  .cats{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px}
-  .pil{border-radius:999px;padding:1px 8px;font-size:.66rem;border:1px solid var(--trait2);color:var(--doux);background:rgba(59,130,246,.10);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .grav{display:inline-block;min-width:58px;text-align:center;border-radius:5px;padding:1px 7px;font-weight:700;font-size:.7rem}
-  .etat{border-radius:5px;padding:1px 8px;font-weight:700;font-size:.66rem;white-space:nowrap}
-  .etat.ban{background:rgba(255,77,94,.2);color:var(--rouge)} .etat.suivi{background:rgba(159,179,214,.2);color:var(--doux)}
-  .att .tags{display:flex;gap:6px;align-items:center;justify-self:end}
-  .plus[hidden]{display:none}
-  .plus{display:block;margin:8px auto 0;font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 12px;cursor:pointer}
-  /* répartitions */
-  .repart{display:grid;gap:12px;grid-template-columns:120px 1fr;align-items:center}
-  .donut{width:120px;height:120px;display:block}
-  .donut text{fill:var(--texte);text-anchor:middle} .donut .ct{font-size:20px;font-weight:700} .donut .cl{font-size:8px;fill:var(--doux)}
-  .leg div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:.76rem;padding:2px 0;color:var(--doux)} .leg i{width:9px;height:9px;border-radius:2px} .leg b{color:var(--texte);font-variant-numeric:tabular-nums}
-  .leg div.clic{cursor:pointer} .leg div.clic:hover{color:var(--texte)}
-  .ligne{display:grid;grid-template-columns:minmax(0,1fr) auto 70px;gap:8px;align-items:center;font-size:.76rem;padding:3px 0}
-  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--texte)} .ligne span.v{color:var(--doux);text-align:right;font-variant-numeric:tabular-nums}
-  /* frise */
-  svg.frise{width:100%;max-width:780px;margin:0 auto;height:auto;display:block} svg.frise text{fill:var(--faible);font-size:9px} svg.frise .gr{stroke:rgba(159,179,214,.14);stroke-width:1} svg.frise text.ip{fill:var(--doux);font-size:9.5px}
-  .sec2{display:none}
-  @container a (max-width:599px){.repart{grid-template-columns:100px 1fr}.donut{width:100px;height:100px}}
-  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}.sec2{display:block}
-    .att{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto}
-    .att .id{grid-column:1;grid-row:1}.att .jauge{grid-column:2;grid-row:1}.att .tags{grid-column:3;grid-row:1}
-    .att .cats,.att .pas{grid-column:1/-1}}
-  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)} .g1{grid-template-columns:1.7fr 1fr} .cote{display:grid;gap:10px;align-content:start}}
-  .cote{display:grid;gap:10px;align-content:start;min-width:0}
+  /* bas (#3969) : filtres, frise fine bornée, tableau compact + un détail, répartitions. Texte ≥ .85rem ; cible ≥ 40 px au doigt et au téléphone. */
+  [hidden]{display:none!important}
+  .bas{display:grid;gap:10px;min-width:0}
+  .bas .pan{display:grid;gap:8px}
+  .bas .pan>h3{margin:0;font-size:.95rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+  .bas .pan>h3 i{font-style:normal;font-weight:400;color:var(--doux);font-size:.85rem;margin-left:0}
+  .bas .vide,.bas .note{color:var(--doux);font-size:.85rem;margin:0;padding:4px 2px}
+  .bas :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .bas button.bt{font:inherit;font-size:.85rem;color:var(--texte);background:rgba(18,40,78,.7);border:1px solid var(--trait2);border-radius:10px;min-height:40px;padding:8px 14px;cursor:pointer;justify-self:start}
+  .bas button.bt:hover{border-color:var(--cyan)}
+  .filtres{display:flex;flex-wrap:wrap;gap:6px}
+  .filtres input,.filtres select{font:inherit;font-size:.85rem;color:var(--texte);background:rgba(6,13,27,.7);border:1px solid var(--trait2);border-radius:8px;padding:6px 8px;min-width:0;min-height:40px}
+  .filtres input{flex:1 1 150px} .filtres select{flex:0 1 auto;max-width:100%}
+  .gp{display:inline-flex;align-items:center;gap:5px;font-size:.85rem;white-space:nowrap;color:var(--doux)} .gp::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--faible);flex:none}
+  .gp.critical{color:#ff8a95} .gp.critical::before{background:var(--rouge)} .gp.high{color:#ffb85c} .gp.high::before{background:var(--orange)}
+  .gp.medium{color:var(--jaune)} .gp.medium::before{background:var(--jaune)} .gp.low{color:#7dd3fc} .gp.low::before{background:var(--cyan)}
+  .eb{font-size:.85rem;white-space:nowrap;color:var(--doux)} .eb.ban{color:#ff8a95}
+  .fr{display:grid;gap:2px;min-width:0}
+  .fr-r,.fr-a{display:grid;grid-template-columns:minmax(0,1fr);gap:2px 10px;align-items:center;width:100%;min-width:0}
+  .fr-r{min-height:40px;padding:3px 6px;font:inherit;font-size:.85rem;color:var(--texte);text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;cursor:pointer}
+  .fr-r:hover{background:rgba(59,130,246,.10)} .fr-r[aria-current=true]{border-color:var(--cyan);background:rgba(41,182,246,.12)}
+  .fr-a{padding:0 7px} .fr-a>span:first-child{display:none}
+  .fr-n{display:flex;align-items:center;gap:8px;min-width:0} .fr-n b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,"IBM Plex Mono",monospace}
+  .piste{position:relative;display:block;height:14px;border-radius:3px;background:rgba(159,179,214,.05);overflow:hidden}
+  .piste i{position:absolute;top:0;bottom:0;display:block}
+  .piste .gr{width:1px;background:rgba(159,179,214,.18)} .piste .sg{top:3px;bottom:3px;border-radius:3px;opacity:.85}
+  .piste .mk{width:3px;margin-left:-1px;background:var(--texte)} .piste .mt{width:2px;background:var(--cyan)}
+  .axe{position:relative;display:block;height:1.4em;font-size:.85rem;color:var(--doux)} .axe>span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+  .axe>span:first-child{transform:none} .axe>span:last-child{transform:translateX(-100%)}
+  .lecture{margin:0;color:var(--doux);font-size:.85rem;min-height:1.4em}
+  .ld{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start} .ld>*{min-width:0}
+  .lst{container-type:inline-size;container-name:l;display:grid;gap:5px;align-content:start} .rangs{display:grid;gap:5px;min-width:0} .pile{display:grid;gap:8px;min-width:0}
+  .cl,.th{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nom etat" "chif chif";gap:3px 10px;align-items:center}
+  .th{display:none;padding:0 11px 0 13px;font-size:.85rem;color:var(--doux)}
+  .cl{width:100%;min-height:44px;padding:6px 10px;font:inherit;font-size:.85rem;color:var(--texte);text-align:left;background:rgba(18,40,78,.45);border:1px solid var(--trait);border-left:3px solid var(--faible);border-radius:9px;cursor:pointer}
+  .cl:hover{border-color:var(--cyan)} .cl.ban{border-left-color:var(--rouge)} .cl[aria-current=true]{background:rgba(41,182,246,.16);border-color:var(--cyan)}
+  .c-nom{grid-area:nom;display:flex;align-items:center;gap:8px;min-width:0} .c-nom b{font-weight:600;font-family:ui-monospace,"IBM Plex Mono",monospace;overflow-wrap:anywhere;min-width:0}
+  .c-e{grid-area:etat;justify-self:end;display:flex;gap:10px} .c-ch{grid-area:chif;display:flex;flex-wrap:wrap;gap:2px 12px;color:var(--doux);font-variant-numeric:tabular-nums;min-width:0;align-items:center}
+  .c-ch [data-u]::after{content:" " attr(data-u)} .c-ch [data-a]::before{content:attr(data-a) " "}
+  .jg{display:inline-block;width:60px;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .jg i{display:block;height:100%;border-radius:3px}
+  @container l (min-width:640px){
+    .cl,.th{grid-template-columns:minmax(0,1fr) 6.4em 5em 5.2em 60px 7.6em 7.6em;grid-template-areas:none;gap:2px 8px}
+    .th{display:grid} .th span:nth-child(4),.th span:nth-child(6),.th span:nth-child(7){text-align:right}
+    .c-nom,.c-e,.c-ch{grid-area:auto} .c-e{display:contents} .c-ch{display:contents} .c-ch>span{text-align:right} .c-ch [data-u]::after,.c-ch [data-a]::before{content:none}
+    .cl{min-height:40px}
+  }
+  .det{border:1px solid var(--trait);border-radius:12px;background:rgba(6,13,27,.45);padding:12px 14px;display:grid;gap:12px;align-content:start;font-size:.9rem}
+  .det>*{min-width:0} .det h4{margin:0;font-size:1.1rem;overflow-wrap:anywhere;font-family:ui-monospace,"IBM Plex Mono",monospace} .det h5{margin:0 0 6px;font-size:.9rem;font-weight:600}
+  .det p{margin:0} .det .ph{color:var(--doux)}
+  .dt{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+  .dk{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))} .dk div{background:rgba(10,22,46,.7);border:1px solid var(--trait);border-radius:9px;padding:6px 9px;min-width:0}
+  .dk b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .dk span{font-size:.85rem;color:var(--doux)}
+  .dl{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr);gap:3px 10px;font-size:.88rem} .dl span:nth-child(odd){color:var(--doux)} .dl span{overflow-wrap:anywhere}
+  .lig{display:grid;grid-template-columns:minmax(0,10em) minmax(30px,1fr) minmax(3em,auto);gap:8px;align-items:center;min-height:26px;font-size:.88rem}
+  button.lig{width:100%;min-height:40px;font:inherit;font-size:.88rem;color:var(--texte);background:transparent;border:1px solid transparent;border-radius:8px;padding:0 6px;text-align:left;cursor:pointer}
+  button.lig:hover,button.lig[aria-pressed=true]{border-color:var(--cyan)}
+  .lig span{overflow-wrap:anywhere} .lig b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .lig em{height:10px;background:rgba(159,179,214,.14);border-radius:0 4px 4px 0;overflow:hidden} .lig em i{display:block;height:100%}
+  .pils{display:flex;flex-wrap:wrap;gap:4px 6px} .pils span{border-radius:999px;padding:2px 9px;font-size:.85rem;border:1px solid var(--trait2);color:var(--doux);overflow-wrap:anywhere}
+  .det details summary{cursor:pointer;color:var(--doux);font-size:.88rem;min-height:40px;display:flex;align-items:center}
+  .det code{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.88rem;overflow-wrap:anywhere}
+  #retour{display:none}
+  .vise{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)} .vise>div{min-width:0} .vise h4{margin:0 0 6px;font-size:.9rem;font-weight:600} .vise h4 i{font-style:normal;font-weight:400}
+  @container a (min-width:600px){.tuiles{grid-template-columns:repeat(3,1fr)}
+    .fr-r,.fr-a{grid-template-columns:minmax(0,15em) minmax(0,1fr)} .fr-r{min-height:28px;padding:2px 6px} .fr-a>span:first-child{display:block}
+    .dk{grid-template-columns:repeat(4,minmax(0,1fr))} .vise{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (pointer:coarse){.fr-r{min-height:40px}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+  @container a (min-width:1100px){.ld{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}}
+  @container a (max-width:1099px){#retour{display:inline-flex}}
+  @media (prefers-reduced-motion:reduce){.bas *{transition:none!important;animation:none!important}}
+  /* fin du bas */
 </style>
 <div class="cadre" id="cadre"><div class="app">
   <div class="tete">
@@ -100,21 +131,23 @@
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
   <div><h2>Attaquants suivis</h2><div class="sous">Adresses écartées du réseau, toujours profilées sur les dernières 24 h.</div></div>
   <div class="tuiles" id="tuiles"></div>
-  <div class="grille g1">
-    <div class="pan"><h3>Classement des attaquants <i id="nbAff"></i></h3>
-      <div class="filtres">
-        <input type="search" id="fq" placeholder="Rechercher une IP…" aria-label="Rechercher une adresse IP" autocomplete="off">
-        <select id="fg" aria-label="Filtrer par gravité"><option value="">Toutes gravités</option><option value="critical">Critique</option><option value="high">Haute</option><option value="medium">Moyenne</option><option value="low">Faible</option></select>
-        <select id="fe" aria-label="Filtrer par état"><option value="">Tous états</option><option value="ban">Bannis</option><option value="suivi">Suivis seuls</option></select>
-        <select id="ft" aria-label="Trier"><option value="sondes">Tri : sondes</option><option value="recent">Tri : dernière vue</option><option value="grave">Tri : gravité</option></select>
-      </div>
-      <div class="rang" id="rang"></div><button type="button" class="plus" id="plus" hidden></button></div>
-    <div class="cote">
-      <div class="pan"><h3>Répartition par gravité <i>adresses</i></h3><div class="repart"><div id="donutG"></div><div class="leg" id="legG"></div></div></div>
-      <div class="pan"><h3>Répartition par nature <i>lue dans les règles déclenchées</i></h3><div id="nature"></div></div>
+  <div class="bas" id="bas">
+    <div class="filtres" role="group" aria-label="Filtres">
+      <input type="search" id="fq" placeholder="Rechercher une IP…" aria-label="Rechercher une adresse IP" autocomplete="off">
+      <select id="fg" aria-label="Filtrer par gravité"><option value="">Toutes gravités</option><option value="critical">Critique</option><option value="high">Haute</option><option value="medium">Moyenne</option><option value="low">Faible</option></select>
+      <select id="fe" aria-label="Filtrer par état"><option value="">Tous états</option><option value="ban">Bannis</option><option value="suivi">Suivis seuls</option></select>
+      <select id="ft" aria-label="Trier"><option value="sondes">Tri : sondes</option><option value="recent">Tri : dernière vue</option><option value="grave">Tri : gravité</option></select>
     </div>
+    <section class="pan" aria-labelledby="hFrise"><h3 id="hFrise">Frise d’activité <i id="frNote">24 dernières heures</i></h3>
+      <div class="fr" id="frise"></div><p class="lecture" id="frLecture" aria-live="polite"></p><p class="note" id="frBas"></p></section>
+    <section class="pan" aria-labelledby="hListe"><h3 id="hListe">Classement des attaquants <i id="nbAff"></i></h3>
+      <div class="ld"><div class="lst"><div class="th" aria-hidden="true"><span>Attaquant</span><span>Gravité</span><span>État</span><span>Sondes</span><span></span><span>Première vue</span><span>Dernière vue</span></div>
+        <div id="rang" class="rangs" role="group" aria-label="Attaquants suivis, dans l’ordre du tri choisi"></div>
+        <button type="button" class="bt" id="plus" hidden></button></div>
+      <div class="pile"><button type="button" class="bt" id="retour">← Revenir à la liste</button><article class="det" id="detail" tabindex="-1" aria-label="Détail de l’attaquant choisi"></article></div></div></section>
+    <section class="pan" aria-labelledby="hRep"><h3 id="hRep">Répartitions <i>adresses suivies sur 24 h ; une gravité filtre le classement</i></h3>
+      <div class="vise"><div><h4>Gravité</h4><div id="legG"></div></div><div><h4>Nature <i class="note">lue dans les règles déclenchées</i></h4><div id="nature"></div></div></div></section>
   </div>
-  <div class="pan sec2"><h3>Frise d’activité <i>intervalle première → dernière vue, 10 premières adresses</i></h3><div id="frise"></div><div class="note">Chaque barre va de la première à la dernière sonde vue sur la fenêtre de 24 h ; la barre ne dit pas si l’activité était continue entre les deux.</div></div>
   <div class="note">Aucun blocage sur un seul signal · actions réversibles · chaque décision est écrite dans le journal d’audit.</div>
 </div></div>
 <script>
@@ -157,32 +190,41 @@
     if(s<86400) return 'il y a '+Math.floor(s/3600)+' h';return 'il y a '+Math.floor(s/86400)+' j';
   }
   function plein(t){return t==null?'':new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-  var DONNEES=null,PHP=null,ETAT={n:40},MAINTENANT=Date.now();
+  var DONNEES=null,PHP=null,MAINTENANT=Date.now();
   // Signature PHP par adresse (#3273) : relevé de fond de l’API. Absent = aucune pastille (jamais un zéro inventé) ; l’adresse « local » n’y figure pas.
   var FAMPHP={php2shell:'PHP2Shell',roundcube:'Roundcube',nextcloud:'Nextcloud',php_requete:'Entrée PHP',outil:'Outil'};
-  function sigPhp(ip){var a=PHP&&PHP.adresses&&PHP.adresses[ip];if(!a)return '';
-    return Object.keys(FAMPHP).filter(function(k){return num(a[k])>0;}).map(function(k){return '<span class="pil" title="Signal PHP en détection seule : '+esc(FAMPHP[k])+' · '+fmt(a[k])+' sur 24 h">🐘 '+esc(FAMPHP[k])+' · '+fmt(a[k])+'</span>';}).join('');}
   function lignes(d){
     return (d&&d.tracked||[]).map(function(r){
       return {ip:String(r.ip||'—'),n:num(r.count),sev:String(r.severity_max||'low').toLowerCase(),cats:r.top_categories||[],
         a:ts(r.first_seen),b:ts(r.last_seen),ban:!!r.currently_banned,nat:nature(r),chemin:r.sample_path||''};
     });
   }
-  function donut(parts,total){
-    var R=44,C=2*Math.PI*R,acc=0,s='<svg class="donut" viewBox="0 0 120 120" role="img" aria-label="Répartition par gravité"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="rgba(159,179,214,.16)" stroke-width="14"/>';
-    if(total>0) parts.forEach(function(p){var l=C*p[1]/total;s+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+p[2]+'" stroke-width="14" stroke-dasharray="'+l.toFixed(2)+' '+(C-l).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(p[0])+' : '+fmt(p[1])+'</title></circle>';acc+=l;});
-    return s+'<text class="ct" x="60" y="62">'+(total>0?fmt(total):'—')+'</text><text class="cl" x="60" y="75">adresses</text></svg>';
+  // ---- Bas de page (#3969) : frise fine bornée, tableau compact + un détail, répartitions. DOM et textContent seulement.
+  // L'API ne donne, par adresse, que la première et la dernière vue sur 24 h : la frise dessine cet intervalle, rien d'autre.
+  // Aucune adresse en clair hors du détail replié : liste et frise montrent une forme masquée.
+  var SEL=null,LIM=10,PAS=10,MAXFR=12,OUV=Object.create(null),FILTRE_G='';
+  function hx(tag,cls,txt,titre){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=String(txt);if(titre)e.title=titre;return e;}
+  function add(p){for(var i=1;i<arguments.length;i++){if(arguments[i]!=null)p.appendChild(arguments[i]);}return p;}
+  function vide(e){while(e.firstChild)e.removeChild(e.firstChild);return e;}
+  function pl(n,s,p){return fmt(n)+' '+(n>1?p:s);}
+  function masque(ip){
+    if(ip==='local') return 'local';
+    var m=/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(ip);if(m) return m[1]+'.'+m[2]+'.•.•';
+    if(ip.indexOf(':')>=0) return ip.split(':').slice(0,2).join(':')+':…';
+    return '•••';
   }
-  function frise(L){
-    var T=L.filter(function(r){return r.a!=null&&r.b!=null;}).sort(function(x,y){return y.n-x.n;}).slice(0,10);
-    if(!T.length) return '<div class="vide">Aucun horodatage exploitable.</div>';
-    var fin=MAINTENANT,deb=fin-24*3600e3,W=520,LM=96,RM=8,TP=6,BT=18,H=TP+BT+T.length*16;
-    var x=function(t){return LM+(Math.max(deb,Math.min(fin,t))-deb)/(fin-deb)*(W-LM-RM);},g='';
-    for(var h=0;h<=24;h+=6){var X=LM+h/24*(W-LM-RM);g+='<line class="gr" x1="'+X+'" y1="'+TP+'" x2="'+X+'" y2="'+(H-BT)+'"/><text x="'+X+'" y="'+(H-5)+'" text-anchor="'+(h===0?'start':h===24?'end':'middle')+'">'+(h===24?'maintenant':'−'+(24-h)+' h')+'</text>';}
-    T.forEach(function(r,i){var y=TP+i*16+3,x1=x(r.a),x2=Math.max(x(r.b),x1+3),c=(GRAV[r.sev]||GRAV.low)[1];
-      g+='<text class="ip" x="'+(LM-6)+'" y="'+(y+8)+'" text-anchor="end">'+esc(r.ip.length>16?r.ip.slice(0,15)+'…':r.ip)+'</text><rect x="'+x1.toFixed(1)+'" y="'+y+'" width="'+(x2-x1).toFixed(1)+'" height="9" rx="3" fill="'+c+'" opacity=".85"><title>'+esc(r.ip)+' : '+esc(plein(r.a))+' → '+esc(plein(r.b))+' · '+fmt(r.n)+' sondes</title></rect>';});
-    return '<svg class="frise" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Frise d’activité des attaquants sur 24 heures">'+g+'</svg>';
-  }
+  function duree(ms){var m=Math.max(1,Math.round(ms/60000));return m<60?m+' min':Math.floor(m/60)+' h'+(m%60?' '+String(m%60).padStart(2,'0'):'');}
+  function nomA(r){return NATURES[r.nat][0]+' '+masque(r.ip);}
+  function gravP(r){var g=GRAV[r.sev];return hx('span','gp '+(g?r.sev:''),g?g[0]:'—','Gravité maximale observée');}
+  function etatP(r){return hx('span','eb'+(r.ban?' ban':''),r.ban?'banni':'suivi',r.ban?'Écarté : un blocage réseau est actif en ce moment.':'Le blocage a expiré, le profil reste suivi.');}
+  function phpListe(ip){var a=PHP&&PHP.adresses&&Object.prototype.hasOwnProperty.call(PHP.adresses,ip)?PHP.adresses[ip]:null;
+    return a?Object.keys(FAMPHP).filter(function(k){return num(a[k])>0;}).map(function(k){return [FAMPHP[k],num(a[k])];}):[];}
+  function focusK(box){var a=document.activeElement;return a&&box.contains(a)?a.getAttribute('data-k'):null;}
+  function refocus(box,k){if(k==null)return;[].some.call(box.querySelectorAll('[data-k]'),function(b){if(b.getAttribute('data-k')!==k)return false;b.focus({preventScroll:true});return true;});}
+  function bouge(box,sel){box.addEventListener('keydown',function(e){
+    var p={ArrowDown:1,ArrowUp:-1,Home:-1e6,End:1e6}[e.key];if(!p)return;
+    var l=[].slice.call(box.querySelectorAll(sel)),i=l.indexOf(document.activeElement);if(i<0)return;
+    e.preventDefault();l[Math.max(0,Math.min(l.length-1,i+p))].focus();});}
   function filtrer(L){
     var t=el('fq').value.trim().toLowerCase(),g=el('fg').value,e=el('fe').value,s=el('ft').value;
     var R=L.filter(function(r){return (!t||r.ip.toLowerCase().indexOf(t)>=0)&&(!g||r.sev===g)&&(!e||(e==='ban')===r.ban);});
@@ -192,23 +234,118 @@
       return y.n-x.n;});
     return R;
   }
-  function carte(r,max){
-    var g=GRAV[r.sev]||[r.sev,'#6f84a8',0],nt=NATURES[r.nat],tot=null;
-    var cats=r.cats.map(function(c){return '<span class="pil" title="'+esc(c.category)+' : '+fmt(c.count)+' sondes">'+esc(c.category)+' · '+fmt(c.count)+'</span>';}).join('');
-    return '<div class="att"><div class="id"><span class="nat" title="'+esc(nt[1])+'">'+nt[0]+'</span><div style="min-width:0"><code title="'+esc(r.ip)+'">'+esc(r.ip)+'</code><div class="intent">'+esc(nt[1])+'</div></div></div>'
-      +'<div class="tags"><span class="grav" style="background:'+g[1]+'33;color:'+g[1]+'">'+esc(g[0])+'</span><span class="etat '+(r.ban?'ban':'suivi')+'" title="'+(r.ban?'Écarté : un blocage réseau est actif en ce moment.':'Le blocage a expiré, le profil reste suivi.')+'">'+(r.ban?'BANNI':'SUIVI')+'</span></div>'
-      +'<div class="jauge" title="'+fmt(r.n)+' sondes sur 24 h"><div class="barre"><i style="width:'+Math.max(3,100*r.n/max)+'%;background:'+g[1]+'"></i></div><b>'+fmt(r.n)+' <small>sondes</small></b></div>'
-      +(cats||sigPhp(r.ip)?'<div class="cats">'+cats+sigPhp(r.ip)+'</div>':'')
-      +'<div class="pas"><span title="'+esc(plein(r.a))+'">Première vue : '+esc(rel(r.a))+'</span><span title="'+esc(plein(r.b))+'">Dernière vue : '+esc(rel(r.b))+'</span></div></div>';
+  function rendFrise(R){
+    var box=el('frise'),foc=focusK(box),fin=MAINTENANT,deb=fin-24*3600e3,x=function(t){return Math.max(0,Math.min(100,(t-deb)/(fin-deb)*100));};
+    vide(box);el('frLecture').textContent='';
+    var T=R.filter(function(r){return r.a!=null&&r.b!=null;}),vus=T.slice(0,MAXFR);
+    if(!DONNEES){add(box,hx('p','vide','Session requise.'));el('frBas').textContent='';return;}
+    if(!vus.length){add(box,hx('p','vide','Aucun horodatage exploitable.'));}
+    else{
+      var ax=hx('div','fr-a'),pa=hx('span','axe');ax.setAttribute('aria-hidden','true');
+      [0,6,12,18,24].forEach(function(h){var s=hx('span',null,h===24?'maintenant':'−'+(24-h)+' h');s.style.left=(h/24*100)+'%';add(pa,s);});
+      add(box,add(ax,hx('span'),pa));
+      var m=Math.max.apply(null,vus.map(function(r){return r.n;}).concat([1]));
+      vus.forEach(function(r){
+        var b=hx('button','fr-r'),n=hx('span','fr-n'),p=hx('span','piste'),g=(GRAV[r.sev]||GRAV.low)[1],z,x1=x(r.a),x2=Math.max(x(r.b),x1+.6),txt;
+        b.type='button';b.setAttribute('data-k',r.ip);b.setAttribute('aria-current',String(r.ip===SEL));p.setAttribute('aria-hidden','true');
+        add(n,hx('b',null,nomA(r),NATURES[r.nat][1]),gravP(r));
+        [6,12,18].forEach(function(h){z=hx('i','gr');z.style.left=(h/24*100)+'%';add(p,z);});
+        txt=nomA(r)+' : de '+plein(r.a)+' à '+plein(r.b)+' · '+pl(r.n,'sonde','sondes');
+        z=hx('i','sg',null,txt);z.style.left=x1+'%';z.style.width=(x2-x1)+'%';z.style.background=g;z.style.opacity=(.35+.65*r.n/m).toFixed(2);z.setAttribute('data-l',txt);add(p,z);
+        z=hx('i','mk',null,'Dernière vue : '+plein(r.b));z.style.left=x(r.b)+'%';z.setAttribute('data-l',nomA(r)+' · '+z.title);add(p,z);
+        z=hx('i','mt',null,'Maintenant');z.style.left='100%';z.style.marginLeft='-2px';add(p,z);
+        b.setAttribute('aria-label',NATURES[r.nat][1]+', '+masque(r.ip)+', gravité '+((GRAV[r.sev]||['—'])[0]).toLowerCase()+' : '+pl(r.n,'sonde','sondes')+', dernière vue '+rel(r.b)+'. Afficher le détail.');
+        b.addEventListener('click',function(){choisir(r.ip,'frise');});
+        add(box,add(b,n,p));
+      });
+      if(T.length>MAXFR) add(box,hx('p','note','+ '+pl(T.length-MAXFR,'adresse','adresses')+' dans le classement ci-dessous.'));
+    }
+    el('frBas').textContent='Chaque barre va de la première à la dernière sonde vue sur 24 h, dans l’ordre du tri choisi ; elle ne dit pas si l’activité était continue entre les deux (l’API ne donne pas de série par adresse). Intensité : sondes, une échelle pour toutes les lignes.';
+    refocus(box,foc);
   }
-  function liste(){
-    var L=lignes(DONNEES);
-    if(!DONNEES){el('rang').innerHTML='<div class="vide">Session requise pour voir les attaquants.</div>';el('nbAff').textContent='';el('plus').hidden=true;return;}
-    var R=filtrer(L),max=Math.max.apply(null,L.map(function(r){return r.n;}).concat([1]));
-    el('nbAff').textContent=L.length?(R.length===L.length?fmt(L.length)+' adresses':fmt(R.length)+' sur '+fmt(L.length)):'';
-    el('rang').innerHTML=!L.length?'<div class="vide">Aucun attaquant suivi sur les 24 dernières heures.</div>':!R.length?'<div class="vide">Aucune adresse ne correspond aux filtres.</div>':R.slice(0,ETAT.n).map(function(r){return carte(r,max);}).join('');
-    var reste=R.length-ETAT.n;el('plus').hidden=reste<=0;if(reste>0)el('plus').textContent='Afficher '+fmt(Math.min(reste,40))+' de plus ('+fmt(reste)+' restantes)';
+  function ligne(r,max){
+    var b=hx('button','cl'+(r.ban?' ban':'')),ch=hx('span','c-ch'),e=hx('span','c-e'),g=(GRAV[r.sev]||[0,'#6f84a8'])[1],j=hx('span','jg'),i=hx('i');
+    b.type='button';b.setAttribute('data-k',r.ip);b.setAttribute('aria-current',String(r.ip===SEL));
+    i.style.width=Math.max(3,100*r.n/max)+'%';i.style.background=g;add(j,i);
+    var so=hx('span',null,fmt(r.n),pl(r.n,'sonde','sondes')+' sur 24 h');so.setAttribute('data-u',r.n>1?'sondes':'sonde');
+    var a=hx('span',null,rel(r.a),plein(r.a));a.setAttribute('data-a','vu');var z=hx('span',null,rel(r.b),plein(r.b));z.setAttribute('data-a','→');
+    add(e,gravP(r),etatP(r));add(ch,so,j,a,z);
+    add(b,add(hx('span','c-nom'),hx('b',null,nomA(r),NATURES[r.nat][1])),e,ch);
+    b.setAttribute('aria-label',NATURES[r.nat][1]+', '+masque(r.ip)+', '+(r.ban?'banni':'suivi')+', gravité '+((GRAV[r.sev]||['—'])[0]).toLowerCase()+', '+pl(r.n,'sonde','sondes')+', dernière vue '+rel(r.b)+'. Afficher le détail.');
+    b.addEventListener('click',function(){choisir(r.ip,'liste');});
+    return b;
   }
+  function rendListe(L,R){
+    var box=el('rang'),foc=focusK(box),max=Math.max.apply(null,L.map(function(r){return r.n;}).concat([1])),reste;
+    vide(box);
+    el('nbAff').textContent=L.length?(R.length===L.length?pl(L.length,'adresse','adresses'):fmt(R.length)+' sur '+fmt(L.length)):'';
+    if(!DONNEES) add(box,hx('p','vide','Session requise pour voir les attaquants.'));
+    else if(!L.length) add(box,hx('p','vide','Aucun attaquant suivi sur les 24 dernières heures.'));
+    else if(!R.length) add(box,hx('p','vide','Aucune adresse ne correspond aux filtres.'));
+    R.slice(0,LIM).forEach(function(r){add(box,ligne(r,max));});
+    reste=R.length-LIM;el('plus').hidden=reste<=0;
+    if(reste>0) el('plus').textContent='Afficher '+Math.min(PAS,reste)+' de plus ('+pl(reste,'restante','restantes')+')';
+    refocus(box,foc);
+  }
+  function barres(items,coul,videTxt){
+    var box=hx('div'),m=Math.max.apply(null,items.map(function(x){return x[1];}).concat([1]));
+    if(!items.length){add(box,hx('p','vide',videTxt||'—'));return box;}
+    items.forEach(function(x){var l=hx('div','lig',null,x[0]+' : '+fmt(x[1])),e=hx('em'),i=hx('i');i.style.width=Math.max(3,100*x[1]/m)+'%';i.style.background=x[2]||coul;
+      add(box,add(l,hx('span',null,x[0]),add(e,i),hx('b',null,fmt(x[1]))));});
+    return box;
+  }
+  function rendDetail(R){
+    var box=el('detail'),dedans=box.contains(document.activeElement),r=R.filter(function(x){return x.ip===SEL;})[0];
+    vide(box);
+    if(!r){add(box,hx('p','vide',DONNEES?'Aucune adresse à détailler.':'Session requise.'));return;}
+    var t=hx('div','dt'),k=hx('div','dk'),dl=hx('div','dl'),nt=NATURES[r.nat];
+    add(t,hx('h4',null,nomA(r)),gravP(r),etatP(r));
+    add(box,add(hx('div'),t,hx('p','ph',nt[1]+' — '+(r.ban?'écarté : un blocage réseau est actif en ce moment.':'le blocage a expiré, le profil reste suivi.'))));
+    [[fmt(r.n),r.n>1?'sondes':'sonde'],[fmt(r.cats.length),'règles en tête'],[(GRAV[r.sev]||['—'])[0],'gravité max.'],[r.b!=null&&r.a!=null?duree(r.b-r.a):'—','première → dernière vue']]
+      .forEach(function(x){add(k,add(hx('div'),hx('b',null,x[0]),hx('span',null,x[1])));});
+    add(box,k);
+    add(dl,hx('span',null,'Première vue'),hx('span',null,r.a!=null?rel(r.a)+' · '+plein(r.a):'—'),hx('span',null,'Dernière vue'),hx('span',null,r.b!=null?rel(r.b)+' · '+plein(r.b):'—'));
+    if(r.chemin) add(dl,hx('span',null,'Chemin type'),add(hx('span'),hx('code',null,r.chemin)));
+    add(box,dl);
+    add(box,add(hx('div'),hx('h5',null,'Règles déclenchées (sondes)'),barres(r.cats.map(function(c){return [String(c.category||'—'),num(c.count)];}),'var(--violet)','— non relevé')));
+    var ph=phpListe(r.ip);
+    if(ph.length){var pp=hx('div','pils');ph.forEach(function(x){add(pp,hx('span',null,'🐘 '+x[0]+' · '+fmt(x[1]),'Signal PHP en détection seule, sur 24 h'));});add(box,add(hx('div'),hx('h5',null,'Signaux PHP'),pp));}
+    var d=hx('details');d.open=!!OUV[r.ip];d.addEventListener('toggle',function(){OUV[r.ip]=d.open;});
+    add(d,hx('summary',null,'Adresse complète'),hx('code',null,r.ip));
+    add(box,d);
+    if(dedans) box.focus({preventScroll:true});
+  }
+  function rendRepart(L){
+    var cnt={},nn=NATURES.map(function(){return 0;}),box=vide(el('legG'));
+    L.forEach(function(r){cnt[r.sev]=(cnt[r.sev]||0)+1;nn[r.nat]++;});
+    var parts=ORDRE.filter(function(k){return cnt[k];});
+    if(!parts.length) add(box,hx('p','vide',DONNEES?'Aucune adresse.':'Session requise.'));
+    var m=Math.max.apply(null,parts.map(function(k){return cnt[k];}).concat([1]));
+    parts.forEach(function(k){
+      var b=hx('button','lig',null,'Filtrer le classement sur la gravité '+GRAV[k][0].toLowerCase()),e=hx('em'),i=hx('i');b.type='button';b.setAttribute('data-g',k);b.setAttribute('aria-pressed',String(el('fg').value===k));
+      i.style.width=Math.max(3,100*cnt[k]/m)+'%';i.style.background=GRAV[k][1];
+      add(box,add(b,hx('span',null,GRAV[k][0]),add(e,i),hx('b',null,fmt(cnt[k])+' · '+Math.round(100*cnt[k]/L.length)+' %')));
+    });
+    add(vide(el('nature')),barres(NATURES.map(function(n,i){return [n[0]+' '+n[1],nn[i],n[2]];}).filter(function(x){return x[1];}),'var(--bleu)',DONNEES?'Aucune adresse.':'Session requise.'));
+  }
+  function rendBas(){
+    var L=lignes(DONNEES),R=filtrer(L);
+    if(!R.some(function(r){return r.ip===SEL;})) SEL=R.length?R[0].ip:null;
+    rendFrise(R);rendListe(L,R);rendDetail(R);rendRepart(L);
+  }
+  function choisir(ip,origine){
+    SEL=ip;
+    var L=lignes(DONNEES),R=filtrer(L),i=R.map(function(r){return r.ip;}).indexOf(ip);
+    if(i>=LIM) LIM=Math.ceil((i+1)/PAS)*PAS;
+    rendListe(L,R);rendDetail(R);
+    [].forEach.call(el('frise').querySelectorAll('.fr-r'),function(b){b.setAttribute('aria-current',String(b.getAttribute('data-k')===ip));});
+    if(origine==='frise'||el('retour').offsetParent!==null){var d=el('detail');d.focus({preventScroll:true});d.scrollIntoView({block:'start'});}
+  }
+  bouge(el('rang'),'.cl');bouge(el('frise'),'.fr-r');
+  el('frise').addEventListener('pointerover',function(e){var t=e.target&&e.target.closest?e.target.closest('[data-l]'):null;if(t) el('frLecture').textContent=t.getAttribute('data-l');});
+  el('frise').addEventListener('focusin',function(e){var b=e.target.closest?e.target.closest('.fr-r'):null;if(b) el('frLecture').textContent=b.getAttribute('aria-label');});
+  el('retour').addEventListener('click',function(){var b=el('rang').querySelector('[aria-current=true]')||el('rang').querySelector('.cl');if(b){b.focus();b.scrollIntoView({block:'center'});}});
+  // ---- Fin du bas de page
   function rend(d){
     DONNEES=d.data;PHP=d.php||null;MAINTENANT=Date.now();
     el('demo').hidden=!d.demo;el('session').hidden=!!(d.demo||d.data);
@@ -222,14 +359,7 @@
      +tuile(IC.cri,N(crit),'Critiques',ok&&L.length?Math.round(100*crit/L.length)+' % des adresses':'','Adresses dont la gravité maximale observée est « critique ».')
      +tuile(IC.ban,N(bans),'Écartés / bannis',ok&&L.length?fmt(L.length-bans)+' suivis seuls':'','Adresses avec un blocage réseau (drop nft) actif en ce moment. Les autres sont suivies : le blocage a expiré mais le profil est conservé.')
      +tuile(IC.act,N(rec),'Actifs dans l’heure','dernière vue < 1 h','Adresses dont la dernière sonde date de moins d’une heure : celles qui insistent encore.');
-    var cnt={};L.forEach(function(r){cnt[r.sev]=(cnt[r.sev]||0)+1;});
-    var parts=ORDRE.filter(function(k){return cnt[k];}).map(function(k){return [GRAV[k][0],cnt[k],GRAV[k][1],k];});
-    el('donutG').innerHTML=donut(parts,L.length);
-    el('legG').innerHTML=parts.length?parts.map(function(p){return '<div class="clic" data-g="'+p[3]+'" title="Filtrer sur cette gravité"><i style="background:'+p[2]+'"></i><span>'+esc(p[0])+'</span><b>'+fmt(p[1])+' · '+Math.round(100*p[1]/L.length)+'%</b></div>';}).join(''):'<div class="vide">'+(ok?'Aucune adresse.':'Session requise.')+'</div>';
-    var nn=NATURES.map(function(){return 0;});L.forEach(function(r){nn[r.nat]++;});var nm=Math.max.apply(null,nn.concat([1]));
-    el('nature').innerHTML=L.length?NATURES.map(function(n,i){return nn[i]?'<div class="ligne"><span class="n">'+n[0]+' '+esc(n[1])+'</span><span class="v">'+fmt(nn[i])+'</span><div class="barre"><i style="width:'+Math.max(4,100*nn[i]/nm)+'%;background:'+n[2]+'"></i></div></div>':'';}).join(''):'<div class="vide">'+(ok?'Aucune adresse.':'Session requise.')+'</div>';
-    el('frise').innerHTML=L.length?frise(L):'<div class="vide">'+(ok?'Aucune activité à afficher.':'Session requise.')+'</div>';
-    liste();
+    rendBas();
   }
   var DEMO=(function(){
     var n=Date.now(),h=function(x){return new Date(n-x*3600e3).toISOString();};
@@ -245,9 +375,9 @@
       {ip:'local',count:3,first_seen:h(11),last_seen:h(10),severity_max:'low',currently_banned:false,top_categories:[{category:'http.suspicious',count:3}]}]}};
   })();
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  ['fq','fg','fe','ft'].forEach(function(i){el(i).addEventListener(i==='fq'?'input':'change',function(){ETAT.n=40;liste();hauteur();});});
-  el('plus').addEventListener('click',function(){ETAT.n+=40;liste();hauteur();});
-  el('legG').addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-g]');if(!t)return;el('fg').value=el('fg').value===t.getAttribute('data-g')?'':t.getAttribute('data-g');ETAT.n=40;liste();hauteur();});
+  ['fq','fg','fe','ft'].forEach(function(i){el(i).addEventListener(i==='fq'?'input':'change',function(){LIM=PAS;rendBas();hauteur();});});
+  el('plus').addEventListener('click',function(){var avant=LIM;LIM+=PAS;rendListe(lignes(DONNEES),filtrer(lignes(DONNEES)));var b=el('rang').querySelectorAll('.cl')[avant];if(b)b.focus();hauteur();});
+  el('legG').addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-g]');if(!t)return;el('fg').value=el('fg').value===t.getAttribute('data-g')?'':t.getAttribute('data-g');LIM=PAS;rendBas();hauteur();});
   // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'attaquants'},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));

@@ -102,7 +102,7 @@ def test_frise_bornee_triee_et_non_lu_dit(nav):
     assert "+ 13 campagnes datées" in p.inner_text("#frise")
     assert all(lignes.nth(i).bounding_box()["height"] <= 30 for i in range(12))  # ligne fine au bureau
     # la plus ancienne alerte lue date d'environ 84 h : avant, hachuré et dit, jamais un zéro
-    assert lignes.first.locator(".nl").count() == 1 and "non lu" in p.inner_text("#frBas")
+    assert lignes.first.locator(".nl").count() >= 1 and "non lu" in p.inner_text("#frBas")
     assert "alertes lues remontent au" in p.inner_text("#frBas")
     assert lignes.first.locator(".mk.ban").count() == 1 and lignes.first.locator(".mk.der").count() == 1
     t = lignes.first.locator(".tr").first
@@ -207,5 +207,25 @@ def test_demo_400_px_sans_debordement_cibles_40(nav, suffixe):
     assert p.evaluate("[...document.querySelectorAll('#bas *')].filter(function(e){return e.getBoundingClientRect().right>401;}).length") == 0
     assert p.evaluate("[...document.querySelectorAll('#bas button, #bas summary')].filter(function(e){return e.offsetParent&&e.getBoundingClientRect().height<40;}).length") == 0
     assert p.evaluate("Math.min(...[...document.querySelectorAll('#bas *')].filter(function(e){return e.offsetParent&&e.childNodes.length&&[...e.childNodes].some(function(n){return n.nodeType===3&&n.textContent.trim();});}).map(function(e){return parseFloat(getComputedStyle(e).fontSize);}))") >= 13.5
+    assert not p.erreurs
+    p.context.close()
+
+
+def test_activite_de_fond_remplace_les_alertes(nav):
+    """GET /campaigns/activite : tranches du journal entier, null = hachuré ; une campagne absente garde les alertes."""
+    camps, al = campagnes(2)
+    p0 = ouvre(nav, {}, "?demo=1")                                    # les débuts des tranches, calculés par la page elle-même
+    debuts = p0.evaluate("(function(){var r=[],d=new Date(),Y=d.getFullYear(),M=d.getMonth(),D=d.getDate();for(var k=0;k<7;k++)for(var q=0;q<4;q++){var s=new Date(Y,M,D-6+k,q*6).getTime();if(s<Date.now())r.push(s/1000);}return r;})()")
+    p0.context.close()
+    serie = [None] * 3 + [5] * (len(debuts) - 3)
+    act = {"disponible": True, "genere_le": int(NOW), "pas_s": 21600, "debuts": debuts, "campagnes": {camps[0]["signature"]: serie}}
+    r = api(camps, al)
+    r["/api/v1/waf/campaigns/activite"] = act
+    p = ouvre(nav, r)
+    l0 = p.locator(f'#frise .fr-r[data-sig="{camps[0]['signature']}"]')
+    assert l0.locator(".nl").count() == 3 and l0.locator(".tr").count() == len(debuts) - 3
+    assert "5 événements" in l0.locator(".tr").first.get_attribute("title")
+    assert "journal du WAF" in p.inner_text("#frBas") and "Les autres campagnes" in p.inner_text("#frBas")
+    assert "journal du WAF" in p.locator("#liste .cl").first.locator(".c-m").get_attribute("title")
     assert not p.erreurs
     p.context.close()

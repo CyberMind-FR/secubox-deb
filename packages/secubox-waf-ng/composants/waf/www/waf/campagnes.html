@@ -277,7 +277,21 @@
     return {t0:t0,t1:t1,now:now,jours:jours,tr:tr,x:function(t){return Math.max(0,Math.min(100,(t-t0)/(t1-t0)*100));}};
   }
   function couverture(alertes){var m=null;(alertes||[]).forEach(function(a){var t=a?ts(a.timestamp):null;if(t!=null&&(m==null||t<m))m=t;});return m;}
-  function compte(c,s0,s1,cov){if(cov==null||s1<=cov)return null;var n=0;c.ts.forEach(function(t){if(t>=s0&&t<s1)n++;});return n;}
+  // Source 1 : l'agrégat de fond du WAF (GET /campaigns/activite, journal entier, null = non mesuré). Source 2 : alertes lues.
+  function indexAct(a){
+    if(!a||a.disponible!==true||!Array.isArray(a.debuts)||!a.campagnes||typeof a.campagnes!=='object') return null;
+    var idx=Object.create(null),camps=Object.create(null);
+    a.debuts.forEach(function(d,i){if(typeof d==='number'&&isFinite(d)) idx[String(d*1000)]=i;});
+    Object.keys(a.campagnes).forEach(function(k){var v=a.campagnes[k];if(Array.isArray(v)&&v.length===a.debuts.length) camps[k]=v.map(function(x){return typeof x==='number'&&isFinite(x)&&x>=0?x:null;});});
+    return {idx:idx,camps:camps,n:Object.keys(camps).length};
+  }
+  function parFond(c){var a=BAS&&BAS.act;return !!(a&&possede(a.camps,c.sig));}
+  function unite(c){return parFond(c)?['événement','événements']:['alerte','alertes'];}
+  function compte(c,s0,s1,cov){
+    var a=BAS&&BAS.act;
+    if(a&&possede(a.camps,c.sig)&&possede(a.idx,String(s0))) return a.camps[c.sig][a.idx[String(s0)]];
+    if(cov==null||s1<=cov)return null;var n=0;c.ts.forEach(function(t){if(t>=s0&&t<s1)n++;});return n;
+  }
   function comptes(c,F,cov){return F.tr.map(function(s){return compte(c,s[0],s[1],cov);});}
   // Population « profileur:<signature> » du relevé de fond (#3919) : tentatives par jour sur 7 jours, agrégat déjà calculé.
   function indexPops(r){
@@ -293,8 +307,9 @@
       while(v.length<7) v.unshift(null);
       if(v.some(function(x){return x!==null;})) return {v:v,fin:p.fin,u:['tentative','tentatives'],src:'tentatives par jour (relevé des populations)'};
     }
-    var w=F.jours.map(function(j,k){return compte(c,j,k<6?F.jours[k+1]:F.t1,cov);});
-    return w.some(function(x){return x!==null;})?{v:w,fin:F.now,u:['alerte','alertes'],src:'alertes lues par jour'}:null;
+    var cp=comptes(c,F,cov),w=F.jours.map(function(j,k){var fin=k<6?F.jours[k+1]:F.t1,v=null;
+      F.tr.forEach(function(s,i){if(s[0]>=j&&s[0]<fin&&cp[i]!=null) v=(v||0)+cp[i];});return v;});
+    return w.some(function(x){return x!==null;})?{v:w,fin:F.now,u:unite(c),src:parFond(c)?'événements par jour (journal du WAF, tâche de fond)':'alertes lues par jour'}:null;
   }
   function mini(s){
     var g=sv('svg',{'class':'mini',viewBox:'0 0 76 24','aria-hidden':'true'}),m=Math.max.apply(null,s.v.map(function(x){return x||0;}).concat([1]));
@@ -340,19 +355,22 @@
         var b=hx('button','fr-r'),n=hx('span','fr-n'),p=hx('span','piste'),tot=0,col=TEINTE[c.etat]||'var(--doux)',z;
         b.type='button';b.setAttribute('data-sig',c.sig);b.setAttribute('aria-current',String(c.sig===SEL));p.setAttribute('aria-hidden','true');
         add(n,hx('b',null,nomC(c),nomC(c)),puceE(c));
-        if(cov==null||cov>F.t0){z=hx('i','nl',null,cov==null?'Non lu':'Avant le '+court(cov)+' : non lu');z.style.left='0';z.style.width=F.x(cov==null?F.t1:cov)+'%';z.setAttribute('data-l',z.title);add(p,z);}
-        if(cov!=null){var a0=F.x(Math.max(cov,F.t0)),a1=F.x(now);z=hx('i','zr');z.style.left=a0+'%';z.style.width=Math.max(0,a1-a0)+'%';add(p,z);}
+        cpt[i].forEach(function(v,k){            // non mesuré : hachuré ; mesuré : trait de base (un zéro se voit)
+          var s=F.tr[k],g=F.x(s[0]),q=hx('i',v==null?'nl':'zr');q.style.left=g+'%';q.style.width=Math.max(0,F.x(Math.min(s[1],now))-g)+'%';
+          if(v==null){q.title=nomC(c)+' · '+tranche(s)+' : non mesuré';q.setAttribute('data-l',q.title);}
+          add(p,q);
+        });
         for(var k=1;k<7;k++){z=hx('i','jr');z.style.left=F.x(F.jours[k])+'%';add(p,z);}
         cpt[i].forEach(function(v,k){
           if(!v) return;
-          var s=F.tr[k],g=F.x(s[0]),t=hx('i','tr'),txt=nomC(c)+' · '+tranche(s)+' : '+pl(v,'alerte','alertes')+(s[0]<cov?' (tranche lue en partie)':'');
+          var s=F.tr[k],g=F.x(s[0]),t=hx('i','tr'),u=unite(c),txt=nomC(c)+' · '+tranche(s)+' : '+pl(v,u[0],u[1])+(!parFond(c)&&s[0]<cov?' (tranche lue en partie)':'');
           tot+=v;t.style.left=g+'%';t.style.width=Math.max(.6,F.x(Math.min(s[1],now))-g)+'%';t.style.background=col;t.style.opacity=(.3+.7*v/pic).toFixed(2);
           t.title=txt;t.setAttribute('data-l',txt);add(p,t);
         });
         if(c.banDer!=null&&c.banDer>=F.t0){z=hx('i','mk ban',null,'Ban (alerte « banned ») : '+court(c.banDer));z.style.left=F.x(c.banDer)+'%';z.setAttribute('data-l',nomC(c)+' · '+z.title);add(p,z);}
         z=hx('i','mk der',null,'Dernier signe : '+court(c.last));z.style.left=F.x(c.last)+'%';z.setAttribute('data-l',nomC(c)+' · '+z.title);add(p,z);
         z=hx('i','mt',null,'Maintenant');z.style.left=F.x(now)+'%';add(p,z);
-        b.setAttribute('aria-label',nomC(c)+', '+etatTxt(c)+' : '+pl(tot,'alerte lue','alertes lues')+' sur la fenêtre, dernier signe '+relatif(c.last,now)+'. Afficher le détail.');
+        b.setAttribute('aria-label',nomC(c)+', '+etatTxt(c)+' : '+pl(tot,unite(c)[0],unite(c)[1])+' sur la fenêtre, dernier signe '+relatif(c.last,now)+'. Afficher le détail.');
         b.addEventListener('click',function(){choisir(c.sig,'frise');});
         add(box,add(b,n,p));
       });
@@ -361,10 +379,14 @@
       [['Ban (alerte)','var(--orange)'],['Dernier signe','var(--texte)'],['Maintenant','var(--cyan)']].forEach(function(x){var s=hx('span'),q=hx('i');q.style.background=x[1];q.style.width='3px';add(leg,add(s,q,document.createTextNode(x[0])));});
       add(leg,add(hx('span'),hx('i','lnl'),document.createTextNode('Non lu')));
     }
-    var t='Activité : alertes recoupées par adresse, par tranche de 6 h ; une même échelle pour toutes les lignes (la tranche la plus vive : '+pl(pic,'alerte','alertes')+'). ';
-    if(!d.alerts) t='Alertes illisibles : aucune activité n’est dessinée. ';
-    else if(cov==null) t='Aucune alerte lue : aucune activité n’est dessinée. ';
-    else t+=cov>F.t0?'Les '+fmt(d.alerts.length)+' alertes lues remontent au '+court(cov)+' : avant, non lu (hachuré). ':'Les '+fmt(d.alerts.length)+' alertes lues couvrent les 7 jours. ';
+    var A=BAS.act,fond=A&&vus.some(parFond),seules=vus.length&&vus.every(parFond),t;
+    t='Activité par tranche de 6 h, une même échelle pour toutes les lignes (la tranche la plus vive : '+fmt(pic)+'). ';
+    if(fond) t+='Source : journal du WAF, agrégat tenu en tâche de fond ; tranche non mesurée : hachurée. ';
+    if(!seules){
+      if(!d.alerts) t+='Alertes illisibles : '+(fond?'les autres campagnes ne sont pas dessinées. ':'aucune activité n’est dessinée. ');
+      else if(cov==null) t+='Aucune alerte lue : '+(fond?'les autres campagnes ne sont pas dessinées. ':'aucune activité n’est dessinée. ');
+      else t+=(fond?'Les autres campagnes : ':'Source : ')+'alertes recoupées par adresse ; '+(cov>F.t0?'les '+fmt(d.alerts.length)+' alertes lues remontent au '+court(cov)+' : avant, non lu (hachuré). ':'les '+fmt(d.alerts.length)+' alertes lues couvrent les 7 jours. ');
+    }
     if(avant) t+=avant>1?avant+' campagnes ont leur dernier signe avant ces 7 jours. ':'1 campagne a son dernier signe avant ces 7 jours. ';
     if(sans) t+=sans>1?sans+' campagnes sans alerte lue ne sont pas dessinées.':'1 campagne sans alerte lue n’est pas dessinée.';
     bas.textContent=t.trim();
@@ -438,9 +460,9 @@
     var cp=comptes(c,F,cov),pic=-1,act=hx('div','act'),m=1;
     cp.forEach(function(v,i){if(v!=null&&v>m)m=v;if(v!=null&&(pic<0||v>cp[pic]))pic=i;});
     if(cp.some(function(v){return v!=null;})){
-      cp.forEach(function(v,i){var b=hx('i',v==null?'nl':!v?'z':i===pic?'pic':null,null,tranche(F.tr[i])+' : '+(v==null?'non lu':pl(v,'alerte','alertes')));if(v)b.style.height=Math.max(4,v/m*100)+'%';add(act,b);});
-      act.setAttribute('role','img');act.setAttribute('aria-label','Activité par tranche de 6 h, pic : '+(pic>=0&&cp[pic]?pl(cp[pic],'alerte','alertes')+' ('+tranche(F.tr[pic])+')':'aucune alerte'));
-      add(box,add(hx('div'),hx('h5',null,'Activité, 7 derniers jours par tranche de 6 h'),act,hx('p','note',(pic>=0&&cp[pic]?'Pic : '+pl(cp[pic],'alerte','alertes')+' ('+tranche(F.tr[pic])+'). ':'')+'Échelle propre à cette campagne ; hachuré : non lu.')));
+      cp.forEach(function(v,i){var b=hx('i',v==null?'nl':!v?'z':i===pic?'pic':null,null,tranche(F.tr[i])+' : '+(v==null?'non mesuré':pl(v,unite(c)[0],unite(c)[1])));if(v)b.style.height=Math.max(4,v/m*100)+'%';add(act,b);});
+      act.setAttribute('role','img');act.setAttribute('aria-label','Activité par tranche de 6 h, pic : '+(pic>=0&&cp[pic]?pl(cp[pic],unite(c)[0],unite(c)[1])+' ('+tranche(F.tr[pic])+')':'aucun'));
+      add(box,add(hx('div'),hx('h5',null,'Activité, 7 derniers jours par tranche de 6 h'),act,hx('p','note',(pic>=0&&cp[pic]?'Pic : '+pl(cp[pic],unite(c)[0],unite(c)[1])+' ('+tranche(F.tr[pic])+'). ':'')+'Échelle propre à cette campagne ; hachuré : non mesuré.')));
     }
     add(box,add(hx('div'),hx('h5',null,'Cibles'),barres(top(c.hosts,5),'var(--rouge)')));
     add(box,add(hx('div'),hx('h5',null,'Catégories'),barres(top(c.cats,5),'var(--violet)')));
@@ -470,7 +492,7 @@
   }
   function rendBas(){
     if(!BAS) return;
-    BAS.F=fenetre(BAS.now);BAS.cov=BAS.d.alerts?couverture(BAS.d.alerts):null;BAS.R=BAS.ok?rangs(BAS.L):[];
+    BAS.act=indexAct(BAS.d.activite);BAS.F=fenetre(BAS.now);BAS.cov=BAS.d.alerts?couverture(BAS.d.alerts):null;BAS.R=BAS.ok?rangs(BAS.L):[];
     if(!BAS.R.some(function(c){return c.sig===SEL;})) SEL=BAS.R.length?BAS.R[0].sig:null;
     rendFrise();rendListe();rendSans();rendDetail();rendVise();
   }
@@ -539,14 +561,21 @@
       plus.push({signature:('00'+(0x5f3e2a10b0+i*0x9e3779b1).toString(16)).slice(-12),outil:x[0],attaquants:ips,nb_attaquants:3,sondes:Math.round(x[4]*(18+hasard()*40)),
         haute_valeur:x[6]==='critical'?40:0,exemple_sequence:['GET /','GET /'+x[1].split('.')[0]+'/','GET /robots.txt']});
     });
-    return {demo:true,now:n,alerts:al,bans:bans,
-      campaigns:{available:true,attaquants:47,campagnes:plus.concat([
+    var camps=plus.concat([
         {signature:'089b4a5e1234',outil:'sqlmap',attaquants:['57.141.0.17','57.141.0.57','57.141.3.58','57.141.3.42'],nb_attaquants:4,sondes:5273,haute_valeur:312,exemple_sequence:['GET /index.php?id=#','GET /login','POST /login','GET /.env','GET /admin']},
         {signature:'1392fa1c9876',outil:'nuclei',attaquants:['185.220.101.3','185.220.101.9','45.155.205.4'],nb_attaquants:3,sondes:2987,haute_valeur:40,exemple_sequence:['GET /','GET /.git/config','GET /wp-login.php','GET /phpmyadmin/']},
         {signature:'7be0c4d2aa10',outil:'webshell-dropper',attaquants:['91.92.241.7','91.92.241.8','91.92.242.1'],nb_attaquants:3,sondes:864,haute_valeur:211,exemple_sequence:['POST /upload.php','GET /shell.php?cmd=id','GET /cgi-bin/']},
         {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']},
         {signature:'5ad07c118b21',outil:'client-automatise?',attaquants:['203.0.113.4','203.0.113.5','203.0.113.6'],nb_attaquants:3,sondes:96,haute_valeur:0,exemple_sequence:['GET /wp-json/','GET /xmlrpc.php','GET /feed/','GET /sitemap.xml']},
-        {signature:'e0b1f4439d70',outil:'client-automatise?',attaquants:['198.51.100.8','198.51.100.9'],nb_attaquants:2,sondes:41,haute_valeur:0,exemple_sequence:['GET /api/status']}])}};
+        {signature:'e0b1f4439d70',outil:'client-automatise?',attaquants:['198.51.100.8','198.51.100.9'],nb_attaquants:2,sondes:41,haute_valeur:0,exemple_sequence:['GET /api/status']}]);
+    // Activité de fond simulée (GET /campaigns/activite) : les événements des campagnes par tranche de 6 h, toutes tranches mesurées.
+    var F=fenetre(n),act={disponible:true,genere_le:Math.floor(n/1000),pas_s:21600,debuts:F.tr.map(function(t){return t[0]/1000;}),campagnes:{}};
+    camps.forEach(function(c){
+      var v=F.tr.map(function(){return 0;}),ips=c.attaquants,datee=false;
+      al.forEach(function(x){if(ips.indexOf(x.client_ip)<0)return;var t=Date.parse(x.timestamp);F.tr.forEach(function(s,i){if(t>=s[0]&&t<s[1]){v[i]+=3;datee=true;}});});
+      if(datee) act.campagnes[c.signature]=v;
+    });
+    return {demo:true,now:n,alerts:al,bans:bans,activite:act,campaigns:{available:true,attaquants:47,campagnes:camps}};
   }
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
@@ -571,9 +600,9 @@
   function charge(){
     if(q.get('demo')){rend(demo());return;}
     var b='/api/v1/waf/';
-    Promise.all([jget(b+'campaigns'),jget(b+'alerts?limit=500'),jget(b+'bans')]).then(function(r){
+    Promise.all([jget(b+'campaigns'),jget(b+'alerts?limit=500'),jget(b+'bans'),jget(b+'campaigns/activite')]).then(function(r){
       var c=r[0]&&typeof r[0]==='object'&&Array.isArray(r[0].campagnes)||r[0]&&r[0].available===false?r[0]:null;
-      rend({campaigns:c,alerts:r[1]&&r[1].alerts||null,bans:r[2]&&Array.isArray(r[2].bans)?r[2].bans:null});
+      rend({campaigns:c,alerts:r[1]&&r[1].alerts||null,bans:r[2]&&Array.isArray(r[2].bans)?r[2].bans:null,activite:r[3]});
     });
   }
   // encadrée par la page /waf/ : on lui dit sa hauteur pour qu'elle n'ait pas de défilement interne
