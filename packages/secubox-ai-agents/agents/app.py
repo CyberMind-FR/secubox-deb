@@ -465,7 +465,7 @@ class Creation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=3, max_length=500)
     negatif: str = Field(default="", max_length=300)
-    modele: Literal["sd15", "sdxl-turbo"] = "sd15"
+    modele: Literal["sd-turbo", "sd15", "sdxl-turbo", "z-image-turbo"] = "sd15"
     taille: Literal[512, 1024] = 512
     graine: int | None = Field(default=None, ge=0, lt=2**31)
 

@@ -20,7 +20,7 @@ from conftest import MOTEUR, PAQUET  # noqa: E402
 # PNG 1×1 réel (blanc)
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC")
 SD = Path.home() / "poc-secubox-ai/sdcpp/build/bin/sd-cli"
-SD15 = Path.home() / "poc-secubox-ai/sd-models/v1-5-pruned-emaonly.safetensors"
+SD15 = Path.home() / "AI/models/sd/checkpoints/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf"
 
 
 def test_filtre_par_defaut():
