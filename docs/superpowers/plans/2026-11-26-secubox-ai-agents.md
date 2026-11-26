@@ -45,7 +45,12 @@ chatbot, mémoire, apprentissage… ». Base : `docs/CYBERMIND-AI-V3-AUDIT.md` (
 Sortie de A : un échange en flux depuis `/jarvis`, l'historique repris au tour suivant, la mémoire citée ;
 tests verts dans `/opt` ; aucune route existante du relais cassée ; rien n'est exposé publiquement.
 
-## Tranche B — apprentissage et évaluation
+## Tranche B — apprentissage et évaluation (#3992, livrée sur gk0)
+
+Fait : `EvalRunner` + jeu SecuBox + notation déterministe + backend socket Unix ; `TraceStore` (retours 👍/👎),
+corrections en mémoire reprises en priorité ; `LearnedRouterPolicy` en recommandation ; second moteur CPU à la
+demande avec garde de mémoire. Non branché : `LLMOptimizer` (infonuagique), dspy/gepa, LoRA/SFT/GRPO (accord).
+
 
 Ce qu'OpenJarvis fournit **réellement** (à relire avant d'écrire : `learning/`, `evals/`, `skills/`,
 `telemetry/`) : banc d'évaluation (jeux locaux seulement, aucun téléchargement Hugging Face en service),

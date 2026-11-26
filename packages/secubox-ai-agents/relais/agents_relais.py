@@ -42,8 +42,86 @@ def _jeton() -> str:
     return JETON.read_text(encoding="utf-8").strip()
 
 
+MODELES = Path.home() / "poc-secubox-ai/models"
+LIMITES = Path(__file__).parent / "limites.toml"
+ENV_EVAL = Path.home() / ".config/secubox-ai-eval/modele.env"
+UNITE_EVAL = "secubox-ai-eval-moteur.service"
+SOCKET_EVAL = SOCKET.parent.parent / "secubox-ai-eval/moteur.sock"
+NOM_MODELE_RE = re.compile(r"^[A-Za-z0-9._-]{1,160}\.gguf$")
+MARGE_RAM_O = 1536 * 1024 ** 2      # le second moteur ne démarre que s'il reste cette marge après chargement
+API2 = "/api/v1/ai/jarvis-moteur2"
+
+
+def _modele_actif() -> str:
+    import tomllib
+    try:
+        return str(tomllib.loads(LIMITES.read_text(encoding="utf-8")).get("moteur", {}).get("modele", ""))
+    except (OSError, ValueError):
+        return ""
+
+
+def _ram_disponible() -> int:
+    for ligne in Path("/proc/meminfo").read_text().splitlines():
+        if ligne.startswith("MemAvailable:"):
+            return int(ligne.split()[1]) * 1024
+    return 0
+
+
+def modeles_eval() -> list[dict]:
+    """Modèles installés utilisables en second moteur : ni l'actif, ni un projecteur (mmproj), ni un .part."""
+    actif, libre = _modele_actif(), _ram_disponible()
+    sortie = []
+    for f in sorted(MODELES.glob("*.gguf")):
+        if f.name == actif or f.name.startswith("mmproj") or not NOM_MODELE_RE.match(f.name) or not f.is_file():
+            continue
+        taille = f.stat().st_size
+        sortie.append({"nom": f.name, "taille_mo": taille // 1024 ** 2,
+                       "tient": taille + MARGE_RAM_O <= libre, "ram_disponible_mo": libre // 1024 ** 2})
+    return sortie
+
+
+def _systemctl(*args: str) -> int:
+    import subprocess
+    return subprocess.run(["systemctl", "--user", *args], capture_output=True, timeout=30, check=False).returncode
+
+
 def brancher(app, local) -> None:
     transport = httpx.AsyncHTTPTransport(uds=str(SOCKET))
+
+    # --- second moteur d'évaluation (#3992) : démarré/arrêté ICI, le service des agents n'a pas ce pouvoir ---
+    @app.get(API2 + "/etat")
+    def eval_etat(request: Request):
+        local(request)
+        modele = ""
+        if ENV_EVAL.is_file():
+            modele = Path(ENV_EVAL.read_text(encoding="utf-8").partition("=")[2].strip()).name
+        return {"actif": _systemctl("is-active", "--quiet", UNITE_EVAL) == 0, "pret": SOCKET_EVAL.is_socket(),
+                "modele": modele, "modeles": modeles_eval()}
+
+    @app.post(API2 + "/demarrer")
+    def eval_demarrer(corps: dict, request: Request):
+        local(request)
+        nom = str(corps.get("modele", ""))
+        choix = {m["nom"]: m for m in modeles_eval()}
+        if nom not in choix:
+            raise HTTPException(404, "modèle inconnu (ni l'actif, ni un projecteur)")
+        if not choix[nom]["tient"]:
+            raise HTTPException(409, f"mémoire insuffisante : {choix[nom]['taille_mo']} Mo à charger, "
+                                     f"{choix[nom]['ram_disponible_mo']} Mo disponibles (marge 1,5 Go)")
+        ENV_EVAL.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        tmp = ENV_EVAL.with_suffix(".tmp")
+        tmp.write_text(f"MODELE={MODELES / nom}\n", encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, ENV_EVAL)                       # double tampon
+        if _systemctl("restart", UNITE_EVAL) != 0:
+            raise HTTPException(503, "second moteur : démarrage refusé par systemd")
+        return {"demarre": nom}
+
+    @app.post(API2 + "/arreter")
+    def eval_arreter(request: Request):
+        local(request)
+        _systemctl("stop", UNITE_EVAL)
+        return {"arrete": True}
 
     @app.get("/jarvis")
     def page_agents(request: Request):

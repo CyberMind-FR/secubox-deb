@@ -1,0 +1,12 @@
+{"id": "port-ssh", "categorie": "short", "question": "Quel est le port TCP par défaut de SSH ? Réponds par le nombre seul.", "attendus": [["22"]]}
+{"id": "port-https", "categorie": "short", "question": "Quel est le port TCP par défaut de HTTPS ? Réponds par le nombre seul.", "attendus": [["443"]]}
+{"id": "port-dns", "categorie": "short", "question": "Sur quel port écoute un serveur DNS par défaut ?", "attendus": [["53"]]}
+{"id": "waf", "categorie": "short", "question": "Que signifie le sigle WAF en sécurité informatique ?", "attendus": [["web application firewall", "pare-feu applicatif", "pare-feu d'application"]]}
+{"id": "nftables", "categorie": "general", "question": "Sous Linux, quel cadre de filtrage réseau remplace iptables dans les distributions récentes comme Debian ?", "attendus": [["nftables", "nft"]]}
+{"id": "cspn", "categorie": "short", "question": "Quel organisme français délivre la certification CSPN ?", "attendus": [["anssi"]]}
+{"id": "debian13", "categorie": "short", "question": "Quel est le nom de code de Debian 13 ?", "attendus": [["trixie"]]}
+{"id": "wireguard", "categorie": "general", "question": "Quel protocole de transport WireGuard utilise-t-il pour ses tunnels : TCP ou UDP ?", "attendus": [["udp"]]}
+{"id": "ipv6", "categorie": "short", "question": "Combien de bits comporte une adresse IPv6 ?", "attendus": [["128"]]}
+{"id": "multiplication", "categorie": "math", "question": "Combien font 17 multiplié par 23 ? Donne le résultat.", "attendus": [["391"]]}
+{"id": "python-len", "categorie": "code", "question": "En Python, quelle fonction renvoie le nombre d'éléments d'une liste ? Écris def exemple(l): return ... avec la bonne fonction.", "attendus": [["len("]]}
+{"id": "nft-list", "categorie": "code", "question": "Quelle commande shell affiche toutes les règles nftables chargées ? Donne la commande exacte dans un bloc de code.", "attendus": [["nft list ruleset"]]}

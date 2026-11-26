@@ -16,6 +16,8 @@ Environment=SECUBOX_AI_AGENTS_JETON=%h/.config/secubox-ai-jeton/jeton
 Environment=SECUBOX_AI_AGENTS_MOTEUR=%h/poc-secubox-ai/run/llama.sock
 # Recherche web : SEULEMENT par le pont SearXNG (socket Unix) ; le service lui-même n'a toujours aucun réseau.
 Environment=SECUBOX_AI_AGENTS_PONT=%t/secubox-ai-pont/searxng.sock
+# Second moteur d'évaluation (#3992), démarré par le relais seulement ; lu ici, jamais piloté.
+Environment=SECUBOX_AI_AGENTS_MOTEUR2=%t/secubox-ai-eval/moteur.sock
 Environment=SECUBOX_AI_AGENTS_ETAT=%S/secubox-ai-agents
 # Télémétrie : désactivée par défaut dans OpenJarvis ; on le redit, et le réseau est fermé de toute façon.
 Environment=OPENJARVIS_HOME=%S/secubox-ai-agents/openjarvis

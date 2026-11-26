@@ -7,6 +7,7 @@
 
 Tranche A : conversation en flux (SSE), conversations conservées, mémoire documentaire par agent.
 Tranche C : recherche approfondie, digest du matin, planificateur (`agents/travaux.py`).
+Tranche B : retours 👍/👎 et corrections, évaluation, routage appris en recommandation (`agents/evaluation.py`).
 Servi sur socket Unix ; nginx (box) ou le relais du POC (gk0) le montent sous `/api/v1/ai/agents/`.
 
 Ce que le service ne fait PAS : aucun outil d'action (ni shell, ni code, ni fichier, ni navigateur, ni réseau
@@ -17,8 +18,10 @@ Le journal ne reçoit ni question ni réponse : seulement des tailles et des dur
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,16 +29,18 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from openjarvis.core.types import Message, Role
+from openjarvis.core.types import Message, Role, Trace
+from openjarvis.traces.store import TraceStore
 from openjarvis.security.capabilities import CapabilityPolicy
 from pydantic import BaseModel, ConfigDict, Field
 
 from agents import garde
 from agents.moteur import Mesure, Moteur
 from agents.stockage import AGENT_RE, Conversations, Memoires
+from agents.evaluation import Historique, recommandation
 from agents.travaux import Planificateur, Travaux, installer_consignes
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 log = logging.getLogger("secubox.ai.agents")
 
 HISTORIQUE_MAX = 12          # messages repris dans le contexte
@@ -75,13 +80,21 @@ class Note(BaseModel):
     source: Literal["note", "document", "reponse"] = "note"
 
 
-def construire_messages(historique, question: str, passages: list[dict]) -> list[Message]:
+CONSIGNE_CORRECTIONS = ("CORRECTIONS validées par le propriétaire sur des réponses précédentes : elles PRÉVALENT "
+                        "sur tes connaissances quand la question porte sur le même sujet.")
+CORRECTIONS_MAX = 2
+
+
+def construire_messages(historique, question: str, passages: list[dict],
+                        corrections: list[dict] | None = None) -> list[Message]:
     """UN seul message système en tête, puis user/assistant strictement alternés, finissant par la question.
 
     Certains gabarits (Gemma 3 du POC) refusent un second message système et deux rôles identiques à la
     suite (HTTP 400 « Conversation roles must alternate ») : les tours consécutifs du même rôle (réponse
     interrompue) sont réunis, un assistant en tête est écarté."""
     systeme = CONSIGNE
+    if corrections:
+        systeme += f"\n\n{CONSIGNE_CORRECTIONS}\n\n" + "\n\n".join(c["texte"][:PASSAGE_CAR] for c in corrections)
     if passages:
         texte = "\n\n".join(f"[{i}] {p['titre'] or p['source']}\n{p['texte'][:PASSAGE_CAR]}"
                             for i, p in enumerate(passages, 1))
@@ -116,7 +129,9 @@ async def cycle(app: FastAPI):
     app.state.conv = Conversations(d)
     app.state.mem = Memoires(d)
     installer_consignes(Path(os.environ.get("OPENJARVIS_HOME", str(d / "openjarvis"))))
-    app.state.travaux = Travaux(d, app.state.moteur, app.state.mem)
+    app.state.traces = TraceStore(str(d / "traces.db"))
+    app.state.evaluations = Historique(d)
+    app.state.travaux = Travaux(d, app.state.moteur, app.state.mem, app.state.traces, app.state.evaluations)
     app.state.plan = Planificateur(d, app.state.travaux)
     app.state.plan.synchroniser_digest(app.state.travaux.config_digest())
     app.state.plan.demarrer()
@@ -124,6 +139,8 @@ async def cycle(app: FastAPI):
         yield
     finally:
         app.state.plan.arreter()
+        app.state.evaluations.fermer()
+        app.state.traces.close()
         app.state.moteur.fermer()
         app.state.conv.fermer()
         app.state.mem.fermer()
@@ -163,14 +180,17 @@ async def chat(corps: Corps, request: Request, sub: str = Depends(_porteur)):
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     passages = await app.state.mem.chercher(corps.agent, corps.message) if corps.memoire else []
+    # Effet des retours : les corrections écrites au 👎 reviennent, en priorité, sur une question voisine.
+    corrections = await app.state.mem.chercher("corrections", corps.message, CORRECTIONS_MAX)
 
-    messages = construire_messages(session.messages, corps.message, passages)
+    messages = construire_messages(session.messages, corps.message, passages, corrections)
     await app.state.conv.ajouter(session.session_id, "user", corps.message)
 
     async def flux():
         mesure, reponse = Mesure(), []
         yield _sse({"conversation": conv, "sources": [{"n": i, "id": p["id"], "titre": p["titre"]}
-                                                       for i, p in enumerate(passages, 1)]})
+                                                       for i, p in enumerate(passages, 1)],
+                    "corrections": len(corrections)})
         try:
             async for morceau in moteur.flux(messages, max_tokens=corps.max_tokens,
                                              temperature=corps.temperature, mesure=mesure):
@@ -180,13 +200,20 @@ async def chat(corps: Corps, request: Request, sub: str = Depends(_porteur)):
             log.warning("génération interrompue : %s %s", type(exc).__name__, getattr(exc, "__cause__", None) or exc)
             yield _sse({"erreur": "génération interrompue"})
         texte = "".join(reponse)
+        trace_id = None
         if texte:
             await app.state.conv.ajouter(session.session_id, "assistant", texte,
                                          {"duree_s": round(mesure.duree_s, 2), "morceaux": mesure.morceaux})
+            trace = Trace(query=corps.message, agent=corps.agent, model=moteur.etat()["modele"] or "", engine="actif",
+                          result=texte, started_at=time.time() - mesure.duree_s, ended_at=time.time(),
+                          total_latency_seconds=mesure.duree_s,
+                          metadata={"sub": sub, "conversation": conv, "corrections": len(corrections)})
+            await asyncio.to_thread(app.state.traces.save, trace)
+            trace_id = trace.trace_id
         log.info("chat car_q=%d car_r=%d morceaux=%d premier_s=%s duree_s=%.2f passages=%d",
                  len(corps.message), len(texte), mesure.morceaux,
                  None if mesure.premier_s is None else round(mesure.premier_s, 2), mesure.duree_s, len(passages))
-        yield _sse({"fin": True, "morceaux": mesure.morceaux, "caracteres": len(texte),
+        yield _sse({"fin": True, "trace": trace_id, "morceaux": mesure.morceaux, "caracteres": len(texte),
                     "premier_s": None if mesure.premier_s is None else round(mesure.premier_s, 3),
                     "duree_s": round(mesure.duree_s, 3)})
 
@@ -337,6 +364,51 @@ async def annuler_tache(ident: str, request: Request):
     except KeyError as exc:
         raise HTTPException(404, "tâche introuvable") from exc
     return {"annulee": ident}
+
+
+class Retour(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    trace: str = Field(pattern=r"^[0-9a-f]{8,64}$")
+    note: Literal["plus", "moins"]
+    correction: str = Field(default="", max_length=4000)
+
+
+@routeur.post("/retour")
+async def retour(corps: Retour, request: Request, sub: str = Depends(_porteur)):
+    """👍/👎 sur une réponse (TraceStore.update_feedback) ; au 👎, la correction écrite va en mémoire."""
+    ts: TraceStore = request.app.state.traces
+    trace = await asyncio.to_thread(ts.get, corps.trace)
+    if trace is None or (trace.metadata or {}).get("sub") != sub:
+        raise HTTPException(404, "réponse introuvable")
+    await asyncio.to_thread(ts.update_feedback, corps.trace, 1.0 if corps.note == "plus" else 0.0)
+    gardee = None
+    if corps.note == "moins" and corps.correction.strip():
+        gardee = await request.app.state.mem.garder(
+            "corrections", trace.query[:200],
+            f"Question : {trace.query[:1000]}\nRéponse correcte : {corps.correction.strip()}", "reponse")
+    return {"trace": corps.trace, "note": corps.note, "correction": gardee}
+
+
+class Evaluation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    moteur: Literal["actif", "second"] = "actif"
+    echantillons: int | None = Field(default=None, ge=1, le=50)
+
+
+@routeur.get("/evaluation")
+async def evaluation(request: Request):
+    app = request.app
+    return {"historique": await asyncio.to_thread(app.state.evaluations.lister),
+            "routage": await asyncio.to_thread(recommandation, app.state.traces),
+            "second": app.state.travaux.second_disponible()}
+
+
+@routeur.post("/evaluation")
+async def lancer_evaluation(corps: Evaluation, request: Request):
+    tr = request.app.state.travaux
+    if corps.moteur == "second" and not tr.second_disponible():
+        raise HTTPException(409, "second moteur arrêté : le démarrer depuis la page Évaluation")
+    return _lancer(tr.demarrer_evaluation, corps.moteur, corps.echantillons)
 
 
 # Ni /docs, ni /openapi.json (comme secubox-ai).

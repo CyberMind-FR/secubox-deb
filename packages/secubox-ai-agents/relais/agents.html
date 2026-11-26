@@ -58,6 +58,7 @@
       <button data-p="p-rech">Recherche</button>
       <button data-p="p-dig">Digest du matin</button>
       <button data-p="p-plan">Planificateur</button>
+      <button data-p="p-eval">Évaluation</button>
     </nav>
     <div id="p-conv" class="panneau" style="display:flex">
       <div id="fil"></div>
@@ -87,6 +88,24 @@
       </form>
       <p class="meta">Lecture seule : actualités du jour des thèmes, par la SearXNG locale ; aucune action.</p>
       <div id="digests"></div>
+    </div>
+    <div id="p-eval" class="panneau">
+      <form id="f-eval" class="ligne">
+        <select id="e-moteur"><option value="actif">moteur actif</option><option value="second">second moteur</option></select>
+        <button class="bouton">Lancer la batterie</button>
+      </form>
+      <div class="carte" id="e-second">
+        <div>Second moteur (CPU, une heure au plus) : <span id="e-etat">…</span></div>
+        <div class="ligne" style="margin-top:6px">
+          <select id="e-modele"></select>
+          <button type="button" id="e-demarrer" class="petit">Démarrer</button>
+          <button type="button" id="e-arreter" class="petit">Arrêter</button>
+        </div>
+      </div>
+      <p class="meta">Jeu SecuBox de 12 questions, notation par mots attendus (sans juge), EvalRunner d'OpenJarvis.
+        Chaque échantillon et chaque retour 👍/👎 alimentent le routage appris, affiché en recommandation.</p>
+      <div id="e-routage" class="meta"></div>
+      <div id="e-histo"></div>
     </div>
     <div id="p-plan" class="panneau">
       <form id="f-plan" class="ligne">
@@ -175,14 +194,35 @@ document.getElementById("formulaire").onsubmit = async (e) => {
       if (ev.conversation) conv = ev.conversation;
       if (ev.morceau) { sortie.textContent += ev.morceau; fil.scrollTop = fil.scrollHeight; }
       if (ev.erreur) sortie.textContent += "\n[" + ev.erreur + "]";
+      if (ev.corrections) meta.dataset.corr = ev.corrections;
       if (ev.fin) {
-        meta.textContent = "premier mot " + ev.premier_s + " s · " + ev.duree_s + " s · " + ev.morceaux + " morceaux";
+        meta.textContent = "premier mot " + ev.premier_s + " s · " + ev.duree_s + " s · " + ev.morceaux + " morceaux" +
+                           (meta.dataset.corr ? " · " + meta.dataset.corr + " correction(s) reprise(s)" : "");
         sortie.appendChild(meta);
+        if (ev.trace) sortie.appendChild(boutonsRetour(ev.trace));
       }
     }
   }
   liste();
 };
+
+function boutonsRetour(trace) {
+  const d = document.createElement("div");
+  d.className = "meta";
+  const envoyer = async (note, correction) => {
+    const r = await fetch(API + "/retour", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: JSON.stringify({ trace, note, correction: correction || "" }) });
+    d.textContent = r.ok ? (note === "plus" ? "Merci : réponse notée 👍" :
+                            "Noté 👎" + (correction ? " ; la correction sera reprise dans les réponses suivantes" : ""))
+                         : "Retour refusé (" + r.status + ")";
+  };
+  const plus = document.createElement("button"); plus.className = "petit"; plus.textContent = "👍";
+  const moins = document.createElement("button"); moins.className = "petit"; moins.textContent = "👎";
+  plus.onclick = () => envoyer("plus");
+  moins.onclick = () => envoyer("moins", prompt("Quelle est la bonne réponse ? (facultatif, gardée en mémoire)") || "");
+  d.append(plus, moins);
+  return d;
+}
 
 etat(); liste();
 
@@ -194,6 +234,7 @@ for (const b of document.querySelectorAll(".onglets button")) {
     if (b.dataset.p === "p-rech") travaux();
     if (b.dataset.p === "p-dig") digest();
     if (b.dataset.p === "p-plan") taches();
+    if (b.dataset.p === "p-eval") evaluation();
   };
 }
 
@@ -227,7 +268,7 @@ async function travaux() {
   let enCours = false;
   for (const t of (await r.json()).travaux) {
     const c = el("div", undefined, "carte");
-    const tete = el("div", (t.genre === "digest" ? "Digest — " : "Recherche — ") + t.titre);
+    const tete = el("div", ({ digest: "Digest — ", evaluation: "", recherche: "Recherche — " }[t.genre] || "") + t.titre);
     tete.style.fontWeight = "600";
     c.appendChild(tete);
     const etat = { en_cours: "en cours…", fini: "fini", echec: "échec", annule: "annulé" }[t.etat] || t.etat;
@@ -329,6 +370,57 @@ document.getElementById("f-plan").onsubmit = async (e) => {
   document.getElementById("pl-q").value = "";
   taches();
 };
+
+// --- évaluation ------------------------------------------------------------------------------------
+const API2 = "/api/v1/ai/jarvis-moteur2";
+async function evaluation() {
+  const [r, s] = await Promise.all([fetch(API + "/evaluation"), fetch(API2 + "/etat")]);
+  if (s.ok) {
+    const e = await s.json();
+    document.getElementById("e-etat").textContent = e.pret ? "prêt (" + e.modele + ")" : e.actif ? "démarrage…" : "arrêté";
+    const sel = document.getElementById("e-modele");
+    sel.replaceChildren();
+    for (const m of e.modeles) {
+      const o = document.createElement("option");
+      o.value = m.nom;
+      o.textContent = m.nom + " — " + m.taille_mo + " Mo" + (m.tient ? "" : " (mémoire insuffisante : " + m.ram_disponible_mo + " Mo libres)");
+      o.disabled = !m.tient;
+      sel.appendChild(o);
+    }
+    if (!e.modeles.length) sel.appendChild(el("option", "aucun autre modèle installé"));
+  }
+  if (!r.ok) return;
+  const d = await r.json();
+  const carte = Object.entries(d.routage.carte || {});
+  document.getElementById("e-routage").textContent = "Routage appris (recommandation, non appliqué) : " +
+    (carte.length ? carte.map(([c, m]) => c + " → " + m).join(" ; ") : "pas encore assez d'échantillons (" + d.routage.echantillons_min + " par classe)");
+  const zone = document.getElementById("e-histo");
+  zone.replaceChildren();
+  for (const x of d.historique) {
+    const c = el("div", undefined, "carte");
+    c.appendChild(el("div", x.modele + " (" + x.moteur + ") — " + x.justes + "/" + x.n + " justes (" + Math.round(x.exactitude * 100) + " %)"));
+    c.appendChild(el("div", new Date(x.quand * 1000).toLocaleString("fr-FR") + " · latence moyenne " + x.latence_s +
+                            " s · premier mot " + x.premier_s + " s · " + x.debit_js + " j/s", "meta"));
+    const faux = x.details.filter((y) => !y.juste).map((y) => y.id + " : « " + y.reponse.slice(0, 60) + " »");
+    if (faux.length) c.appendChild(el("div", "Faux : " + faux.join(" ; "), "meta"));
+    zone.appendChild(c);
+  }
+}
+
+document.getElementById("f-eval").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch(API + "/evaluation", { method: "POST", headers: { "Content-Type": "application/json" },
+                                               body: JSON.stringify({ moteur: document.getElementById("e-moteur").value }) });
+  if (!r.ok) { alert((await jsonOu(r)).detail || ("Erreur " + r.status)); return; }
+  document.querySelector('.onglets button[data-p="p-rech"]').click();
+};
+document.getElementById("e-demarrer").onclick = async () => {
+  const r = await fetch(API2 + "/demarrer", { method: "POST", headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ modele: document.getElementById("e-modele").value }) });
+  if (!r.ok) alert((await jsonOu(r)).detail || ("Erreur " + r.status));
+  setTimeout(evaluation, 3000);
+};
+document.getElementById("e-arreter").onclick = async () => { await fetch(API2 + "/arreter", { method: "POST" }); evaluation(); };
 </script>
 </body>
 </html>
