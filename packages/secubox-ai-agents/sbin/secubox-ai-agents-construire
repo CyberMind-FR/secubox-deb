@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# Construit l'environnement Python dédié de secubox-ai-agents (#3986, tranche A).
+#
+# Usage (root, au moment de l'installation ; le service, lui, ne tourne jamais en root) :
+#   secubox-ai-agents-construire <dossier-du-paquet> [préfixe=/opt/secubox-ai-agents]
+#
+# - venv neuf à côté de l'ancien, puis bascule atomique du lien `venv` (l'ancien reste en `venv.avant`) ;
+# - dépendances épinglées PAR EMPREINTE (requirements.txt, --require-hashes) : ni python-telegram-bot,
+#   ni posthog, ni datasets ;
+# - OpenJarvis au commit fixé, installé SANS ses dépendances ; extension Rust compilée par maturin ;
+# - sous-système de minage « Pearl » SUPPRIMÉ du venv (mining/, cli/mine_cmd.py, cli/pearl_cmd.py),
+#   puis vérifié absent ; bac à sable Docker (sandbox/) et outils de outils-retires.txt supprimés ;
+# - tout le venv appartient à root, en lecture seule pour le service.
+# Idempotent : relancé, il reconstruit et rebascule.
+set -euo pipefail
+
+OJ_DEPOT="https://github.com/open-jarvis/OpenJarvis"
+OJ_COMMIT="556ddf32"
+PYTHON="${PYTHON:-python3.12}"
+UV="${UV:-uv}"
+
+paquet="${1:?dossier du paquet requis}"
+prefixe="${2:-/opt/secubox-ai-agents}"
+[[ -f "$paquet/requirements.txt" ]] || { echo "requirements.txt absent de $paquet" >&2; exit 2; }
+
+horodatage="$(date -u +%Y%m%dT%H%M%SZ)"
+neuf="$prefixe/venv-$horodatage"
+travail="$(mktemp -d)"
+trap 'rm -rf "$travail"' EXIT
+
+install -d -m 0755 "$prefixe"
+"$UV" venv -q -p "$PYTHON" "$neuf"
+VIRTUAL_ENV="$neuf" "$UV" pip install -q --require-hashes -r "$paquet/requirements.txt"
+
+git clone -q "$OJ_DEPOT" "$travail/oj"
+git -C "$travail/oj" checkout -q "$OJ_COMMIT"
+VIRTUAL_ENV="$neuf" "$UV" pip install -q --no-deps "$travail/oj"
+# Extension Rust : obligatoire pour la mémoire (tools/storage/sqlite.py, bm25.py).
+VIRTUAL_ENV="$travail/outil" "$UV" venv -q -p "$PYTHON" "$travail/outil"
+VIRTUAL_ENV="$travail/outil" "$UV" pip install -q maturin
+"$travail/outil/bin/maturin" build -q --release -i "$neuf/bin/python" \
+  -m "$travail/oj/rust/crates/openjarvis-python/Cargo.toml" -o "$travail/roues"
+VIRTUAL_ENV="$neuf" "$UV" pip install -q --no-deps "$travail"/roues/*.whl
+
+# Minage exclu : absent du venv, jamais importable.
+site="$("$neuf/bin/python" -I -c 'import openjarvis, pathlib; print(pathlib.Path(openjarvis.__file__).parent)')"
+rm -rf "$site/mining" "$site/cli/mine_cmd.py" "$site/cli/pearl_cmd.py" "$site/sandbox"
+# Outils interdits (shell, code, fichiers, navigateur, Docker, réseau direct…) : supprimés eux aussi.
+while IFS= read -r outil; do
+  [[ -z "$outil" || "$outil" == \#* ]] && continue
+  [[ "$outil" =~ ^[a-z_]+$ ]] || { echo "nom d'outil invalide : $outil" >&2; exit 2; }
+  rm -f "$site/tools/$outil.py"
+done < "$paquet/outils-retires.txt"
+if "$neuf/bin/python" -I -c 'import openjarvis.mining' 2>/dev/null; then
+  echo "openjarvis.mining encore importable : abandon" >&2; exit 3
+fi
+
+# Le code du module à côté du venv.
+rm -rf "$neuf/agents-src"
+install -d "$neuf/agents-src"
+cp -r "$paquet/agents" "$neuf/agents-src/"
+find "$neuf" -name __pycache__ -type d -prune -exec rm -rf {} +
+"$neuf/bin/python" -I -m compileall -q "$neuf/agents-src" "$site" >/dev/null
+chown -R root:root "$neuf"
+chmod -R go-w "$neuf"
+
+if [[ -L "$prefixe/venv" ]]; then
+  ln -sfn "$(readlink "$prefixe/venv")" "$prefixe/venv.avant"
+fi
+ln -sfn "$neuf" "$prefixe/venv.tmp"
+mv -T "$prefixe/venv.tmp" "$prefixe/venv"
+echo "venv actif : $neuf"

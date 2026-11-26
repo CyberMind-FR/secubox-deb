@@ -1,0 +1,140 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox AI — agents</title>
+<style>
+  :root { --fond:#0f1419; --carte:#18202a; --texte:#e6edf3; --doux:#8b98a5; --accent:#4fb3a9; --bord:#2a3542; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fond); color:var(--texte); font:15px/1.5 system-ui, sans-serif; }
+  main { display:grid; grid-template-columns:260px 1fr; height:100vh; }
+  aside { border-right:1px solid var(--bord); padding:12px; overflow:auto; }
+  aside button { width:100%; text-align:left; margin:2px 0; background:var(--carte); color:var(--texte);
+                 border:1px solid var(--bord); border-radius:6px; padding:6px 8px; cursor:pointer; }
+  section { display:flex; flex-direction:column; min-width:0; }
+  #fil { flex:1; overflow:auto; padding:16px; }
+  .msg { max-width:860px; margin:0 0 12px; padding:10px 12px; border-radius:8px; white-space:pre-wrap; }
+  .user { background:#1f2b38; margin-left:auto; } .assistant { background:var(--carte); border:1px solid var(--bord); }
+  .meta { color:var(--doux); font-size:12px; margin-top:4px; }
+  form { display:flex; gap:8px; padding:12px; border-top:1px solid var(--bord); }
+  textarea { flex:1; min-height:56px; background:var(--carte); color:var(--texte); border:1px solid var(--bord);
+             border-radius:6px; padding:8px; font:inherit; }
+  .bouton { background:var(--accent); color:#06201d; border:0; border-radius:6px; padding:0 16px; font-weight:600; }
+  label { color:var(--doux); font-size:13px; }
+  @media (max-width: 700px) { main { grid-template-columns:1fr; } aside { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <aside>
+    <button id="nouvelle" class="bouton" style="width:100%;padding:8px">Nouvelle conversation</button>
+    <p class="meta" id="moteur">moteur…</p>
+    <div id="liste"></div>
+  </aside>
+  <section>
+    <div id="fil"></div>
+    <form id="formulaire">
+      <textarea id="question" placeholder="Votre question" required></textarea>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="bouton" style="flex:1">Envoyer</button>
+        <label><input type="checkbox" id="memoire" checked> mémoire</label>
+      </div>
+    </form>
+  </section>
+</main>
+<script>
+const API = "/api/v1/ai/jarvis";
+let conv = null;
+const fil = document.getElementById("fil");
+
+function bulle(role, texte) {
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.textContent = texte;
+  fil.appendChild(d);
+  fil.scrollTop = fil.scrollHeight;
+  return d;
+}
+
+async function liste() {
+  const r = await fetch(API + "/conversations");
+  if (!r.ok) return;
+  const div = document.getElementById("liste");
+  div.replaceChildren();
+  for (const c of (await r.json()).conversations) {
+    const b = document.createElement("button");
+    b.textContent = (c.titre || c.id) + " (" + c.messages + ")";
+    b.onclick = () => ouvrir(c.id);
+    div.appendChild(b);
+  }
+}
+
+async function ouvrir(id) {
+  const r = await fetch(API + "/conversations/" + id);
+  if (!r.ok) return;
+  conv = id;
+  fil.replaceChildren();
+  for (const m of (await r.json()).messages) bulle(m.role, m.texte);
+}
+
+async function etat() {
+  const r = await fetch(API + "/status");
+  const p = document.getElementById("moteur");
+  if (!r.ok) { p.textContent = "service indisponible (" + r.status + ")"; return; }
+  const s = await r.json();
+  p.textContent = (s.moteur.pret ? "moteur : " + s.moteur.modele : "moteur arrêté") + " — outils : aucun";
+}
+
+document.getElementById("nouvelle").onclick = () => { conv = null; fil.replaceChildren(); };
+
+document.getElementById("formulaire").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("question");
+  const texte = q.value.trim();
+  if (!texte) return;
+  q.value = "";
+  bulle("user", texte);
+  const sortie = bulle("assistant", "");
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const corps = { message: texte, memoire: document.getElementById("memoire").checked };
+  if (conv) corps.conversation = conv;
+  const r = await fetch(API + "/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+                                         body: JSON.stringify(corps) });
+  if (!r.ok) { sortie.textContent = "Erreur " + r.status; return; }
+  const lecteur = r.body.getReader();
+  const dec = new TextDecoder();
+  let reste = "";
+  for (;;) {
+    const { value, done } = await lecteur.read();
+    if (done) break;
+    reste += dec.decode(value, { stream: true });
+    const blocs = reste.split("\n\n");
+    reste = blocs.pop();
+    for (const b of blocs) {
+      if (!b.startsWith("data: ")) continue;
+      const ev = JSON.parse(b.slice(6));
+      if (ev.conversation) conv = ev.conversation;
+      if (ev.morceau) { sortie.textContent += ev.morceau; fil.scrollTop = fil.scrollHeight; }
+      if (ev.erreur) sortie.textContent += "\n[" + ev.erreur + "]";
+      if (ev.fin) {
+        meta.textContent = "premier mot " + ev.premier_s + " s · " + ev.duree_s + " s · " + ev.morceaux + " morceaux";
+        sortie.appendChild(meta);
+      }
+    }
+  }
+  liste();
+};
+
+etat(); liste();
+</script>
+</body>
+</html>
