@@ -513,3 +513,18 @@ def test_aucune_disponibilite_a_zero_dans_le_titre():
         d["par_jour"][j]["dispo"] = None
     v = RP.verdict(d, RP.kpis(d), [])
     assert "disponible" not in v and "0,00" not in v and "comprendre" not in str(RP.decisions(d)).lower()
+
+
+def test_veille_est_disponible_jamais_injoignable(tmp_path, monkeypatch):
+    md = tmp_path / "modules.d"
+    md.mkdir()
+    (md / "gitea.toml").write_text('lifecycle = "on-demand"\n[portal]\ndomain = "git.a.test"\n')
+    (md / "x.toml").write_text("pas du toml = = =")
+    monkeypatch.setattr(RQ, "MODULES_D", md)
+    maintenant = ts("2026-11-22", 0, 25)
+    s = tmp_path / "status.json"
+    s.write_text(json.dumps({"timestamp": datetime.fromtimestamp(maintenant - 30, timezone.utc).isoformat(), "vhosts": {
+        "a.test": {"status": "ok", "latency_ms": 50.0}, "nc.a.test": {"status": "veille", "status_code": 503, "error": "veille"},
+        "git.a.test": {"status": "down", "status_code": 503, "error": None}}}))
+    r = RQ.lire_latence(s, maintenant)
+    assert r["injoignables"] == [] and r["en_veille"] == 2 and r["sites"] == 3

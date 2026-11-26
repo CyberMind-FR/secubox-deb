@@ -52,6 +52,16 @@ def _ondemand_domains():
     return doms
 
 
+# Marques des pages de la mise en veille (secubox-profiles : templates/waking.html et la page « Module desactive » de
+# api/waker.py, servies en 503 par @sbx_wake). Une veille est une réponse voulue, jamais une panne (#3970).
+MARQUES_VEILLE = ("SecuBox — réveil du service", "<title>Module desactive</title>")
+
+
+def est_veille(statut, corps):
+    """Vrai si la réponse est la page de veille ou de réveil d'un module à la demande (reconnue par sa marque, pas par le code)."""
+    return statut in (502, 503, 504) and isinstance(corps, str) and any(m in corps for m in MARQUES_VEILLE)
+
+
 def get_vhosts_from_haproxy():
     vhosts = []
     if not HAPROXY_CFG.exists():
@@ -107,10 +117,13 @@ async def probe_vhost(session, domain, timeout_ms, config):
                     result["status"] = "ok"
             elif resp.status in [301, 302, 303, 307, 308]:
                 result["status"] = "ok"
-            elif resp.status == 503:
-                result["status"] = "down"
             else:
-                result["status"] = "down"
+                corps = (await resp.content.read(65536)).decode("utf-8", "replace") if resp.status in (502, 503, 504) else ""
+                if est_veille(resp.status, corps):
+                    result["status"] = "veille"     # module en veille : réponse voulue, compte comme disponible
+                    result["error"] = "veille"
+                else:
+                    result["status"] = "down"
                 
     except asyncio.TimeoutError:
         result["status"] = "down"
@@ -135,6 +148,7 @@ async def probe_all(config):
         "slow": 0,
         "down": 0,
         "placeholder": 0,
+        "veille": 0,
         "error": 0,
         "vhosts": {}
     }
@@ -157,6 +171,8 @@ async def probe_all(config):
                 results["slow"] += 1
             elif status == "placeholder":
                 results["placeholder"] += 1
+            elif status == "veille":
+                results["veille"] += 1
             elif status == "down":
                 results["down"] += 1
             else:
@@ -165,7 +181,7 @@ async def probe_all(config):
     # Health % only counts configured vhosts (not placeholders)
     real_vhosts = results["total"] - results["placeholder"]
     if real_vhosts > 0:
-        results["health_pct"] = round((results["ok"] + results["slow"]) / real_vhosts * 100, 1)
+        results["health_pct"] = round((results["ok"] + results["slow"] + results["veille"]) / real_vhosts * 100, 1)
     else:
         results["health_pct"] = 100  # All placeholders = no real services to check
     

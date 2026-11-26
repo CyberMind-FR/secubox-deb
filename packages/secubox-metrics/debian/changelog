@@ -3,7 +3,8 @@ secubox-metrics (1.32.2-1~trixie1) trixie; urgency=medium
   * Rapport de pilotage : disponibilité = relevés hors panne (« degraded » n'est pas
     une panne), non mesurée sans le compte des pannes (secubox-status >= 0.1.6) ;
     site injoignable = délai dépassé ou 5xx à deux relevés consécutifs de la sonde,
-    jamais un refus voulu (401, 403, 404) ni une redirection (ref #3970).
+    jamais un refus voulu (401, 403, 404) ni une redirection, ni un module en veille
+    (état « veille » de la sonde, secubox-health >= 1.4.5) ou à la demande (ref #3970).
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 15:00:00 +0100
 

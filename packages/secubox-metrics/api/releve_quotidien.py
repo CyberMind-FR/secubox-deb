@@ -532,6 +532,29 @@ def lire_dispo(chemin: Path = DISPO_JOURS, jours: Iterable[str] = (), noeud: Opt
 
 
 # ── sonde des temps de réponse et contrôles de santé (instantanés) ────────
+MODULES_D = Path("/etc/secubox/modules.d")
+
+
+def domaines_a_la_demande(dossier: Optional[Path] = None) -> set:
+    """Domaines des modules `lifecycle = "on-demand"` (modules.d, même lecture que la sonde de secubox-health) : leur sommeil est
+    voulu, ils ne sont jamais injoignables. Illisible : ensemble vide."""
+    import tomllib
+    out: set = set()
+    try:
+        fichiers = sorted((dossier or MODULES_D).glob("*.toml"))[:500]
+    except OSError:
+        return out
+    for f in fichiers:
+        try:
+            m = tomllib.loads(f.read_text(encoding="utf-8")[:65536])
+        except (OSError, ValueError):
+            continue
+        dom = (m.get("portal") or {}).get("domain") if isinstance(m.get("portal"), dict) else None
+        if str(m.get("lifecycle", "")).strip() == "on-demand" and isinstance(dom, str) and dom:
+            out.add(nom_site(dom))
+    return out
+
+
 def _code(v: Any) -> int:
     return v if isinstance(v, int) and not isinstance(v, bool) else 0
 
@@ -576,11 +599,15 @@ def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Op
     maintenant = time.time() if maintenant is None else maintenant
     if t is None or maintenant - t > SONDE_PERIMEE_S:
         return None
-    lat, lents, bas = [], [], []
+    lat, lents, bas, veilles = [], [], [], 0
+    a_la_demande = domaines_a_la_demande()
     for nom, v in d["vhosts"].items():
         if not isinstance(v, dict):
             continue
         st = v.get("status")
+        if st == "veille" or nom_site(nom) in a_la_demande:
+            veilles += 1                      # module en veille ou à la demande : réponse voulue, disponible
+            continue
         if st in ("ok", "slow") and isinstance(v.get("latency_ms"), (int, float)):
             lat.append(float(v["latency_ms"]))
             if st == "slow":
@@ -589,11 +616,11 @@ def lire_latence(chemin: Path = SONDE, maintenant: Optional[float] = None) -> Op
             # Même règle que les situations du SOC : « down » compte aussi les refus voulus (401, 403, 404) et les
             # redirections ; seuls un délai dépassé ou une erreur 5xx disent une panne.
             bas.append(nom_site(nom))
-    if not lat and not bas:
+    if not lat and not bas and not veilles:
         return None
     lat.sort()
     med = (lat[len(lat) // 2] if len(lat) % 2 else (lat[len(lat) // 2 - 1] + lat[len(lat) // 2]) / 2) if lat else None
-    return {"mediane_ms": None if med is None else round(med, 1), "sites": len(lat) + len(bas), "lents": sorted(lents, key=lambda x: -x[1])[:5],
+    return {"mediane_ms": None if med is None else round(med, 1), "sites": len(lat) + len(bas) + veilles, "en_veille": veilles, "lents": sorted(lents, key=lambda x: -x[1])[:5],
             "injoignables": sorted(bas)[:10], "instant": t}
 
 
