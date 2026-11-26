@@ -1,3 +1,12 @@
+secubox-status (0.1.5-1~trixie1) trixie; urgency=medium
+
+  * Disponibilité par jour de Paris exportée une fois l'heure dans
+    /var/lib/secubox-status/disponibilite.json (0640, groupe secubox) pour le
+    rapport de pilotage de secubox-metrics, qui ne peut pas lire la base WAL
+    (ref #3970).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 09:00:00 +0100
+
 secubox-status (0.1.4-1~trixie1) trixie; urgency=medium
 
   * Légendes des graphiques : chaque libellé prend la couleur de sa courbe

@@ -187,15 +187,12 @@ def test_dns_nginx_dispo(tmp_path):
     assert RQ.nginx_jour(ng, "2026-11-20")["requetes"] == 12 and "(adresse IP nue)" in RQ.nginx_jour(ng, "2026-11-20")["par_site"]
     assert RQ.nginx_jour(ng, "2026-11-21")["requetes"] == 0          # dans le suivi : 0 réel
     assert RQ.nginx_jour(ng, "2026-11-22") is None and RQ.nginx_jour(ng, "2026-11-14") is None
-    st = tmp_path / "status.db"
-    with sqlite3.connect(st) as cx:
-        cx.execute("CREATE TABLE snapshots(node_id TEXT, sequence INT, collected_at TEXT, overall TEXT, document TEXT)")
-        t0 = RQ.bornes("2026-11-20")[0]
-        rows = [("gk", i, datetime.fromtimestamp(t0 + 60 * i, timezone.utc).isoformat(), "outage" if i < 3 else "operational", "{}") for i in range(1440)]
-        rows += [("gk", i, datetime.fromtimestamp(t0 + 86400 + 60 * i, timezone.utc).isoformat(), "operational", "{}") for i in range(100)]
-        cx.executemany("INSERT INTO snapshots VALUES (?,?,?,?,?)", rows)
-    d = RQ.lire_dispo(st, ["2026-11-20", "2026-11-21"], noeud="gk")
-    assert d["2026-11-20"] == round(100 * 1437 / 1440, 3) and d["2026-11-21"] is None     # 100 relevés : trop peu, non mesuré
+    st = tmp_path / "disponibilite.json"
+    st.write_text(json.dumps({"noeud": "gk", "jours": {"2026-11-20": {"connus": 1440, "operationnels": 1437},
+                                                       "2026-11-21": {"connus": 100, "operationnels": 100}}}))
+    d = RQ.lire_dispo(st, ["2026-11-20", "2026-11-21", "2026-11-22"], noeud="gk")
+    assert d == {"2026-11-20": round(100 * 1437 / 1440, 3), "2026-11-21": None, "2026-11-22": None}   # trop peu de relevés : non mesuré
+    assert RQ.lire_dispo(st, ["2026-11-20"], noeud="autre") is None and RQ.lire_dispo(tmp_path / "x.json", ["2026-11-20"]) is None
 
 
 def test_instantanes_sonde_et_sante(tmp_path):
@@ -222,7 +219,7 @@ def test_acteurs_lus_par_la_vue_reduite():
         vus.append(chemin)
         if chemin.startswith("/api/v1/actor/radar"):
             return {"acteurs": [{"id": "ACT-0001", "risque": {"valeur": 40}, "action_proposee": "OBSERVE"},
-                                {"id": "ACT-0002", "risque": {"valeur": 95}, "action_proposee": "BLOCK", "scenario": "sondes"}]}
+                                {"id": "ACT-0002", "risque": {"valeur": 95}, "niveau": "BLOCK", "action_proposee": "blocage temporaire réversible (ban 1 h)", "scenario": "sondes"}]}
         return {"src": {"ips": 12}, "bans": 3, "detail": {"jours": {"debut": 0, "pas": 86400, "valeurs": [1, None]}}}
     a = RQ.lire_acteurs(lire)
     assert [x["id"] for x in a["acteurs"]] == ["ACT-0002", "ACT-0001"] and a["a_bloquer"] == 1 and a["acteurs"][0]["adresses"] == 12
@@ -330,7 +327,12 @@ def test_verdict_construit_des_mesures():
     d = RP.donnees_exemple()
     ks = RP.kpis(d)
     v = RP.verdict(d, ks, [{}])
-    assert v.startswith("Service disponible à 99,") and "requêtes hostiles arrêtées ; 1 décision à prendre" in v
+    assert v.startswith("Service disponible à 99,") and "requêtes servies ; 1 décision à prendre" in v
+    for k in ks:
+        if k["cle"] == "dispo":
+            k["valeur"] = None
+    assert RP.verdict(d, ks, []).startswith("180") and "adresse" not in RP.verdict(d, ks, [])
+    assert RP.manques(ks) == "Non mesuré cette semaine : disponibilité."
     assert RP.verdict(_vide(), RP.kpis(_vide()), []) == "Semaine incomplètement mesurée ; rien à décider"
 
 
@@ -346,7 +348,8 @@ def test_decisions_par_seuils_et_rien_a_decider():
     d["instant"]["latence"]["injoignables"] = ["a.test", "b.test"]
     dec = RP.decisions(d)
     assert [x["regle"] for x in dec] == ["service_vital", "site_injoignable"]
-    assert "Remettre en service le contrôle « nginx »" == dec[0]["titre"] and "2 sites ne répondent" in dec[1]["raison"]
+    assert "Remettre en service le contrôle « nginx »" == dec[0]["titre"] and dec[1]["titre"] == "Rétablir 2 sites injoignables"
+    assert "a.test, b.test." in dec[1]["raison"]
     for j in d["jours"]:
         d["par_jour"][j]["dispo"] = 99.0
         d["par_jour"][j]["latence"] = {"mediane_ms": 700.0}
@@ -362,8 +365,8 @@ def test_pic_et_parts():
     assert RP.pic([100, 120, 110, 900, 100, None, 105], j) == {"jour": "2026-11-19", "valeur": 900, "facteur": 900 / 105}
     assert RP.pic([100, 120, 110, 300, 100, 90, 105], j) is None            # sous 3 fois la médiane
     assert RP.pic([10, 12, 11, 400, 10, 9, 10], j) is None                  # sous 500
-    assert all(v is None for _, v in RP.parts({"a": [1] * 7, "b": [None] + [1] * 6}))
-    assert dict(RP.parts({"a": [1] * 7, "b": [3] * 7})) == {"a": 25.0, "b": 75.0}
+    assert RP.parts({"a": [1] * 7, "b": [None] + [1] * 6}) == [("a", None, "7"), ("b", None, "non mesuré sur 1 jour")]
+    assert RP.parts({"a": [1] * 7, "b": [3] * 7}) == [("a", 25.0, "25,0 %"), ("b", 75.0, "75,0 %")]
 
 
 def test_serie_acteur_par_jour_utc():
@@ -461,7 +464,7 @@ def test_unites_durcies_minuteur_pilotage_desactive_releve_active():
         assert f"systemd/secubox-metrics-{f}" in rules
     # l'ancien rapport du lundi est inchangé
     assert "OnCalendar=Mon *-*-* 07:00:00" in _unite("secubox-metrics-rapport.timer")
-    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.0-1~trixie1) trixie;")
+    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.1-1~trixie1) trixie;")
 
 
 def test_emojis_drapeaux_et_pays_des_populations():
@@ -481,3 +484,13 @@ def test_pdf_porte_des_images_d_emoji(tmp_path):
         pytest.skip("police couleur absente")
     pdf = RP.construire_pdf(RP.donnees_exemple())
     assert pdf.count(b"/Subtype /Image") > 20
+
+
+def test_libelles_francais_et_niveaux_courts():
+    assert RP.libelle_categorie("aspirateur_ua") == "Outil d'aspiration"
+    assert RP.libelle_categorie("auth_smtp:sasl_failed") == "Mots de passe sur la messagerie"
+    assert RP.libelle_categorie("host_anomaly:unrouted") == "Noms non servis" and RP.libelle_categorie("host_anomaly:ip_literal") == "Accès par adresse IP"
+    assert RP.libelle_categorie("scanners|prolonge") == "Outils de balayage" and RP.libelle_categorie("leurre_redirige") == "Détournées vers un leurre"
+    d = RP.donnees_exemple()
+    d["instant"]["acteurs"]["acteurs"][1]["action"] = "blocage temporaire réversible (ban 1 h, puis 24 h)"
+    assert "acteur_a_bloquer" in [x["regle"] for x in RP.decisions(d)]                 # la décision suit le niveau, pas le texte

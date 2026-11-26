@@ -1,3 +1,14 @@
+secubox-metrics (1.32.1-1~trixie1) trixie; urgency=medium
+
+  * Rapport de pilotage, premier rapport réel (ref #3970) : disponibilité lue dans
+    le résumé par jour exporté par secubox-status (>= 0.1.5) ; décision proposée en
+    libellé court (Bloquer, Freiner, Observer) d'après le niveau d'actord ; « Rétablir
+    N sites injoignables » et la liste dessous ; catégories en français (table des
+    dossiers du WAF) ; titre fait des chiffres mesurés, les manques en sous-titre ;
+    couche incomplète : « non mesuré sur N jours » ou son total.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 09:00:00 +0100
+
 secubox-metrics (1.32.0-1~trixie1) trixie; urgency=medium
 
   * Rapport de pilotage hebdomadaire (ref #3970) : six feuilles A4 paysage, version
