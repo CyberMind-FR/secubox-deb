@@ -163,7 +163,8 @@ h1{font-family:"Unbounded","Arial Black",system-ui,sans-serif;font-weight:900;le
   if(!window.SbxDe3d){ repli('moteur absent'); return; }
   // faces orange (SecuBox) et bleue (globe) permutées, demande du propriétaire (26/11)
   var faces=[5,1,2,3,4,0].map(function(k){ return '/_noeud/dice/face-'+k+'.jpg'; });
-  window.SbxDe3d.demarrer(cv,faces,{repli:repli,
+  window.SbxDe3d.demarrer(cv,faces,{quarts:{0:1},repli:repli,   // face bleue tournée d'un quart de tour (26/11)
+
     pret:function(aise){ cv.classList.add('pret'); racine.classList.toggle('vif',aise); },
     charge:function(){ racine.classList.remove('vif'); }});
 })();

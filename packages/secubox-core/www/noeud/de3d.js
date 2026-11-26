@@ -91,6 +91,12 @@ void main(){vec2 uv=(gl_FragCoord.xy*2.-R)/R.y;float l=length(uv);o=vec4(0);if(l
 var TAU=Math.PI*2, NIVEAUX=[1,.82,.67,.55,.45], BAS=NIVEAUX.length-1, IS=320, TROP_LENT=120;
 
 function maintenant(){ return performance.now(); }
+// Face tournée de k quarts de tour (sens horaire) avant l'envoi au GPU ; 0 : l'image telle quelle.
+function tourner(im,k){
+  k=((k%4)+4)%4;if(!k)return im;
+  var c=document.createElement('canvas'),x;c.width=im.naturalWidth;c.height=im.naturalHeight;x=c.getContext('2d');
+  x.translate(c.width/2,c.height/2);x.rotate(k*Math.PI/2);x.drawImage(im,-c.width/2,-c.height/2);return c;
+}
 function image(u){ return new Promise(function(ok,ko){ var i=new Image(); i.onload=function(){ ok(i); }; i.onerror=function(){ ko(new Error('image')); }; i.src=u; }); }
 function plateau(){
   var n=1024,c=document.createElement('canvas'),x,b=78,q=(n-2*b)/8,i,j; c.width=c.height=n; x=c.getContext('2d');
@@ -157,7 +163,7 @@ function demarrer(cv,urls,opt){
     g.activeTexture(g.TEXTURE0); g.bindTexture(A,g.createTexture()); g.texStorage3D(A,9,g.SRGB8_ALPHA8,IS,IS,6);
     I.forEach(function(im,i){
       if(im.naturalWidth!==IS||im.naturalHeight!==IS) throw new Error('image');
-      g.texSubImage3D(A,0,0,0,i,IS,IS,1,g.RGBA,g.UNSIGNED_BYTE,im);
+      g.texSubImage3D(A,0,0,0,i,IS,IS,1,g.RGBA,g.UNSIGNED_BYTE,tourner(im,(opt.quarts||{})[i]|0));
     });
     g.generateMipmap(A);
     g.texParameteri(A,g.TEXTURE_WRAP_S,g.CLAMP_TO_EDGE); g.texParameteri(A,g.TEXTURE_WRAP_T,g.CLAMP_TO_EDGE); g.texParameteri(A,g.TEXTURE_MIN_FILTER,g.LINEAR_MIPMAP_LINEAR);
