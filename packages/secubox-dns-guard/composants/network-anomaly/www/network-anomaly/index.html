@@ -117,10 +117,10 @@
         <label><input type="checkbox" id="fNon"> Non acquittées seulement</label>
         <input type="search" id="fQ" placeholder="Appareil, métrique…" aria-label="Rechercher" size="14">
       </div>
-      <div class="scroll"><table><thead><tr><th>Appareil</th><th class="r">Score</th><th>Type</th><th>Gravité</th><th>Quand</th><th>État</th></tr></thead><tbody id="classement"></tbody></table></div>
+      <div class="scroll"><table><thead><tr><th>Appareil</th><th class="r" title="Nombre d’anomalies regroupées sur 24 h">Fois</th><th class="r" title="Score le plus élevé du groupe">Score max</th><th>Type</th><th>Gravité</th><th>Dernière</th><th>État</th></tr></thead><tbody id="classement"></tbody></table></div>
       <div class="note">Score = écart à la moyenne en nombre d’écarts-types (z). Il n’existe pas pour un balayage de ports : celui-ci est classé par gravité. Appareil = adresse source si elle est connue, sinon interface déduite du nom de la métrique.</div>
     </div>
-    <div class="pan"><h3>Détail <i id="detNote"></i></h3><div class="det" id="detail"><div class="vide">Choisis une anomalie dans le classement.</div></div></div>
+    <div class="pan"><h3>Détail <i id="detNote"></i></h3><div class="det" id="detail"><div class="vide">Choisis une ligne du classement.</div></div></div>
   </div>
   <div class="pan"><h3>La normale : lignes de base <i id="blNote"></i></h3><div class="scroll"><table><thead><tr><th>Métrique</th><th class="r">Moyenne</th><th class="r">Écart-type</th><th class="r">Min</th><th class="r">Max</th><th class="r">Échantillons</th><th>Mise à jour</th></tr></thead><tbody id="bases"></tbody></table></div></div>
   <div class="note">Lecture seule, sauf l’acquittement d’une anomalie (confirmation demandée). Aucun blocage n’est déclenché depuis cette page.</div>
@@ -165,6 +165,20 @@
   }
   function score(a){var z=a.details&&a.details.z_score;return ok(z)?Number(z):null;}
   function cle(a){var z=score(a);return (z==null?0:z)+0.0001*((GRAV[a.severity]||[0,0,0])[2]);}
+  /* Regroupement : une ligne par type + métrique (ou adresse source), toutes occurrences réunies (#4001) */
+  function cleGroupe(a){var d=a.details||{};return (a.type||'')+'|'+(d.metric||a.source_ip||d.source_ip||a.description||a.id);}
+  function groupes(al){
+    var m={},l=[];
+    al.forEach(function(a){var k=cleGroupe(a),g=m[k];if(!g){g=m[k]={id:k,items:[]};l.push(g);}g.items.push(a);});
+    l.forEach(function(g){
+      g.items.sort(function(x,y){return (Date.parse(y.timestamp)||0)-(Date.parse(x.timestamp)||0);});
+      g.pire=g.items.reduce(function(p,a){return cle(a)>cle(p)?a:p;},g.items[0]);
+      g.dernier=g.items[0];g.premier=g.items[g.items.length-1];
+      g.non=g.items.filter(function(a){return !a.acknowledged;});
+      g.cle=cle(g.pire);
+    });
+    return l;
+  }
   function quand(ts){
     var t=Date.parse(ts);if(!isFinite(t))return '—';
     var m=Math.round((Date.now()-t)/60000);
@@ -215,44 +229,53 @@
   }
   function classement(){
     var al=S.alerts;
-    if(!al){el('classement').innerHTML='<tr><td colspan="6" class="vide">Ouvre une session pour voir les anomalies.</td></tr>';el('clNote').textContent='session requise';return;}
+    if(!al){el('classement').innerHTML='<tr><td colspan="7" class="vide">Ouvre une session pour voir les anomalies.</td></tr>';el('clNote').textContent='session requise';return;}
     var ft=el('fType').value,fn=el('fNon').checked,fq=el('fQ').value.trim().toLowerCase();
-    var l=al.filter(function(a){return (!ft||a.type===ft)&&(!fn||!a.acknowledged)&&(!fq||((appareil(a)||'')+' '+((a.details&&a.details.metric)||'')+' '+(a.description||'')).toLowerCase().indexOf(fq)>=0);}).sort(function(x,y){return cle(y)-cle(x);});
-    el('clNote').textContent=l.length+' sur '+al.length;
-    el('classement').innerHTML=l.length?l.slice(0,50).map(function(a){
-      var g=GRAV[a.severity]||[a.severity||'—','#6f84a8',0],t=TYPES[a.type]||[a.type||'—','#9fb3d6'],z=score(a),ap=appareil(a);
-      return '<tr tabindex="0" data-id="'+esc(a.id)+'" class="'+(S.sel===a.id?'sel':'')+'"><td>'+(ap?'<code>'+esc(ap)+'</code>':'—')+'</td><td class="r">'+(z==null?'<span class="score" style="background:rgba(159,179,214,.16);color:var(--faible)" title="Pas de score statistique pour ce type">—</span>':'<span class="score" style="background:'+g[1]+'33;color:'+g[1]+'">'+dec(z,1)+'</span>')+'</td><td><span style="color:'+t[1]+'">●</span> '+esc(t[0])+'</td><td><span class="pastille" style="color:'+g[1]+';border-color:'+g[1]+';background:'+g[1]+'1f">'+esc(g[0])+'</span></td><td title="'+esc(hms(a.timestamp))+'">'+esc(quand(a.timestamp))+'</td><td>'+(a.acknowledged?'<span style="color:var(--vert)">acquittée</span>':'<span style="color:var(--orange)">à traiter</span>')+'</td></tr>';}).join(''):'<tr><td colspan="6" class="vide">'+(al.length?'Aucune anomalie ne correspond au filtre.':'Aucune anomalie sur 24 h : le réseau reste dans la normale.')+'</td></tr>';
+    var l=groupes(al.filter(function(a){return (!ft||a.type===ft)&&(!fn||!a.acknowledged)&&(!fq||((appareil(a)||'')+' '+((a.details&&a.details.metric)||'')+' '+(a.description||'')).toLowerCase().indexOf(fq)>=0);})).sort(function(x,y){return y.cle-x.cle||y.items.length-x.items.length;});
+    var nb=l.reduce(function(t,g){return t+g.items.length;},0);
+    el('clNote').textContent=l.length+' groupe'+(l.length>1?'s':'')+' · '+nb+' anomalie'+(nb>1?'s':'')+(nb<al.length?' sur '+al.length:'');
+    el('classement').innerHTML=l.length?l.slice(0,60).map(function(gr){
+      var a=gr.pire,g=GRAV[a.severity]||[a.severity||'—','#6f84a8',0],t=TYPES[a.type]||[a.type||'—','#9fb3d6'],z=score(a),ap=appareil(a),n=gr.items.length,nn=gr.non.length;
+      return '<tr tabindex="0" data-id="'+esc(gr.id)+'" class="'+(S.sel===gr.id?'sel':'')+'"><td>'+(ap?'<code>'+esc(ap)+'</code>':'—')+'</td><td class="r"><b>'+(n>1?'×'+fmt(n):'1')+'</b></td><td class="r">'+(z==null?'<span class="score" style="background:rgba(159,179,214,.16);color:var(--faible)" title="Pas de score statistique pour ce type">—</span>':'<span class="score" style="background:'+g[1]+'33;color:'+g[1]+'">'+dec(z,1)+'</span>')+'</td><td><span style="color:'+t[1]+'">●</span> '+esc(t[0])+'</td><td><span class="pastille" style="color:'+g[1]+';border-color:'+g[1]+';background:'+g[1]+'1f">'+esc(g[0])+'</span></td><td title="'+esc(hms(gr.dernier.timestamp))+'">'+esc(quand(gr.dernier.timestamp))+'</td><td>'+(nn?'<span style="color:var(--orange)">'+(n>1?fmt(nn)+' à traiter':'à traiter')+'</span>':'<span style="color:var(--vert)">acquittée'+(n>1?'s':'')+'</span>')+'</td></tr>';}).join(''):'<tr><td colspan="7" class="vide">'+(al.length?'Aucune anomalie ne correspond au filtre.':'Aucune anomalie sur 24 h : le réseau reste dans la normale.')+'</td></tr>';
   }
   function detail(){
-    var box=el('detail'),a=S.alerts&&S.alerts.filter(function(x){return x.id===S.sel;})[0];
-    if(!a){box.innerHTML='<div class="vide">'+(S.alerts?'Choisis une anomalie dans le classement.':'Session requise.')+'</div>';el('detNote').textContent='';return;}
+    var box=el('detail'),gr=S.alerts&&groupes(S.alerts).filter(function(x){return x.id===S.sel;})[0],a=gr&&gr.pire;
+    if(!a){box.innerHTML='<div class="vide">'+(S.alerts?'Choisis une ligne du classement.':'Session requise.')+'</div>';el('detNote').textContent='';return;}
     var d=a.details||{},g=GRAV[a.severity]||[a.severity,'#6f84a8',0],t=TYPES[a.type]||[a.type,'#9fb3d6'],ap=appareil(a),z=score(a),h='';
-    el('detNote').textContent=a.id;
+    el('detNote').textContent=gr.items.length>1?gr.items.length+' occurrences · la plus forte ci-dessous':a.id;
     h+='<div><span class="pastille" style="color:'+g[1]+';border-color:'+g[1]+';background:'+g[1]+'1f">'+esc(g[0])+'</span> <b>'+esc(t[0])+'</b></div><div style="color:var(--doux)">'+esc(a.description||'')+'</div>';
-    h+='<dl><dt>Appareil</dt><dd>'+(ap?'<code>'+esc(ap)+'</code>':'—')+'</dd><dt>Détectée</dt><dd>'+esc(hms(a.timestamp))+'</dd>';
+    h+='<dl><dt>Appareil</dt><dd>'+(ap?'<code>'+esc(ap)+'</code>':'—')+'</dd><dt>'+(gr.items.length>1?'Plus forte':'Détectée')+'</dt><dd>'+esc(hms(a.timestamp))+'</dd>'+(gr.items.length>1?'<dt>Première · dernière</dt><dd>'+esc(hms(gr.premier.timestamp))+' · '+esc(hms(gr.dernier.timestamp))+'</dd>':'');
     if(d.metric){h+='<dt>Métrique</dt><dd><code>'+esc(d.metric)+'</code></dd><dt>Valeur mesurée</dt><dd>'+esc(valeur(d.metric,d.value))+'</dd><dt>Normale</dt><dd>'+esc(valeur(d.metric,d.baseline_mean))+' ± '+esc(valeur(d.metric,d.baseline_std))+'</dd>';}
     if(z!=null)h+='<dt>Score (z)</dt><dd>'+dec(z,2)+(ok(d.threshold)?' · seuil '+dec(d.threshold,1):'')+'</dd>';
     if(ok(d.port_count))h+='<dt>Ports sondés</dt><dd>'+fmt(d.port_count)+(d.ports_sample&&d.ports_sample.length?' · ex. '+esc(d.ports_sample.slice(0,8).join(', ')):'')+'</dd>';
-    h+='<dt>État</dt><dd>'+(a.acknowledged?'acquittée'+(a.acknowledged_by?' par '+esc(a.acknowledged_by):'')+(a.acknowledged_at?' · '+esc(hms(a.acknowledged_at)):''):'à traiter')+'</dd></dl>';
+    if(gr.items.length>1)h+='<dt>État</dt><dd>'+(gr.non.length?fmt(gr.non.length)+' à traiter sur '+fmt(gr.items.length):'toutes acquittées')+'</dd></dl>';
+    else h+='<dt>État</dt><dd>'+(a.acknowledged?'acquittée'+(a.acknowledged_by?' par '+esc(a.acknowledged_by):'')+(a.acknowledged_at?' · '+esc(hms(a.acknowledged_at)):''):'à traiter')+'</dd></dl>';
     if(d.metric&&ok(d.value)&&ok(d.baseline_mean))h+=jauge(d);
-    if(!a.acknowledged){
-      if(S.conf)h+='<div class="conf"><div>Acquitter cette anomalie ? Elle sera marquée comme traitée dans le journal des alertes ; l’action n’a pas de retour arrière.</div><div class="bt"><button type="button" class="btn ok" id="bConf">Confirmer</button><button type="button" class="btn" id="bAnn">Annuler</button></div></div>';
-      else h+='<div><button type="button" class="btn" id="bAck">Acquitter</button></div>';
+    if(gr.items.length>1)h+='<div class="scroll" style="max-height:180px"><table><thead><tr><th>Quand</th><th class="r">Valeur</th><th class="r">Score</th><th>État</th></tr></thead><tbody>'+gr.items.slice(0,40).map(function(x){var xd=x.details||{},xz=score(x);return '<tr><td title="'+esc(hms(x.timestamp))+'">'+esc(quand(x.timestamp))+'</td><td class="r">'+esc(xd.metric?valeur(xd.metric,xd.value):(ok(xd.port_count)?fmt(xd.port_count)+' ports':'—'))+'</td><td class="r">'+(xz==null?'—':dec(xz,1))+'</td><td>'+(x.acknowledged?'<span style="color:var(--vert)">acquittée</span>':'<span style="color:var(--orange)">à traiter</span>')+'</td></tr>';}).join('')+'</tbody></table></div>'+(gr.items.length>40?'<div class="sous">40 plus récentes sur '+fmt(gr.items.length)+'.</div>':'');
+    var nn=gr.non.length;
+    if(nn){
+      if(S.conf)h+='<div class="conf"><div>Acquitter '+(nn>1?'les '+fmt(nn)+' anomalies à traiter de ce groupe ? Elles seront marquées':'cette anomalie ? Elle sera marquée')+' comme traitées dans le journal des alertes ; l’action n’a pas de retour arrière.</div><div class="bt"><button type="button" class="btn ok" id="bConf">Confirmer</button><button type="button" class="btn" id="bAnn">Annuler</button></div></div>';
+      else h+='<div><button type="button" class="btn" id="bAck">Acquitter'+(nn>1?' les '+fmt(nn):'')+'</button></div>';
     }
     if(S.msg)h+='<div class="msg '+(S.msg.ok?'ok':'ko')+'" role="status">'+esc(S.msg.t)+'</div>';
     box.innerHTML=h;
     var b1=el('bAck'),b2=el('bConf'),b3=el('bAnn');
     if(b1)b1.addEventListener('click',function(){S.conf=true;S.msg=null;detail();hauteur();});
     if(b3)b3.addEventListener('click',function(){S.conf=false;detail();hauteur();});
-    if(b2)b2.addEventListener('click',function(){acquitter(a.id);});
+    if(b2)b2.addEventListener('click',function(){acquitter(gr.non.map(function(x){return x.id;}));});
   }
-  function acquitter(id){
+  function acquitter(ids){
     S.conf=false;
     if(S.demo){S.msg={ok:false,t:'Démonstration : aucune action n’est envoyée.'};detail();hauteur();return;}
-    ecrire('/alerts/'+encodeURIComponent(id)+'/acknowledge').then(function(r){
-      S.msg=r.ok?{ok:true,t:'Anomalie acquittée.'}:{ok:false,t:'Échec de l’acquittement'+(r.status?' (HTTP '+r.status+')':'')+'.'};
-      detail();hauteur();if(r.ok)charge();
-    });
+    var faits=0,echec=null,i=0;
+    function suivant(){
+      if(i>=ids.length||echec){
+        S.msg=echec?{ok:false,t:fmt(faits)+' acquittée(s) sur '+fmt(ids.length)+' ; échec'+(echec.status?' (HTTP '+echec.status+')':'')+'.'}:{ok:true,t:(ids.length>1?fmt(faits)+' anomalies acquittées.':'Anomalie acquittée.')};
+        detail();hauteur();if(faits)charge();return;
+      }
+      ecrire('/alerts/'+encodeURIComponent(ids[i++])+'/acknowledge').then(function(r){if(r.ok)faits++;else echec=r;suivant();});
+    }
+    suivant();
   }
   function rend(){
     var al=S.alerts,st=S.stats,bs=S.bases;
@@ -315,7 +338,7 @@
     if(S.demo){var d=demo();S.alerts=d.alerts;S.stats=d.stats;S.bases=d.bases;rend();return Promise.resolve();}
     return Promise.all([jget('/alerts?hours=24'),jget('/stats'),jget('/baselines')]).then(function(r){
       S.alerts=r[0]&&r[0].alerts||null;S.stats=r[1]||null;S.bases=r[2]&&r[2].baselines||null;
-      if(S.sel&&S.alerts&&!S.alerts.some(function(a){return a.id===S.sel;})){S.sel=null;S.conf=false;}
+      if(S.sel&&S.alerts&&!S.alerts.some(function(a){return cleGroupe(a)===S.sel;})){S.sel=null;S.conf=false;}
       rend();
     });
   }

@@ -1,3 +1,9 @@
+secubox-dns-guard (1.4.10-1~trixie1) trixie; urgency=medium
+
+  * network-anomaly : classement agrégé, une ligne par type et métrique (ou adresse source) avec occurrences, score max, dernière vue ; le détail liste les occurrences et acquitte le groupe (ref #4001).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 04:50:46 +0100
+
 secubox-dns-guard (1.4.9-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
