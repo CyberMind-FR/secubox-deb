@@ -11,6 +11,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-27 — leurres de service : premier ban à 7 j (closes #4027)
+
+- Rapport IA accès distant (telnet, 93 % de phrases retenues) : 76 retours sur 245 adresses relâchées, médiane 6 j.
+- `secubox-authwatch` : `--duree-ban-leurre 168h` (option existante #3988) ; récidive inchangée (7 j). toolbox-ng 0.22.2
+  déployé sur gk2 (PR #4028), cmdline vérifiée, couture 200.
+- Bibliothèque #4020 : les 7 familles étaient déjà en escalade (3 touches, 24 h) depuis 10:48 par la page Modes ;
+  surveillance 6 h en cours. Rapports IA rédigés : balayage_web, acces_distant, collecte.
+
 ## 2026-11-27 — vague d'aspiration Gitea qualifiée, couches de menace, défi de calcul, bibliothèque de filtres
 
 - **#4001 (PR #4002, déployé gk2)** : dns-guard 1.4.10, classement network-anomaly agrégé par type + métrique (closes #4001).
