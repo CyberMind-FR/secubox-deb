@@ -160,6 +160,7 @@ func TestFamille(t *testing.T) {
 		{"waf_fingerprint", "balayage_web"},
 		{"host_anomaly:unrouted", "balayage_web"},
 		{"rotation:asn", "collecte"},
+		{"bib:fichiers_exposes:git", "balayage_web"},
 		{"inconnue", "autre"},
 	}
 	for _, c := range cas {

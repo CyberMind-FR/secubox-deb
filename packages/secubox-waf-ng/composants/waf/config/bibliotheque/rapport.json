@@ -1,0 +1,324 @@
+{
+ "sources": {
+  "owasp-crs": "v4.31.0",
+  "nuclei-templates": "v10.5.3"
+ },
+ "rejeu": {
+  "requetes": 229996,
+  "touches": 984,
+  "sondes_evidentes_2xx_3xx": 510,
+  "vhosts_redirigeant_tout": 3
+ },
+ "familles": {
+  "defauts_web": {
+   "importees": 995,
+   "converties": 646,
+   "verifiees": 646,
+   "rejetees_rejeu": 0,
+   "retenues": 646,
+   "regex": 0,
+   "chemins_exacts": 646,
+   "touches_rejouees": 6,
+   "ecartees": {
+    "chemin trop générique": 285,
+    "requête brute, charges ou fuzzing": 79,
+    "chemin avec requête": 71,
+    "flux, variables ou protocole non HTTP": 54,
+    "chemin ambigu (plusieurs technos)": 24,
+    "chemin variable": 7,
+    "méthode autre que GET": 6,
+    "chemin hors {{BaseURL}}": 1
+   }
+  },
+  "fichiers_exposes": {
+   "importees": 716,
+   "converties": 700,
+   "verifiees": 700,
+   "rejetees_rejeu": 2,
+   "retenues": 698,
+   "regex": 0,
+   "chemins_exacts": 698,
+   "touches_rejouees": 27,
+   "ecartees": {
+    "chemin trop générique": 257,
+    "requête brute, charges ou fuzzing": 33,
+    "chemin ambigu (plusieurs technos)": 26,
+    "flux, variables ou protocole non HTTP": 19,
+    "chemin avec requête": 13,
+    "chemin hors {{BaseURL}}": 3,
+    "méthode autre que GET": 1,
+    "chemin variable": 1
+   }
+  },
+  "lfi": {
+   "importees": 5,
+   "converties": 3,
+   "verifiees": 3,
+   "rejetees_rejeu": 0,
+   "retenues": 3,
+   "regex": 3,
+   "chemins_exacts": 0,
+   "touches_rejouees": 5,
+   "ecartees": {
+    "transformation cmdline": 1,
+    "niveau de paranoïa > 1": 1
+   }
+  },
+  "non_retenue": {
+   "importees": 181,
+   "converties": 0,
+   "verifiees": 0,
+   "rejetees_rejeu": 0,
+   "retenues": 0,
+   "regex": 0,
+   "chemins_exacts": 0,
+   "touches_rejouees": 0,
+   "ecartees": {
+    "famille CRS 920 non retenue": 60,
+    "famille CRS 901 non retenue": 39,
+    "famille CRS 921 non retenue": 18,
+    "famille CRS 949 non retenue": 18,
+    "famille CRS 934 non retenue": 14,
+    "famille CRS 944 non retenue": 14,
+    "famille CRS 922 non retenue": 7,
+    "famille CRS 931 non retenue": 5,
+    "famille CRS 943 non retenue": 3,
+    "famille CRS 905 non retenue": 2,
+    "famille CRS 911 non retenue": 1
+   }
+  },
+  "panneaux_admin": {
+   "importees": 1591,
+   "converties": 549,
+   "verifiees": 549,
+   "rejetees_rejeu": 1,
+   "retenues": 548,
+   "regex": 0,
+   "chemins_exacts": 548,
+   "touches_rejouees": 10,
+   "ecartees": {
+    "chemin trop générique": 804,
+    "chemin avec requête": 100,
+    "chemin ambigu (plusieurs technos)": 59,
+    "requête brute, charges ou fuzzing": 24,
+    "flux, variables ou protocole non HTTP": 7,
+    "chemin hors {{BaseURL}}": 2,
+    "chemin variable": 1
+   }
+  },
+  "php": {
+   "importees": 21,
+   "converties": 10,
+   "verifiees": 8,
+   "rejetees_rejeu": 0,
+   "retenues": 8,
+   "regex": 8,
+   "chemins_exacts": 0,
+   "touches_rejouees": 26,
+   "ecartees": {
+    "niveau de paranoïa > 1": 8,
+    "transformation removewhitespace": 2,
+    "regex invalide": 2,
+    "ancre sur un argument (sbxwaf lit la requête entière)": 1,
+    "transformation cmdline": 1,
+    "règle chaînée": 1,
+    "cible non reprise (FILES)": 1
+   }
+  },
+  "rce": {
+   "importees": 49,
+   "converties": 17,
+   "verifiees": 17,
+   "rejetees_rejeu": 0,
+   "retenues": 0,
+   "regex": 0,
+   "chemins_exacts": 0,
+   "touches_rejouees": 0,
+   "ecartees": {
+    "niveau de paranoïa > 1": 24,
+    "famille différée (coût au banc, édition suivante)": 17,
+    "ancre sur un argument (sbxwaf lit la requête entière)": 6,
+    "règle chaînée": 6,
+    "transformation cmdline": 5,
+    "cible non reprise (REQUEST_HEADERS)": 1,
+    "transformation removewhitespace": 1
+   }
+  },
+  "sondes_techno": {
+   "importees": 1177,
+   "converties": 276,
+   "verifiees": 276,
+   "rejetees_rejeu": 0,
+   "retenues": 276,
+   "regex": 0,
+   "chemins_exacts": 276,
+   "touches_rejouees": 2,
+   "ecartees": {
+    "chemin trop générique": 656,
+    "requête brute, charges ou fuzzing": 265,
+    "méthode autre que GET": 23,
+    "chemin avec requête": 13,
+    "flux, variables ou protocole non HTTP": 9,
+    "chemin ambigu (plusieurs technos)": 8,
+    "chemin variable": 3,
+    "chemin hors {{BaseURL}}": 2
+   }
+  },
+  "sqli": {
+   "importees": 60,
+   "converties": 12,
+   "verifiees": 12,
+   "rejetees_rejeu": 0,
+   "retenues": 0,
+   "regex": 0,
+   "chemins_exacts": 0,
+   "touches_rejouees": 0,
+   "ecartees": {
+    "niveau de paranoïa > 1": 35,
+    "famille différée (coût au banc, édition suivante)": 12,
+    "règle chaînée": 5,
+    "transformation replacecomments": 4,
+    "ancre sur un argument (sbxwaf lit la requête entière)": 2,
+    "opérateur @detectSQLi": 1,
+    "transformation removecommentschar": 1,
+    "transformation removewhitespace": 1
+   }
+  },
+  "ua_outils": {
+   "importees": 1,
+   "converties": 1,
+   "verifiees": 1,
+   "rejetees_rejeu": 0,
+   "retenues": 1,
+   "regex": 1,
+   "chemins_exacts": 0,
+   "touches_rejouees": 3,
+   "ecartees": {}
+  },
+  "xss": {
+   "importees": 34,
+   "converties": 2,
+   "verifiees": 2,
+   "rejetees_rejeu": 0,
+   "retenues": 0,
+   "regex": 0,
+   "chemins_exacts": 0,
+   "touches_rejouees": 0,
+   "ecartees": {
+    "transformation cssdecode": 20,
+    "niveau de paranoïa > 1": 8,
+    "transformation htmlentitydecode": 2,
+    "transformation compresswhitespace": 2,
+    "famille différée (coût au banc, édition suivante)": 2,
+    "règle chaînée": 1
+   }
+  }
+ },
+ "rejets_par_vhost": {
+  "admin.gk2.secubox.in": {
+   "fichiers_exposes": 1
+  },
+  "apt.fichier": {
+   "panneaux_admin": 1
+  },
+  "apt.secubox.in": {
+   "panneaux_admin": 1
+  },
+  "comic.secubox.in": {
+   "panneaux_admin": 1
+  },
+  "devel.cybermind.fr": {
+   "panneaux_admin": 1
+  },
+  "gk2.net": {
+   "fichiers_exposes": 1,
+   "panneaux_admin": 1
+  },
+  "hall.gk2.net": {
+   "panneaux_admin": 1
+  },
+  "secubox.in": {
+   "panneaux_admin": 1
+  }
+ },
+ "rejetees_rejeu_motifs": {
+  "bib-crs-930130-chemin": [
+   "admin.gk2.secubox.in"
+  ],
+  "bib-nuclei-llms-file-enum-00524": [
+   "gk2.net"
+  ],
+  "bib-nuclei-wordpress-login-01297": [
+   "apt.fichier",
+   "apt.secubox.in",
+   "comic.secubox.in",
+   "devel.cybermind.fr",
+   "gk2.net"
+  ]
+ },
+ "etiquettes_echantillon": {
+  "bib:php:generique": 26,
+  "bib:fichiers_exposes:generique": 9,
+  "bib:lfi:generique": 5,
+  "bib:fichiers_exposes:google": 4,
+  "bib:fichiers_exposes:javascript": 4,
+  "bib:ua_outils:generique": 3,
+  "bib:fichiers_exposes:aws": 2,
+  "bib:panneaux_admin:adaptive_security_appliance_software": 2,
+  "bib:fichiers_exposes:claude": 2,
+  "bib:fichiers_exposes:terraform": 2,
+  "bib:panneaux_admin:experience_manager": 1,
+  "bib:panneaux_admin:argo_cd": 1,
+  "bib:sondes_techno:confluence": 1,
+  "bib:defauts_web:control": 1,
+  "bib:panneaux_admin:couchdb": 1,
+  "bib:fichiers_exposes:docker": 1,
+  "bib:fichiers_exposes:firebase": 1,
+  "bib:panneaux_admin:harbor": 1,
+  "bib:panneaux_admin:consul": 1,
+  "bib:defauts_web:jaeger_ui": 1,
+  "bib:defauts_web:litellm": 1,
+  "bib:sondes_techno:moveit_transfer": 1,
+  "bib:defauts_web:oidc": 1,
+  "bib:fichiers_exposes:markdown": 1,
+  "bib:defauts_web:redpanda": 1,
+  "bib:fichiers_exposes:rails": 1,
+  "bib:defauts_web:content_server": 1,
+  "bib:panneaux_admin:sfos": 1,
+  "bib:panneaux_admin:vault": 1,
+  "bib:panneaux_admin:horizon": 1
+ },
+ "motifs_les_plus_touches": {
+  "bib-crs-933135-chemin": 13,
+  "bib-crs-933160-chemin": 13,
+  "bib-crs-930140-chemin": 5,
+  "bib-crs-913100-ua": 3,
+  "bib-nuclei-credentials-json-00435": 3,
+  "bib-nuclei-generic-php-files-00047": 3,
+  "bib-nuclei-cisco-asa-panel-00837": 2,
+  "bib-nuclei-docker-compose-config-00133": 2,
+  "bib-nuclei-generic-php-files-00045": 2,
+  "bib-nuclei-adobe-experience-manager-login-00743": 1,
+  "bib-nuclei-argocd-login-00780": 1,
+  "bib-nuclei-aws-config-00066": 1,
+  "bib-nuclei-aws-credentials-00067": 1,
+  "bib-nuclei-claude-settings-exposure-00099": 1,
+  "bib-nuclei-claude-settings-exposure-00100": 1,
+  "bib-nuclei-confluence-eol-01400": 1,
+  "bib-nuclei-connectwise-setup-01789": 1,
+  "bib-nuclei-couchdb-exposure-00863": 1,
+  "bib-nuclei-docker-compose-config-00127": 1,
+  "bib-nuclei-dockercfg-config-00135": 1,
+  "bib-nuclei-firebase-config-exposure-00161": 1,
+  "bib-nuclei-google-services-json-00485": 1,
+  "bib-nuclei-harbor-panel-00941": 1,
+  "bib-nuclei-hashicorp-consul-agent-00945": 1,
+  "bib-nuclei-jaeger-ui-dashboard-01852": 1,
+  "bib-nuclei-javascript-env-config-00186": 1,
+  "bib-nuclei-javascript-env-config-00187": 1,
+  "bib-nuclei-javascript-env-config-00189": 1,
+  "bib-nuclei-javascript-env-config-00190": 1,
+  "bib-nuclei-litellm-unauth-model-exposure-01884": 1
+ },
+ "total_retenues": 2180
+}

@@ -7,6 +7,7 @@
 
   SecuBox — « SBXWAF », onglet Modes (#3741, maquette approuvée le 2026-11-16).
   Lecture : GET /api/v1/waf/{categories,categories/stats7j,leurres-service/modes,php-sites}.
+  #4020 : quatrième onglet « Bibliothèque » (motifs figés OWASP CRS / Nuclei, par famille ; écriture par /categories/modes).
   #3980 : trois onglets internes pleine largeur (Catégories, Leurres, Sites PHP ; ?vue= ou #<vue>), catégories par famille.
   Écriture (session d'administrateur) : POST /categories/modes (lot, bouton « Appliquer »),
   /leurres-service/modes, /php-sites, /php-sites/detecter. ?demo=1 : données d'exemple, aucune écriture.
@@ -55,7 +56,7 @@
   .famille{margin:12px 0 2px;font-size:.9rem;color:var(--cyan);font-weight:600;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;padding:0 8px}
   .famille i{font-style:normal;color:var(--faible);font-weight:400}
   .cat{padding:8px;border-top:1px solid rgba(86,150,255,.14);border-radius:6px}
-  .cat.change{background:rgba(255,159,28,.08)} .cat.off{opacity:.7}
+  .cat.change,.carte.change{background:rgba(255,159,28,.08)} .cat.off{opacity:.7}
   .cat .nom{font-weight:600;min-width:0;overflow-wrap:anywhere} .cat .nom small{display:block;font-weight:400;color:var(--faible);font-size:.85rem}
   .cat .ctl{color:var(--doux);font-size:.88rem}
   .cat .mode{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0}
@@ -102,6 +103,8 @@
   .carte .h{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;justify-content:space-between} .carte .h b{overflow-wrap:anywhere}
   .carte.bannir{border-color:rgba(255,77,94,.45)}
   .carte .pas,.carte .pill{align-self:flex-start} .carte .h .mono{white-space:nowrap}
+  /* bibliothèque (#4020) */
+  #bib{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))} #bib .tch{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center} #bib .pas{max-width:100%;flex-wrap:wrap}
   /* sites PHP */
   .resume{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.9rem;color:var(--doux)} .resume b{color:var(--texte);font-size:1.1rem}
   .deux{display:grid;gap:14px} @container a (min-width:900px){.deux{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}
@@ -136,6 +139,18 @@
     <button type="button" role="tab" id="o-categories" data-vue="categories" aria-controls="panCats" aria-selected="true">Catégories <span class="n" id="nCats">—</span></button>
     <button type="button" role="tab" id="o-leurres" data-vue="leurres" aria-controls="panLeurres" aria-selected="false">Leurres <span class="n" id="nLeurres">—</span></button>
     <button type="button" role="tab" id="o-php" data-vue="php" aria-controls="panSites" aria-selected="false">Sites PHP <span class="n" id="nSites">—</span></button>
+    <button type="button" role="tab" id="o-bibliotheque" data-vue="bibliotheque" aria-controls="panBib" aria-selected="false">Bibliothèque <span class="n" id="nBib">—</span></button>
+  </div>
+
+  <div class="pan" id="panBib" role="tabpanel" aria-labelledby="o-bibliotheque" hidden>
+    <p class="une">Motifs figés tirés d'OWASP CRS et des modèles Nuclei, rangés par famille. Par défaut, une touche est seulement identifiée (étiquetée) ; bannir est un choix par famille.</p>
+    <details class="savoir"><summary>En savoir plus</summary>
+      <p>Identifier seulement (Détection) : la touche est écrite au journal des menaces avec l'étiquette <span class="mono">bib:&lt;famille&gt;:&lt;techno&gt;</span> et l'outil déduit, puis nourrit populations et acteurs ; aucun ban. Après N ou Immédiat : la famille bannit comme une catégorie ordinaire.</p>
+      <p>Chaque motif a été rejoué sur des journaux réels avant livraison : un motif qui touchait une réponse 2xx ou 3xx légitime d'un vrai site a été retiré. Un motif ne s'applique jamais sur un site qui héberge la technologie visée. La bibliothèque ne change que par une mise à jour du paquet, jamais par téléchargement.</p>
+      <p>Appliquer : même voie que l'onglet Catégories (double tampon, validation, relecture, audit).</p>
+    </details>
+    <div class="resume" id="bibResume"></div>
+    <div class="cartes" id="bib"></div>
   </div>
 
   <div class="pan" id="panCats" role="tabpanel" aria-labelledby="o-categories">
@@ -198,7 +213,7 @@
   var DEMO=/[?&]demo=1\b/.test(location.search);
   var MODES=[['detect','Détection','d'],['escalate','Après N','e'],['block','Immédiat','b']];
   var LIB={detect:'détection',escalate:'après N touches',block:'immédiat'};
-  var CATS=null, STATS=null, LEURRES=null, SITES=null, ATTENTE={};
+  var CATS=null, STATS=null, LEURRES=null, SITES=null, BIB=null, ATTENTE={};
   function el(i){return document.getElementById(i);}
   function cree(tag,cls,texte){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;return e;}
   function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
@@ -229,6 +244,11 @@
     STATS={categories:{nextcloud:{touches:14,faux_positifs_estimes:2,par_jour:[1,0,3,2,4,1,3]},roundcube:{touches:9,faux_positifs_estimes:0,par_jour:[0,0,2,1,3,1,2]},
       sqli:{touches:57,faux_positifs_estimes:0,par_jour:[6,9,4,12,8,10,8]},scanners:{touches:1867,faux_positifs_estimes:0,par_jour:[240,310,198,280,301,260,278]},
       recon_crawler:{touches:122,faux_positifs_estimes:4,par_jour:[14,20,11,25,18,16,18]}}};
+    CATS.categories.bib_fichiers_exposes={name:'Bibliothèque — Fichiers de configuration et secrets exposés (#4020)',mode:'detect',motifs:730,structurels:0,enabled:true,verrouille:false};
+    CATS.categories.bib_ua_outils={name:'Bibliothèque — UA d\'outils de balayage (#4020)',mode:'escalate',ban_seuil:3,ban_duree:'24h',motifs:1,structurels:0,enabled:true,verrouille:false};
+    BIB={sources:{'owasp-crs':'v4.31.0','nuclei-templates':'v10.5.3'},rejeu:{requetes:229996},familles:{
+      fichiers_exposes:{categorie:'bib_fichiers_exposes',name:'Fichiers exposés',presente:true,mode:'detect',identifier_seulement:true,regles:730,regex:0,chemins_exacts:730,importees:716,rejetees_rejeu:2,touches_rejouees:29,touches_7j:{touches:41,par_jour:[3,5,8,6,7,4,8],technos:{generique:20,aws:6,docker:4}}},
+      ua_outils:{categorie:'bib_ua_outils',name:'UA d\'outils',presente:true,mode:'escalate',ban_seuil:3,ban_duree:'24h',identifier_seulement:false,regles:1,regex:1,chemins_exacts:0,importees:1,rejetees_rejeu:0,touches_rejouees:3,touches_7j:{touches:12,par_jour:[1,2,1,3,2,1,2],technos:{generique:12}}}}};
     LEURRES={leurres:[['rdp',3389],['vnc',5900],['telnet',23],['smb',445],['mysql',3306],['postgres',5432],['redis',6379],['mongodb',27017],['elasticsearch',9200],['mssql',1433],['submission',587],['imap',143],['pop3',110],['smtp',25],['smtps',465],['imaps',993],['pop3s',995]]
       .map(function(x){var fixe=/^(smtp|smtps|imaps|pop3s)$/.test(x[0]);return {service:x[0],port:x[1],mode:fixe||/^(postgres|submission|imap|pop3)$/.test(x[0])?'observer':'bannir',fixe:fixe};})};
     SITES={detectes:[{hote:'nc.exemple.fr',type:'appli',preuve:'appli nextcloud (module installé)',premiere:'2026-11-20T08:00:00Z',derniere:'2026-11-26T09:00:00Z',exclu:false,couvert:'service'},
@@ -316,7 +336,7 @@
     if(!CATS){z.appendChild(cree('div','vide','Catégories indisponibles'));el('fixees').hidden=true;el('masquees').hidden=true;return;}
     var q=el('cherche').value.trim().toLowerCase(),seules=el('avecTouches').checked&&!!(STATS&&STATS.categories);
     function tch(id){var x=statCat(id);return x?x.touches||0:0;}
-    var ids=Object.keys(CATS.categories).filter(function(id){var c=CATS.categories[id];return !q||(id+' '+(c.name||'')).toLowerCase().indexOf(q)>=0;});
+    var ids=Object.keys(CATS.categories).filter(function(id){var c=CATS.categories[id];return id.indexOf('bib_')!==0&&(!q||(id+' '+(c.name||'')).toLowerCase().indexOf(q)>=0);});
     ids.sort(function(a,b){return tch(b)-tch(a)||(a<b?-1:1);});
     var fixes=ids.filter(function(id){return CATS.categories[id].verrouille;}),libres=ids.filter(function(id){return !CATS.categories[id].verrouille;});
     var caches=0,groupes={};
@@ -400,15 +420,47 @@
     (SITES.servis||[]).forEach(function(h){var o=cree('option');o.value=h;dl.appendChild(o);});
   }
 
+  // #4020 : bibliothèque par famille ; le choix de mode passe par ATTENTE et « Appliquer » (/categories/modes).
+  function rendreBib(){
+    var z=el('bib'),rz=el('bibResume');vide(z);vide(rz);
+    if(!BIB||!BIB.familles){z.appendChild(cree('div','vide','Bibliothèque indisponible'));return;}
+    var src=BIB.sources||{},fams=Object.keys(BIB.familles);
+    function chiffre(n,t){var s=cree('span');s.appendChild(cree('b','',nb(n)));s.appendChild(document.createTextNode(' '+t));rz.appendChild(s);}
+    chiffre(BIB.total_regles!==undefined?BIB.total_regles:fams.reduce(function(t,f){return t+BIB.familles[f].regles;},0),'règles');
+    chiffre(fams.length,'familles');
+    if(BIB.rejeu&&BIB.rejeu.requetes)chiffre(BIB.rejeu.requetes,'requêtes rejouées');
+    rz.appendChild(cree('span','mono','CRS '+(src['owasp-crs']||'?')+' · Nuclei '+(src['nuclei-templates']||'?')));
+    fams.sort(function(a,b){function t(f){var x=BIB.familles[f].touches_7j;return x?x.touches||0:0;}return t(b)-t(a)||(a<b?-1:1);});
+    fams.forEach(function(f){
+      var d=BIB.familles[f],id=d.categorie,c=CATS&&CATS.categories[id],e=c?etat(id):{mode:d.mode};
+      var k=cree('div','carte'+(e.mode&&e.mode!=='detect'?' bannir':'')+(ATTENTE[id]?' change':''));k.dataset.cat=id;
+      var h=cree('div','h');h.appendChild(cree('b','',f.replace(/_/g,' ')));
+      h.appendChild(cree('span','pill '+(e.mode&&e.mode!=='detect'?'p-orange':'p-gris'),e.mode&&e.mode!=='detect'?'Bannir':'Identifier seulement'));k.appendChild(h);
+      k.appendChild(cree('small','',nb(d.regles)+' règles ('+nb(d.regex)+' regex · '+nb(d.chemins_exacts)+' chemins exacts) · '+nb(d.rejetees_rejeu)+' rejetées au rejeu'));
+      var t=cree('div','tch'),x=d.touches_7j;
+      if(x&&Array.isArray(x.par_jour)&&x.par_jour.length===7)t.appendChild(serie(x.par_jour));
+      t.appendChild(cree('b','',x?nb(x.touches):'—'));t.appendChild(document.createTextNode(' touches 7 j · '+nb(d.touches_rejouees)+' rejouées'));k.appendChild(t);
+      if(x&&x.technos){var tk=Object.keys(x.technos);if(tk.length)k.appendChild(cree('small','mono',tk.map(function(n){return n+' '+nb(x.technos[n]);}).join(' · ')));}
+      if(!c){k.appendChild(cree('small','','Pas encore dans les règles de la box (mise à jour du paquet attendue).'));z.appendChild(k);return;}
+      k.appendChild(selecteur(MODES,e.mode,!c.enabled,function(v){changer(id,{mode:v});}));
+      if(e.mode==='escalate'){var s=cree('span','seuil');s.appendChild(document.createTextNode('ban après '));
+        var l1=liste([1,2,3,4,5,6,7,8,9,10],e.ban_seuil||3,function(v){changer(id,{ban_seuil:+v});});l1.setAttribute('aria-label','touches avant ban');s.appendChild(l1);
+        s.appendChild(document.createTextNode(' touches, pour '));
+        var l2=liste(['4h','24h','168h'],e.ban_duree||'24h',function(v){changer(id,{ban_duree:v});},function(v){return v==='168h'?'7 j':v.replace('h',' h');});l2.setAttribute('aria-label','durée du ban');s.appendChild(l2);
+        k.appendChild(s);}
+      z.appendChild(k);
+    });
+  }
   function compteurs(){
-    el('nCats').textContent=CATS?nb(Object.keys(CATS.categories).length):'—';
+    el('nBib').textContent=BIB&&BIB.familles?nb(Object.keys(BIB.familles).length):'—';
+    el('nCats').textContent=CATS?nb(Object.keys(CATS.categories).filter(function(id){return id.indexOf('bib_')!==0;}).length):'—';
     el('nLeurres').textContent=LEURRES?nb(LEURRES.leurres.length):'—';
     el('nSites').textContent=SITES?nb(SITES.detectes.filter(function(s){return !s.exclu;}).length):'—';
   }
-  function rendre(){tuiles();compteurs();rendreCats();rendreAttente();rendreLeurres();rendreSites();hauteur();}
+  function rendre(){tuiles();compteurs();rendreCats();rendreAttente();rendreLeurres();rendreSites();rendreBib();hauteur();}
 
   // Onglets internes (#3980) : ?vue= (passé par index.html depuis #modes:<vue>) ou #<vue> hors cadre.
-  var VUES={categories:'panCats',leurres:'panLeurres',php:'panSites'};
+  var VUES={categories:'panCats',leurres:'panLeurres',php:'panSites',bibliotheque:'panBib'};
   function montrer(v,annoncer){
     if(!VUES[v])v='categories';
     Object.keys(VUES).forEach(function(k){el(VUES[k]).hidden=k!==v;el('o-'+k).setAttribute('aria-selected',String(k===v));el('o-'+k).tabIndex=k===v?0:-1;});
@@ -428,8 +480,8 @@
 
   function charger(){
     if(DEMO){exemple();el('releve').textContent='démonstration';rendre();return;}
-    Promise.all([jget('/categories'),jget('/categories/stats7j'),jget('/leurres-service/modes'),jget('/php-sites')]).then(function(r){
-      CATS=r[0]&&r[0].categories?r[0]:null;STATS=r[1];LEURRES=r[2]&&r[2].leurres?r[2]:null;SITES=r[3]&&r[3].detectes?r[3]:null;
+    Promise.all([jget('/categories'),jget('/categories/stats7j'),jget('/leurres-service/modes'),jget('/php-sites'),jget('/bibliotheque')]).then(function(r){
+      CATS=r[0]&&r[0].categories?r[0]:null;STATS=r[1];LEURRES=r[2]&&r[2].leurres?r[2]:null;SITES=r[3]&&r[3].detectes?r[3]:null;BIB=r[4]&&r[4].familles?r[4]:null;
       Object.keys(ATTENTE).forEach(function(id){if(!CATS||!CATS.categories[id])delete ATTENTE[id];});
       el('releve').textContent=(CATS&&CATS.source==='paquet'?'règles du paquet (état de la box indisponible) · ':'')+(STATS&&STATS.etat?'touches 7 j : '+STATS.etat+' · ':'')+'relevé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       rendre();});

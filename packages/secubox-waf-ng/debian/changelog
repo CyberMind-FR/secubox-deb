@@ -1,3 +1,26 @@
+secubox-waf-ng (1.58.0-1~trixie1) trixie; urgency=medium
+
+  * Bibliothèque figée de motifs (ref #4020) : motifs RE2 tirés d'OWASP CRS
+    v4.31.0 (Apache-2.0) et des modèles Nuclei v10.5.3 (MIT), sources de
+    motifs seulement, construits et rejoués côté dépôt
+    (composants/waf/bibliotheque/construire.py), livrés dans
+    /usr/share/secubox/waf/bibliotheque/ avec licences et NOTICE.md.
+    2 180 règles en 8 familles (catégories bib_<famille>), mode detect
+    (identifier seulement) par défaut ; aucun téléchargement sur la box.
+  * waf-rules-sync range la bibliothèque en fin des règles livrées ; le mode
+    choisi par famille depuis la page Modes tient aux mises à jour.
+  * sbxwaf : motif lié à un champ (chemin, requete, ua, corps), chemins
+    exacts en table, verdicts des motifs d'UA mémoïsés (bornés) ; touche
+    étiquetée bib:<famille>:<techno> dans waf-threats.log ; jamais appliqué
+    sur un vhost qui héberge la techno visée (cms_vhosts de #4019, à
+    défaut le service du vhost).
+  * Page WAF › Modes : onglet Bibliothèque (règles, touches rejouées et 7 j,
+    detect / escalate / block par famille par la voie /categories/modes) ;
+    GET /bibliotheque en lecture.
+  * Populations et acteurs : bib:* rangé en balayage_web.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:58:32 +0100
+
 secubox-waf-ng (1.57.0-1~trixie1) trixie; urgency=medium
 
   * Défi de calcul par vhost et par chemin (ref #4021) : page minimale

@@ -405,7 +405,7 @@
             const voulu = /^sites:([a-z0-9][a-z0-9._-]{0,252})$/.exec(name);
             SITE = voulu ? voulu[1] : '';
             if (voulu) name = 'sites';
-            const sous = /^modes:(categories|leurres|php)$/.exec(name);   // #3980 : onglet interne de Modes
+            const sous = /^modes:(categories|leurres|php|bibliotheque)$/.exec(name);   // #3980 : onglet interne de Modes
             if (sous) name = 'modes';
             const vueModes = sous ? sous[1] : '';
             if (ONGLETS.indexOf(name) < 0) name = 'vue';
@@ -433,7 +433,7 @@
         window.addEventListener('message', (e) => {
             if (e.origin !== location.origin || !e.data) return;
             const px = (h, onglet) => Math.min(Object.prototype.hasOwnProperty.call(HAUTEUR_MAX, onglet) ? HAUTEUR_MAX[onglet] : 4000, Math.max(300, +h + 4)) + 'px';
-            if (e.data.onglet === 'modes' && /^(categories|leurres|php)$/.test(e.data.sbxWafModes || '') && ONGLET === 'modes') { try { history.replaceState(null, '', '#modes:' + e.data.sbxWafModes); } catch (err) { /* sans objet */ } }
+            if (e.data.onglet === 'modes' && /^(categories|leurres|php|bibliotheque)$/.test(e.data.sbxWafModes || '') && ONGLET === 'modes') { try { history.replaceState(null, '', '#modes:' + e.data.sbxWafModes); } catch (err) { /* sans objet */ } }
             if (e.data.sbxwafVue) { const f = $('vueFrame'); if (f) f.style.height = px(e.data.sbxwafVue); }
             if (e.data.sbxWafVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxWafVue, e.data.onglet); }
             if (e.data.sbxVue && e.data.onglet) { const f = $('pageFrame'); if (f && f.dataset.p === e.data.onglet) f.style.height = px(e.data.sbxVue, e.data.onglet); }

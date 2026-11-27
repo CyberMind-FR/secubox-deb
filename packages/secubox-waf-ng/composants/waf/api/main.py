@@ -2710,6 +2710,15 @@ _modes.configurer(audit=_audit, journal=THREATS_LOG, regles_livrees=RULES_PATH,
                   liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
 app.include_router(_modes.router)
 
+# ── Bibliothèque figée OWASP CRS / Nuclei (#4020) : vue par famille ; l'écriture passe par /categories/modes ──
+try:
+    from api import bibliotheque as _bibliotheque
+except ImportError:  # standalone
+    import bibliotheque as _bibliotheque
+
+_bibliotheque.configurer(categories=_modes.lire_categories, stats7j=_modes.stats7j)
+app.include_router(_bibliotheque.router)
+
 
 # ── Onglet Filtres IA (#3748) : filtres de l'IA en vigueur, touches, bans, recoupement avec les leurres ──
 try:

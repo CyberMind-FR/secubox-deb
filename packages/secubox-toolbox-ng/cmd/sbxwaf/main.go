@@ -854,6 +854,15 @@ func (s *Server) handler() http.Handler {
 						hit = false // chemin légitime du service de ce vhost (Phase G)
 					}
 				}
+				// #4020 : motif de la bibliothèque. Jamais sur un vhost qui
+				// héberge la techno visée (ré-évaluation sans cette catégorie,
+				// comme la garde anti-contrebande ci-dessus) ; sinon la touche
+				// est étiquetée bib:<famille>:<techno> dans le journal.
+				libelle := cat
+				if hit {
+					cat, sev, mode, motif, libelle, hit = s.filtrerBibliotheque(r, rawPath, string(bodyBytes),
+						includeBlock, cat, sev, mode, motif)
+				}
 				if hit && mode == modeDetect {
 					// Observe only: log it, let it through. A detect category
 					// must be as harmless as enabled:false, minus the log line
@@ -865,7 +874,7 @@ func (s *Server) handler() http.Handler {
 							Host:     r.Host,
 							Method:   r.Method,
 							Path:     rawPath,
-							Category: cat,
+							Category: libelle,
 							Severity: sev,
 							RuleID:   motif,
 							Action:   "detect",
@@ -890,7 +899,7 @@ func (s *Server) handler() http.Handler {
 					// #4019 : sonde d'un CMS absent de ce vhost. Journal et ban
 					// sous « cms_sonde:<cms> », durée graduée comme un leurre
 					// (24 h, puis 7 j à la récidive dans les 30 jours).
-					etiquette, action := cat, "banned"
+					etiquette, action := libelle, "banned" // #4020 : bib:<famille>:<techno>
 					cms := s.rules.SondeCMS(cat)
 					if cms != "" {
 						etiquette = prefixeSondeCMS + cms
@@ -950,7 +959,7 @@ func (s *Server) handler() http.Handler {
 							Host:     r.Host,
 							Method:   r.Method,
 							Path:     rawPath,
-							Category: cat,
+							Category: libelle,
 							Severity: sev,
 							// C'EST LE CHEMIN DE BLOCAGE, et c'est celui qui compte le
 							// plus (#1313) : une requete BLOQUEE sans sa regle est une

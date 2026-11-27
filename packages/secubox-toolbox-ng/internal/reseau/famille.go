@@ -43,6 +43,8 @@ var reglesFamille = []regleFamille{
 	{"waf_fingerprint", false, FamilleBalayageWeb},
 	{"host_anomaly:", true, FamilleBalayageWeb},
 	{"rotation:", true, FamilleCollecte},
+	// #4020 : étiquettes de la bibliothèque figée (bib:<famille>:<techno>).
+	{"bib:", true, FamilleBalayageWeb},
 }
 
 // Famille rend la famille d'une catégorie de règle ; « autre » si aucune

@@ -94,6 +94,7 @@ FAMILLE = (
     ("waf_fingerprint", False, "balayage_web"),
     ("host_anomaly:", True, "balayage_web"),
     ("rotation:", True, "collecte"),
+    ("bib:", True, "balayage_web"),          # #4020 : bib:<famille>:<techno>
 )
 AUTRE = "autre"
 
