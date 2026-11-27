@@ -208,3 +208,23 @@ def test_vue_garde_une_entree_distincte_par_periode_et_grouper(monkeypatch):
     ag.vue("semaine", True)
 
     assert len(appels) == 3, f"des combinaisons differentes ont partage un cache : {appels}"
+
+
+def test_autre_detaille_4017():
+    """#4017 : « Autre » est détaillé, et ce qui n'est pas une personne n'est pas compté humain."""
+    from api.vhost_stats import navigateur
+    cas = {
+        "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)": ("Aperçu de lien", False),
+        "secubox-webos-hotes": ("Agent SecuBox", False),
+        "poc-secubox-ai/0.1": ("Agent SecuBox", False),
+        "Debian APT-HTTP/1.3 (3.0.4)": ("Gestionnaire de paquets", False),
+        "Hello from Palo Alto Networks, find out more about our scans": ("Scanner", False),
+        "-": ("Sans UA", False),
+        "": ("Sans UA", False),
+        "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0": ("Firefox", True),
+        "Mozilla/5.0 (compatible; Konqueror/4.5; Linux)": ("Autre navigateur", True),
+        "Feedly/1.0 (+http://www.feedly.com/fetcher.html)": ("Feedly", False),
+        "Googlebot/2.1": ("Robot", False),
+    }
+    for ua, attendu in cas.items():
+        assert navigateur(ua) == attendu, ua
