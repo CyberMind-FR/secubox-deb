@@ -37,6 +37,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -124,6 +125,7 @@ type DefiCalcul struct {
 
 	mu       sync.Mutex
 	utilises map[string]int64 // aléa du jeton → échéance
+	saturee  bool
 	insistes map[string]*insistant
 	bans     map[string]bansInsistance
 }
@@ -275,7 +277,7 @@ func (d *DefiCalcul) config() *defiConfig {
 
 func (d *DefiCalcul) mac(n int, parts ...string) string {
 	h := hmac.New(sha256.New, d.cle)
-	h.Write([]byte(strings.Join(parts, "|")))
+	h.Write([]byte(strings.Join(parts, "\x00"))) // NUL : un UA (contrôlé par le client) ne peut pas déplacer une frontière de champ
 	return hex.EncodeToString(h.Sum(nil))[:n]
 }
 
@@ -355,9 +357,16 @@ func (d *DefiCalcul) verifierSolution(c *defiConfig, host, fp, tok, nonce string
 			}
 		}
 		if len(d.utilises) >= maxJetonsUtilises {
-			return "sature" // mémoire pleine : refus (le client est redéfié), jamais d'acceptation sans contrôle
+			// Mémoire pleine (vague hors norme) : la preuve, la signature et la fraîcheur restent vérifiées ; seul l'usage unique est
+			// suspendu. Refuser ici redéfierait puis bannirait des clients honnêtes.
+			if !d.saturee {
+				d.saturee = true
+				log.Printf("sbxwaf: défi de calcul : mémoire des jetons utilisés pleine (%d) — usage unique suspendu jusqu'à purge", maxJetonsUtilises)
+			}
+			return ""
 		}
 	}
+	d.saturee = false
 	d.utilises[p[1]+p[0]] = e + int64(c.validite.Seconds()) + 60
 	return ""
 }
@@ -397,18 +406,19 @@ func exclusionDefi(r *http.Request, chemin string) string {
 	ua := strings.ToLower(r.Header.Get("User-Agent"))
 	acc := strings.ToLower(r.Header.Get("Accept"))
 	lc := strings.ToLower(chemin)
+	// Un UA d'outil ne vaut exclusion que SANS demande de page HTML : un vrai client git, APT ou agent ne demande jamais text/html,
+	// et un aspirateur qui se dit « git/ » en demandant une page reste défié.
+	html := strings.Contains(acc, "text/html")
 	switch {
-	case strings.HasPrefix(ua, "git/"), strings.HasPrefix(ua, "jgit/"), strings.HasPrefix(ua, "go-git"),
-		strings.HasSuffix(lc, "/info/refs"), strings.Contains(lc, "/git-upload-pack"), strings.Contains(lc, "/git-receive-pack"),
-		r.Header.Get("Git-Protocol") != "":
+	case strings.HasSuffix(lc, "/info/refs"), strings.Contains(lc, "/git-upload-pack"), strings.Contains(lc, "/git-receive-pack"),
+		!html && (strings.HasPrefix(ua, "git/") || strings.HasPrefix(ua, "jgit/") || strings.HasPrefix(ua, "go-git")):
 		return "git"
-	case strings.HasPrefix(ua, "debian apt-http"), strings.HasPrefix(ua, "secubox"):
+	case !html && (strings.HasPrefix(ua, "debian apt-http") || strings.HasPrefix(ua, "secubox")):
 		return "agent"
-	case strings.Contains(acc, "application/json"), strings.HasPrefix(lc, "/api/"), strings.Contains(lc, "/api/v1/"):
+	case !html && strings.Contains(acc, "application/json"), strings.HasPrefix(lc, "/api/"), strings.Contains(lc, "/api/v1/"):
 		return "api"
-	case strings.Contains(lc, "/hooks/"), strings.Contains(lc, "webhook"), r.Header.Get("X-Gitea-Event") != "",
-		r.Header.Get("X-GitHub-Event") != "", r.Header.Get("X-Gitlab-Event") != "":
-		return "webhook"
+	case strings.Contains(lc, "/hooks/"), strings.Contains(lc, "webhook"):
+		return "webhook" // les livraisons de webhooks sont des POST, déjà exclus
 	case lc == "/robots.txt", strings.HasPrefix(lc, "/.well-known/"):
 		return "public"
 	}
@@ -459,14 +469,19 @@ func (d *DefiCalcul) Intercepte(w http.ResponseWriter, r *http.Request, host str
 	if d.CookieValide(r, host) {
 		return false
 	}
-	if uaRobot(r.Header.Get("User-Agent")) && d.robots != nil && d.robots.Verifie(ip) != "" {
+	robot := uaRobot(r.Header.Get("User-Agent"))
+	if robot && d.robots != nil && d.robots.Verifie(ip) != "" {
 		return false // robot d'indexation vérifié (DNS inverse + direct)
 	}
 	nav := navigateurAccepte(r)
 	if !nav && !v.compterNonNav {
 		return false // image d'un README, curl d'un fichier brut : laissés (non_navigateur = laisser)
 	}
-	d.compter(r, c, v, host, ip)
+	// Un robot déclaré non vérifié (aperçus de liens Slack, Matrix, Discord…) reçoit la page sans contenu, mais n'est jamais compté :
+	// il ne sait pas résoudre et n'insiste pas.
+	if !robot {
+		d.compter(r, c, v, host, ip)
+	}
 	if !nav || v.etat != "arme" {
 		return false // observe : rien de servi ; non-navigateur compté mais servi
 	}
@@ -499,11 +514,19 @@ func (d *DefiCalcul) compter(r *http.Request, c *defiConfig, v *defiVhostCompile
 				delete(d.insistes, k)
 			}
 		}
-		if len(d.insistes) >= maxInsistants {
-			d.insistes = map[string]*insistant{} // vague hors norme : on repart de zéro plutôt que de grossir sans fin
+	}
+	if len(d.bans) >= maxInsistants {
+		for k, b := range d.bans {
+			if now-b.last > 30*24*3600 {
+				delete(d.bans, k)
+			}
 		}
 	}
 	x := d.insistes[ip]
+	if x == nil && len(d.insistes) >= maxInsistants {
+		d.mu.Unlock()
+		return // table pleine de compteurs vivants : une nouvelle adresse n'est pas comptée (jamais d'effacement des autres)
+	}
 	if x == nil || now-x.debut > fen {
 		x = &insistant{debut: now}
 		d.insistes[ip] = x
@@ -597,11 +620,14 @@ func (d *DefiCalcul) repondre(w http.ResponseWriter, r *http.Request, c *defiCon
 		return
 	}
 	tok, nonce, retour := r.PostForm.Get("t"), r.PostForm.Get("n"), retourSur(r.PostForm.Get("r"))
+	if !memeOrigine(r, host) {
+		// Formulaire posté depuis un autre site : refusé, sans redirection ni comptage (personne ne peut faire bannir un visiteur ainsi).
+		http.Error(w, "origine refusée", http.StatusForbidden)
+		return
+	}
 	fp := d.empreinte(r)
 	if raison := d.verifierSolution(c, host, fp, tok, nonce); raison != "" {
-		if v := c.vhosts[host]; v != nil {
-			d.compter(r, c, v, host, ip) // une solution fausse compte comme une requête sans solution
-		}
+		// Jamais compté : seul un GET défié sans solution compte (un POST forgé ne doit pas pouvoir faire bannir).
 		w.Header().Set("Cache-Control", "no-store")
 		http.Redirect(w, r, retour, http.StatusSeeOther) // redéfié au retour
 		return
@@ -621,6 +647,19 @@ func (d *DefiCalcul) repondre(w http.ResponseWriter, r *http.Request, c *defiCon
 		HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, retour, http.StatusSeeOther)
+}
+
+// memeOrigine : Sec-Fetch-Site (navigateurs récents) ou, à défaut, Origin doivent désigner ce vhost ; sans aucun des deux
+// (navigateur ancien), on accepte : la solution reste liée à l'empreinte et au vhost.
+func memeOrigine(r *http.Request, host string) bool {
+	if s := r.Header.Get("Sec-Fetch-Site"); s != "" {
+		return s == "same-origin"
+	}
+	if o := r.Header.Get("Origin"); o != "" {
+		u, err := url.Parse(o)
+		return err == nil && hoteNu(u.Host) == host
+	}
+	return true
 }
 
 // ── page ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

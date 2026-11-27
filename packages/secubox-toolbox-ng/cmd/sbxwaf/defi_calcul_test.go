@@ -48,7 +48,11 @@ type journalCalculFaux struct {
 	rec []ThreatRecord
 }
 
-func (j *journalCalculFaux) ajouter(r ThreatRecord) { j.mu.Lock(); j.rec = append(j.rec, r); j.mu.Unlock() }
+func (j *journalCalculFaux) ajouter(r ThreatRecord) {
+	j.mu.Lock()
+	j.rec = append(j.rec, r)
+	j.mu.Unlock()
+}
 
 func fichierDefi(t *testing.T, etat string) string {
 	t.Helper()
@@ -224,15 +228,14 @@ func TestDefiCalcul_Exclusions(t *testing.T) {
 		ip, ua, accept   string
 		entete, valeurEn string
 	}{
-		{"git UA", "GET", cheminCommit, ipExt, "git/2.43.0", "text/html", "", ""},
+		{"git UA", "GET", cheminCommit, ipExt, "git/2.43.0", "*/*", "", ""},
 		{"smart-http", "GET", "/alice/projet/info/refs", ipExt, uaNav, "text/html", "", ""},
 		{"upload-pack", "GET", "/alice/projet/git-upload-pack", ipExt, uaNav, "text/html", "", ""},
-		{"apt", "GET", "/alice/projet/raw/branch/main/x.deb", ipExt, "Debian APT-HTTP/1.3 (2.6.1)", "text/html", "", ""},
-		{"agent secubox", "GET", cheminCommit, ipExt, "secubox-webos-hotes", "text/html", "", ""},
+		{"apt", "GET", "/alice/projet/raw/branch/main/x.deb", ipExt, "Debian APT-HTTP/1.3 (2.6.1)", "*/*", "", ""},
+		{"agent secubox", "GET", cheminCommit, ipExt, "secubox-webos-hotes", "", "", ""},
 		{"api accept", "GET", cheminCommit, ipExt, uaNav, "application/json", "", ""},
 		{"api chemin", "GET", "/api/v1/repos/alice/projet/commits", ipExt, uaNav, "text/html", "", ""},
 		{"post", "POST", cheminCommit, ipExt, uaNav, "text/html", "", ""},
-		{"webhook", "GET", cheminCommit, ipExt, uaNav, "text/html", "X-Gitea-Event", "push"},
 		{"robot vérifié", "GET", cheminCommit, "198.51.100.9", "Mozilla/5.0 (compatible; Googlebot/2.1)", "text/html", "", ""},
 		{"LAN", "GET", cheminCommit, "192.168.1.20", uaNav, "text/html", "", ""},
 		{"maillage", "GET", cheminCommit, "10.10.0.5", uaNav, "text/html", "", ""},
@@ -253,9 +256,51 @@ func TestDefiCalcul_Exclusions(t *testing.T) {
 	if len(b.bans) != 0 {
 		t.Fatalf("exclus bannis : %v", b.ips)
 	}
-	// Un faux Googlebot (non vérifié) est défié.
-	if !d.Intercepte(httptest.NewRecorder(), requeteCalcul("GET", cheminCommit, ipExt, "Googlebot/2.1", "text/html"), defiHote) {
-		t.Error("robot non vérifié non défié")
+	// Un faux Googlebot (non vérifié) est défié, sans jamais être compté.
+	for i := 0; i < 30; i++ {
+		if !d.Intercepte(httptest.NewRecorder(), requeteCalcul("GET", cheminCommit, ipExt, "Googlebot/2.1", "text/html"), defiHote) {
+			t.Fatal("robot non vérifié non défié")
+		}
+	}
+	// Un UA d'outil qui demande une page HTML reste défié (en-tête falsifiable).
+	for _, ua := range []string{"git/2.43.0", "secubox-x", "Debian APT-HTTP/1.3"} {
+		if !d.Intercepte(httptest.NewRecorder(), requeteCalcul("GET", cheminCommit, "192.0.2.77", ua, "text/html"), defiHote) {
+			t.Errorf("UA %q avec text/html non défié", ua)
+		}
+	}
+	if len(b.bans) != 0 {
+		t.Fatalf("robot non vérifié banni : %v", b.ips)
+	}
+}
+
+func TestDefiCalcul_PostForgeNiRedirectionNiComptage(t *testing.T) {
+	d, b, _, _ := nouveauDefi(t, "arme")
+	for i := 0; i < 30; i++ {
+		r := httptest.NewRequest(http.MethodPost, "https://"+defiHote+cheminCalcul, strings.NewReader("t=x&n=1&r=/a"))
+		r.RemoteAddr = ipExt + ":1"
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if i%2 == 0 {
+			r.Header.Set("Sec-Fetch-Site", "cross-site")
+		} else {
+			r.Header.Set("Origin", "https://evil.example")
+		}
+		w := httptest.NewRecorder()
+		d.Intercepte(w, r, defiHote)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("POST d'un autre site : %d", w.Code)
+		}
+	}
+	for i := 0; i < 30; i++ { // solutions fausses du même site : jamais comptées
+		poster(d, ipExt, uaNav, url.Values{"t": {"1.2.3.4"}, "n": {"1"}})
+	}
+	if len(b.bans) != 0 {
+		t.Fatal("un POST forgé a fait bannir")
+	}
+	for _, r := range []string{"/\t/evil.example", "/\x7f/x", "//evil.example", "https://evil.example"} {
+		v, _ := strconv.Unquote(`"` + r + `"`)
+		if got := retourSur(v); got != "/" {
+			t.Errorf("retour %q accepté : %q", r, got)
+		}
 	}
 }
 

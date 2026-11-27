@@ -565,8 +565,12 @@ ressource externe) qui résout une preuve de travail SHA-256 puis repose la requ
 - **Laissez-passer** : cookie `sbx_calcul` (HMAC-SHA256, 6 h), lié à l'empreinte UA + préfixe /24 (IPv4) ou /48 (IPv6), jamais
   l'adresse en clair. Compromis : un mobile qui change de réseau est redéfié (une page, ~100 ms) ; deux clients derrière le même
   NAT avec le même UA partagent l'empreinte. Clé : `/etc/secubox/secrets/waf-defi-calcul.key` (postinst, `secubox-waf` 0600).
-- **Jamais défiés** : méthodes autres que GET/HEAD, API (Accept JSON, `/api/`), git en HTTP (UA `git/`, `info/refs`,
-  `git-upload-pack`), APT, agents `secubox-*`, webhooks, robots vérifiés, LAN/maillage/plages protégées, `exclus` du vhost.
+- **Jamais défiés** : méthodes autres que GET/HEAD, API (`/api/`, Accept JSON), git en HTTP (`info/refs`, `git-upload-pack`,
+  UA `git/`), APT, agents `secubox-*`, webhooks, robots vérifiés, LAN/maillage/plages protégées, `exclus` du vhost. Un UA d'outil
+  ou un Accept JSON n'exempte que SANS demande `text/html` (un aspirateur qui se dit `git/` en demandant une page reste défié).
+  Un robot déclaré non vérifié (aperçus de liens) reçoit la page mais n'est jamais compté.
+- **Solution** : POST `/__sbx/calcul` refusé (403) s'il vient d'un autre site (`Sec-Fetch-Site`, `Origin`) ; une solution
+  fausse n'est jamais comptée (personne ne peut faire bannir un visiteur par un formulaire forgé).
 - **Ban** : seulement par insistance (20 requêtes défiées sans solution en 10 min) — 24 h puis 7 j, par la pose nft (Epargne).
   La catégorie `aspirateur_ua` (ban à la 1re requête) n'est pas changée : le défi passe après les règles.
 - **Indice** : la page renvoie une empreinte d'automatisation (`navigator.webdriver`, navigateur sans interface, incohérences

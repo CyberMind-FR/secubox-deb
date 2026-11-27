@@ -427,6 +427,12 @@ func retourSur(s string) string {
 	if !strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") || strings.ContainsAny(s, "\\\r\n") || len(s) > 2048 {
 		return "/"
 	}
+	// #4021 : aucun caractère de contrôle (une tabulation supprimée par le navigateur ferait de « /\t/x » un « //x » externe).
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			return "/"
+		}
+	}
 	return s
 }
 
