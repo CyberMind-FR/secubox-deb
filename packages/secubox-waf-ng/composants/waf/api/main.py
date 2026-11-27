@@ -77,6 +77,10 @@ try:
 except ImportError:  # standalone
     import populations as _populations
 try:
+    from api import rapports as _rapports
+except ImportError:  # standalone
+    import rapports as _rapports
+try:
     from api import dossiers as _dossiers
 except ImportError:  # standalone
     import dossiers as _dossiers
@@ -111,6 +115,10 @@ PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requ
 POPULATIONS_CACHE = Path("/var/lib/secubox/waf/populations.json")
 POPULATIONS_PERIODE = 1800  # s : 30 min (une passe coûtait 68 à 107 s de processeur sur gk2, boîte saturée)
 POPULATIONS_DELAI = 540    # s : au-delà, le processus est tué (sous la période : jamais deux passes à la fois)
+# Rapports multi-historiques (#4006) : 90 jours de bans.jsonl et archives, même patron (processus à part, nice 10).
+RAPPORTS_CACHE = Path(_rapports.CACHE)
+RAPPORTS_PERIODE = 3600
+RAPPORTS_DELAI = 540
 _history_lock = threading.Lock()
 
 
@@ -1085,6 +1093,43 @@ def _demarrer_populations() -> bool:
     return True
 
 
+_rapports_tache: Optional["asyncio.Task"] = None
+
+
+async def _lancer_rapports() -> Optional[int]:
+    """Une passe des rapports (#4006) dans un processus à part (même patron que les populations)."""
+    argv = ["nice", "-n", "10", "ionice", "-c", "2", "-n", "7", sys.executable, "-m", "api.rapports", "--ecrire", str(RAPPORTS_CACHE)]
+    try:
+        proc = await asyncio.create_subprocess_exec(*argv, cwd=_POPULATIONS_CWD, stdin=asyncio.subprocess.DEVNULL,
+                                                    stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+    except OSError as e:
+        log.warning("rapports : lancement impossible : %s", e)
+        return None
+    try:
+        _, err = await asyncio.wait_for(proc.communicate(), RAPPORTS_DELAI)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        log.warning("rapports : calcul tué après %d s, le relevé précédent reste servi", RAPPORTS_DELAI)
+        return None
+    except asyncio.CancelledError:
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
+        raise
+    if proc.returncode != 0:
+        log.warning("rapports : sortie %s : %s", proc.returncode, (err or b"").decode("utf-8", "replace").strip()[-300:])
+    return proc.returncode
+
+
+def _demarrer_rapports() -> bool:
+    global _rapports_tache
+    if _rapports_tache is not None and not _rapports_tache.done():
+        return False
+    _rapports_tache = asyncio.create_task(_lancer_rapports())
+    return True
+
+
 async def _warm_loop():
     """Background refresher. Survives individual failures so a single
     bad log line can't kill the loop."""
@@ -1093,7 +1138,7 @@ async def _warm_loop():
     await asyncio.sleep(1)
     dernier_sites_php = dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = dernier_populations = dernier_dossiers = 0.0
     _leurres_panne = _dossiers_panne = _activite_panne = ""
-    dernier_activite = 0.0
+    dernier_activite = dernier_rapports = 0.0
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
@@ -1160,6 +1205,10 @@ async def _warm_loop():
         if time.time() - dernier_populations >= POPULATIONS_PERIODE:   # #3919 : relevé populations, lu par gk3
             if _demarrer_populations():
                 dernier_populations = time.time()
+        # #4006 : après une passe des populations (le rapport en lit le relevé), jamais pendant
+        if time.time() - dernier_rapports >= RAPPORTS_PERIODE and (_populations_tache is None or _populations_tache.done()):
+            if _demarrer_rapports():
+                dernier_rapports = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1169,7 +1218,7 @@ async def _lifespan(_app):
     try:
         yield
     finally:
-        for t in (task, _populations_tache):
+        for t in (task, _populations_tache, _rapports_tache, _redaction_tache):
             if t is None:
                 continue
             t.cancel()
@@ -1234,6 +1283,77 @@ async def waf_populations():
     genere = releve.get("genere_le")
     age = int(_maintenant() - genere) if isinstance(genere, (int, float)) and not isinstance(genere, bool) else None
     return {**releve, "disponible": True, "age_s": age}
+
+
+# ── Rapports de menaces multi-historiques (#4006) ──────────────────────────────────────────────────────────────
+# Lecture : le cache de la tâche de fond, jamais un calcul ici ; aucune adresse (dossiers sans IP). Rédaction IA :
+# POST administrateur, en tâche de fond, une à la fois ; vérifiée par le code avant d'être gardée.
+_RAPPORT_ID = r"^[A-Za-z0-9_:.-]{1,80}$"
+_redaction_tache: Optional["asyncio.Task"] = None
+_redaction_cle: Optional[str] = None
+
+
+def _rapport_lu(genre: str, ident: str) -> tuple:
+    if genre not in _rapports.GENRES:
+        raise HTTPException(404, detail={"motif": "genre inconnu"})
+    releve = _rapports.lire_cache(str(RAPPORTS_CACHE))
+    if releve is None:
+        raise HTTPException(503, detail={"motif": "relevé pas encore calculé"})
+    cle = f"{genre}:{ident}"
+    r = releve["rapports"].get(cle)
+    if not isinstance(r, dict):
+        raise HTTPException(404, detail={"motif": "sujet inconnu"})
+    return releve, cle, r
+
+
+@app.get("/rapports", dependencies=[Depends(require_lecture_ai)])
+async def waf_rapports():
+    """Les sujets (campagnes, acteurs) qui ont un rapport, avec l'âge du relevé ; `{"disponible": False}` sans cache."""
+    releve = await asyncio.to_thread(_rapports.lire_cache, str(RAPPORTS_CACHE))
+    if releve is None:
+        return {"disponible": False}
+    genere = releve.get("genere_le")
+    age = int(_maintenant() - genere) if isinstance(genere, (int, float)) and not isinstance(genere, bool) else None
+    return {"disponible": True, "age_s": age, "complet": releve.get("complet"), "manques": releve.get("manques", []),
+            "sujets": releve.get("sujets", []), "redaction_en_cours": _redaction_cle if _redaction_tache and not _redaction_tache.done() else None}
+
+
+@app.get("/rapports/{genre}/{ident}", dependencies=[Depends(require_lecture_ai)])
+async def waf_rapport(genre: str, ident: str = ParamChemin(..., pattern=_RAPPORT_ID)):
+    """Le rapport d'un sujet : dossier de faits, séries, lecture par règles (toujours), lecture IA vérifiée si elle
+    existe (avec son taux de phrases retenues et `perimee` si le dossier a changé depuis), et l'export Markdown."""
+    releve, cle, r = await asyncio.to_thread(_rapport_lu, genre, ident)
+    ia = (await asyncio.to_thread(_rapports.lire_ia)).get(cle)
+    if isinstance(ia, dict):
+        ia = {**ia, "perimee": ia.get("signature") != _rapports.signature(r["dossier"])}
+    else:
+        ia = None
+    en_cours = _redaction_cle == cle and _redaction_tache is not None and not _redaction_tache.done()
+    return {"cle": cle, "genere_le": releve.get("genere_le"), **r, "ia": ia, "redaction_en_cours": en_cours,
+            "markdown": _rapports.markdown(r, ia)}
+
+
+async def _rediger_rapport(cle: str, dossier: dict) -> None:
+    try:
+        res = await _rapports.rediger(cle, dossier, _rapports.urls_moteurs(get_config("waf")))
+    except Exception as e:  # noqa: BLE001 — la rédaction ne doit jamais tuer la boucle ; repli enregistré
+        log.warning("rapports : rédaction en échec (%s) : %s", cle, e)
+        res = {"cle": cle, "etat": "repli", "motif": "erreur interne", "quand": int(time.time()),
+               "signature": _rapports.signature(dossier)}
+    log.info("rapports : %s rédigé (%s, %s %% retenues)", cle, res.get("etat"), res.get("taux_retenues_pct"))
+    await asyncio.to_thread(_rapports.garder_ia, cle, res)
+
+
+@app.post("/rapports/{genre}/{ident}/rediger")
+async def waf_rapport_rediger(genre: str, ident: str = ParamChemin(..., pattern=_RAPPORT_ID), _user: dict = Depends(require_jwt)):
+    """Demande la rédaction IA du rapport (une à la fois) ; le résultat, vérifié, se lit ensuite par GET."""
+    global _redaction_tache, _redaction_cle
+    _, cle, r = await asyncio.to_thread(_rapport_lu, genre, ident)
+    if _redaction_tache is not None and not _redaction_tache.done():
+        return {"etat": "occupe", "en_cours": _redaction_cle}
+    _redaction_cle = cle
+    _redaction_tache = asyncio.create_task(_rediger_rapport(cle, r["dossier"]))
+    return {"etat": "en_cours", "cle": cle}
 
 
 @app.get("/status", dependencies=[Depends(require_lecture)])

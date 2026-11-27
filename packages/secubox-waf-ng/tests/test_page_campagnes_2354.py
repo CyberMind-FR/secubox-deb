@@ -22,8 +22,8 @@ def test_hauteur_auto_et_demo():
 
 def test_aucun_script_externe():
     # #3919 : scripts de la même page, en chemin relatif (repères, cartes partagés, profil #4005), rien d'autre
-    assert re.findall(r"<script[^>]+src=\"([^\"]*)\"", SRC, re.I) == ["reperes.js", "cartes-campagnes.js", "profil-populations.js"]
-    assert len(re.findall(r"<script[^>]+src=", SRC, re.I)) == 3
+    assert re.findall(r"<script[^>]+src=\"([^\"]*)\"", SRC, re.I) == ["reperes.js", "cartes-campagnes.js", "profil-populations.js", "rapport-menaces.js"]
+    assert len(re.findall(r"<script[^>]+src=", SRC, re.I)) == 4   # + rapport-menaces.js (#4006)
     assert not re.search(r"<link[^>]+href=\"https?:", SRC, re.I)
 
 

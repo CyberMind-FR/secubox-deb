@@ -185,6 +185,7 @@
   <section class="pops"><div><h2>Campagnes et populations</h2><div class="sous">7 derniers jours · triées par activité des dernières 24 h · lecture seule</div></div><div id="populations" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
   <section class="pops"><div><h2>Profil déduit</h2><div class="sous">lecture factuelle produite par les règles de la box · chaque phrase porte son chiffre · aucune adresse</div></div><div id="profils" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
   <section class="pops"><div><h2>Ruptures par couches</h2><div class="sous">1 h, 8 h, 1 j, 7 j contre la médiane des fenêtres précédentes · double lecture bans.jsonl / journal</div></div><div id="ruptures" class="prtabz"><span class="popnr">Lecture du relevé…</span></div></section>
+  <section class="pops"><div><h2>Rapport</h2><div class="sous">historique 90 jours · vagues, récurrences, phases, liens · lecture IA relue par le code de la box · aucune adresse · export Markdown</div></div><div id="rapport"><span class="popnr">Lecture des rapports…</span></div></section>
   <div><h2>Campagnes d’attaque</h2><div class="sous">Des adresses différentes, un même mode opératoire : mêmes sondes, même outil, corrélés à travers le temps.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="bas" id="bas">
@@ -203,6 +204,7 @@
 <script src="reperes.js"></script>
 <script src="cartes-campagnes.js"></script>
 <script src="profil-populations.js"></script>
+<script src="rapport-menaces.js"></script>
 <script>
 (function(){
   "use strict";
@@ -628,6 +630,8 @@
   if(window.ResizeObserver) new ResizeObserver(hauteur).observe(el('cadre'));
   el('rafraichir').addEventListener('click',function(){charge();chargePops(true);});
   charge();chargePops(true);
+  if(!q.get('demo')&&window.SbxRapport) window.SbxRapport.monter(document,el('rapport'),{genre:'campagne',jget:jget,jeton:jeton});   // #4006
+  else if(el('rapport')) el('rapport').textContent='Rapports : données réelles seulement (pas de démonstration).';
   if(!q.get('demo')) setInterval(function(){if(document.visibilityState==='visible'){charge();chargePops(false);}},30000);
 })();
 </script>

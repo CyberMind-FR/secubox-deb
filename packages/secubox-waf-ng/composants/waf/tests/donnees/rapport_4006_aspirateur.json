@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sujet": {"genre": "campagne", "id": "famille:collecte", "nom": "collecte", "famille": "collecte", "outil": "aspirateur_ua"},
+  "genere_le": "2026-11-27",
+  "periode": {"debut": "2026-08-30", "fin": "2026-11-27", "jours": 90},
+  "chiffres": {"adresses_90j": 20931, "bans_90j": 27118, "blocs24_90j": 9874, "jours_actifs": 9},
+  "jalons": [
+    {"date": "2026-11-24", "libelle": "ban dès la première requête", "bans_depuis": 13630, "liste_adresses": 20931},
+    {"date": "2026-11-26", "libelle": "réévaluation à 168 h", "duree_h": 168},
+    {"date": "2026-11-27", "libelle": "profil déduit des populations"}
+  ],
+  "retours": {"relachees": 11249, "retours": 4, "delai_median_s": null},
+  "classes": {"proxy_loue": 62, "hebergeur": 21},
+  "operateurs": [{"nom": "Alibaba (US) Technology Co., Ltd.", "part": 18}],
+  "categories": [{"nom": "aspirateur_ua", "bans": 26100}, {"nom": "rotation:navigateurs", "bans": 1018}],
+  "vhosts": [{"nom": "forge.gk2.secubox.in", "part": 97}],
+  "lecture": [
+    {"code": "adresses_jetables", "valeur": 4, "texte": "Adresses jetables : 4 retours sur 11 249 relâchées."},
+    {"code": "infrastructure_louee", "valeur": 83, "texte": "Infrastructure louée : 83 % d'adresses chez des hébergeurs/proxys."}
+  ],
+  "pistes": ["faux positifs", "profil déduit", "double tampon"],
+  "tendances": []
+}

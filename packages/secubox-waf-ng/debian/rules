@@ -198,6 +198,9 @@ execute_after_dh_auto_install:
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/index.html
 	install -m 0644 www/actor/reperes.js \
 	  debian/secubox-waf-ng/usr/share/secubox/www/actor/reperes.js
+	# #4006 : le rapport multi-historique, partagé avec la page Campagnes du WAF (même fichier).
+	install -m 0644 composants/waf/www/waf/rapport-menaces.js \
+	  debian/secubox-waf-ng/usr/share/secubox/www/actor/rapport-menaces.js
 	# #1240 : vhost dédié actor.<domaine> (servi en direct par nginx, comme
 	# le vhost du tableau WAF). Déposé dans sites-available ; activé + semé « lan » par le postinst.
 	install -d debian/secubox-waf-ng/etc/nginx/sites-available

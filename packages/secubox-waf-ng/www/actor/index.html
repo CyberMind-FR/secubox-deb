@@ -236,10 +236,12 @@
       <section class="pan"><h2>Profil acteur <i id="pver"></i></h2><div id="profile"><div class="vide">Sélectionne un acteur.</div></div></section>
     </div>
   </div>
+  <section class="pan"><h2>Rapport <i>historique 90 jours · lecture IA relue par la box · aucune adresse</i></h2><div id="rapport"><div class="vide">Lecture des rapports…</div></div></section>
   <div class="note">Observe. Correlate. Explain. Defend. — « continuité de campagne probable », jamais « même personne ».</div>
 </div></div></main>
 
 <script src="reperes.js"></script>
+<script src="rapport-menaces.js"></script>
 <script>
 "use strict";
 var Q=new URLSearchParams(location.search),DEMO=!!Q.get('demo'),EMB=!!Q.get('embed');
@@ -1071,6 +1073,8 @@ $('rafraichir').addEventListener('click',function(){ACTS_LE=CAMPS_LE=APERCU_LE=A
 $('retour').addEventListener('click',montreListe);
 if(DEMO){$('demo').hidden=false;$('geoNote').textContent='';}
 rendFlow();tick();
+if(!DEMO&&!EMB&&window.SbxRapport)window.SbxRapport.monter(document,$('rapport'),{genre:'acteur',jget:function(u){return jget(u,true);},jeton:jeton});   // #4006
+else if($('rapport'))$('rapport').textContent=DEMO?'Rapports : données réelles seulement.':'';
 setInterval(function(){if(!document.hidden&&!DEMO)tick();},15000);
 </script>
 </body>
