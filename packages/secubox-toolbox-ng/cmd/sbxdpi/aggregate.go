@@ -42,6 +42,8 @@ type aggregator struct {
 	capteur *ActorSensor
 	// appareils : agrégat par adresse cible (SBX TV Privacy lot 4, #3374), nil si non armé ; nil-safe.
 	appareils *suiviAppareils
+	// couches : couches de menace par source externe (#4010), nil si non armé ; nil-safe.
+	couches *couchesMenaces
 
 	mu         sync.Mutex
 	protocols  map[string]*counter // master proto: "TLS"
@@ -225,6 +227,7 @@ func (a *aggregator) recordTLS(ev *dpiEvent) {
 	if !ok {
 		return
 	}
+	a.couches.Empreinte(ev.FlowID, e.JA4) // #4010 : verrou propre aux couches, pris AVANT celui de l'agrégat
 	a.mu.Lock()
 	bump(a.fps, e.JA4, 1, 0)
 	bump(a.fpsJA3, e.JA3, 1, 0)
@@ -532,6 +535,7 @@ func flushLoop(ctx context.Context, cfg Config, agg *aggregator) {
 		case <-p.C:
 			agg.writeSnapshot(cfg.CachePath)
 		case <-t.C:
+			agg.couches.ecrire()  // #4010 : tmpfs, double tampon
 			agg.appareils.flush() // lot 4 : fichier par appareil, seulement si des cibles existent
 		}
 	}

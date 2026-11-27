@@ -104,6 +104,13 @@
     <div class="pan"><h3>Répartition par catégorie <i>flux à risque</i></h3><div class="repart"><div id="donutC"></div><div class="leg" id="legC"></div></div></div>
   </div>
   <div class="pan"><h3>Derniers flux à risque <i id="evNote"></i></h3><div class="scroll"><table><thead><tr><th>Heure</th><th>Source</th><th>Destination</th><th>Risque</th><th>Gravité</th><th>Score</th><th>Détail</th></tr></thead><tbody id="events"></tbody></table></div></div>
+  <div class="pan" id="couches"><h3>Sources externes — couches de menace <i id="coNote">nDPId · 24 h glissantes · aucune adresse affichée</i></h3>
+    <div class="grille g2">
+      <div><div class="sous">Accès par service (hors WAF en orange)</div><div id="coServ"></div></div>
+      <div><div class="sous">Raisons nDPI (bruit connu atténué)</div><div id="coRais"></div></div>
+    </div>
+    <div class="sous" style="margin-top:8px">Agent : UA déclaré au WAF rapproché de l’empreinte TLS</div><div id="coAgent"></div>
+  </div>
   <div class="note">Gravité d’après le score nDPI : critique ≥ 90 · haute ≥ 70 · moyenne ≥ 40 · faible en dessous. Page en lecture seule : aucune action sur les flux.</div>
 </div></div>
 <script>
@@ -278,5 +285,28 @@
   el('rafraichir').addEventListener('click',charge);
   charge();
   setInterval(function(){if(!document.hidden) charge();},30000);
+})();
+</script>
+<script>
+/* Couches de menace par source externe (#4010) : /api/v1/ndpid/couches-menaces, agrégats seulement. */
+(function(){
+  var NOMS={outil_probable:'Outil probable (UA navigateur, empreinte de bibliothèque)',outil_declare:'Outil ou robot déclaré',client_bibliotheque:'Client de bibliothèque (hors WAF)',coherent:'UA et empreinte cohérents',indetermine:'Indéterminé'};
+  function el(i){return document.getElementById(i);}
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function lignes(id,l,nom,coul){var m=Math.max.apply(null,l.map(function(e){return e.sources;}).concat([1]));
+    el(id).innerHTML=l.length?l.slice(0,8).map(function(e){return '<div class="ligne"><span class="n"><span class="t">'+esc(nom(e))+'</span></span><span class="c">'+e.sources+' src · '+e.flux+' flux</span><div class="barre"><i style="width:'+Math.round(100*e.sources/m)+'%;background:'+coul(e)+'"></i></div></div>';}).join(''):'<div class="vide">—</div>';}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function charge(){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
+    fetch('/api/v1/ndpid/couches-menaces?limit=20',{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}).then(function(d){
+      if(!d||!Array.isArray(d.services)){['coServ','coRais','coAgent'].forEach(function(i){el(i).innerHTML='<div class="vide">—</div>';});return;}
+      el('coNote').textContent=d.sources_externes+' sources · '+d.sources_hors_waf+' hors WAF'+(d.complet?'':' · relevé partiel');
+      lignes('coServ',d.services,function(e){return e.service;},function(e){return e.hors_waf?'var(--orange)':'var(--cyan)';});
+      lignes('coRais',d.raisons,function(e){return e.risque;},function(e){return e.bruit?'var(--faible)':'var(--rouge)';});
+      var a=Object.keys(d.agents||{}).map(function(k){return {k:k,sources:d.agents[k],flux:0};}).sort(function(x,y){return y.sources-x.sources;});
+      var m=Math.max.apply(null,a.map(function(e){return e.sources;}).concat([1]));
+      el('coAgent').innerHTML=a.length?a.map(function(e){return '<div class="ligne"><span class="n"><span class="t">'+esc(NOMS[e.k]||e.k)+'</span></span><span class="c">'+e.sources+' src</span><div class="barre"><i style="width:'+Math.round(100*e.sources/m)+'%;background:'+(e.k==='outil_probable'?'var(--rouge)':e.k==='coherent'?'var(--vert)':'var(--violet)')+'"></i></div></div>';}).join(''):'<div class="vide">—</div>';
+    });}
+  if(new URLSearchParams(location.search).get('demo')) return;
+  charge();setInterval(function(){if(!document.hidden) charge();},60000);
 })();
 </script>

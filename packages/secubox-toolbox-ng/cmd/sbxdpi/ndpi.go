@@ -209,6 +209,7 @@ func ingest(agg *aggregator, filt *filter, sess *sessionTracker, ev *dpiEvent) {
 		agg.recordTLS(ev)
 		return
 	}
+	agg.couches.Observe(ev) // #4010 : avant le filtrage d'affichage, flux entrants seulement (nil-safe)
 	switch ev.FlowEventName {
 	case "detected", "detection-update", "guessed":
 		d := filt.classify(ev)

@@ -1,3 +1,16 @@
+secubox-toolbox-ng (0.21.0-1~trixie1) trixie; urgency=medium
+
+  * sbxdpi (ref #4010) : couches de menace par adresse source externe
+    (flux entrants vers la box, jamais le LAN) — services visés par
+    protocole L7/port, risques nDPI, empreintes JA4 rattachées par flux —
+    sur 24 h glissantes, bornées (4096 sources). Fichier interne
+    /run/secubox/sbxdpi/couches-menaces.json (DPI_COUCHES_OUT, 0640),
+    double tampon : un relevé dégradé n'écrase pas un relevé complet.
+  * Capteur Actor Intelligence : l'enveloppe dpi porte désormais le JA4
+    calculé par sbxdpi (la libndpi livrée n'en fournit pas).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 06:38:29 +0100
+
 secubox-toolbox-ng (0.20.1-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch (ref #3988) : un contact sur un leurre de service (telnet,

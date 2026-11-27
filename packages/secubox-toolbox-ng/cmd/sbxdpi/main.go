@@ -100,6 +100,9 @@ type Config struct {
 	// SBX TV Privacy lot 4 (#3374) : cibles (écrites par root pour ad-guard) et sortie par appareil.
 	TargetsFile string
 	DevicesOut  string
+	// Couches de menace par source externe (#4010) : fichier interne (vide = désarmé) et fenêtre glissante.
+	CouchesOut     string
+	CouchesFenetre time.Duration
 
 	// onReady, if set, is called once the API listener is up (test hook).
 	onReady func()
@@ -148,6 +151,8 @@ func defaultConfig() Config {
 		ActorSeuil:      envIntDefault("DPI_ACTOR_SEUIL", 0),
 		TargetsFile:     getenvDefault("DPI_TARGETS_FILE", "/run/secubox/sbxdpi-cibles/cibles.json"),
 		DevicesOut:      getenvDefault("DPI_DEVICES_OUT", "/run/secubox/sbxdpi/appareils.json"),
+		CouchesOut:      getenvDefault("DPI_COUCHES_OUT", "/run/secubox/sbxdpi/couches-menaces.json"),
+		CouchesFenetre:  envDurationDefault("DPI_COUCHES_FENETRE", fenetreCouchesDefaut),
 	}
 }
 
@@ -208,8 +213,14 @@ func run(ctx context.Context, cfg Config) error {
 		agg.appareils.recharger()
 	}
 	filt := newFilter(cfg)
+	if cfg.CouchesOut != "" {
+		agg.couches = newCouchesMenaces(cfg.CouchesOut, cfg.CouchesFenetre)
+		agg.couches.muet = filt.riskMuted
+		agg.couches.connecte = agg.connected.Load
+	}
 	if agg.capteur != nil {
-		agg.capteur.muet = filt.riskMuted // la liste de silence de l'opérateur vaut aussi pour le capteur
+		agg.capteur.ja4De = agg.couches.ja4De // nil-safe : sans couches, rend ""
+		agg.capteur.muet = filt.riskMuted     // la liste de silence de l'opérateur vaut aussi pour le capteur
 	}
 	enr := newEnricher(cfg.RulesFile, cfg.ReloadEvery)
 	sess := newSessionTracker(enr)

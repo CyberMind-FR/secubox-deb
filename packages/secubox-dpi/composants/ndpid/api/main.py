@@ -655,6 +655,21 @@ flow_db = FlowDatabase(DB_FILE)
 dpi_bridge = DpiBridge()
 sbx_bridge = SbxdpiBridge()
 
+# Couches de menace nourries par nDPId (#4010) : calcul hors boucle, rafraîchi au plus toutes les 60 s.
+try:
+    from api.couches_menaces import CouchesMenaces, vue_publique
+except ImportError:
+    from couches_menaces import CouchesMenaces, vue_publique
+couches = CouchesMenaces()
+_couches_verrou = asyncio.Lock()
+
+
+async def _couches_a_jour() -> dict:
+    if couches.perime() and not _couches_verrou.locked():
+        async with _couches_verrou:
+            return await asyncio.to_thread(couches.rafraichir)
+    return await asyncio.to_thread(couches.lire)
+
 
 # ============================================================================
 # Risk Scoring
@@ -859,6 +874,12 @@ async def get_risks(hours: int = 24, limit: int = 100):
     if not risks and sbx_bridge.available():
         risks = sbx_bridge.risks(limit)
     return {"risks": risks}
+
+
+@app.get("/couches-menaces", dependencies=[Depends(require_jwt)])
+async def get_couches_menaces(limit: int = 20):
+    """Couches de menace par source externe (accès hors HTTP, raisons nDPI, agent UA/JA4) — agrégats, aucune adresse (#4010)."""
+    return vue_publique(await _couches_a_jour(), max(1, min(limit, 100)))
 
 
 @app.get("/risks/current", dependencies=[Depends(require_jwt)])
@@ -1127,4 +1148,15 @@ _assurer_donnees()
 async def startup():
     """Initialize on startup."""
     _assurer_donnees()
+    asyncio.create_task(_boucle_couches())
     log.info("nDPId module started")
+
+
+async def _boucle_couches():
+    """Unité autonome seulement (l'agrégateur ne lance pas ce démarrage : la route calcule alors à la demande)."""
+    while True:
+        try:
+            await _couches_a_jour()
+        except (OSError, ValueError) as e:
+            log.warning("couches de menace : %s", e)
+        await asyncio.sleep(60)
