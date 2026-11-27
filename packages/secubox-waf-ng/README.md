@@ -657,7 +657,7 @@ Page `/waf/sites.html` (onglet « Sites », premier de `/waf/` ; `/waf/#sites:<n
 - « Sous attaque » : 30 requêtes hostiles ou plus depuis le début de l'heure précédente (60 à 120 min, durée écrite), et trois fois le rythme des
   heures complètes (six au moins) à durée égale ; `null` si ces heures sont mal couvertes ou la lecture en retard. Heures de Paris.
 
-## Bibliothèque figée OWASP CRS / Nuclei (#4020, 1.57.0)
+## Bibliothèque figée OWASP CRS / Nuclei (#4020, 1.58.0)
 
 Motifs RE2 tirés d'OWASP CRS (Apache-2.0) et des modèles Nuclei (MIT), utilisés comme **sources de motifs**
 seulement : seul `sbxwaf` les évalue. Bibliothèque figée dans le paquet (`/usr/share/secubox/waf/bibliotheque/` :
