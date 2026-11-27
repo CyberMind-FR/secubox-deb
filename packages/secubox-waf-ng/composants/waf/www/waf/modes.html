@@ -103,6 +103,8 @@
   .carte .h{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;justify-content:space-between} .carte .h b{overflow-wrap:anywhere}
   .carte.bannir{border-color:rgba(255,77,94,.45)}
   .carte .pas,.carte .pill{align-self:flex-start} .carte .h .mono{white-space:nowrap}
+  /* bibliothèque (#4020) */
+  #bib{grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))} #bib .tch{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center} #bib .pas{max-width:100%;flex-wrap:wrap}
   /* sites PHP */
   .resume{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.9rem;color:var(--doux)} .resume b{color:var(--texte);font-size:1.1rem}
   .deux{display:grid;gap:14px} @container a (min-width:900px){.deux{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}}

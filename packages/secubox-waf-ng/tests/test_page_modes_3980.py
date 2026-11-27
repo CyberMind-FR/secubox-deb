@@ -160,4 +160,4 @@ def test_demo_coherente_et_inerte(nav):
 def test_source_textcontent_et_fragment_index():
     assert "innerHTML" not in PAGE and "insertAdjacentHTML" not in PAGE and "outerHTML" not in PAGE
     assert "<details" in PAGE and "En savoir plus" in PAGE
-    assert "modes:(categories|leurres|php)" in INDEX and "sbxWafModes" in INDEX and "&vue=" in INDEX
+    assert "modes:(categories|leurres|php|bibliotheque)" in INDEX and "sbxWafModes" in INDEX and "&vue=" in INDEX
