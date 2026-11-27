@@ -37,8 +37,10 @@ try:
 except ImportError:  # pragma: no cover — Python < 3.11
     _tomllib = None
 try:  # paquet `api` (API, processus de calcul, tests) ; à plat sinon, comme main.py
+    from . import couche_ndpi as _ndpi
     from . import profil as _profil
 except ImportError:  # pragma: no cover
+    import couche_ndpi as _ndpi  # type: ignore
     import profil as _profil  # type: ignore
 
 # ── sources (mêmes chemins que les options Go --geoip-asn / --reseaux-classes) ──────────────────────────────────────
@@ -532,14 +534,16 @@ def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str
 def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[str], str],
               classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
               rotation: list, campagnes_actord: Optional[list] = None,
-              classe_asn: Optional[Callable[[int], str]] = None, externes: Optional[tuple] = None) -> Dict[str, Any]:
+              classe_asn: Optional[Callable[[int], str]] = None, externes: Optional[tuple] = None,
+              ndpi: Optional[tuple] = None) -> Dict[str, Any]:
     """Le relevé des populations sur les FENETRE_JOURS jours calendaires (locaux) qui finissent aujourd'hui, depuis les
     agrégats des journaux (le plus récent d'abord : au plafond d'adresses, celles du jour sont gardées).
 
     `classer(ip) -> (asn, org, classe)` n'est appelé que pour une adresse dont aucune ligne ne porte le réseau ;
     `classe_asn(asn)` classe une ligne qui porte un ASN (la classe écrite dans la ligne ne sert qu'à défaut : un
     catalogue complété depuis s'applique ainsi à tout l'historique) ; `campagnes_actord` None = actord absent.
-    `externes` (#4005) : (relâches, profil.BansLus ou None) lus de bans.jsonl et reevaluations.jsonl ; None = non lus."""
+    `externes` (#4005) : (relâches, profil.BansLus ou None) lus de bans.jsonl et reevaluations.jsonl ; None = non lus.
+    `ndpi` (#4014) : (sources nDPI par adresse ou None, état, mémoire des premières vues ou None) ; None = non lu."""
     dernier_jour = _jour(maintenant).toordinal()
     premier_jour = dernier_jour - FENETRE_JOURS + 1
     fin = int(maintenant) + 300
@@ -639,24 +643,33 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
         if externes:
             pop["retours"] = _profil.retours_population(p.adresses, relaches, bans.retour if bans else {})
         pop["lecture"] = _profil.lecture(pop, pop["profil"])
+        if ndpi and ndpi[0] is not None:          # #4014 : rapprochement par adresse, seules des parts sortent
+            pop["ndpi"] = _ndpi.par_population(p.adresses, ndpi[0])
+            pop["lecture"].extend(_ndpi.lecture(pop["ndpi"]))
         pop["campagne_actord"] = _rapprocher(pop, campagnes_actord)
         sortie.append(pop)
         for ip in p.adresses:
             vues[ip] = vues.get(ip, 0) + 1
     sortie.sort(key=lambda x: (-x["serie"][-1], -x["adresses"], x["id"]))
-    return {
+    ruptures = _profil.ruptures(maintenant, quarts, debut_q, {
+        "adresses": premiere_vue,
+        "blocs24": _premieres_par(premiere_vue, _bloc24),
+        "asn": _premieres_par(premiere_vue, lambda ip: infos.get(ip, (0,))[0] or None),
+        "bannies": premier_ban,
+    }, bans, _ndpi.couches(ndpi[2] if ndpi else None, int(maintenant // _profil.QUART), _profil.QUART, _profil.RODAGE_Q,
+                           _profil.couche))
+    releve = {
         "genere_le": int(maintenant),
         "complet": complet,
         "fenetre_jours": FENETRE_JOURS,
         "populations": sortie,
         "recouvrement": {"adresses_communes": sum(1 for n in vues.values() if n > 1), "adresses_total": len(vues)},
-        "ruptures": _profil.ruptures(maintenant, quarts, debut_q, {
-            "adresses": premiere_vue,
-            "blocs24": _premieres_par(premiere_vue, _bloc24),
-            "asn": _premieres_par(premiere_vue, lambda ip: infos.get(ip, (0,))[0] or None),
-            "bannies": premier_ban,
-        }, bans),
+        "ruptures": ruptures,
     }
+    if ndpi:
+        releve["ndpi"] = ndpi[1].get("etat", "indisponible")
+        releve["ndpi_etat"] = ndpi[1]
+    return releve
 
 
 def _bloc24(ip: str) -> str:
@@ -1219,9 +1232,14 @@ def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: f
     try:
         reserve = os.path.join(os.path.dirname(os.path.abspath(cache)), RESERVE)
         memo = MemoAdresses(annuaire, reserve)
+        # #4014 : couche nDPI (indice) ; absente, illisible ou périmée : populations sans ces champs, relevé toujours complet
+        sources_ndpi, etat_ndpi = _ndpi.lire(maintenant)
+        memoire_ndpi = _ndpi.memoriser(os.path.join(reserve, _ndpi.MEMOIRE), sources_ndpi, maintenant) \
+            if os.path.isdir(reserve) else None
         releve = assembler(agregats_du_journal(dossier, reserve, maintenant), maintenant, memo.pays, memo.classer,
                            _liste(smtp), _liste(prof, "campagnes"), _liste(rot, "campagnes"),
-                           campagnes_actord=actord, classe_asn=annuaire.classe_asn, externes=(relaches, bans))
+                           campagnes_actord=actord, classe_asn=annuaire.classe_asn, externes=(relaches, bans),
+                           ndpi=(sources_ndpi, etat_ndpi, memoire_ndpi))
         memo.garder()
         if not annuaire.disponible:
             manques.append("base_asn")

@@ -1,3 +1,18 @@
+secubox-waf-ng (1.55.0-1~trixie1) trixie; urgency=medium
+
+  * Populations (ref #4014) : couche nDPI rapprochée par adresse (jamais
+    rendue) depuis le relevé de ndpid, à défaut celui de sbxdpi : services
+    hors HTTP visés, risques nDPI, forme JA4 tronquée, part « outil
+    probable », part des adresses vues par nDPI. Phrases de lecture par
+    règles, celles tirées du JA4 marquées « indice » (jamais motif de ban).
+  * Ruptures : couches « sources nDPI hors HTTP neuves » et « sources
+    outil probable neuves » (1 h / 8 h / 1 j / 7 j), mémoire interne des
+    premières vues dans la réserve des populations.
+  * Relevé nDPI absent, illisible ou périmé (> 1 h) : populations sans ces
+    champs, `ndpi: indisponible`, relevé toujours complet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 08:30:00 +0100
+
 secubox-waf-ng (1.54.0-1~trixie1) trixie; urgency=medium
 
   * Rapports de menaces multi-historiques par campagne et par acteur

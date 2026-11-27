@@ -453,7 +453,8 @@ def double_lecture(c: Dict[str, Any], autre: Dict[int, int], source: str, fin: i
 
 
 def ruptures(maintenant: float, journal: Dict[str, Dict[int, int]], debut_journal: Optional[int],
-             neufs_journal: Dict[str, Dict[Any, float]], bans: Optional[BansLus]) -> Dict[str, Any]:
+             neufs_journal: Dict[str, Dict[Any, float]], bans: Optional[BansLus],
+             supplementaires: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Toutes les couches. `journal` : séries par quart du journal des menaces (`f:<famille>`, `v:<hôte>`, `b` bans
     vus au journal) ; `neufs_journal` : premières vues par adresse (`adresses`, `blocs24`, `asn`, `bannies`)."""
     fin = int(maintenant // QUART)
@@ -487,6 +488,7 @@ def ruptures(maintenant: float, journal: Dict[str, Dict[int, int]], debut_journa
     vh = sorted((k for k in journal if k.startswith("v:")), key=lambda k: (-sum(journal[k].values()), k))
     for cle in vh[:MAX_VHOSTS_RUPTURES]:
         couches.append(couche("vhost:" + cle[2:], "Alertes sur " + cle[2:], "journal", journal[cle], fin, debut_journal))
+    couches.extend(supplementaires or [])          # #4014 : couches nDPI, déjà calculées par couche_ndpi.couches
     signalees = sum(1 for c in couches for f in c["fenetres"].values() if f["sens"] in ("hausse", "baisse"))
     return {"pas_s": QUART, "facteur": FACTEUR, "couches": couches, "signalees": signalees,
             "ecarts": sum(1 for c in couches if c.get("double", {}).get("ecart")),

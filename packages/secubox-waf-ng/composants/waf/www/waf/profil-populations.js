@@ -79,6 +79,16 @@
         + nb(pr.ua_distincts) + (pr.ua_plafond ? "+" : "") + " distincts) : " + (pr.ua_premier || "—");
       a.appendChild(ua);
     }
+    var nd = p.ndpi;                                   // #4014 : couche nDPI, parts seulement (aucune adresse), indice
+    if (nd && nd.adresses_vues) {
+      var gn = hx(doc, "div", "prgrille");
+      gn.appendChild(barresParts(doc, "Hors HTTP (nDPI)", nd.services_hors_http));
+      gn.appendChild(barresParts(doc, "Risques nDPI", nd.risques));
+      gn.appendChild(barresParts(doc, "Empreintes TLS (forme)", (nd.empreintes || []).map(function (e) { return [e[0] + (e[2] ? " · " + e[2] : ""), e[1]]; })));
+      a.appendChild(gn);
+      a.appendChild(hx(doc, "p", "poprep", "Vues par nDPI : " + nb(nd.part_vues) + " % des adresses · hors HTTP : "
+        + nb(nd.part_hors_http) + " % · outil probable : " + nb(nd.part_outil_probable) + " % (indice, jamais motif de ban)"));
+    }
     var r = p.retours;
     if (r) a.appendChild(hx(doc, "p", "poprep", "Relâchées : " + nb(r.relachees) + " · revenues : " + nb(r.retours)
       + (nombre(r.delai_median_s) ? " · délai médian " + nb(r.delai_median_s / 3600) + " h" : "")));
@@ -142,6 +152,8 @@
     if (!pops.length) zoneProfils.appendChild(hx(doc, "span", "popnr", "Aucun profil qualifié par les règles."));
     pops.forEach(function (p) { zoneProfils.appendChild(carteProfil(doc, p)); });
     tableRuptures(doc, zoneRuptures, releve.ruptures);
+    if (releve.ndpi === "indisponible") zoneRuptures.appendChild(hx(doc, "p", "poprep",
+      "nDPI indisponible (relevé absent, illisible ou périmé) : populations calculées sans la couche nDPI."));
   }
 
   w.SbxProfil = { rendre: rendre };
