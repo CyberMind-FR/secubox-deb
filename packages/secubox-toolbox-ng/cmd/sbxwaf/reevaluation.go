@@ -86,14 +86,36 @@ func Reevaluer(categorie string, paquets uint64, avecCompteur bool, recidives in
 	return ReevalDecision{"EXTEND", d, "a continué d'envoyer des paquets pendant son ban"}
 }
 
+// avecPlancher relève une prolongation à la durée configurée de la catégorie (ban_duree, #4003) : l'échelle 4 h/24 h/7 j ne
+// raccourcit jamais un ban que la catégorie veut plus long (aspirateur_ua 168 h était prolongé à 24 h). Mêmes plafonds :
+// 7 jours par prolongation, 30 jours de chaîne.
+func avecPlancher(d ReevalDecision, plancher, depuisChaine time.Duration) ReevalDecision {
+	if d.Action != "EXTEND" || plancher <= d.Duree {
+		return d
+	}
+	p := plancher
+	if p > plafondProlonge {
+		p = plafondProlonge
+	}
+	if reste := plafondChaine - depuisChaine; p > reste {
+		p = reste
+	}
+	if p > d.Duree {
+		d.Duree = p
+	}
+	return d
+}
+
 type Reeval struct {
-	banneur *NftBanner
-	store   *BanStore
-	mode    string // off | propose | auto
-	preuves string
-	audit   string
-	seuil   uint64
-	now     func() time.Time
+	// plancher rend la durée configurée d'une catégorie (Rules.ParamsBan) ; nil = pas de plancher.
+	plancher func(cat string) time.Duration
+	banneur  *NftBanner
+	store    *BanStore
+	mode     string // off | propose | auto
+	preuves  string
+	audit    string
+	seuil    uint64
+	now      func() time.Time
 
 	mu       sync.Mutex
 	deja     map[string]int64 // ip|échéance → échéance (pour purger)
@@ -167,7 +189,11 @@ func (r *Reeval) Tick() {
 			continue // déjà traité, ou plus dans nft (levé entre-temps : rien à décider)
 		}
 		recid := r.store.CompteCategorie(rec.IP, famille(rec.Category), now.Add(-plafondChaine).Unix())
-		d := Reevaluer(rec.Category, el.Paquets, el.AvecCompteur, max(recid-1, 0), r.store.DepuisChaine(rec.IP, now.Unix()), r.seuil)
+		chaine := r.store.DepuisChaine(rec.IP, now.Unix())
+		d := Reevaluer(rec.Category, el.Paquets, el.AvecCompteur, max(recid-1, 0), chaine, r.seuil)
+		if r.plancher != nil {
+			d = avecPlancher(d, r.plancher(strings.TrimSuffix(rec.Category, "|prolonge")), chaine)
+		}
 		applique := r.mode == "auto" && d.Action == "EXTEND"
 		r.ecrire(r.preuves, map[string]any{"ts": now.Unix(), "ip": rec.IP, "categorie": rec.Category, "paquets": el.Paquets, "compteur": el.AvecCompteur,
 			"recidives": recid, "decision": d.Action, "duree_s": int64(d.Duree.Seconds()), "raison": d.Raison, "mode": r.mode, "applique": applique, "version": "v1"})

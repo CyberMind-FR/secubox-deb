@@ -1889,6 +1889,13 @@ func main() {
 		if *reevaluation == "propose" || *reevaluation == "auto" {
 			rv := NewReeval(nb, store, *reevaluation, *reevalPreuves)
 			rv.seuil = *reevalSeuil
+			rv.plancher = func(cat string) time.Duration {
+				if srv.rules == nil {
+					return 0
+				}
+				_, d := srv.rules.ParamsBan(cat)
+				return d
+			}
 			nb.QuandPret(func() { go rv.Veiller(30 * time.Second) })
 			log.Printf("sbxwaf: réévaluation des bans mode=%s (seuil=%d paquets, preuves=%s)", *reevaluation, *reevalSeuil, *reevalPreuves)
 		}
