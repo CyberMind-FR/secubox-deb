@@ -79,6 +79,7 @@ type VhostProfiles struct {
 	phpServices  map[string]bool           // nom de service -> fait tourner PHP (#3257)
 	phpHotes     []*regexp.Regexp          // motifs d'hôte PHP (#3257, R15)
 	federation   map[string]bool           // hôte -> fédération Nextcloud utilisée (#3273, R-NC1)
+	cms          map[string]map[string]bool // hôte -> CMS réellement hébergés (#4019)
 
 	// memoPHP : verdict de servicePHP par hôte normalisé (passe finale I1).
 	// Bornée à servicePHPMemoMax entrées : au-delà, rien n'est plus retenu,
@@ -128,6 +129,11 @@ type fichierProfils struct {
 	// n'est signalé qu'en rafale ; ailleurs, à chaque appel. Clé absente =
 	// aucun (une box unique ne fédère pas).
 	FederationVhosts []string `json:"federation_vhosts"`
+	// CMSVhosts (#4019) : vhosts qui hébergent RÉELLEMENT un CMS, avec la
+	// liste de ces CMS (« blog.exemple.fr »: ["wordpress"]). Sur eux, la
+	// catégorie de sonde de CE CMS ne bannit jamais. Clé absente = aucun : tout
+	// chemin par défaut d'un CMS est une sonde, partout.
+	CMSVhosts map[string][]string `json:"cms_vhosts"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -153,6 +159,7 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		antirobots:   make(map[string]bool, len(f.AntiRobots)),
 		phpServices:  make(map[string]bool, len(f.PHPServices)),
 		federation:   make(map[string]bool, len(f.FederationVhosts)),
+		cms:          make(map[string]map[string]bool, len(f.CMSVhosts)),
 	}
 	for _, cat := range f.SuppressCategories {
 		vp.supprimables[cat] = true
@@ -205,6 +212,20 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 	for _, hote := range f.FederationVhosts {
 		vp.federation[normaliserHote(hote)] = true
 	}
+	// Comme anti_robots : normalisé, sans exiger de profil de service.
+	for hote, liste := range f.CMSVhosts {
+		h := normaliserHote(hote)
+		for _, nom := range liste {
+			nom = strings.ToLower(strings.TrimSpace(nom))
+			if nom == "" {
+				continue
+			}
+			if vp.cms[h] == nil {
+				vp.cms[h] = make(map[string]bool, len(liste))
+			}
+			vp.cms[h][nom] = true
+		}
+	}
 	for i, brutMotif := range f.PHPHotes {
 		var motif string
 		if err := json.Unmarshal(brutMotif, &motif); err != nil {
@@ -231,6 +252,17 @@ func normaliserHote(host string) string {
 		host = host[:i]
 	}
 	return host
+}
+
+// hebergeCMS dit si l'hôte déclare héberger ce CMS (#4019, cms_vhosts).
+// Récepteur nil-safe : sans profils, aucun vhost n'est déclaré.
+func (v *VhostProfiles) hebergeCMS(host, cms string) bool {
+	if v == nil || cms == "" {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.cms[normaliserHote(host)][cms]
 }
 
 // catSupprimable dit si une catégorie touchée figure dans la liste GLOBALE des

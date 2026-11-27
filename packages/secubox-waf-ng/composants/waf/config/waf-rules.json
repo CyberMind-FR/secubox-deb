@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.8.2",
-    "updated": "2026-11-24",
-    "changelog": "1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h (taille de la liste waf_ban). 1.8.1 : aspirateur_ua en mode escalate, le seul qui honore ban_seuil=1 et ban_duree=168h (block bannissait à la 3e touche, 1 h). 1.8.0 : catégorie aspirateur_ua (#3905), UA figé de l'aspirateur distribué de Gitea, bloqué et banni 7 j dès la 1re requête. 1.7.0 : catégories roundcube, nextcloud et php_requete (signatures structurelles équivalentes à PHP2Shell, #3273) et compléments php2shell-005 à php2shell-008, tout en mode detect, seuils provisoires étiquetés. 1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
+    "version": "1.9.0",
+    "updated": "2026-11-27",
+    "changelog": "1.9.0 : catégories cms_wordpress, cms_drupal, cms_joomla et cms_defauts_web (#4019), chemins par défaut d'un CMS sur un vhost qui ne l'héberge pas : sonde, ban dès la 1re requête, gradué comme un leurre (24 h puis 7 j), journal « cms_sonde:<cms> » ; exception déclarative cms_vhosts de vhost_profiles.json. wordpress-001/002 retirés de la graine product_absent_probes (repris, ancrés, par cms_wordpress). 1.8.2 : aspirateur_ua banni 24 h au lieu de 168 h (taille de la liste waf_ban). 1.8.1 : aspirateur_ua en mode escalate, le seul qui honore ban_seuil=1 et ban_duree=168h (block bannissait à la 3e touche, 1 h). 1.8.0 : catégorie aspirateur_ua (#3905), UA figé de l'aspirateur distribué de Gitea, bloqué et banni 7 j dès la 1re requête. 1.7.0 : catégories roundcube, nextcloud et php_requete (signatures structurelles équivalentes à PHP2Shell, #3273) et compléments php2shell-005 à php2shell-008, tout en mode detect, seuils provisoires étiquetés. 1.6.0 : catégorie php2shell (CVE-2026-109618/109619), signatures structurelles en mode detect sur les corps multipart des vhosts PHP, seuils de profondeur et de parties provisoires. 1.5.0 : motifs tires du journal de menaces de gk2 (5152 requetes externes). WordPress (422 req.), prefixes /wordpress|/wp (273), Livewire (4), et l'evasion par encodage %2e/%2f (23). Zero faux positif mesure sur les chemins legitimes du parc. Le contournement par encodage appelle une NORMALISATION du chemin avant comparaison — ces motifs bouchent le trou visible, ils ne ferment pas la famille (double encodage, UTF-8 sur-long).",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -833,6 +833,189 @@
         }
       ]
     },
+    "cms_wordpress": {
+      "name": "Sonde WordPress sur un site sans WordPress (#4019)",
+      "severity": "high",
+      "enabled": true,
+      "mode": "escalate",
+      "ban_seuil": 1,
+      "ban_duree": "24h",
+      "sonde_cms": "wordpress",
+      "note": "#4019 : chemin par défaut d'un CMS sur un vhost qui ne l'héberge pas = sonde, ban dès la 1re requête, journal et ban « cms_sonde:wordpress », durée graduée comme un leurre (24 h, 7 j à la récidive sous 30 j ; ban_duree n'est que la valeur de repli). Exception déclarative : cms_vhosts de vhost_profiles.json. Ancrage : début du chemin, au plus un dossier devant (/blog/wp-login.php), fin de segment ; jamais le corps ni l'UA. LAN, maillage et plages protégées jamais bannis. Placées avant recon_crawler (detect) : le premier motif qui touche décide, une catégorie detect devant laissait passer la sonde.",
+      "patterns": [
+        {
+          "id": "cms-wp-001",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-login\\.php(?:$|[\\s?#/])",
+          "desc": "Connexion WordPress"
+        },
+        {
+          "id": "cms-wp-002",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-admin(?:$|[\\s?#/])",
+          "desc": "Administration WordPress"
+        },
+        {
+          "id": "cms-wp-003",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-json(?:$|[\\s?#/])",
+          "desc": "API REST WordPress"
+        },
+        {
+          "id": "cms-wp-004",
+          "pattern": "^[/.]*(?:index\\.php)?\\s(?:\\S*&)?rest_route=",
+          "desc": "API REST WordPress sans permaliens (?rest_route=)"
+        },
+        {
+          "id": "cms-wp-005",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?xmlrpc\\.php(?:$|[\\s?#/])",
+          "desc": "XML-RPC WordPress (scan-004 garde pingback/multicall en blocage)"
+        },
+        {
+          "id": "cms-wp-006",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wlwmanifest\\.xml(?:$|[\\s?#/])",
+          "desc": "Manifeste Windows Live Writer de WordPress"
+        },
+        {
+          "id": "cms-wp-007",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-includes/",
+          "desc": "Bibliothèques WordPress"
+        },
+        {
+          "id": "cms-wp-008",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-content/",
+          "desc": "Extensions, thèmes et envois WordPress"
+        },
+        {
+          "id": "cms-wp-009",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?wp-(?:config|cron|trackback|signup|links-opml|mail|activate|load|settings|blog-header|comments-post)\\.php(?:$|[\\s?#/])",
+          "desc": "Scripts racine de WordPress"
+        },
+        {
+          "id": "cms-wp-010",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:readme\\.html|license\\.txt)(?:$|[\\s?#/])",
+          "desc": "readme.html et license.txt à la racine (version de WordPress)"
+        }
+      ]
+    },
+    "cms_drupal": {
+      "name": "Sonde Drupal sur un site sans Drupal (#4019)",
+      "severity": "high",
+      "enabled": true,
+      "mode": "escalate",
+      "ban_seuil": 1,
+      "ban_duree": "24h",
+      "sonde_cms": "drupal",
+      "note": "#4019 : chemin par défaut d'un CMS sur un vhost qui ne l'héberge pas = sonde, ban dès la 1re requête, journal et ban « cms_sonde:drupal », durée graduée comme un leurre (24 h, 7 j à la récidive sous 30 j ; ban_duree n'est que la valeur de repli). Exception déclarative : cms_vhosts de vhost_profiles.json. Ancrage : début du chemin, au plus un dossier devant (/blog/wp-login.php), fin de segment ; jamais le corps ni l'UA. LAN, maillage et plages protégées jamais bannis. Placées avant recon_crawler (detect) : le premier motif qui touche décide, une catégorie detect devant laissait passer la sonde.",
+      "patterns": [
+        {
+          "id": "cms-dr-001",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?core/(?:changelog\\.txt|install\\.php|authorize\\.php|misc/drupal\\.js|core\\.services\\.yml)(?:$|[\\s?#/])",
+          "desc": "Fichiers du cœur Drupal 8+"
+        },
+        {
+          "id": "cms-dr-002",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?sites/(?:default|all)/(?:files|settings\\.php|default\\.settings\\.php|modules|themes)(?:$|[\\s?#/])",
+          "desc": "Dossier des sites Drupal"
+        },
+        {
+          "id": "cms-dr-003",
+          "pattern": "(?:^|/\\.\\.)[/.]*changelog\\.txt(?:$|[\\s?#/])",
+          "desc": "CHANGELOG.txt à la racine (version de Drupal 7)"
+        },
+        {
+          "id": "cms-dr-004",
+          "pattern": "^[/.]*(?:index\\.php)?\\s(?:\\S*&)?q=(?:user/(?:login|register|password)|node/add|admin/)",
+          "desc": "Drupal 7 sans URL propres (?q=user/login)"
+        }
+      ]
+    },
+    "cms_joomla": {
+      "name": "Sonde Joomla sur un site sans Joomla (#4019)",
+      "severity": "high",
+      "enabled": true,
+      "mode": "escalate",
+      "ban_seuil": 1,
+      "ban_duree": "24h",
+      "sonde_cms": "joomla",
+      "note": "#4019 : chemin par défaut d'un CMS sur un vhost qui ne l'héberge pas = sonde, ban dès la 1re requête, journal et ban « cms_sonde:joomla », durée graduée comme un leurre (24 h, 7 j à la récidive sous 30 j ; ban_duree n'est que la valeur de repli). Exception déclarative : cms_vhosts de vhost_profiles.json. Ancrage : début du chemin, au plus un dossier devant (/blog/wp-login.php), fin de segment ; jamais le corps ni l'UA. LAN, maillage et plages protégées jamais bannis. Placées avant recon_crawler (detect) : le premier motif qui touche décide, une catégorie detect devant laissait passer la sonde.",
+      "patterns": [
+        {
+          "id": "cms-jo-001",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?administrator(?:$|[\\s?#/])",
+          "desc": "Administration Joomla"
+        },
+        {
+          "id": "cms-jo-002",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?components/com_",
+          "desc": "Composants Joomla"
+        },
+        {
+          "id": "cms-jo-003",
+          "pattern": "^[/.]*(?:index\\.php)?\\s(?:\\S*&)?option=com_",
+          "desc": "Routage Joomla (?option=com_)"
+        },
+        {
+          "id": "cms-jo-004",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?configuration\\.php(?:$|[\\s?#/])",
+          "desc": "Configuration Joomla"
+        }
+      ]
+    },
+    "cms_defauts_web": {
+      "name": "Défauts du web jamais servis (#4019)",
+      "severity": "high",
+      "enabled": true,
+      "mode": "escalate",
+      "ban_seuil": 1,
+      "ban_duree": "24h",
+      "sonde_cms": "web",
+      "note": "#4019 : chemin par défaut d'un CMS sur un vhost qui ne l'héberge pas = sonde, ban dès la 1re requête, journal et ban « cms_sonde:web », durée graduée comme un leurre (24 h, 7 j à la récidive sous 30 j ; ban_duree n'est que la valeur de repli). Exception déclarative : cms_vhosts de vhost_profiles.json. Ancrage : début du chemin, au plus un dossier devant (/blog/wp-login.php), fin de segment ; jamais le corps ni l'UA. LAN, maillage et plages protégées jamais bannis. Placées avant recon_crawler (detect) : le premier motif qui touche décide, une catégorie detect devant laissait passer la sonde.",
+      "patterns": [
+        {
+          "id": "cms-web-001",
+          "pattern": "/\\.ds_store(?:$|[\\s?#/])",
+          "desc": "Index Finder macOS"
+        },
+        {
+          "id": "cms-web-002",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?cgi-bin/",
+          "desc": "CGI (les CVE précises restent aux filtres IA)"
+        },
+        {
+          "id": "cms-web-003",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?vendor/phpunit/",
+          "desc": "PHPUnit exposé (eval-stdin)"
+        },
+        {
+          "id": "cms-web-004",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?\\.aws/",
+          "desc": "Identifiants AWS (honey-011 garde credentials en blocage)"
+        },
+        {
+          "id": "cms-web-005",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?\\.(?:svn|hg|bzr)/",
+          "desc": "Dépôts SVN, Mercurial, Bazaar"
+        },
+        {
+          "id": "cms-web-006",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?\\.(?:idea|vscode)/",
+          "desc": "Réglages d'éditeur"
+        },
+        {
+          "id": "cms-web-007",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?(?:\\.htpasswd|\\.htaccess|\\.npmrc|\\.git-credentials)(?:$|[\\s?#/])",
+          "desc": "Fichiers de secrets du serveur web"
+        },
+        {
+          "id": "cms-web-008",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?\\.ssh/",
+          "desc": "Clés SSH"
+        },
+        {
+          "id": "cms-web-009",
+          "pattern": "(?:^|/\\.\\.)[/.]*(?:[a-z0-9_-]+/+|index\\.php/+)?_ignition/",
+          "desc": "Laravel Ignition (exécution de code)"
+        }
+      ]
+    },
     "recon_crawler": {
       "name": "Reconnaissance Crawlers",
       "severity": "info",
@@ -954,16 +1137,6 @@
           "cve": "CVE-2024-3400",
           "vendor": "paloaltonetworks",
           "source": "nuclei"
-        },
-        {
-          "id": "wordpress-001",
-          "pattern": "/wp-(login|admin|config|content|includes|json|cron)",
-          "desc": "Sonde WordPress — aucun WordPress n'est heberge (422 requetes mesurees)"
-        },
-        {
-          "id": "wordpress-002",
-          "pattern": "/(wordpress|wp)/",
-          "desc": "Prefixe WordPress classique sous /wordpress/ ou /wp/ (273 requetes)"
         },
         {
           "id": "livewire-001",

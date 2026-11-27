@@ -815,6 +815,43 @@ func (s *Server) handler() http.Handler {
 						hit = false
 					}
 				}
+				// #4019 : un vhost qui déclare héberger un CMS (cms_vhosts) n'est
+				// jamais sanctionné pour les chemins par défaut de CE CMS. Même
+				// garde anti-contrebande que la Phase G : on ré-évalue sans la
+				// catégorie, une autre règle touchée est traitée normalement.
+				//
+				// Sur un vhost sans ce CMS, une règle plus précise (filtre IA
+				// d'une CVE, catégorie bloquante) qui touche aussi la requête
+				// l'emporte : sa trace nomme la vulnérabilité visée. Une
+				// catégorie detect ne l'emporte jamais (la sonde resterait
+				// impunie).
+				for exclues := map[string]bool(nil); hit; {
+					cms := s.rules.SondeCMS(cat)
+					if cms == "" {
+						break
+					}
+					if !s.vhostProfiles.hebergeCMS(r.Host, cms) {
+						c2, s2, m2, mo2, h2 := s.rules.MatchDetail(
+							r.Method, rawPath, r.URL.RawQuery, string(bodyBytes),
+							r.Header.Get("User-Agent"), includeBlock, s.rules.CategoriesSondeCMS(),
+						)
+						if h2 && m2 != modeDetect && !s.vhostProfiles.doitSupprimer(r.Host, rawPath, c2) {
+							cat, sev, mode, motif = c2, s2, m2, mo2
+						}
+						break
+					}
+					if exclues == nil {
+						exclues = make(map[string]bool, 2)
+					}
+					exclues[cat] = true
+					cat, sev, mode, motif, hit = s.rules.MatchDetail(
+						r.Method, rawPath, r.URL.RawQuery, string(bodyBytes),
+						r.Header.Get("User-Agent"), includeBlock, exclues,
+					)
+					if hit && s.vhostProfiles.doitSupprimer(r.Host, rawPath, cat) {
+						hit = false // chemin légitime du service de ce vhost (Phase G)
+					}
+				}
 				if hit && mode == modeDetect {
 					// Observe only: log it, let it through. A detect category
 					// must be as harmless as enabled:false, minus the log line
@@ -848,14 +885,27 @@ func (s *Server) handler() http.Handler {
 					if compteur != nil && seuilCat > 0 {
 						compteur = s.compteurEscalate(cat, seuilCat)
 					}
+					// #4019 : sonde d'un CMS absent de ce vhost. Journal et ban
+					// sous « cms_sonde:<cms> », durée graduée comme un leurre
+					// (24 h, puis 7 j à la récidive dans les 30 jours).
+					etiquette, action := cat, "banned"
+					cms := s.rules.SondeCMS(cat)
+					if cms != "" {
+						etiquette = prefixeSondeCMS + cms
+					}
 					if compteur == nil {
 						// No counter → observe like detect, never ban.
-						s.logEscalate(r, ip, rawPath, cat, sev, motif, "detect")
+						s.logEscalate(r, ip, rawPath, etiquette, sev, motif, "detect")
 						hit = false
 					} else if count, banned := compteur.Record(ip, time.Now().Unix()); banned {
 						// Threshold crossed: ban for real, exactly as the block
 						// path's ban branch does — but gated on escalateBan.
-						s.logEscalate(r, ip, rawPath, cat, sev, motif, "banned")
+						if cms != "" {
+							action = s.actionBan(ip) // « epargne » : plage protégée, robot vérifié (#4008)
+							dureeCat = dureeLeurre(s.recidivesSondeCMS(ip))
+						}
+						cat = etiquette
+						s.logEscalate(r, ip, rawPath, cat, sev, motif, action)
 						// Mirror the block path's journald line so an operator
 						// tailing `journalctl -u secubox-waf-ng` for THREAT sees
 						// escalate bans too — otherwise a banned scanner is
@@ -866,7 +916,7 @@ func (s *Server) handler() http.Handler {
 						return
 					} else {
 						// Still observing: log and let it through.
-						s.logEscalate(r, ip, rawPath, cat, sev, motif, "detect")
+						s.logEscalate(r, ip, rawPath, etiquette, sev, motif, "detect")
 						hit = false
 					}
 				}

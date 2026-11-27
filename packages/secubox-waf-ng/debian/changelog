@@ -1,3 +1,28 @@
+secubox-waf-ng (1.56.0-1~trixie1) trixie; urgency=medium
+
+  * Sondes de CMS (ref #4019), règles 1.9.0 : catégories cms_wordpress,
+    cms_drupal, cms_joomla et cms_defauts_web (wp-login.php, wp-admin,
+    wp-json, ?rest_route=, xmlrpc.php, wlwmanifest.xml, wp-includes/,
+    wp-content/, core/CHANGELOG.txt, sites/default/, administrator,
+    components/com_, ?option=com_, .DS_Store, cgi-bin/, vendor/phpunit/,
+    .aws/, .svn/…), ancrées au début du chemin (un dossier devant au plus,
+    fin de segment), jamais le corps ni l'UA. Sur un vhost qui n'héberge pas
+    ce CMS : ban dès la 1re requête, 24 h puis 7 j à la récidive sous 30 j,
+    journal et ban « cms_sonde:<cms> » (« epargne » pour une plage
+    protégée). Une règle plus précise (filtre IA, blocage) nomme le ban.
+    Placées avant recon_crawler (detect), qui les masquait.
+  * vhost_profiles.json : cms_vhosts (hôte → CMS réellement hébergés),
+    vide à la livraison, relu à chaud : sur ces vhosts la catégorie de CE
+    CMS ne bannit jamais. /user/login n'est pas une sonde Drupal (Gitea).
+  * Graine product_absent_probes : wordpress-001/002 retirés (non ancrés,
+    repris par cms_wordpress).
+  * waf-php-sites : une page de repli (même taille pour 3 chemins .php
+    distincts) n'est plus une preuve PHP ; une détection « fichier » faite
+    sur une telle page est retirée, auditée (admin.gk2 classé PHP à tort par
+    « /info.php servi en 2xx »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:31:32 +0100
+
 secubox-waf-ng (1.55.0-1~trixie1) trixie; urgency=medium
 
   * Populations (ref #4014) : couche nDPI rapprochée par adresse (jamais

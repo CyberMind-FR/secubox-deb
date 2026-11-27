@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.22.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf (ref #4019) : catégories « sonde_cms » (escalate, ban_seuil 1) :
+    ban et journal « cms_sonde:<cms> », durée graduée comme un leurre (24 h,
+    7 j à la récidive), sauf sur un vhost déclaré dans cms_vhosts
+    (vhost_profiles.json) ; garde anti-contrebande et règle plus précise
+    prioritaire. Livré par secubox-waf-ng 1.56.0.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:31:32 +0100
+
 secubox-toolbox-ng (0.21.0-1~trixie1) trixie; urgency=medium
 
   * sbxdpi (ref #4010) : couches de menace par adresse source externe

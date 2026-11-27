@@ -110,6 +110,9 @@ type compiledCategory struct {
 	// (-escalate-threshold, -nft-ban-duration).
 	banSeuil int
 	banDuree time.Duration
+	// sondeCMS (#4019) : CMS dont la catégorie décrit les chemins par défaut
+	// ("wordpress", "drupal", "joomla", "web"). Vide = catégorie ordinaire.
+	sondeCMS string
 	patterns []compiledPattern
 	// structurelles : signatures lues sur le ResultatMultipart de l'analyseur
 	// (#3257). Jamais consultees par MatchDetail.
@@ -526,6 +529,9 @@ func loadRulesJSON(path string) *rulesData {
 		// elle ne fait pas sauter la catégorie entière.
 		BanSeuil json.RawMessage `json:"ban_seuil"`
 		BanDuree json.RawMessage `json:"ban_duree"`
+		// SondeCMS (#4019) : catégorie de sonde d'un CMS absent. Brut : une
+		// valeur qui n'est pas un nom simple est ignorée, la catégorie reste.
+		SondeCMS json.RawMessage `json:"sonde_cms"`
 	}
 
 	// Use a simple ordered parse: json.Decoder over the categories object,
@@ -594,6 +600,7 @@ func loadRulesJSON(path string) *rulesData {
 			cc.name = catID
 		}
 		cc.banSeuil, cc.banDuree = lireParamsBan(catID, cat.BanSeuil, cat.BanDuree)
+		cc.sondeCMS = lireSondeCMS(catID, cat.SondeCMS)
 
 		for _, p := range cat.Patterns {
 			if p.Pattern == "" {
@@ -783,6 +790,57 @@ func (r *Rules) ParamsBan(cat string) (int, time.Duration) {
 		}
 	}
 	return 0, 0
+}
+
+// SondeCMS rend le CMS d'une catégorie de sonde de CMS (#4019), "" sinon.
+func (r *Rules) SondeCMS(cat string) string {
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return ""
+	}
+	for _, c := range cur.cats {
+		if c.id == cat {
+			return c.data.sondeCMS
+		}
+	}
+	return ""
+}
+
+// CategoriesSondeCMS rend l'ensemble des catégories de sonde de CMS (#4019).
+func (r *Rules) CategoriesSondeCMS() map[string]bool {
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	out := map[string]bool{}
+	if cur == nil {
+		return out
+	}
+	for _, c := range cur.cats {
+		if c.data.sondeCMS != "" {
+			out[c.id] = true
+		}
+	}
+	return out
+}
+
+// nomCMS : un nom de CMS est un mot simple en minuscules (il entre dans la
+// catégorie du ban, « cms_sonde:<nom> »).
+var nomCMS = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+
+// lireSondeCMS lit "sonde_cms" (#4019). Absent ou invalide → "" (catégorie
+// ordinaire), avec avertissement si la valeur est présente mais invalide.
+func lireSondeCMS(catID string, brut json.RawMessage) string {
+	if len(brut) == 0 {
+		return ""
+	}
+	var nom string
+	if err := json.Unmarshal(brut, &nom); err != nil || !nomCMS.MatchString(nom) {
+		log.Printf("sbxwaf/rules: catégorie %s : sonde_cms %s invalide, ignoré", catID, string(brut))
+		return ""
+	}
+	return nom
 }
 
 // Match checks the request against all compiled WAF rules (all modes). See the
