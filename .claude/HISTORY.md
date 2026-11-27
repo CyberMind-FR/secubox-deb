@@ -28,8 +28,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - **#4021 (PR #4023, déployé gk2)** : waf-ng 1.57.0, défi de calcul armé sur gitea.gk2 (rejeu de la vague : 18 422 requêtes défiées,
   0 git/apt défié). Drop-in 10-honeypot.conf remis au modèle ; plages protégées : 31 (box + Meta) via protegees.env, 2 retirées sur
   décision du propriétaire (closes #4021).
-- **#4020 (PR #4024, ref #4020, publié, installation gk2 en attente de charge < 15)** : waf-ng 1.58.0, toolbox-ng 0.22.1, bibliothèque
-  figée OWASP CRS / Nuclei (2 180 règles, identifier seulement). Coût arm64 à mesurer sur gk6 avant tout passage en escalate/block.
+- **#4020 (PR #4024, déployé gk2)** : waf-ng 1.58.0, toolbox-ng 0.22.1, bibliothèque
+  figée OWASP CRS / Nuclei (2 180 règles, identifier seulement). Coût arm64 à mesurer sur gk6 avant tout passage en escalate/block ; 31 plages protégées actives (closes #4020).
 - Couture : 4 à 16 s de coupure par installation de waf-ng (16 s quand le drop-in impose un second redémarrage).
 - Biais trouvé : l'auto-test du WAF pose de vrais bans xss/lfi/sqli (exclu des mesures). Gitea en veille → 401 du réveil, voulu.
 
