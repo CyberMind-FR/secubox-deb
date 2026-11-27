@@ -123,8 +123,12 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 	log.Printf("sbxwaf: rotation-ban %s ← %s (aucune ressource, cookie ni référent %s après sa page)", ip, court, r.cfg.Delai)
 	if r.journal != nil {
 		// Ni chemin ni navigateur déclaré (un ban n'est pas une sonde) ; jamais vers actord : un constat d'absence ne nourrit ni score ni mesure.
+		action := "banned"
+		if e, ok := r.banneur.(interface{ Epargne(string) string }); ok && e.Epargne(ip) != "" {
+			action = "epargne" // #4008 : la pose l'a écarté, le journal ne l'annonce pas comme posé
+		}
 		r.journal(ThreatRecord{ClientIP: ip, Host: v.hote, Method: "GET", Category: "rotation:" + court, Severity: "high", RuleID: "rotation",
-			Action: "banned", HorsActeur: true})
+			Action: action, HorsActeur: true})
 	}
 }
 

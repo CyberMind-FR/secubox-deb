@@ -600,3 +600,26 @@ func TestNftReel_3932(t *testing.T) {
 	}
 	fmt.Println("vrai nft :", lectures.Load(), "lectures, aucune vide")
 }
+
+// #4008 : Epargne annonce ce que la pose écartera, pour que le journal des menaces n'écrive pas « banned » à tort.
+func TestEpargne4008(t *testing.T) {
+	b, _ := banneurLots(t, nil)
+	b.protegees = parseCIDRs("203.0.113.7/32")
+	if r := b.Epargne("203.0.113.7"); r != "plage protégée" {
+		t.Fatalf("plage protégée non signalée : %q", r)
+	}
+	if r := b.Epargne("::ffff:203.0.113.7"); r != "plage protégée" {
+		t.Fatalf("forme IPv4 mappée non signalée : %q", r)
+	}
+	if r := b.Epargne("203.0.113.8"); r != "" {
+		t.Fatalf("adresse ordinaire épargnée à tort : %q", r)
+	}
+	var nul *NftBanner
+	if nul.Epargne("203.0.113.7") != "" {
+		t.Fatal("un banneur absent n'épargne rien")
+	}
+	s := &Server{nftBan: b}
+	if s.actionBan("203.0.113.7") != "epargne" || s.actionBan("203.0.113.8") != "banned" {
+		t.Fatal("actionBan ne suit pas Epargne")
+	}
+}

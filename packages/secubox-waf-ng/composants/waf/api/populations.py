@@ -386,6 +386,17 @@ def _utile(cat: str) -> str:
     return fam if fam != AUTRE else ("ia_filtres_" if cat.startswith("ia_filtres_") else "")
 
 
+def pose_par_sbxwaf(cat: str, hote: Any) -> bool:
+    """Un « banned » du journal que sbxwaf a posé et inscrit dans bans.jsonl (#4008). Les leurres de service (telnet, rdp…, hôte sans
+    point) et les échecs d'authentification (`auth_`) sont bannis par sbx-authwatch, qui garde son propre registre dans ce journal :
+    la double lecture ne les compte pas, sinon elle signale un écart qui n'en est pas un."""
+    if cat.startswith("auth_"):
+        return False
+    if cat.startswith("leurre:") and not (isinstance(hote, str) and "." in hote):
+        return False
+    return True
+
+
 def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
     """Un passage sur les lignes d'un journal. Celles dont la catégorie ne compte pas (sqli, xss…) sont écartées avant
     tout décodage JSON ; dates, adresses et hôtes sont mémorisés."""
@@ -490,7 +501,7 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
         if vhost:
             cq = (q, "v:" + vhost)
             qa[cq] = qa.get(cq, 0) + 1
-        if ban:
+        if ban and pose_par_sbxwaf(cat, e.get("host")):
             cq = (q, "b")
             qa[cq] = qa.get(cq, 0) + 1
             if ip not in a.premier_ban or s < a.premier_ban[ip]:
@@ -871,7 +882,7 @@ def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Opti
 
 # ── agrégats des journaux tournés, gardés sur disque ────────────────────────────────────────────────────────────
 
-VERSION_AGREGAT = 3             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
+VERSION_AGREGAT = 4             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
 MAX_AGREGATS = 12               # fichiers gardés (logrotate : 7 rotations)
 MAX_AGREGAT_OCTETS = 32 * 1024 * 1024
 _NOM_AGREGAT = re.compile(r"^(?:agregat-[0-9a-f-]+|adresses)\.json$")

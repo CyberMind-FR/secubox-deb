@@ -833,6 +833,31 @@ func (b *NftBanner) ElementsAvecCompteurs(ctx context.Context) (map[string]ElemB
 	return out, nil
 }
 
+// Epargne dit pourquoi une adresse ne sera PAS bannie (#4008) : plage protégée ou robot d'indexation vérifié ; « » sinon. Mêmes
+// règles que poser, que le journal des menaces consulte AVANT d'écrire « banned » : un ban écarté ne s'y annonce plus comme posé.
+// La vérification des robots passe par leur cache ; elle n'a lieu que pour une requête que l'on s'apprête à bannir.
+func (b *NftBanner) Epargne(ip string) string {
+	if b == nil {
+		return ""
+	}
+	a, ok := adresseBan(ip)
+	if !ok {
+		return ""
+	}
+	b.mu.Lock()
+	p := b.protegee(a)
+	b.mu.Unlock()
+	if p {
+		return "plage protégée"
+	}
+	if b.robots != nil {
+		if nom := b.robots.Verifie(a.String()); nom != "" {
+			return "robot vérifié " + nom
+		}
+	}
+	return ""
+}
+
 // Prolonger repose un ban avec une nouvelle durée, sans attendre ni le cooldown ni un ban de la même adresse déjà en file ;
 // l'échéance la plus tardive l'emporte, l'adresse n'est jamais libre entre-temps (poserElement). Le journal de bans reçoit une
 // nouvelle ligne : le ban prolongé est visible et annulable comme les autres.

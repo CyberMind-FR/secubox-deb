@@ -1,3 +1,14 @@
+secubox-waf-ng (1.53.1-1~trixie1) trixie; urgency=medium
+
+  * Journal des menaces (ref #4008) : un ban que la pose écarte (plage
+    protégée, robot d'indexation vérifié) s'écrit « epargne », plus
+    « banned ».
+  * Double lecture : les bans de sbx-authwatch (leurres de service, auth_),
+    absents de bans.jsonl par construction, ne sont plus comptés côté
+    journal ; agrégats en version 4, recalculés une fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 06:17:33 +0100
+
 secubox-waf-ng (1.53.0-1~trixie1) trixie; urgency=medium
 
   * Populations (ref #4005) : profil déduit de chaque population (empreinte
