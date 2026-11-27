@@ -97,6 +97,8 @@ override_dh_auto_install:
 	install -d debian/secubox-waf-ng/etc/secubox/waf
 	[ -f composants/waf/config/vhost_profiles.json ] && install -m 0644 composants/waf/config/vhost_profiles.json \
 		debian/secubox-waf-ng/etc/secubox/waf/vhost_profiles.json || true
+	# #4021 : défi de calcul par vhost et par chemin, CONFFILE (l'opérateur arme ou désarme ses vhosts), lu par --defi-calcul.
+	install -m 0644 composants/waf/config/defi-calcul.json debian/secubox-waf-ng/etc/secubox/waf/defi-calcul.json
 	# wafctl control script
 	install -d debian/secubox-waf-ng/usr/sbin
 	[ -f composants/waf/scripts/wafctl ] && install -m 755 composants/waf/scripts/wafctl debian/secubox-waf-ng/usr/sbin/ || true

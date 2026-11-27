@@ -552,6 +552,31 @@ reviennent. Composant `/shared/pouls.js` (secubox-hub ≥ 1.13.0), chargé par l
 | WAF vue, menaces, surfaces, tableau, visites : cartes | relevés successifs de l'onglet (`sessionStorage`, pays et comptes seulement, 12 au plus, 3 h) : l'API ne compte pas les pays par heure et aucun balayage n'a été ajouté. Premier affichage : fixe, puis vivante dès le second relevé distant d'une minute |
 | WAF vue, trois tuiles | mini-série par jour de `/history` |
 
+## Défi de calcul par vhost (#4021, 1.57.0)
+
+Avant les chemins coûteux déclarés, un navigateur sans laissez-passer reçoit une page minimale (≈ 3 Kio, CSP stricte, aucune
+ressource externe) qui résout une preuve de travail SHA-256 puis repose la requête d'origine. Code : `cmd/sbxwaf/defi_calcul.go`.
+
+- **Configuration** : `/etc/secubox/waf/defi-calcul.json` (conffile, relu à chaud, `--defi-calcul`). Lieu choisi plutôt que
+  `vhost_profiles.json` (règles de détection) ou `haproxy.toml` (exposition) : le défi est une décision du WAF, par vhost et par
+  chemin, qui doit s'armer et se désarmer seule. Un fichier invalide est rejeté entier, la configuration précédente reste.
+  `etat` : `desarme` (rien), `observe` (compte, journalise `propose`, ne sert rien), `arme`. `chemins` / `exclus` : expressions
+  régulières ; `non_navigateur` : `laisser` (défaut) ou `compter`.
+- **Laissez-passer** : cookie `sbx_calcul` (HMAC-SHA256, 6 h), lié à l'empreinte UA + préfixe /24 (IPv4) ou /48 (IPv6), jamais
+  l'adresse en clair. Compromis : un mobile qui change de réseau est redéfié (une page, ~100 ms) ; deux clients derrière le même
+  NAT avec le même UA partagent l'empreinte. Clé : `/etc/secubox/secrets/waf-defi-calcul.key` (postinst, `secubox-waf` 0600).
+- **Jamais défiés** : méthodes autres que GET/HEAD, API (`/api/`, Accept JSON), git en HTTP (`info/refs`, `git-upload-pack`,
+  UA `git/`), APT, agents `secubox-*`, webhooks, robots vérifiés, LAN/maillage/plages protégées, `exclus` du vhost. Un UA d'outil
+  ou un Accept JSON n'exempte que SANS demande `text/html` (un aspirateur qui se dit `git/` en demandant une page reste défié).
+  Un robot déclaré non vérifié (aperçus de liens) reçoit la page mais n'est jamais compté.
+- **Solution** : POST `/__sbx/calcul` refusé (403) s'il vient d'un autre site (`Sec-Fetch-Site`, `Origin`) ; une solution
+  fausse n'est jamais comptée (personne ne peut faire bannir un visiteur par un formulaire forgé).
+- **Ban** : seulement par insistance (20 requêtes défiées sans solution en 10 min) — 24 h puis 7 j, par la pose nft (Epargne).
+  La catégorie `aspirateur_ua` (ban à la 1re requête) n'est pas changée : le défi passe après les règles.
+- **Indice** : la page renvoie une empreinte d'automatisation (`navigator.webdriver`, navigateur sans interface, incohérences
+  UA/plateforme) ; journalisée dans `waf-threats.log` (catégorie `defi_calcul_indice`, champ `indice`, sévérité `audit`) et
+  versée à actord en étiquettes. Jamais motif de ban seule.
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;

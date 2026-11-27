@@ -1,3 +1,27 @@
+secubox-waf-ng (1.57.0-1~trixie1) trixie; urgency=medium
+
+  * Défi de calcul par vhost et par chemin (ref #4021) : page minimale
+    embarquée (CSP stricte, sans dépendance externe) qui résout une preuve
+    de travail SHA-256 (14 bits par défaut) et repose la requête ; cookie
+    `sbx_calcul` signé HMAC (6 h), lié à une empreinte UA + préfixe /24 ou
+    /48 (jamais l'adresse en clair) ; jetons signés, horodatés, à usage
+    unique borné. Clé /etc/secubox/secrets/waf-defi-calcul.key créée par le
+    postinst (secubox-waf 0600, jamais régénérée).
+  * Ciblage déclaratif /etc/secubox/waf/defi-calcul.json (conffile, relu à
+    chaud) : desarme | observe | arme, chemins et exclus par vhost. Armé
+    pour gitea.gk2.secubox.in (src/commit, blame, raw, commits, compare,
+    archive), après rejeu de la vague Gitea.
+  * Jamais défiés : méthodes autres que GET/HEAD, API, git en HTTP, APT,
+    agents secubox-*, webhooks, robots vérifiés, LAN/maillage/plages
+    protégées. Placé après les règles : aspirateur_ua inchangé.
+  * Ban seulement de qui insiste (20 requêtes défiées sans solution en
+    10 min) : 24 h puis 7 j, par la pose existante (Epargne).
+  * Empreinte d'automatisation de la page journalisée en INDICE (champ
+    `indice` de waf-threats.log, étiquettes vers actord), jamais motif de
+    ban. Le laissez-passer vaut aussi pour la mesure CHALLENGE d'actord.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 09:30:00 +0100
+
 secubox-waf-ng (1.56.0-1~trixie1) trixie; urgency=medium
 
   * Sondes de CMS (ref #4019), règles 1.9.0 : catégories cms_wordpress,

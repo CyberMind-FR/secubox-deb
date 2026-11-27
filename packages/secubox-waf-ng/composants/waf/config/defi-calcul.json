@@ -1,0 +1,16 @@
+{
+  "_licence": "SPDX-License-Identifier: LicenseRef-CMSD-1.0 — Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>",
+  "_aide": "Défi de calcul par vhost et par chemin (#4021), lu par sbxwaf --defi-calcul (relu à chaud). etat : desarme | observe (compte et journalise « propose », ne sert rien) | arme. chemins/exclus : expressions régulières sur le chemin. non_navigateur : laisser (défaut ; requête sans Accept text/html servie sans compter) | compter. Jamais défiés : méthodes autres que GET/HEAD, API, git en HTTP, APT, agents secubox-*, webhooks, robots vérifiés, LAN/maillage/plages protégées.",
+  "difficulte_bits": 14,
+  "duree_cookie": "6h",
+  "validite_defi": "5m",
+  "insistance": {"seuil": 20, "fenetre": "10m", "durees": ["24h", "168h"]},
+  "vhosts": {
+    "gitea.gk2.secubox.in": {
+      "etat": "arme",
+      "chemins": ["^(/[^/]+/[^/]+)?/(src/commit|blame|raw|commits|compare|archive)(/|$)"],
+      "exclus": ["^/api/", "^/[^/]+/[^/]+\\.git/", "/info/refs$", "/git-(upload|receive)-pack$"],
+      "non_navigateur": "laisser"
+    }
+  }
+}

@@ -86,6 +86,8 @@ type MesuresWAF struct {
 	tarpitSlots  chan struct{}
 	maxBansHeure int
 	secret       []byte
+	// calcul (#4021) : un laissez-passer sbx_calcul valable vaut laissez-passer de la mesure CHALLENGE.
+	calcul *DefiCalcul
 	// delaiVerification : le tour n'attend pas plus longtemps la vérification DNS des robots (le reste s'achève en arrière-plan).
 	delaiVerification time.Duration
 
@@ -336,7 +338,7 @@ func (m *MesuresWAF) Intercepte(w http.ResponseWriter, r *http.Request) bool {
 		m.attendre(r.Context(), m.delai)
 		return false
 	case "CHALLENGE":
-		if m.laissezPasserValide(r, ip) {
+		if m.laissezPasserValide(r, ip) || m.calcul.CookieValide(r, hoteNu(r.Host)) {
 			return false
 		}
 		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.Contains(r.Header.Get("Accept"), "text/html") {
@@ -424,6 +426,12 @@ func (m *MesuresWAF) laissezPasserValide(r *http.Request, ip string) bool {
 func retourSur(s string) string {
 	if !strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") || strings.ContainsAny(s, "\\\r\n") || len(s) > 2048 {
 		return "/"
+	}
+	// #4021 : aucun caractère de contrôle (une tabulation supprimée par le navigateur ferait de « /\t/x » un « //x » externe).
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			return "/"
+		}
 	}
 	return s
 }
