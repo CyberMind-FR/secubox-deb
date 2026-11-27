@@ -467,6 +467,23 @@ tentatives ou moins, et une même cible pour la moitié des tentatives au moins.
 passe. Sources facultatives, absentes sans erreur : `/run/secubox-authwatch/campagnes.json`,
 `/var/lib/secubox/waf/rotation-etat.json` (détecteur de rotation, ci-dessous), sbx-actord.
 
+**Profil déduit et ruptures (#4005)**, calculés dans la même passe (`api/profil.py`, règles déterministes, aucune IA) :
+chaque population de famille ou de rotation porte `profil` (`requetes`, `ua_distincts`, `ua_premier`, `ua_premier_part`,
+`ua_premier_cible`, `methodes`, `pages` — chemins réduits à leur classe : `/<compte>/<dépôt>/src/commit/…` → `src/commit` —,
+`vhosts`, parts en %), `retours` (`relachees`, `retours`, `delai_median_s` : relâches RELEASE de `reevaluations.jsonl`
+puis ban NEUF — pas `|prolonge` — dans `bans.jsonl`, 30 jours, archives mensuelles `.jsonl.gz` comprises), `blocs24` et
+`lecture` : liste de `{code, valeur, texte}`, phrases en français produites par règles, chacune adossée à un chiffre,
+jamais une adresse (empreinte unique/dominante/majoritaire/ciblée, lecture seule, pages visées, cible unique,
+infrastructure louée, dispersion, adresses jetables/retours fréquents, vague éteinte/en cours). Une population du
+profileur n'a pas de profil (ses compteurs ne sont pas séparés de ceux de sa famille). Le relevé porte `ruptures` :
+`couches` (bans posés et adresses bannies neuves depuis `bans.jsonl`, adresses, /24 et ASN neufs, alertes par famille,
+alertes des 8 premiers vhosts depuis le journal), chacune avec `jours` (7 totaux de 24 h) et `fenetres` `1h`/`8h`/`1j`/`7j` :
+`courant`, `mediane` des 6 fenêtres précédentes de même longueur (3 au moins, sinon `sens: insuffisant`), `sens`
+(`hausse` ≥ ×3 et au-dessus d'un volume minimal, `baisse`, `stable`), `facteur`. Double lecture : `double` sur les couches
+de bans, mêmes mesures comptées dans `bans.jsonl` (`a`) et dans le journal (`b`), `ecart` au-delà de max(5, 20 %).
+`bans.jsonl` ou `reevaluations.jsonl` présents mais illisibles : `manques` les nomme et le relevé est partiel (double
+tampon). Agrégats de la réserve en version 3 (profils, séries par quart d'heure) : recalculés une fois après mise à jour.
+
 **Campagnes d'actord** (`/api/v1/actor/campaigns`) : `famille`, `cibles_noms` (vue complète, comptes masqués),
 `classes`, `pays_top`, `une`, `le3`, `rotation`. Les parts portent sur les adresses vues depuis moins de 48 h
 (`sources` compte toutes les adresses) ; aucune : `classes`, `pays_top`, `une` et `le3` sont **absents**. `rotation`

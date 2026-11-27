@@ -36,6 +36,10 @@ try:
     import tomllib as _tomllib
 except ImportError:  # pragma: no cover — Python < 3.11
     _tomllib = None
+try:  # paquet `api` (API, processus de calcul, tests) ; à plat sinon, comme main.py
+    from . import profil as _profil
+except ImportError:  # pragma: no cover
+    import profil as _profil  # type: ignore
 
 # ── sources (mêmes chemins que les options Go --geoip-asn / --reseaux-classes) ──────────────────────────────────────
 # Bases essayées dans l'ordre, la première qui s'ouvre gagne (la box n'a pas toujours le même emplacement).
@@ -48,6 +52,7 @@ CAMPAGNES_PROFILEUR = "/var/cache/secubox/waf/campaigns.json"
 CATALOGUES = ("/usr/share/secubox/waf/reseaux-classes.toml", "/etc/secubox/waf/reseaux-classes.toml")
 AUTHWATCH_CAMPAGNES = "/run/secubox-authwatch/campagnes.json"
 ROTATION_ETAT = "/var/lib/secubox/waf/rotation-etat.json"
+ETAT_WAF = "/var/lib/secubox/waf"   # bans.jsonl, reevaluations.jsonl (+ archives mensuelles) : profil et ruptures (#4005)
 ACTORD_SOCK = "/run/secubox/actor.sock"
 ACTORD_DELAI_S = 2.0
 JOURNAL = "waf-threats.log"
@@ -351,14 +356,19 @@ class _Agregat:
 
     `tentatives` : (jour local, adresse, clé, cible) → [nombre, première, dernière, dernier ban ou 0] ; la clé est une
     famille ou `rotation:<8 hex>`. `reseaux` : adresse → (asn, opérateur, classe portée par la ligne).
-    `cves` : adresse → {CVE: dernier jour}."""
-    __slots__ = ("tentatives", "reseaux", "cves", "complet")
+    `cves` : adresse → {CVE: dernier jour}. #4005 : `profils` : clé → compteurs du profil (user-agents, méthodes, pages,
+    vhosts) ; `quarts` : (quart d'heure, `f:<famille>` | `v:<hôte>` | `b`) → nombre ; `premier_ban` : adresse → premier
+    ban vu au journal."""
+    __slots__ = ("tentatives", "reseaux", "cves", "complet", "profils", "quarts", "premier_ban")
 
     def __init__(self):
         self.tentatives: Dict[Tuple[int, str, str, str], List[int]] = {}
         self.reseaux: Dict[str, Tuple[int, str, str]] = {}
         self.cves: Dict[str, Dict[str, int]] = {}
         self.complet = True
+        self.profils: Dict[str, Dict[str, Any]] = {}
+        self.quarts: Dict[Tuple[int, str], int] = {}
+        self.premier_ban: Dict[str, int] = {}
 
 
 #: Leurres de messagerie d'authwatch (#3924) : leurs lignes de gravité `audit` (compte réel, mode observer) ne font pas un
@@ -414,6 +424,8 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
             genre = _utile(cat)
         if not genre or (e.get("severity") == "audit" and cat.startswith(LEURRES_MAIL)):
             continue
+        if _profil.est_autotest(e.get("user_agent")):     # #4005 : auto-test du WAF, jamais une population
+            continue
         t = _horodatage(e.get("timestamp"))
         if t is None or t < debut or t > fin:
             continue
@@ -445,7 +457,9 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
             if isinstance(asn, int) and not isinstance(asn, bool) and asn > 0:
                 org, cl = e.get("asn_org"), e.get("reseau_classe")
                 reseaux[ip] = (asn, org if isinstance(org, str) else "", cl if cl in CLASSES else INCONNU)
-        path = e.get("path") if cat.startswith("auth_") else None
+        auth = cat.startswith("auth_")
+        path = e.get("path") if auth else None
+        vhost = ""
         if isinstance(path, str) and path:
             cible = masquer_compte(path)          # compte visé : JAMAIS gardé en clair
         else:
@@ -456,6 +470,7 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
                 cible = _hote(h) or ""
                 if len(hotes) < MAX_CIBLES_SUIVIES:
                     hotes[h] = cible
+            vhost = cible
         if cible not in cibles_vues:              # cibles distinctes bornées par journal : au-delà, sans cible
             if len(cibles_vues) >= MAX_CIBLES_JOURNAL:
                 cible = ""
@@ -463,6 +478,23 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
         k = (jour, ip, cat if cat.startswith("rotation:") and _HEX8.match(cat[9:]) else genre, cible)
         s = int(t)
         ban = s if e.get("action") == "banned" else 0
+        # #4005 : profil de la clé et séries par quart d'heure (ruptures)
+        pr = a.profils.get(k[2])
+        if pr is None:
+            pr = a.profils[k[2]] = _profil.profil_vide()
+        _profil.ajouter(pr, e.get("user_agent"), e.get("method"), _profil.classer_page(e.get("method"), e.get("path"), auth),
+                        vhost)
+        qa = a.quarts
+        cq = (q, "f:" + genre)
+        qa[cq] = qa.get(cq, 0) + 1
+        if vhost:
+            cq = (q, "v:" + vhost)
+            qa[cq] = qa.get(cq, 0) + 1
+        if ban:
+            cq = (q, "b")
+            qa[cq] = qa.get(cq, 0) + 1
+            if ip not in a.premier_ban or s < a.premier_ban[ip]:
+                a.premier_ban[ip] = s
         r = tentatives.get(k)
         if r is None:
             tentatives[k] = [1, s, s, ban]
@@ -480,22 +512,23 @@ def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
 def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str],
              classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
              rotation: list, campagnes_actord: Optional[list] = None,
-             classe_asn: Optional[Callable[[int], str]] = None) -> Dict[str, Any]:
+             classe_asn: Optional[Callable[[int], str]] = None, externes: Optional[tuple] = None) -> Dict[str, Any]:
     """Le relevé depuis des lignes (un seul journal) : voir `assembler`."""
     return assembler([agreger(lignes, maintenant)], maintenant, pays, classer, campagnes_smtp, campagnes_profileur,
-                     rotation, campagnes_actord, classe_asn)
+                     rotation, campagnes_actord, classe_asn, externes)
 
 
 def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[str], str],
               classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
               rotation: list, campagnes_actord: Optional[list] = None,
-              classe_asn: Optional[Callable[[int], str]] = None) -> Dict[str, Any]:
+              classe_asn: Optional[Callable[[int], str]] = None, externes: Optional[tuple] = None) -> Dict[str, Any]:
     """Le relevé des populations sur les FENETRE_JOURS jours calendaires (locaux) qui finissent aujourd'hui, depuis les
     agrégats des journaux (le plus récent d'abord : au plafond d'adresses, celles du jour sont gardées).
 
     `classer(ip) -> (asn, org, classe)` n'est appelé que pour une adresse dont aucune ligne ne porte le réseau ;
     `classe_asn(asn)` classe une ligne qui porte un ASN (la classe écrite dans la ligne ne sert qu'à défaut : un
-    catalogue complété depuis s'applique ainsi à tout l'historique) ; `campagnes_actord` None = actord absent."""
+    catalogue complété depuis s'applique ainsi à tout l'historique) ; `campagnes_actord` None = actord absent.
+    `externes` (#4005) : (relâches, profil.BansLus ou None) lus de bans.jsonl et reevaluations.jsonl ; None = non lus."""
     dernier_jour = _jour(maintenant).toordinal()
     premier_jour = dernier_jour - FENETRE_JOURS + 1
     fin = int(maintenant) + 300
@@ -506,9 +539,28 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
     pops: Dict[str, _Pop] = {}
     profileur = _index_profileur(campagnes_profileur)
     classe_de = classe_asn or (lambda asn: INCONNU)
+    profils: Dict[str, Dict[str, Any]] = {}
+    quarts: Dict[str, Dict[int, int]] = {}
+    premier_ban: Dict[str, float] = {}
+    premiere_vue: Dict[str, float] = {}
+    debut_q: Optional[int] = None
+    premier_q = int(datetime.combine(date.fromordinal(premier_jour), datetime.min.time()).timestamp() // _profil.QUART)
 
     for a in agregats:
         complet = complet and a.complet
+        for cle, pr in a.profils.items():
+            if cle not in profils:
+                profils[cle] = _profil.profil_vide()
+            _profil.fusionner(profils[cle], pr)
+        for (q, cle), n in a.quarts.items():
+            if q < premier_q:
+                continue
+            serie_q = quarts.setdefault(cle, {})
+            serie_q[q] = serie_q.get(q, 0) + n
+            debut_q = q if debut_q is None or q < debut_q else debut_q
+        for ip, s in a.premier_ban.items():
+            if ip not in premier_ban or s < premier_ban[ip]:
+                premier_ban[ip] = s
         for ip, trouves in a.cves.items():
             if ip in cves or len(cves) < MAX_ADRESSES:
                 cves.setdefault(ip, set()).update(c for c, j in trouves.items() if j >= premier_jour)
@@ -538,6 +590,8 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
             if p is None:
                 p = pops[cle] = _Pop(cle, fam)
             p.adresses[ip] = p.adresses.get(ip, 0) + n
+            if ip not in premiere_vue or prem < premiere_vue[ip]:
+                premiere_vue[ip] = prem
             p.familles[fam] = p.familles.get(fam, 0) + n
             if jour <= dernier_jour:
                 p.serie[jour - premier_jour] += n
@@ -557,6 +611,7 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
         if cle not in pops:
             pops[cle] = _Pop(cle, "collecte")
     smtp = _campagnes_smtp(campagnes_smtp)
+    relaches, bans = externes if externes else ({}, None)
 
     sortie = []
     vues: Dict[str, int] = {}
@@ -566,6 +621,13 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
         pop = _rendre(p, maintenant, infos, pays, cves, smtp, etat_rotation.get(p.ident))
         if pop["famille"] == AUTRE:
             continue
+        # #4005 : profil déduit (familles et rotations ; une population du profileur n'a pas de compteurs à elle) et lecture
+        cle_profil = p.ident[len("famille:"):] if p.ident.startswith("famille:") else (
+            p.ident if p.ident.startswith("rotation:") else None)
+        pop["profil"] = _profil.rendre_profil(profils.get(cle_profil)) if cle_profil else None
+        if externes:
+            pop["retours"] = _profil.retours_population(p.adresses, relaches, bans.retour if bans else {})
+        pop["lecture"] = _profil.lecture(pop, pop["profil"])
         pop["campagne_actord"] = _rapprocher(pop, campagnes_actord)
         sortie.append(pop)
         for ip in p.adresses:
@@ -577,7 +639,28 @@ def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[s
         "fenetre_jours": FENETRE_JOURS,
         "populations": sortie,
         "recouvrement": {"adresses_communes": sum(1 for n in vues.values() if n > 1), "adresses_total": len(vues)},
+        "ruptures": _profil.ruptures(maintenant, quarts, debut_q, {
+            "adresses": premiere_vue,
+            "blocs24": _premieres_par(premiere_vue, _bloc24),
+            "asn": _premieres_par(premiere_vue, lambda ip: infos.get(ip, (0,))[0] or None),
+            "bannies": premier_ban,
+        }, bans),
     }
+
+
+def _bloc24(ip: str) -> str:
+    """Le /24 (IPv4) ou le /48 (IPv6) d'une adresse normalisée, sans `ipaddress` pour l'IPv4 (200 000 adresses)."""
+    return ip.rsplit(".", 1)[0] if "." in ip else _profil.bloc24(ip)
+
+
+def _premieres_par(premiere_vue: Dict[str, float], cle: Callable[[str], Any]) -> Dict[Any, float]:
+    """Première vue d'une clé dérivée de l'adresse (/24, ASN) ; clé vide ou None ignorée."""
+    res: Dict[Any, float] = {}
+    for ip, t in premiere_vue.items():
+        k = cle(ip)
+        if k and (k not in res or t < res[k]):
+            res[k] = t
+    return res
 
 
 def _etat_rotation(rotation: list) -> Dict[str, dict]:
@@ -635,6 +718,7 @@ def _rendre(p: _Pop, maintenant: float, infos: Dict[str, Tuple[int, str, str]], 
         "cibles": cibles,
         "adresses": n,
         "reseaux": len(reseaux),
+        "blocs24": len({_bloc24(ip) for ip in p.adresses}),
         "une": _part(une, n),
         "le3": _part(le3, n),
         "classes": {c: _part(k, n) for c, k in sorted(classes.items(), key=lambda kv: (-kv[1], kv[0]))},
@@ -787,7 +871,7 @@ def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Opti
 
 # ── agrégats des journaux tournés, gardés sur disque ────────────────────────────────────────────────────────────
 
-VERSION_AGREGAT = 2             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
+VERSION_AGREGAT = 3             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
 MAX_AGREGATS = 12               # fichiers gardés (logrotate : 7 rotations)
 MAX_AGREGAT_OCTETS = 32 * 1024 * 1024
 _NOM_AGREGAT = re.compile(r"^(?:agregat-[0-9a-f-]+|adresses)\.json$")
@@ -864,8 +948,14 @@ def _ranger(a: _Agregat) -> Dict[str, Any]:
     for (jour, ip, cle, cible), (n, prem, der, ban) in a.tentatives.items():
         plat += (jour, rang(0, ip), rang(1, cle), rang(2, cible), n, prem, der, ban)
     res = [[rang(0, ip), asn, rang(3, org), cl] for ip, (asn, org, cl) in a.reseaux.items()]
+    series: Dict[str, int] = {}
+    quarts: List[int] = []
+    for (q, cle), n in a.quarts.items():
+        quarts += (q, series.setdefault(cle, len(series)), n)
+    pb = [[rang(0, ip), s] for ip, s in a.premier_ban.items()]
     return {"v": VERSION_AGREGAT, "complet": a.complet, "ips": list(tables[0]), "cles": list(tables[1]),
-            "cibles": list(tables[2]), "orgs": list(tables[3]), "reseaux": res, "cves": a.cves, "t": plat}
+            "cibles": list(tables[2]), "orgs": list(tables[3]), "reseaux": res, "cves": a.cves, "t": plat,
+            "series": list(series), "q": quarts, "pb": pb, "profils": a.profils}
 
 
 def _cible_valide(c: Any) -> bool:
@@ -908,6 +998,22 @@ def _deranger(d: Any) -> Optional[_Agregat]:
             if len(v) > MAX_CVES or not all(_CVE.fullmatch(c) and type(j) is int for c, j in v.items()):
                 return None
             a.cves[ip] = dict(v)
+        series, quarts, pb, profils = d["series"], d["q"], d["pb"], d["profils"]
+        if not isinstance(series, list) or not isinstance(quarts, list) or len(quarts) % 3 or not isinstance(pb, list):
+            return None
+        if not all(isinstance(c, str) and (c == "b" or (c[:2] in ("f:", "v:") and len(c) <= 255)) for c in series):
+            return None
+        if not set(map(type, quarts)) <= {int} or (quarts and not 0 <= min(quarts) <= max(quarts) < MAX_ENTIER):
+            return None
+        it = iter(quarts)
+        a.quarts = {(q, series[c]): n for q, c, n in zip(*[it] * 3)}
+        for i, s in pb:
+            if type(i) is not int or type(s) is not int or not 0 <= s < MAX_ENTIER:
+                return None
+            a.premier_ban[ips[i]] = s
+        if not isinstance(profils, dict) or not all(_cle_valide(k) and _profil.profil_valide(v) for k, v in profils.items()):
+            return None
+        a.profils = profils
         return a
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError):
         return None
@@ -1075,7 +1181,7 @@ def _liste(d: Any, cle: Optional[str] = None) -> list:
     return d if isinstance(d, list) else []
 
 
-def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: float) -> bool:
+def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: float, etat: str = ETAT_WAF) -> bool:
     """Une passe complète : lit toutes les sources, calcule, écrit le cache. Lancée dans un PROCESSUS à part (`main`),
     jamais dans le processus de l'API. Le relevé porte sa durée (`duree_s`)."""
     import time
@@ -1091,13 +1197,20 @@ def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: f
     if present and not isinstance(rot, dict):
         manques.append("rotation")
     actord = lire_campagnes_actord(ACTORD_SOCK)
+    # #4005 : relâches puis bans (le premier ban neuf après une relâche = un retour) ; illisibles = relevé partiel
+    relaches, lisible = _profil.lire_relaches(etat, maintenant)
+    if not lisible:
+        manques.append("reevaluations")
+    bans = _profil.lire_bans(etat, maintenant, relaches, famille, _adresse_publique)
+    if not bans.lisible:
+        manques.append("bans")
     annuaire = Annuaire(BASES_ASN, BASES_PAYS, CATALOGUES)
     try:
         reserve = os.path.join(os.path.dirname(os.path.abspath(cache)), RESERVE)
         memo = MemoAdresses(annuaire, reserve)
         releve = assembler(agregats_du_journal(dossier, reserve, maintenant), maintenant, memo.pays, memo.classer,
                            _liste(smtp), _liste(prof, "campagnes"), _liste(rot, "campagnes"),
-                           campagnes_actord=actord, classe_asn=annuaire.classe_asn)
+                           campagnes_actord=actord, classe_asn=annuaire.classe_asn, externes=(relaches, bans))
         memo.garder()
         if not annuaire.disponible:
             manques.append("base_asn")
@@ -1175,8 +1288,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--ecrire", required=True, help="chemin du cache à écrire")
     ap.add_argument("--journal", default=None, help="dossier de waf-threats.log* (défaut : celui de sbxwaf)")
     ap.add_argument("--campagnes", default=CAMPAGNES_PROFILEUR, help="instantané des campagnes du profileur")
+    ap.add_argument("--etat", default=ETAT_WAF, help="dossier de bans.jsonl et reevaluations.jsonl (#4005)")
     args = ap.parse_args(argv)
-    ecrit = rafraichir(args.journal or _dossier_journal(), args.ecrire, args.campagnes, time.time())
+    ecrit = rafraichir(args.journal or _dossier_journal(), args.ecrire, args.campagnes, time.time(), args.etat)
     releve = lire_cache(args.ecrire) if ecrit else None
     print(json.dumps({"ecrit": ecrit, "duree_s": (releve or {}).get("duree_s")}))
     return 0 if ecrit else 1

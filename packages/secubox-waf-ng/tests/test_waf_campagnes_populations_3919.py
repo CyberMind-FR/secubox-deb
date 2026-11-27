@@ -19,7 +19,7 @@ TEST_MJS = Path(__file__).with_name("cartes_campagnes_3919.test.mjs")
 
 
 def test_scripts_relatifs_avant_le_script_de_la_page():
-    assert re.findall(r'<script src="([^"]+)"', HTML) == ["reperes.js", "cartes-campagnes.js"]
+    assert re.findall(r'<script src="([^"]+)"', HTML) == ["reperes.js", "cartes-campagnes.js", "profil-populations.js"]   # #4005
     assert HTML.index('src="cartes-campagnes.js"') < HTML.index("<script>")
 
 
