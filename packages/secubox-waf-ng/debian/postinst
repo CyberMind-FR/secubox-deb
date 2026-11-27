@@ -213,6 +213,19 @@ PROTEGEES
         fi
       fi
 
+      # #4021 : clé HMAC des jetons et laissez-passer du défi de calcul. 32 octets aléatoires, secubox-waf 0600, créée si absente,
+      # jamais régénérée (la tourner invalide seulement les laissez-passer en cours) ; jamais écrite dans un journal.
+      if [ ! -s /etc/secubox/secrets/waf-defi-calcul.key ]; then
+        ( umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n" \
+            > /etc/secubox/secrets/waf-defi-calcul.key ) 2>/dev/null || true
+      fi
+      if [ -s /etc/secubox/secrets/waf-defi-calcul.key ]; then
+        chmod 0600 /etc/secubox/secrets/waf-defi-calcul.key 2>/dev/null || true
+        if getent passwd secubox-waf >/dev/null 2>&1; then
+          chown secubox-waf:secubox-waf /etc/secubox/secrets/waf-defi-calcul.key 2>/dev/null || true
+        fi
+      fi
+
       # #3795 : clé du HMAC des mots de passe tentés sur les leurres de service (veille V2). 32 octets aléatoires,
       # root:secubox 0640, créée si absente, JAMAIS tournée automatiquement (les empreintes de gk3 restent comparables).
       # Lue directement par l'API (utilisateur secubox) ; jamais bloquante pour secubox-waf.service.

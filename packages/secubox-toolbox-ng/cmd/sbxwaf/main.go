@@ -87,6 +87,8 @@ func upstreamErrorCode(err error) int {
 type Server struct {
 	// mesures : l'échelle de réponse d'Actor Intelligence (délai, défi, tarpit, ban) appliquée aux requêtes (#2274). nil = désactivée.
 	mesures *MesuresWAF
+	// defiCalcul : défi de calcul par vhost et par chemin (#4021, defi_calcul.go). nil = désactivé.
+	defiCalcul *DefiCalcul
 	// rotation : détecteur de campagnes à rotation web (#3919, rotation.go). nil = désactivé (--rotation off). Un SEUL processus doit le porter : les preuves
 	// d'un visiteur réparties entre plusieurs processus seraient perdues.
 	rotation *Rotation
@@ -1009,6 +1011,10 @@ func (s *Server) handler() http.Handler {
 		// two proxy.ServeHTTP call sites, plus the cache-hit return) covers
 		// all three: `defer` fires whichever exit path the function takes
 		// from here on, so one Begin always pairs with exactly one End.
+		// #4021 : défi de calcul des chemins coûteux déclarés, APRÈS les règles (aspirateur_ua inchangé), avant toute réponse réelle.
+		if s.defiCalcul.Intercepte(w, r, host) {
+			return
+		}
 		if s.vhostSignals != nil && s.onDemand != nil && s.onDemand.Contains(host) {
 			s.vhostSignals.Begin(host)
 			defer s.vhostSignals.End(host)
@@ -1549,6 +1555,8 @@ func main() {
 	campagneBanEtat := flag.String("campagne-ban-etat", "/var/lib/secubox/waf/campagne-ban-etat.json", "état du ban des campagnes pour le panneau")
 	mesuresMode := flag.String("mesures", "off", "échelle de réponse d'actord appliquée : délai, défi (preuve de travail), tarpit, ban : off | propose | auto (#2274)")
 	mesuresFichier := flag.String("mesures-fichier", "/run/secubox/actord-mesures.json", "mesures publiées par actord")
+	defiCalculFichier := flag.String("defi-calcul", "", "défi de calcul par vhost et par chemin (#4021) : fichier JSON (/etc/secubox/waf/defi-calcul.json) ; vide = désactivé")
+	defiCalculCle := flag.String("defi-calcul-cle", "/etc/secubox/secrets/waf-defi-calcul.key", "clé HMAC des jetons et laissez-passer du défi de calcul")
 	mesuresMaxBans := flag.Int("mesures-max-bans-heure", 20, "coupe-circuit : bans de l'échelle de réponse par heure glissante")
 	reevaluation := flag.String("reevaluation", "off", "kill switch logique : réévalue chaque ban à l'échéance, RELEASE ou EXTEND gradué (jamais permanent, plafond 30 j) : off | propose | auto (#2240 phase 4)")
 	reevalPreuves := flag.String("reevaluation-preuves", "/var/lib/secubox/waf/reevaluations.jsonl", "journal des réévaluations (une ligne par transition, append-only)")
@@ -1969,6 +1977,27 @@ func main() {
 				time.AfterFunc(3*time.Second, func() { nb.Reparer("rechargement signalé") })
 			}
 		}()
+	}
+	// #4021 : défi de calcul. Ban par insistance seulement, par la pose existante (Epargne) ; nft absent = défis sans ban.
+	if *defiCalculFichier != "" {
+		dc := NewDefiCalcul(*defiCalculFichier, lireCleDefi(*defiCalculCle))
+		dc.protegees = protegees
+		dc.ja4 = srv.lireJA4
+		dc.journal = func(rec ThreatRecord) {
+			if srv.threatLog != nil {
+				srv.threatLog.Record(rec)
+			}
+		}
+		if srv.nftBan != nil {
+			dc.banneur, dc.epargne = srv.nftBan, srv.nftBan.Epargne
+			if srv.nftBan.robots != nil {
+				dc.robots = srv.nftBan.robots
+			}
+		}
+		srv.defiCalcul = dc
+		if srv.mesures != nil {
+			srv.mesures.calcul = dc // un laissez-passer du défi de calcul vaut aussi pour la mesure CHALLENGE d'actord
+		}
 	}
 	// #3820 : journaux de preuves bornés, quel que soit le mode (un journal d'un mode repassé à off est compacté aussi).
 	// Bornes de lecture de l'API du WAF : fin de 8 Mio (/mesures), 5 000 dernières lignes (/reevaluations).

@@ -81,6 +81,8 @@ type ThreatRecord struct {
 	// Servies (#3723) : requêtes servies par le leurre que la ligne représente (elle-même et celles qui n'ont pas
 	// été écrites depuis la précédente). La somme du champ compte les requêtes, pas le nombre de lignes.
 	Servies int64
+	// Indice (#4021) : empreinte d'automatisation renvoyée par la page de défi de calcul. INDICE seulement : jamais motif de ban seul.
+	Indice []string
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -172,6 +174,7 @@ func entryToEnvelope(e *logEntry) *envelope.Envelope {
 	// eux que deux adresses au même outil se rapprochent, même quand l'une
 	// ment sur son User-Agent et l'autre non.
 	tags = append(tags, e.Traits...)
+	tags = append(tags, e.Indice...)
 	if e.Leurre != "" {
 		tags = append(tags, "leurre:"+e.Leurre)
 	}
@@ -235,6 +238,8 @@ type logEntry struct {
 	Signals map[string]int `json:"signals,omitempty"`
 	// #3723 — lignes leurre_redirige : requêtes représentées par la ligne.
 	Servies int64 `json:"servies,omitempty"`
+	// #4021 — indices d'automatisation (défi de calcul), versés à actord comme étiquettes.
+	Indice []string `json:"indice,omitempty"`
 	// #3919 — réseau de l'adresse source (absents sans annuaire ni base).
 	ASN          uint32 `json:"asn,omitempty"`
 	ASNOrg       string `json:"asn_org,omitempty"`
@@ -299,6 +304,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		Mode:          rec.Mode,
 		Signals:       rec.Signaux,
 		Servies:       rec.Servies,
+		Indice:        rec.Indice,
 	}
 
 	// #3919 : classé avec l'adresse d'origine, avant son masquage en « local ».
