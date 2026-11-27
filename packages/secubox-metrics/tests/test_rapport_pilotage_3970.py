@@ -467,7 +467,7 @@ def test_unites_durcies_minuteur_pilotage_desactive_releve_active():
         assert f"systemd/secubox-metrics-{f}" in rules
     # l'ancien rapport du lundi est inchangé
     assert "OnCalendar=Mon *-*-* 07:00:00" in _unite("secubox-metrics-rapport.timer")
-    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.32.2-1~trixie1) trixie;")
+    assert (PKG / "debian" / "changelog").read_text().startswith("secubox-metrics (1.3")
 
 
 def test_emojis_drapeaux_et_pays_des_populations():

@@ -1,3 +1,14 @@
+secubox-metrics (1.33.0-1~trixie1) trixie; urgency=medium
+
+  * Entrée / sortie par site (#4011) : requêtes reçues par type de visite (humain, robot déclaré,
+    outil, aspirateur, sonde) et type de page (page, statique, API, forge, médias, admin), réduction
+    par les bans nftables (avant HTTP), le WAF et les erreurs, sortie servie, vrais visiteurs
+    (sessions sans cookie, durée médiane et p75), tendance 1 h / 8 h / 1 j / 7 j ; route
+    GET /api/v1/metrics/entree-sortie, section de la page des sites. Lecture incrémentale, double
+    tampon, aucune adresse conservée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:00:00 +0100
+
 secubox-metrics (1.32.2-1~trixie1) trixie; urgency=medium
 
   * Rapport de pilotage : disponibilité = relevés hors panne (« degraded » n'est pas

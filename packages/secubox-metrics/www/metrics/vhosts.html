@@ -74,6 +74,12 @@
   td.site{max-width:260px;overflow:hidden;text-overflow:ellipsis}
   .dom{color:var(--cyan);font-weight:700;overflow:hidden;text-overflow:ellipsis;display:block}
   .fam{display:inline-block;font-size:.62rem;color:var(--faible);border:1px solid var(--trait);border-radius:4px;padding:0 5px;margin-left:6px;font-weight:500}
+  .es-f{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+  .es td.c{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .es .pile{display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(159,179,214,.14);margin-top:3px;min-width:90px}
+  .es .pile i{display:block;height:100%}
+  .es .t-h{color:var(--rouge)} .es .t-b{color:var(--vert)} .es .t-s,.es .t-i{color:var(--faible)}
+  .es .sp{width:90px;height:22px}
   .mini{height:3px;border-radius:2px;background:rgba(159,179,214,.14);margin-top:3px;overflow:hidden} .mini i{display:block;height:100%;background:var(--cyan);border-radius:2px}
   .past{display:inline-block;min-width:34px;text-align:center;border-radius:999px;padding:1px 8px;font-weight:700;font-size:.68rem;border:1px solid transparent}
   .past.v{background:rgba(46,204,113,.16);color:var(--vert);border-color:rgba(46,204,113,.4)}
@@ -153,6 +159,17 @@
       </table></div>
       <div class="note" id="plus"></div>
       <div class="note">« Visiteurs » compte des adresses IP : derrière un proxy qui n’est pas déclaré comme relais de confiance, toutes les visites ont la même adresse et le site affiche 1 visiteur. Le chiffre n’est pas masqué, il est à lire avec cette réserve. Un clic sur un site ouvre son détail.</div>
+    </div>
+    <div class="pan es" id="esPan">
+      <h3>Entrée / sortie <i id="esNote">ce qui arrive, ce qui est retenu, ce qui est servi</i></h3>
+      <div class="es-f" id="esF"><button type="button" class="bt" data-f="1h">1 h</button><button type="button" class="bt" data-f="8h">8 h</button><button type="button" class="bt on" data-f="1j">1 j</button><button type="button" class="bt" data-f="7j">7 j</button></div>
+      <div class="tuiles" id="esTuiles"></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Site</th><th class="r" title="Requêtes HTTP reçues (bloquées par le WAF comprises), par type de visite">Entrée</th><th title="humain · robot · outil · aspirateur · sonde">Types de visite</th><th title="page · statique · API · forge · médias · admin · autre">Types de page</th>
+          <th class="r" title="Paquets refusés par nftables avant HTTP (adresses bannies)">Bans</th><th class="r" title="Requêtes bloquées par le WAF (jamais transmises)">WAF</th><th class="r" title="Réponses 4xx/5xx de nginx">Erreurs</th><th class="r" title="Servi en 2xx/3xx">Sortie</th><th class="r" title="Vrais visiteurs (humains) : sessions sans cookie, pause > 30 min">Sessions</th><th title="Tendance de l’entrée contre la médiane des fenêtres précédentes de même longueur">Tendance</th><th>24 h</th></tr></thead>
+        <tbody id="esTb"></tbody>
+      </table></div>
+      <div class="note" id="esLeg"></div>
     </div>
     <div class="grille g2">
       <div class="pan"><h3>Statuts HTTP <i>réponses servies, tous sites</i></h3><div class="repart"><div class="donut" id="donut"><span id="donutC"></span></div><div class="leg" id="legS"></div></div></div>
@@ -576,6 +593,54 @@
   }
 
   // ── chargement ──
+
+  // ── entrée / sortie (#4011) ──
+  let es = null, esF = '1j';
+  const COUL_V = {humain:'var(--vert)', robot:'var(--cyan)', outil:'var(--violet)', aspirateur:'var(--orange)', sonde:'var(--rouge)'};
+  const COUL_P = {page:'var(--vert)', statique:'var(--bleu)', api:'var(--cyan)', forge:'var(--orange)', medias:'var(--violet)', admin:'var(--jaune)', autre:'rgba(159,179,214,.5)'};
+  const NOM_P = {page:'page', statique:'statique', api:'API', forge:'forge', medias:'médias', admin:'admin', autre:'autre'};
+  function pile(obj, coul, noms){
+    const ks = Object.keys(coul), tot = ks.reduce((a,k)=>a+num(obj[k] && obj[k].requetes!=null ? obj[k].requetes : obj[k]),0) || 1;
+    const val = k => num(obj[k] && obj[k].requetes!=null ? obj[k].requetes : obj[k]);
+    const titre = ks.filter(k=>val(k)).map(k=>(noms?noms[k]:k)+' '+fmt(val(k))).join(' · ');
+    return '<div title="'+esc(titre||'—')+'" style="font-size:.66rem;color:var(--faible)">'+esc(titre||'—')+'</div><div class="pile">'+ks.map(k=>val(k)?'<i style="width:'+(100*val(k)/tot)+'%;background:'+coul[k]+'"></i>':'').join('')+'</div>';
+  }
+  function duree(s){ return s==null?'—':s<60?s+' s':s<3600?Math.round(s/60)+' min':Math.round(s/3600)+' h'; }
+  function tend(t){
+    if(!t) return '—';
+    if(t.sens==='insuffisant') return '<span class="t-i" title="historique insuffisant">…</span>';
+    const f = t.facteur ? ' ×'+String(t.facteur).replace('.',',') : '';
+    return '<span class="t-'+(t.sens==='hausse'?'h':t.sens==='baisse'?'b':'s')+'" title="'+esc('courant '+fmt(t.courant)+' · médiane '+fmt(t.mediane)+' sur '+t.fenetres+' fenêtres')+'">'+(t.sens==='hausse'?'▲':t.sens==='baisse'?'▼':'＝')+f+'</span>';
+  }
+  function rendES(){
+    if(!es || !es.total){ el('esTb').innerHTML = '<tr><td colspan="11" class="vide">'+(es && es.en_attente ? 'Premier relevé en cours…' : 'Aucune mesure.')+'</td></tr>'; el('esTuiles').innerHTML=''; return; }
+    const tb = es.total.fenetres[esF], e = tb.entree, r = tb.reductions, so = tb.sortie, vi = tb.visiteurs, tt = es.total.tendance[esF] || {};
+    const h = es.total.histo_24h.heures;
+    el('esTuiles').innerHTML =
+      tuile(IC.req, fmt(e.requetes), 'Entrée', octets(e.octets)+' · '+fmt(e.adresses_heure)+' adresses-heure', 'Requêtes HTTP reçues sur la fenêtre, bloquées par le WAF comprises.', spark(h.map(x=>x[0]),'#29b6f6'), '', true)
+     +tuile(IC.err, fmt(r.bans.paquets), 'Bans (avant HTTP)', fmt(r.bans.adresses)+' relevés d’adresses bannies', 'Paquets refusés par nftables : ils n’atteignent jamais le serveur web.', spark(h.map(x=>x[3]),'#ff9f1c'))
+     +tuile(IC.err, fmt(r.waf.requetes), 'Bloqué par le WAF', fmt(r.erreurs.requetes)+' erreurs 4xx/5xx', 'Requêtes refusées par le WAF ; le sous-titre donne les erreurs de nginx.', spark(h.map(x=>x[2]),'#ff4d5e'))
+     +tuile(IC.vis, fmt(so.requetes), 'Sortie servie', octets(so.octets)+(so.taux!=null?' · '+Math.round(100*so.taux)+' % de l’entrée':''), 'Réponses 2xx/3xx.', spark(h.map(x=>x[1]),'#2ecc71'))
+     +tuile(IC.vis, fmt(vi.sessions), 'Vrais visiteurs', vi.sessions?(String(vi.pages_par_session).replace('.',',')+' pages/session · médiane '+duree(vi.duree_mediane_s)+' · p75 '+duree(vi.duree_p75_s)):'', 'Sessions humaines sans cookie (empreinte salée du jour), pause de plus de 30 min = nouvelle session ; une session d’une page n’a pas de durée.', '');
+    el('esTb').innerHTML = es.vhosts.map(v=>{
+      const b = v.fenetres[esF], t = (v.tendance[esF]||{}).entree, x = b.reductions;
+      return '<tr><td class="site"><span class="dom">'+esc(v.vhost)+'</span></td><td class="c">'+fmt(b.entree.requetes)+'<div style="font-size:.66rem;color:var(--faible)">'+octets(b.entree.octets)+'</div></td>'
+        +'<td>'+pile(b.entree.par_visite, COUL_V)+'</td><td>'+pile(b.entree.par_page, COUL_P, NOM_P)+'</td>'
+        +'<td class="c">'+fmt(x.bans.paquets)+'</td><td class="c">'+fmt(x.waf.requetes)+'</td><td class="c" title="'+esc('4xx '+fmt(x.erreurs.c4xx)+' · 5xx '+fmt(x.erreurs.c5xx))+'">'+fmt(x.erreurs.requetes)+'</td>'
+        +'<td class="c">'+fmt(b.sortie.requetes)+'<div style="font-size:.66rem;color:var(--faible)">'+octets(b.sortie.octets)+'</div></td>'
+        +'<td class="c" title="'+esc('médiane '+duree(b.visiteurs.duree_mediane_s)+' · p75 '+duree(b.visiteurs.duree_p75_s)+' · '+fmt(b.visiteurs.une_page)+' d’une seule page')+'">'+fmt(b.visiteurs.sessions)+'</td>'
+        +'<td>'+tend(t)+'</td><td>'+spark(v.histo_24h.heures.map(y=>y[0]),'#29b6f6')+'</td></tr>';
+    }).join('') || '<tr><td colspan="11" class="vide">Aucun site actif.</td></tr>';
+    el('esNote').textContent = (es.complet ? '' : 'relevé partiel · ') + (es.passe_degradee ? 'dernière passe dégradée, relevé complet conservé · ' : '') + 'relevé '+String(es.genere||'').slice(11,16);
+    el('esLeg').textContent = 'Typage déterministe : humain, robot (déclaré par son agent, la vérification DNS du WAF n’est pas journalisée), outil, aspirateur (catégorie aspirateur du WAF ou rafale d’une même empreinte sur l’historique de forge), sonde (signalée par le WAF ou chemin de scan). Fenêtres closes ; tendance : ▲/▼ au-delà de 3 fois la médiane des fenêtres précédentes. Octets d’entrée = octets des réponses. Aucune adresse n’est conservée ni affichée.';
+  }
+  async function chargeES(){
+    if(DEMO) return;
+    const r = await sûr(api('/entree-sortie'));
+    if(r) es = r;
+    rendES();
+  }
+  el('esF').addEventListener('click', ev=>{ const b = ev.target.closest('button[data-f]'); if(!b) return; esF = b.dataset.f; el('esF').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); rendES(); });
   async function charge(){
     const b = el('rafraichir'); b.disabled = true; session = true;
     try{
@@ -591,6 +656,7 @@
       }
       el('heure').textContent = new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
       rend();
+      chargeES();
       if(det && el('detail').style.display==='grid' && !DEMO){
         try{ det = await api(`/vhost-stats/${encodeURIComponent(courant)}?periode=${per}`); rendDetail(); }catch(e){}
       }
