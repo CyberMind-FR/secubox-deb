@@ -38,7 +38,7 @@ import time
 from collections import Counter, OrderedDict, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Tuple, Iterable, Optional
 
 REP_LOGS = Path("/var/log/nginx")
 CACHE = Path("/var/cache/secubox/metrics/vhost_stats.json")
@@ -109,6 +109,17 @@ SONDES = re.compile(
 
 # L'ordre compte : Edge se declare Chrome, Chrome se declare Safari.
 NAVIGATEURS = [
+    # #4017 : ce qui tombait dans « Autre » (16 % sur gk2) est nommé, avant les robots génériques.
+    ("Sans UA", re.compile(r'^-?$')),
+    ("Agent SecuBox", re.compile(r'secubox|sbx[-_]', re.I)),
+    ("Aperçu de lien", re.compile(r'facebookexternalhit|facebookcatalog|meta-externalagent|Twitterbot|'
+                                  r'LinkedInBot|Slackbot|Discordbot|TelegramBot|WhatsApp|SkypeUriPreview|'
+                                  r'redditbot|Pinterest|Embedly|Iframely|vkShare|Mastodon|Pleroma|Misskey|Bluesky', re.I)),
+    ("Gestionnaire de paquets", re.compile(r'APT-HTTP|apt-|Debian APT|pip/|npm/|yarn/|Go-module|cargo/|'
+                                           r'Homebrew|composer/|dnf|yum|apk-tools|conda/', re.I)),
+    ("Scanner", re.compile(r'Palo Alto|Cortex|Xpanse|Censys|Shodan|zgrab|masscan|nmap|Nuclei|'
+                           r'Expanse|InternetMeasurement|ModatScanner|LeakIX|Onyphe|BinaryEdge|'
+                           r'Netcraft|Qualys|Nessus|OpenVAS|ZoomEye|fofa', re.I)),
     ("Robot", re.compile(r'bot|crawl|spider|slurp|curl|wget|python-|go-http|'
                          r'okhttp|libwww|scrapy|headless|monitoring', re.I)),
     ("Edge", re.compile(r'Edg[e/]', re.I)),
@@ -170,6 +181,25 @@ def _classe(ua: str, table) -> str:
         if motif.search(ua):
             return nom
     return "Autre"
+
+
+# Familles qui ne sont pas des personnes : comptées avec les robots (#4017). Sans cela, aperçus de lien, agents
+# internes et scanners gonflaient les « humains ».
+NON_HUMAINS = {"Robot", "Sans UA", "Agent SecuBox", "Aperçu de lien", "Gestionnaire de paquets", "Scanner"}
+_PRODUIT = re.compile(r'^\s*([A-Za-z][A-Za-z0-9._+-]{1,31})')
+
+
+def navigateur(ua: str) -> Tuple[str, bool]:
+    """Famille du user-agent et « humain ? » (#4017). Jamais « Autre » seul : un navigateur inconnu (Mozilla/…) devient
+    « Autre navigateur » ; un client qui n'imite pas un navigateur prend le nom du produit qu'il déclare (premier jeton,
+    32 caractères au plus), et n'est pas compté comme humain."""
+    nom = _classe(ua or "", NAVIGATEURS)
+    if nom != "Autre":
+        return nom, nom not in NON_HUMAINS
+    if (ua or "").startswith("Mozilla/"):
+        return "Autre navigateur", True
+    m = _PRODUIT.match(ua or "")
+    return (m.group(1) if m else "Autre"), False
 
 
 def _jour_de(horodatage: str) -> Optional[str]:
@@ -390,9 +420,9 @@ def _compter(s: dict, m: re.Match) -> None:
     elif _lan(g["ip"]) and len(s["ips_lan"]) < PLAFOND_IP:
         s["ips_lan"].add(g["ip"])
 
-    nav = _classe(ua, NAVIGATEURS)
+    nav, humain = navigateur(ua)
     s["navigateurs"][nav] += 1
-    if nav == "Robot":
+    if not humain:
         s["robots"] += 1
     else:
         s["plateformes"][_classe(ua, PLATEFORMES)] += 1

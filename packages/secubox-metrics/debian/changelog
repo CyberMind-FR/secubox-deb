@@ -1,3 +1,12 @@
+secubox-metrics (1.33.1-1~trixie1) trixie; urgency=medium
+
+  * vhosts (ref #4017) : « Autre » des navigateurs détaillé — aperçus de
+    lien, agents SecuBox, gestionnaires de paquets, scanners, sans UA,
+    autre navigateur, sinon le produit déclaré ; ces clients ne sont plus
+    comptés comme humains.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:11:33 +0100
+
 secubox-metrics (1.33.0-1~trixie1) trixie; urgency=medium
 
   * Entrée / sortie par site (#4011) : requêtes reçues par type de visite (humain, robot déclaré,
