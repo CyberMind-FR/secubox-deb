@@ -1,3 +1,25 @@
+secubox-waf-ng (1.54.0-1~trixie1) trixie; urgency=medium
+
+  * Rapports de menaces multi-historiques par campagne et par acteur
+    (ref #4006) : 90 jours de bans.jsonl et de ses archives mensuelles,
+    séries jour et semaine, vagues, récurrences (adresses, /24, opérateurs
+    qui reviennent après une extinction), phases repérage → collecte →
+    attaque par règles, liens entre sujets (empreinte, opérateurs, cibles,
+    /24, rythme). Tâche de fond horaire en processus à part (nice 10),
+    cache /var/lib/secubox/waf/rapports.json en double tampon.
+  * Dossier de faits JSON sans adresse et lecture par règles (repli sans
+    IA). Rédaction IA à la demande (POST …/rediger, administrateur) par le
+    relais OpenAI-compatible de la ZIA, depuis le dossier seul, puis
+    vérification par le code (api/verif_rapport.py) : nombre, date, nom et
+    liaison nombre/unité contrôlés contre le dossier, causalité et capacité
+    retirées, supposition marquée hypothèse ; taux de phrases retenues
+    publié.
+  * Routes GET /rapports et /rapports/{genre}/{id} (require_lecture_ai) ;
+    section « Rapport » dans les pages Campagnes et Acteurs, export
+    Markdown (téléchargement ou copie).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 09:30:00 +0100
+
 secubox-waf-ng (1.53.1-1~trixie1) trixie; urgency=medium
 
   * Journal des menaces (ref #4008) : un ban que la pose écarte (plage

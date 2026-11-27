@@ -1,0 +1,9 @@
+## Rapport : campagne d'aspiration de la forge
+
+Le ban dès la 1re requête du 24/11 a donné 13 630 bans ; la liste compte 20 931 adresses.
+La réévaluation à 168h (26/11) a permis de prolonger les bans, mais a aussi révélé un biais (C) : le WAF auto-test générait des faux positifs.
+Le correctif (27/11) a corrigé ce problème.
+Les adresses semblent jetables : 4 retours sur 11 249 relâchées, ce qui peut indiquer une réaction de l'adversaire au ban (hypothèse).
+La box SecuBox sait déjà déduire des profils basés sur l'empreinte, les pages visitées et les retours.
+L'adversaire semble ajuster ses tactiques en utilisant des proxys loués et en exploitant les failles du WAF.
+Priorités : réduire les faux positifs, généraliser le profil déduit et garder le double tampon.

@@ -87,6 +87,9 @@ class Banc:
         u = r.request.url.split("http://sbx.test", 1)[1]
         if u.startswith("/page/reperes.js"):
             return r.fulfill(status=200, content_type="application/javascript", body=REPERES)
+        if u.startswith("/page/rapport-menaces.js"):   # #4006
+            return r.fulfill(status=200, content_type="application/javascript",
+                             body=(RACINE / "composants" / "waf" / "www" / "waf" / "rapport-menaces.js").read_text(encoding="utf-8"))
         if u.startswith("/page/"):
             return r.fulfill(status=200, content_type="text/html", body=HTML)
         self.appels.append(u)

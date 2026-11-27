@@ -20,7 +20,7 @@ def test_page_autonome_sans_dialogue_natif(nom):
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in s
     # seule ressource chargée : les repères partagés des cartes de campagne (#3919), servis à côté de la page
     scripts = re.findall(r'<script[^>]*\bsrc="([^"]*)"', s)
-    assert scripts == ([] if nom != "actor" else ["reperes.js"]) and "hybrid" not in s and "googleapis" not in s and "<link" not in s
+    assert scripts == ([] if nom != "actor" else ["reperes.js", "rapport-menaces.js"]) and "hybrid" not in s and "googleapis" not in s and "<link" not in s
     for interdit in ("confirm(", "alert(", "prompt(", "innerHTML", "onclick=", "Math.random"):
         assert interdit not in s, interdit
     assert "lorem" not in s.lower() and "demo" in s.lower() and "embed" in s and "sbxVue" in s
@@ -70,6 +70,9 @@ def ouvre(nav, nom, chemin_url, api, taille=None):
             r.fulfill(status=200, content_type="text/css" if c.endswith(".css") else "application/javascript", body="")
         elif c == "page/reperes.js":
             r.fulfill(status=200, content_type="application/javascript", body=(RACINE / "www" / "actor" / "reperes.js").read_text(encoding="utf-8"))
+        elif c == "page/rapport-menaces.js":   # #4006 : servi à côté de la page (copie de celui du WAF)
+            r.fulfill(status=200, content_type="application/javascript",
+                      body=(RACINE / "composants" / "waf" / "www" / "waf" / "rapport-menaces.js").read_text(encoding="utf-8"))
         elif c.startswith("page/"):
             r.fulfill(status=200, content_type="text/html", body=SRC[nom])
         else:
