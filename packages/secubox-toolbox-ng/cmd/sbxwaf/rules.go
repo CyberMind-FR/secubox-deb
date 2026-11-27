@@ -98,6 +98,14 @@ type compiledPattern struct {
 	desc string
 	// severity is inherited from the parent category at compile time.
 	severity string
+	// champ (#4020) : champ lu par ce motif — "" (texte joint historique :
+	// chemin, requête, corps, UA), champChemin, champRequete, champUA,
+	// champCorps. Un motif de la bibliothèque ancré (« ^…$ ») ne vaut que
+	// sur son champ.
+	champ uint8
+	// uaBit (#4020) : rang de ce motif parmi les motifs d'UA mémoïsés
+	// (memoUA), -1 sinon.
+	uaBit int8
 }
 
 // compiledCategory is one loaded WAF category with all its compiled patterns.
@@ -114,6 +122,17 @@ type compiledCategory struct {
 	// ("wordpress", "drupal", "joomla", "web"). Vide = catégorie ordinaire.
 	sondeCMS string
 	patterns []compiledPattern
+	// exacts (#4020) : motifs « ^littéral$ » sur le chemin, indexés par leur
+	// littéral en minuscules (une consultation de table au lieu de N regex).
+	// Ils restent comptés dans patterns pour Integrite, mais n'y sont pas
+	// évalués (exactsIdx marque leurs positions).
+	exacts map[string]int
+	// bib (#4020) : la catégorie vient de la bibliothèque figée (OWASP CRS,
+	// modèles Nuclei) ; ses motifs portent famille et techno.
+	bib bool
+	// infos (#4020) : famille et techno de chaque motif de la bibliothèque,
+	// par identifiant. Nil hors bibliothèque.
+	infos map[string]infoBib
 	// structurelles : signatures lues sur le ResultatMultipart de l'analyseur
 	// (#3257). Jamais consultees par MatchDetail.
 	structurelles []signatureStructurelle
@@ -402,6 +421,11 @@ type rulesData struct {
 	// inconnu, sous la forme <categorie>/<id>:<service>.
 	avertis []string
 
+	// memo (#4020) : verdicts des motifs d'UA par UA (bornée, neuve à
+	// chaque rechargement) ; uaMotifs leurs regex, dans l'ordre des bits.
+	memo     *memoUA
+	uaMotifs []*regexp.Regexp
+
 	// ind : indicateurs lus sur le chemin de chaque requête, calculés une
 	// fois par calculerIndicateurs à la fin du chargement (passe finale I1).
 	ind indicateursPHP
@@ -515,6 +539,10 @@ func loadRulesJSON(path string) *rulesData {
 		ID      string `json:"id"`
 		Pattern string `json:"pattern"`
 		Desc    string `json:"desc"`
+		// #4020 : champ lu, et pour la bibliothèque famille et techno visée.
+		Champ   string `json:"champ"`
+		Famille string `json:"famille"`
+		Techno  string `json:"techno"`
 	}
 	type categoryJSON struct {
 		Name     string        `json:"name"`
@@ -522,6 +550,8 @@ func loadRulesJSON(path string) *rulesData {
 		Enabled  *bool         `json:"enabled"` // pointer: nil means absent (default true)
 		Mode     *string       `json:"mode"`    // pointer: nil means absent (default block)
 		Patterns []patternJSON `json:"patterns"`
+		// Bibliotheque (#4020) : catégorie issue de la bibliothèque figée.
+		Bibliotheque bool `json:"bibliotheque"`
 		// Brut : une forme inattendue est rejetee nommement plus bas, elle ne
 		// doit pas faire sauter la categorie entiere (ses motifs regex).
 		Structural json.RawMessage `json:"structural"`
@@ -595,6 +625,7 @@ func loadRulesJSON(path string) *rulesData {
 			name:     cat.Name,
 			severity: sev,
 			mode:     mode,
+			bib:      cat.Bibliotheque,
 		}
 		if cc.name == "" {
 			cc.name = catID
@@ -619,12 +650,39 @@ func loadRulesJSON(path string) *rulesData {
 				data.rejetes = append(data.rejetes, catID+"/"+p.ID)
 				continue
 			}
-			cc.patterns = append(cc.patterns, compiledPattern{
+			champ, champOK := champsMotif[p.Champ]
+			if !champOK {
+				// Champ inconnu : le motif ne vaudrait sur rien de prévu. Rejeté
+				// NOMMÉMENT, comme une regex qui ne compile pas.
+				log.Printf("sbxwaf/rules: category %q pattern %q: champ %q inconnu (skipped)", catID, p.ID, p.Champ)
+				data.rejetes = append(data.rejetes, catID+"/"+p.ID)
+				continue
+			}
+			cp := compiledPattern{
 				id:       p.ID,
 				re:       re,
 				desc:     p.Desc,
 				severity: sev,
-			})
+				champ:    champ,
+				uaBit:    -1,
+			}
+			if champ == champUA && len(data.uaMotifs) < memoUABits {
+				cp.uaBit = int8(len(data.uaMotifs))
+				data.uaMotifs = append(data.uaMotifs, re)
+			}
+			if cc.bib {
+				cc.bibInfo(p.ID, p.Famille, p.Techno)
+			}
+			if lit, ok := litteralExact(p.Pattern); ok && champ == champChemin {
+				if cc.exacts == nil {
+					cc.exacts = map[string]int{}
+				}
+				if _, deja := cc.exacts[lit]; !deja {
+					cc.exacts[lit] = len(cc.patterns)
+				}
+				cp.re = nil // évalué par la table, jamais par la boucle
+			}
+			cc.patterns = append(cc.patterns, cp)
 			total++
 		}
 
@@ -671,6 +729,7 @@ func loadRulesJSON(path string) *rulesData {
 	}
 
 	data.ind = calculerIndicateurs(data)
+	data.memo = nouveauMemoUA()
 	log.Printf("sbxwaf/rules: loaded %d patterns in %d categories from %s", total, len(data.cats), path)
 	if len(data.rejetes) > 0 {
 		// « ALERTE » et non « info » : des motifs ecrits et livres ne
@@ -899,20 +958,31 @@ func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeB
 func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeBlock bool, exclure map[string]bool) (cat, sev, mode, ruleID string, hit bool) {
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
-	scanParts := []string{decodedPath, decodedQuery, body, ua}
+	// #4020 : chaque champ est mis en minuscules À PART, puis joint : le texte
+	// joint est identique à l'ancien (ToLower d'une jointure par espaces), et
+	// les motifs de la bibliothèque lisent leur seul champ sans recalcul.
+	ch := champsRequete{
+		chemin:  strings.ToLower(decodedPath),
+		requete: strings.ToLower(decodedQuery),
+		corps:   strings.ToLower(body),
+		ua:      strings.ToLower(ua),
+	}
+	scanParts := []string{ch.chemin, ch.requete, ch.corps, ch.ua}
 
 	// Variante normalisée (voir replierchemin.go). Elle est AJOUTÉE, jamais
 	// substituée : tout ce que le décodage simple attrapait aujourd'hui
 	// continue d'être attrapé, et on ne gagne que des prises. La quasi-totalité
 	// du trafic ne produit aucune variante et ne paie donc rien.
 	if v := varianteNormalisee(rawPath, decodedPath); v != "" {
-		scanParts = append(scanParts, v)
+		ch.cheminV = strings.ToLower(v)
+		scanParts = append(scanParts, ch.cheminV)
 	}
 	if v := varianteNormalisee(rawQuery, decodedQuery); v != "" {
-		scanParts = append(scanParts, v)
+		ch.requeteV = strings.ToLower(v)
+		scanParts = append(scanParts, ch.requeteV)
 	}
 
-	scanText := strings.ToLower(strings.Join(scanParts, " "))
+	scanText := strings.Join(scanParts, " ")
 
 	r.mu.RLock()
 	cur := r.current
@@ -921,6 +991,7 @@ func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeB
 	if cur == nil {
 		return "", "", "", "", false
 	}
+	ch.donnees = cur
 
 	for _, c := range cur.cats {
 		if !includeBlock && c.data.mode == modeBlock {
@@ -929,8 +1000,29 @@ func (r *Rules) MatchDetail(method, rawPath, rawQuery, body, ua string, includeB
 		if exclure[c.id] {
 			continue
 		}
+		if c.data.exacts != nil {
+			if i, ok := c.data.exacts[ch.chemin]; ok {
+				p := c.data.patterns[i]
+				return c.id, p.severity, c.data.mode, p.id, true
+			}
+			if ch.cheminV != "" {
+				if i, ok := c.data.exacts[ch.cheminV]; ok {
+					p := c.data.patterns[i]
+					return c.id, p.severity, c.data.mode, p.id, true
+				}
+			}
+		}
 		for _, p := range c.data.patterns {
-			if p.re.MatchString(scanText) {
+			if p.re == nil {
+				continue // motif exact : déjà consulté dans la table
+			}
+			if p.champ == champTout {
+				if p.re.MatchString(scanText) {
+					return c.id, p.severity, c.data.mode, p.id, true
+				}
+				continue
+			}
+			if ch.touche(p) {
 				return c.id, p.severity, c.data.mode, p.id, true
 			}
 		}

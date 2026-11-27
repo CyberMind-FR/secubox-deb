@@ -70,6 +70,7 @@ def test_famille_table():
         ("waf_fingerprint", "balayage_web"),
         ("host_anomaly:unrouted", "balayage_web"),
         ("rotation:asn", "collecte"),
+        ("bib:fichiers_exposes:git", "balayage_web"),
         ("inconnue", "autre"),
     ]
     for entree, attendu in cas:

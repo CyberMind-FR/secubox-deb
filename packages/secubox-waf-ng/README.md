@@ -656,3 +656,33 @@ Page `/waf/sites.html` (onglet « Sites », premier de `/waf/` ; `/waf/#sites:<n
 - **Pas mesurable** : requêtes reçues par site sur 24 h (`visits-stats.json` ne porte que les 1 000 dernières visites) : « — ».
 - « Sous attaque » : 30 requêtes hostiles ou plus depuis le début de l'heure précédente (60 à 120 min, durée écrite), et trois fois le rythme des
   heures complètes (six au moins) à durée égale ; `null` si ces heures sont mal couvertes ou la lecture en retard. Heures de Paris.
+
+## Bibliothèque figée OWASP CRS / Nuclei (#4020, 1.57.0)
+
+Motifs RE2 tirés d'OWASP CRS (Apache-2.0) et des modèles Nuclei (MIT), utilisés comme **sources de motifs**
+seulement : seul `sbxwaf` les évalue. Bibliothèque figée dans le paquet (`/usr/share/secubox/waf/bibliotheque/` :
+`categories.json`, `rapport.json`, `NOTICE.md`, `LICENCES/`), aucun téléchargement sur la box ; mise à jour par
+publication d'une nouvelle version.
+
+- **Construction (dépôt seulement)** : `composants/waf/bibliotheque/construire.py --crs <clone> --nuclei <clone>
+  --crs-version vX --nuclei-version vY --rejeu <journal.tsv>`. Chaîne des filtres IA (#3732) : candidats →
+  vérificateur (`hors_re2` de cve-triage, pages de SecuBox) → rejeu → bornes → émission. Écartés et comptés : règle
+  chaînée, paranoïa > 1, cible TX (anomalie cumulée), transformation non équivalente, opérateur autre que
+  `@rx`/`@pm`/`@pmFromFile`, regex hors RE2, chemin Nuclei variable, générique, ambigu ou avec requête. Les familles
+  RCE, SQLi et XSS sont converties mais différées (coût au banc).
+- **Rejeu** : TSV anonymisé `hôte, client haché, méthode, URI, statut, UA` (aucune adresse). Un motif qui touche une
+  réponse 2xx/3xx légitime est rejeté (sonde évidente exclue : UA de CRS 913100, ≥ 10 réponses 404 ou ≥ 3 motifs
+  pour le même client ; 3xx d'un vhost qui redirige ≥ 80 % de ses chemins).
+- **Dans waf-rules.json** : `waf-rules-sync` ajoute les catégories `bib_<famille>` (`"bibliotheque": true`) en fin
+  des règles livrées ; mode `detect` par défaut, le mode choisi depuis la page tient (`mode_choisi`).
+- **sbxwaf** : champ `champ` d'un motif (`chemin`, `requete`, `ua`, `corps` ; absent = texte joint historique) ;
+  `^littéral$` sur le chemin en table ; verdicts des motifs d'UA mémoïsés (4 096 UA, table vidée pleine). Touche
+  étiquetée `bib:<famille>:<techno>` (champ `category` de waf-threats.log, outil déduit dans `tool`). Jamais
+  appliqué sur un vhost qui héberge la techno : `VhostProfiles.hebergeTechno` (`cms_vhosts` de vhost_profiles.json, #4019 ;
+  à défaut le service du vhost).
+- **Page** : WAF › Modes › Bibliothèque. Identifier seulement = `detect` ; bannir = `escalate` (N touches, durée) ou
+  `block`, par famille, écrit par `POST /api/v1/waf/categories/modes` (cvectl waf-modes, double tampon, audit).
+
+| Route | Garde | Rend |
+|---|---|---|
+| `GET /api/v1/waf/bibliotheque` | `require_lecture` | `familles` : `categorie`, `mode`, `identifier_seulement`, `regles`, `regex`, `chemins_exacts`, `importees`, `rejetees_rejeu`, `touches_rejouees`, `touches_7j` (`touches`, `par_jour`, `technos`) ; `sources`, `rejeu`, `total_regles` |

@@ -1,3 +1,11 @@
+secubox-toolbox-ng (0.22.1-1~trixie1) trixie; urgency=medium
+
+  * reseau.Famille (ref #4020) : les étiquettes de la bibliothèque figée
+    du WAF (bib:<famille>:<techno>) sont rangées en balayage_web
+    (sbx-authwatch).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 07:58:32 +0100
+
 secubox-toolbox-ng (0.22.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf (ref #4019) : catégories « sonde_cms » (escalate, ban_seuil 1) :
