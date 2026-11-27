@@ -12,8 +12,8 @@ qui font réellement du PHP, et seulement eux, plus les exceptions « forcer » 
 Preuves relevées (aucune n'est un nom de site deviné) :
   - appli : le vhost est rattaché, dans vhost_profiles.json, à un service déclaré PHP (php_services) ;
   - fichier : le journal nginx commun (format sbx_host) montre au moins 2 réponses 2xx à un chemin en .php dont la
-    taille diffère de celle de « / » (un site « attrape-tout » qui rend sa page d'accueil pour tout chemin n'est pas
-    du PHP) ;
+    taille diffère de celle de « / » et d'une page de repli (même taille pour 3 chemins .php distincts, #4019) : un
+    site « attrape-tout » qui rend sa page d'accueil ou de repli pour tout chemin n'est pas du PHP ;
   - entete : le serveur d'origine (adresse de haproxy-routes.json) répond à « GET / » avec X-Powered-By: PHP… ou un
     cookie de session PHP (PHPSESSID, roundcube_sessid, nc_session_id, oc…).
 Les signaux d'attaque (php-signaux.json) ne sont PAS une preuve : un robot sonde du .php partout.
@@ -42,6 +42,7 @@ MAX_SONDES = 300
 DELAI_SONDE_S = 2.0
 BUDGET_SONDES_S = 18.0          # wafctl est appelé avec un délai de 30 s par l'API
 MIN_FICHIERS = 2
+REPLI_CHEMINS = 3              # même taille pour 3 chemins .php distincts = page de repli (#4019)
 PLAFOND_OCTETS = 32 * 1024 * 1024   # au plus 32 Mio relus par passage
 LIGNE = re.compile(r'^(?P<hote>[A-Za-z0-9._:-]+) \S+ \S+ \S+ \[[^\]]+\] "(?P<m>[A-Z]+) (?P<chemin>[^" ]*)[^"]*" '
                    r'(?P<statut>\d{3}) (?P<octets>\d+|-) ')
@@ -263,17 +264,27 @@ def preuves_journal(chemins, routes, etat):
             accueil.setdefault(h, set()).add(taille)
         elif CHEMIN_PHP.search(chemin) and m["m"] in ("GET", "POST", "HEAD"):
             php.setdefault(h, []).append((CHEMIN_SUR.sub("", chemin)[:80], taille))
-    out = {}
+    out, repli, attrape = {}, {h: set(v) for h, v in (mem.get("repli") or {}).items() if isinstance(v, list)}, set()
     for h, vus in php.items():
-        bons = [c for c, t in vus if t not in accueil.get(h, set())]
+        # Page de repli (#4019) : une même taille rendue pour REPLI_CHEMINS chemins .php distincts est la page
+        # qu'un site « attrape-tout » sert pour tout chemin (admin.gk2 : 2491 octets pour /info.php, /test.php…),
+        # pas du PHP. Gardée en mémoire : un relevé plus tard ne la reprend pas pour une preuve.
+        chemins = {}
+        for c, t in vus:
+            chemins.setdefault(t, set()).add(c)
+        repli.setdefault(h, set()).update(t for t, cs in chemins.items() if len(cs) >= REPLI_CHEMINS)
+        bons = [c for c, t in vus if t not in accueil.get(h, set()) and t not in repli[h]]
         if len(bons) >= MIN_FICHIERS:
             freq = {}
             for c in bons:
                 freq[c] = freq.get(c, 0) + 1
             out[h] = (max(sorted(freq), key=lambda k: freq[k]), len(bons))
+        elif repli[h]:
+            attrape.add(h)
     mem["accueil"] = {h: sorted(v)[:8] for h, v in sorted(accueil.items())[:2000]}
-    mem["candidats"] = {h: [list(x) for x in v[-10:]] for h, v in sorted(php.items())[:2000] if h not in out}
-    return out
+    mem["repli"] = {h: sorted(v)[:8] for h, v in sorted(repli.items())[:2000] if v}
+    mem["candidats"] = {h: [list(x) for x in v[-10:]] for h, v in sorted(php.items())[:2000]}
+    return out, attrape
 
 
 def sonder(h, cible, echeance):
@@ -343,19 +354,25 @@ def noter(etat, h, type_, texte, maintenant):
 
 
 def detecter(c, etat, profils, routes, maintenant):
-    nouveaux = []
+    """Rend (nouveaux, retirés) : retirés = détections « fichier » reconnues comme page de repli (#4019)."""
+    nouveaux, retires = [], []
     for h, s in sorted(services_php(profils).items()):
         if (routes is None or h in routes) and noter(etat, h, "appli", f"appli {s} (module installé)", maintenant):
             nouveaux.append(h)
     if routes is not None:
-        for h, (chemin, n) in sorted(preuves_journal(c["journaux"], routes, etat).items()):
+        preuves, attrape = preuves_journal(c["journaux"], routes, etat)
+        for h, (chemin, n) in sorted(preuves.items()):
             if noter(etat, h, "fichier", f"{chemin} servi en 2xx ({n} fois)", maintenant):
                 nouveaux.append(h)
+        for h in sorted(attrape):                     # une preuve « fichier » d'avant #4019 n'était qu'une page de repli
+            if (etat["detectes"].get(h) or {}).get("type") == "fichier":
+                del etat["detectes"][h]
+                retires.append(h)
         for h, texte in sorted(preuves_entetes(routes, set(etat["detectes"])).items()):
             if noter(etat, h, "entete", texte, maintenant):
                 nouveaux.append(h)
     etat["derniere_detection"] = maintenant
-    return nouveaux
+    return nouveaux, retires
 
 
 # ── verbes ────────────────────────────────────────────────────────────────
@@ -485,11 +502,12 @@ def main(argv):
             print(json.dumps({"ok": True, "suspendu": True, "nouveaux": [], "explicites": []}))
             return 0
         if verbe == "detecter":
-            nouveaux = detecter(c, etat, profils, routes, maintenant)
+            nouveaux, retires = detecter(c, etat, profils, routes, maintenant)
             avant, apres = appliquer(c, etat, profils, routes)
-            if apres != avant or not present:
+            if apres != avant or not present or retires:
                 auditer(c["audit"], action, "ok", "detecter : " + (("nouveaux " + ",".join(nouveaux)) if nouveaux
-                        else "aucun nouveau") + (" ; migration" if not present else ""), acteur)
+                        else "aucun nouveau") + ((" ; page de repli, retirés " + ",".join(retires)) if retires else "")
+                        + (" ; migration" if not present else ""), acteur)
             print(json.dumps({"ok": True, "nouveaux": nouveaux, "explicites": explicites(etat, routes)}))
             return 0
         detail, avant, apres = verbe_ecrire(entree, etat, profils, routes, acteur, maintenant, c)

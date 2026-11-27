@@ -317,3 +317,26 @@ def test_un_seul_declencheur_horaire():
     main = (ICI / "api" / "main.py").read_text()
     assert "SITES_PHP_PERIODE = 3600" in main and "_modes.detecter_sites" in main
     assert not [p for p in (ICI.parents[1]).rglob("*.timer") if "php" in p.read_text(errors="ignore")]
+
+
+def test_page_de_repli_n_est_pas_du_php_4019(ctl):
+    """#4019 : un site qui rend la même page (autre que « / ») pour tout chemin n'est pas PHP ; une ancienne
+    détection « fichier » faite sur cette page est retirée, auditée."""
+    routes = json.loads((ctl.dossier / "routes.json").read_text())
+    routes["admin.ex.fr"] = ["127.0.0.1", 9]
+    (ctl.dossier / "routes.json").write_text(json.dumps(routes))
+    ctl("php-sites", "detecter")
+    etat = json.loads((ctl.dossier / "php-sites.json").read_text())
+    etat["detectes"]["admin.ex.fr"] = {"type": "fichier", "preuve": "/info.php servi en 2xx (3 fois)",
+                                       "premiere": "2026-11-26T07:07:38Z", "derniere": "2026-11-26T07:07:38Z"}
+    (ctl.dossier / "php-sites.json").write_text(json.dumps(etat))
+    with (ctl.dossier / "hosts.log").open("a") as f:
+        f.write(ACCES.format(h="admin.ex.fr", n=1, m="GET", p="/", s=200, o=10674))
+        for i, p in enumerate(("/info.php", "/test.php", "/p.php", "/info.php")):
+            f.write(ACCES.format(h="admin.ex.fr", n=i, m="GET", p=p, s=200, o=2491))
+    rc, d = ctl("php-sites", "detecter")
+    etat = json.loads((ctl.dossier / "php-sites.json").read_text())
+    assert rc == 0 and "admin.ex.fr" not in etat["detectes"] and "admin.ex.fr" not in d["explicites"]
+    assert etat["journal"]["repli"]["admin.ex.fr"] == ["2491"]
+    assert "page de repli, retirés admin.ex.fr" in ctl.audits()[-1]["detail"]
+    assert etat["detectes"]["boutique.ex.fr"]["type"] == "fichier"          # vrai PHP : tailles différentes, gardé

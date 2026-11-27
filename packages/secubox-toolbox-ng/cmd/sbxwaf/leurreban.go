@@ -49,6 +49,17 @@ func (s *Server) recidivesLeurre(ip string) int {
 	return s.nftBan.store.CompteCategorie(ip, "leurre:", time.Now().Add(-fenetreRecidiveLeurre).Unix())
 }
 
+// prefixeSondeCMS : catégorie des bans de sonde de CMS absent (#4019), « cms_sonde:wordpress ».
+const prefixeSondeCMS = "cms_sonde:"
+
+// recidivesSondeCMS compte les bans de sonde de CMS déjà posés sur cette adresse (même fenêtre que les leurres, #4019).
+func (s *Server) recidivesSondeCMS(ip string) int {
+	if s.nftBan == nil {
+		return 0
+	}
+	return s.nftBan.store.CompteCategorie(ip, prefixeSondeCMS, time.Now().Add(-fenetreRecidiveLeurre).Unix())
+}
+
 // UN LEURRE N'A AUCUN AUTRE BUT QUE DE DÉTECTER (décision du propriétaire, 2026-10-11) : tout contact avec un service simulé est banni, où qu'il ait
 // lieu — hôte non routé, chemin-appât d'un vrai vhost, marque rejouée. Les garde-fous restent : jamais le LAN, jamais une plage protégée (la box, la
 // Freebox, le maillage), durée graduée à la récidive (24 h puis 7 j, #3988), journal de bans annulable.
