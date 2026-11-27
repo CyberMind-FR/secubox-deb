@@ -81,3 +81,14 @@ Exception documentée à la règle « sans PII » : les seules adresses listées
 sont comptées par adresse dans `DPI_DEVICES_OUT` (`/run/secubox/sbxdpi/appareils.json`, 0640, groupe `secubox`) : application nDPI,
 catégorie, nom d'hôte, port, adresse distante seulement sans nom, flux, octets, à la minute, fenêtre de 10 minutes, 20 000 clés et
 2 000 par adresse au plus. Sans cibles, rien n'est compté ni écrit. Ad-guard rattache chaque adresse à sa MAC.
+
+## Couches de menace par source externe (#4010)
+
+Pour chaque adresse **publique** qui ouvre un flux vers une destination **locale** (la box ou son réseau ; jamais le LAN comme source, ni le CGNAT,
+ni le transit), sbxdpi tient sur 24 h glissantes (`DPI_COUCHES_FENETRE`) : flux (événement `new`), services visés `Proto/port` (à la détection ;
+`Unknown/port` si nDPI ne reconnaît rien), octets et risques nDPI (à la fin du flux, une fois par flux, liste de silence comprise), et les JA4 de
+`tlsfp.go`, rattachés par l'identifiant de flux car les événements `packet-flow` ne portent pas d'adresse. Bornes : 4096 sources (la moins récente
+est évincée), 32 services, 32 risques, 8 JA4 par source. Le relevé est écrit à chaque flush (30 s) dans `DPI_COUCHES_OUT`
+(`/run/secubox/sbxdpi/couches-menaces.json`, tmpfs, 0640) ; il porte les adresses et n'est rendu par **aucune** route de sbxdpi. Double tampon :
+pendant les 10 premières minutes ou distributeur coupé, le relevé est « dégradé » et ne remplace pas un relevé complet de moins de deux fenêtres.
+L'API ndpid (`/api/v1/ndpid/couches-menaces`) en tire la vue sans adresse. Le capteur Actor Intelligence reprend le JA4 de la source.

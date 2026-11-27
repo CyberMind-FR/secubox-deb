@@ -85,6 +85,8 @@ type ActorSensor struct {
 	now      func() time.Time
 	// muet : liste de l'opérateur (DPI_RISK_MUTE) — un risque qu'il a réduit au silence ne compte jamais, ici non plus. Posé avant le démarrage.
 	muet func(risque string) bool
+	// ja4De : empreinte calculée par sbxdpi pour une source (#4010) — la libndpi livrée n'en met aucune dans l'événement. Posé avant le démarrage.
+	ja4De func(ip string) string
 
 	mu  sync.Mutex
 	acc map[string]*srcCapteur
@@ -166,6 +168,8 @@ func (s *ActorSensor) Observe(ev *dpiEvent) {
 	}
 	if j := ev.ja4(); j != "" {
 		a.ja4 = j
+	} else if s.ja4De != nil && a.ja4 == "" {
+		a.ja4 = s.ja4De(ev.SrcIP) // #4010 : le JA4 calculé par sbxdpi, faute de celui de nDPI
 	}
 	a.proto, a.transport = strings.ToLower(ev.master()), strings.ToLower(ev.L4Proto)
 	emettre := a.score >= s.seuil && (a.emis == 0 || a.score >= 2*a.emis)
