@@ -160,6 +160,28 @@ ban sans suite, acteur à bloquer sans mesure, disponibilité < 99,5 %, temps de
 Relevé : `/var/lib/secubox/metrics/releve/releve-AAAAMM.jsonl`, une ligne par jour (≤ 32 Kio), remplacée par écriture atomique,
 13 mois gardés ; il rattrape les jours manquants des 7 derniers et sert de repli au rapport quand les journaux ont tourné.
 
+## Entrée / sortie par site (1.33.0, #4011)
+
+| Méthode | Route | Garde | Réponse |
+|---|---|---|---|
+| GET | `/api/v1/metrics/entree-sortie` | `require_jwt` | `{genere, complet, sources:{nginx,waf,bans}, passe_degradee?, regles, total, vhosts:[…]}` |
+
+Chaque site (et `total`) porte `fenetres` (`1h`, `8h`, `1j`, `7j` closes, `en_cours`), `tendance` (même règle
+que les ruptures du WAF #4005 : médiane de 3 à 6 fenêtres précédentes de même longueur, facteur 3) et
+`histo_24h`. Une fenêtre : `entree` (requêtes, octets des réponses, adresses-heure, `par_visite`
+humain/robot/outil/aspirateur/sonde, `par_page` page/statique/api/forge/medias/admin/autre, `croise`),
+`reductions` (`bans` : paquets refusés par nftables avant HTTP, imputés au site visité en dernier ;
+`waf` : requêtes bloquées ; `erreurs` : 4xx/5xx), `sortie` (2xx/3xx, octets) et `visiteurs` (vrais visiteurs
+humains : sessions sans cookie par empreinte salée du jour, pause > 30 min, pages par session, durée médiane
+et p75 ; une session d'une seule page n'a pas de durée).
+
+Tâche de fond toutes les 120 s, lecture incrémentale de `secubox-hosts.log` (ou des `*_access.log`), de
+`waf-threats.log` et des compteurs de `waf_ban`/`waf_ban6` (`nft -j list set`, `CAP_NET_ADMIN` de l'unité).
+Cache : `/var/cache/secubox/metrics/entree-sortie.json` (rapport, double tampon : une passe dégradée ne
+remplace jamais un rapport complet) et `entree-sortie-etat.json` (compteurs horaires 5 j, journaliers 50 j).
+Aucune adresse, aucun agent, aucune empreinte n'y est écrit. L'auto-test du WAF est exclu.
+Page : section « Entrée / sortie » de `/metrics/vhosts.html`.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.

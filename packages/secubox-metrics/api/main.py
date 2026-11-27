@@ -89,6 +89,9 @@ from vhost_stats import VhostStatsAggregator, famille  # noqa: E402
 from secubox_core.auth import require_lecture
 
 vhost_stats_agg = VhostStatsAggregator()
+from entree_sortie import EntreeSortie  # noqa: E402
+entree_sortie_agg = EntreeSortie()
+_collecte_es: Optional[asyncio.Task] = None
 
 # Le lifespan ne se declenche pas quand metrics est monte dans l agregateur ;
 # la collecte s amorce donc aussi a la premiere requete, faute de quoi la vue
@@ -123,6 +126,9 @@ def amorcer_collecte() -> None:
     global _collecte
     if _collecte is None or _collecte.done():
         _collecte = asyncio.create_task(vhost_stats_agg.run_forever())
+    global _collecte_es
+    if _collecte_es is None or _collecte_es.done():      # #4011 : entrée / sortie, même amorçage
+        _collecte_es = asyncio.create_task(entree_sortie_agg.run_forever())
     _amorcer_cache_leger()
     _prechauffer_rapport()
 
@@ -200,7 +206,7 @@ async def lifespan(_app):
     try:
         yield
     finally:
-        toutes = tasks + [x for x in (_collecte, _tache_cache_leger) if x is not None]
+        toutes = tasks + [x for x in (_collecte, _collecte_es, _tache_cache_leger) if x is not None]
         for t in toutes:
             t.cancel()
         await asyncio.gather(*toutes, return_exceptions=True)
@@ -1354,6 +1360,13 @@ async def cert_status_endpoint():
 
 # ─── Statistiques par vhost ───────────────────────────────────────────────
 # Visites, visiteurs, navigateurs — et les sondes qui viennent avec.
+
+@app.get("/api/v1/metrics/entree-sortie")
+async def entree_sortie(_=Depends(require_jwt)):
+    """Entrée / sortie par vhost (#4011) : servi depuis le tampon actif, rebâti en fond."""
+    amorcer_collecte()
+    return JSONResponse(content=entree_sortie_agg.rapport())
+
 
 @app.get("/api/v1/metrics/vhost-stats")
 async def vhost_stats(periode: str = "jour", grouper: bool = False,
