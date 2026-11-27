@@ -11,6 +11,28 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-27 — vague d'aspiration Gitea qualifiée, couches de menace, défi de calcul, bibliothèque de filtres
+
+- **#4001 (PR #4002, déployé gk2)** : dns-guard 1.4.10, classement network-anomaly agrégé par type + métrique (closes #4001).
+- **#4003 (PR #4004, déployé gk2)** : waf-ng 1.52.2, une prolongation ne descend plus sous la durée de sa catégorie (aspirateur_ua 168 h
+  prolongé à 24 h : 13 438 fois en 3 j). Liste waf_ban 20 931 → 10 738 entre le 26 et le 27 : relâchements normaux (closes #4003).
+- **#4005 (PR #4007)**, **#4008 (PR #4009)**, **#4006 (PR #4015)**, **#4014 (PR #4016)** : waf-ng 1.53.0 → 1.55.0, déployé gk2. Profil
+  déduit et ruptures 1 h / 8 h / 1 j / 7 j, double tampon et double lecture ; « epargne » au lieu de « banned » pour un ban écarté, bans
+  de sbx-authwatch hors double lecture ; rapports multi-historiques rédigés par l'IA et vérifiés par le code (cas fautif du 27/11 rejoué :
+  4 phrases fausses sur 7 retirées) ; couche nDPI des populations (closes #4005, closes #4008, closes #4006, closes #4014).
+- **#4010 (PR #4013, déployé gk2)** : toolbox-ng 0.21.0, dpi 1.15.0, nDPId comme source par adresse externe (sbxdpi 1,8 % CPU) (closes #4010).
+- **#4011 (PR #4012)**, **#4017 (PR #4018)** : metrics 1.33.0 → 1.33.1, déployé gk2. Entrée / sortie par site, sessions des vrais
+  visiteurs ; « Autre » des navigateurs détaillé, non-humains comptés à part (closes #4011, closes #4017). Retours visiteurs : jeton à décider.
+- **#4019 (PR #4022, déployé gk2)** : waf-ng 1.56.0, sondes de CMS absents bannies dès la 1re requête (rejeu : 1 373 sondes, 0 page
+  légitime), faux « site PHP » de l'admin corrigé (closes #4019).
+- **#4021 (PR #4023, déployé gk2)** : waf-ng 1.57.0, défi de calcul armé sur gitea.gk2 (rejeu de la vague : 18 422 requêtes défiées,
+  0 git/apt défié). Drop-in 10-honeypot.conf remis au modèle ; plages protégées : 31 (box + Meta) via protegees.env, 2 retirées sur
+  décision du propriétaire (closes #4021).
+- **#4020 (PR #4024, ref #4020, publié, installation gk2 en attente de charge < 15)** : waf-ng 1.58.0, toolbox-ng 0.22.1, bibliothèque
+  figée OWASP CRS / Nuclei (2 180 règles, identifier seulement). Coût arm64 à mesurer sur gk6 avant tout passage en escalate/block.
+- Couture : 4 à 16 s de coupure par installation de waf-ng (16 s quand le drop-in impose un second redémarrage).
+- Biais trouvé : l'auto-test du WAF pose de vrais bans xss/lfi/sqli (exclu des mesures). Gitea en veille → 401 du réveil, voulu.
+
 ## 2026-11-26 — WAF Modes lisible (en revue)
 
 - **#3980 (ref #3980, PR ouverte, non déployé)** : waf-ng 1.52.0, page Modes en trois onglets pleine largeur (Catégories par famille
