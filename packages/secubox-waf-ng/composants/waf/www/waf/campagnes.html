@@ -12,7 +12,8 @@
     /campaigns  → signature, outil, attaquants[], nb_attaquants, sondes, haute_valeur, exemple_sequence[] ;
     /alerts     → recoupées par adresse pour dater, situer (cible, pays, catégories, gravité) chaque campagne ;
     /bans       → adresses effectivement bannies (nft) ;
-    /populations → populations d'attaquants sur 7 jours (#3919), en tête de page : cartes de cartes-campagnes.js, repères de reperes.js.
+    /populations → populations d'attaquants sur 7 jours (#3919), en tête de page : cartes de cartes-campagnes.js, repères de reperes.js ;
+                   profil déduit, lecture factuelle (règles de la box) et ruptures par couches (#4005) : profil-populations.js.
   Le corrélateur ne date ni ne situe ses campagnes : ces champs viennent du recoupement avec les alertes récentes et
   se disent « — » quand le recoupement ne trouve rien. Une mesure absente s'affiche « — », jamais 0.
   Bas de page (#3969) : frise bornée (12 lignes, tranches de 6 h tirées des alertes recoupées ; avant la plus ancienne alerte
@@ -158,6 +159,18 @@
   .campsans ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
   .campsans li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;border-bottom:1px solid var(--trait);padding-bottom:6px;font-size:.85rem;min-width:0}
   .campsans .seq{flex:1 1 260px;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,"IBM Plex Mono",monospace;color:var(--doux)} .campsans .inf{color:var(--doux);font-variant-numeric:tabular-nums}
+  /* Profil déduit et ruptures (#4005) : mêmes jetons que les cartes de populations ; mini-histogrammes. */
+  .prc ul.prlect{margin:0;padding-left:1.1em;display:grid;gap:3px} .prc ul.prlect li{overflow-wrap:anywhere}
+  .prhisto{width:84px;height:24px;fill:var(--bleu);flex:none}
+  .prgrille{display:grid;gap:8px 14px;grid-template-columns:minmax(0,1fr)} .prparts h4{margin:0 0 3px;font-size:.74rem;color:var(--doux);font-weight:500}
+  .prl{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) 3.2em;gap:6px;align-items:center;font-size:.74rem}
+  .prk{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,"IBM Plex Mono",monospace} .prv{text-align:right;font-variant-numeric:tabular-nums;color:var(--doux)}
+  .prb{display:block;height:6px;border-radius:3px;background:var(--trait);overflow:hidden} .prb span{display:block;height:100%;background:var(--cyan)}
+  .prtabz{overflow-x:auto;min-width:0} .prtab{border-collapse:collapse;width:100%;font-size:.76rem}
+  .prtab th,.prtab td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(86,150,255,.15);vertical-align:middle} .prtab th{color:var(--doux);font-weight:500}
+  .prtab td.n{text-align:right;font-variant-numeric:tabular-nums} .prtab td.o{overflow-wrap:anywhere}
+  .prh{color:var(--rouge);font-weight:600} .prba{color:var(--cyan);font-weight:600} .rcamp .puce.prec,.puce.prec{color:var(--orange);border:1px solid currentColor}
+  @container a (min-width:700px){.prgrille{grid-template-columns:repeat(3,minmax(0,1fr))}}
   body.emb .cadre{padding:2px}
   body.emb .tuiles{grid-template-columns:repeat(2,1fr) !important}
 </style>
@@ -170,6 +183,8 @@
   <div class="demo" id="session" hidden style="background:var(--cyan)">Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
   <section class="pops"><div><h2>Campagnes et populations</h2><div class="sous">7 derniers jours · triées par activité des dernières 24 h · lecture seule</div></div><div id="populations" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
+  <section class="pops"><div><h2>Profil déduit</h2><div class="sous">lecture factuelle produite par les règles de la box · chaque phrase porte son chiffre · aucune adresse</div></div><div id="profils" class="rcamp"><span class="popnr">Lecture du relevé…</span></div></section>
+  <section class="pops"><div><h2>Ruptures par couches</h2><div class="sous">1 h, 8 h, 1 j, 7 j contre la médiane des fenêtres précédentes · double lecture bans.jsonl / journal</div></div><div id="ruptures" class="prtabz"><span class="popnr">Lecture du relevé…</span></div></section>
   <div><h2>Campagnes d’attaque</h2><div class="sous">Des adresses différentes, un même mode opératoire : mêmes sondes, même outil, corrélés à travers le temps.</div></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="bas" id="bas">
@@ -187,6 +202,7 @@
 </div></div>
 <script src="reperes.js"></script>
 <script src="cartes-campagnes.js"></script>
+<script src="profil-populations.js"></script>
 <script>
 (function(){
   "use strict";
@@ -588,6 +604,7 @@
     if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
     var k=C.cle(r);if(k===POP_CLE){C.majAge(z,r);return;}
     POP_CLE=k;C.populations(document,R,z,r);
+    if(window.SbxProfil) window.SbxProfil.rendre(document,el('profils'),el('ruptures'),r);   // #4005
     POP_SER=indexPops(r);if(BAS) rendBas();   // #3969 : mini-séries des campagnes du profileur
   }
   function chargePops(force){

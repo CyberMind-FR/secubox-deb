@@ -1,3 +1,17 @@
+secubox-waf-ng (1.53.0-1~trixie1) trixie; urgency=medium
+
+  * Populations (ref #4005) : profil déduit de chaque population (empreinte
+    user-agent, méthodes, classes de pages, vhosts, retours après
+    relâchement) et lecture factuelle produite par règles, chaque phrase
+    adossée à un chiffre, jamais une adresse. Ruptures par couches (bans,
+    adresses, /24 et ASN neufs, alertes par famille et par vhost) sur 1 h,
+    8 h, 1 j et 7 j contre la médiane des fenêtres précédentes ; double
+    lecture bans.jsonl / journal avec indicateur d'écart. Même tâche de
+    fond, même cache en double tampon ; page des campagnes : profils et
+    tableau des ruptures avec mini-histogrammes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 06:10:00 +0100
+
 secubox-waf-ng (1.52.2-1~trixie1) trixie; urgency=medium
 
   * Réévaluation des bans (ref #4003) : une prolongation ne descend plus
