@@ -291,3 +291,14 @@ def test_bans_d_auto_test_ecartes_par_l_adresse(tmp_path, monkeypatch):
         {"ip": "198.51.100.77", "cat": "lfi", "at": MAINTENANT - 60 * k, "action": "ban"}) for k in range(300)) + "\n")
     b = F.lire_bans(str(tmp_path), MAINTENANT, {}, P.famille, P._adresse_publique)
     assert b.lisible and b.quarts == {} and b.premier == {}
+
+
+def test_double_lecture_ignore_bans_de_sbx_authwatch_4008():
+    """#4008 : les bans posés par sbx-authwatch (leurres de service, auth_) n'entrent pas dans bans.jsonl : jamais comptés côté journal."""
+    from api.populations import pose_par_sbxwaf
+    assert not pose_par_sbxwaf("leurre:telnet", "telnet")
+    assert not pose_par_sbxwaf("leurre:rdp", "")
+    assert not pose_par_sbxwaf("auth_ssh", "gk2")
+    assert pose_par_sbxwaf("leurre:unrouted", "exemple.secubox.in")
+    assert pose_par_sbxwaf("host_anomaly:unrouted", "exemple.fr")
+    assert pose_par_sbxwaf("xss", "hall.gk2.secubox.in")

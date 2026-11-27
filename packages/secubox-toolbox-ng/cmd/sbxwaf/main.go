@@ -888,7 +888,7 @@ func (s *Server) handler() http.Handler {
 					count, banned := s.ban.Record(ip, time.Now().Unix())
 					action := "warning"
 					if banned {
-						action = "banned"
+						action = s.actionBan(ip)
 					}
 
 					// Log threat (best-effort: nil threatLog is a no-op).
@@ -1132,6 +1132,14 @@ func (s *Server) fenetreCorps() int64 {
 // laissé à deviner (voir main()).
 //
 // duree : durée de la catégorie (#3732) ; 0 = durée globale (-nft-ban-duration).
+// actionBan rend l'action à journaliser pour un ban décidé : « banned », ou « epargne » quand la pose l'écartera (#4008).
+func (s *Server) actionBan(ip string) string {
+	if s.nftBan != nil && s.nftBan.Epargne(ip) != "" {
+		return "epargne"
+	}
+	return "banned"
+}
+
 func (s *Server) appliquerBan(ip, cat, sev string, duree time.Duration) {
 	if s.nftBan == nil {
 		return
@@ -1204,12 +1212,12 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 	case firstParty:
 		action = "detect" // notre domaine : jamais de ban (config à câbler, pas une attaque)
 	case cls.Strong:
-		action = "banned" // vide/IP/DGA : ban dès le premier coup
+		action = s.actionBan(ip) // vide/IP/DGA : ban dès le premier coup
 	case leurre != "" && s.leurreBan:
-		action = "banned" // le leurre n'est servi qu'à un extérieur sur un hôte non à nous : ban gradué (#2238)
+		action = s.actionBan(ip) // le leurre n'est servi qu'à un extérieur sur un hôte non à nous : ban gradué (#2238)
 	case s.ban != nil:
 		if _, banned := s.ban.Record(ip, time.Now().Unix()); banned {
-			action = "banned"
+			action = s.actionBan(ip)
 		} else {
 			action = "warning"
 		}
