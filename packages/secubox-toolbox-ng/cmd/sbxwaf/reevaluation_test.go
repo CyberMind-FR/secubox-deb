@@ -264,3 +264,24 @@ func (f *fauxNftMigration) run(_ context.Context, args ...string) ([]byte, error
 	}
 	return nil, nil
 }
+
+// #4003 : la prolongation ne descend jamais sous la durée de la catégorie, plafonnée à 7 j et au reste de la chaîne.
+func TestAvecPlancher4003(t *testing.T) {
+	h := time.Hour
+	d := avecPlancher(ReevalDecision{"EXTEND", 24 * h, "x"}, 168*h, 2*h)
+	if d.Duree != 168*h {
+		t.Fatalf("aspirateur_ua 168 h prolongé à %v", d.Duree)
+	}
+	if d := avecPlancher(ReevalDecision{"EXTEND", 24 * h, "x"}, 30*24*h, 0); d.Duree != plafondProlonge {
+		t.Fatalf("plafond 7 j non tenu : %v", d.Duree)
+	}
+	if d := avecPlancher(ReevalDecision{"EXTEND", 4 * h, "x"}, 168*h, plafondChaine-10*h); d.Duree != 10*h {
+		t.Fatalf("reste de chaîne non tenu : %v", d.Duree)
+	}
+	if d := avecPlancher(ReevalDecision{"RELEASE", 0, "x"}, 168*h, 0); d.Action != "RELEASE" || d.Duree != 0 {
+		t.Fatalf("un relâchement ne devient jamais un ban : %+v", d)
+	}
+	if d := avecPlancher(ReevalDecision{"EXTEND", 168 * h, "x"}, 24*h, 0); d.Duree != 168*h {
+		t.Fatalf("le plancher ne raccourcit jamais : %v", d.Duree)
+	}
+}

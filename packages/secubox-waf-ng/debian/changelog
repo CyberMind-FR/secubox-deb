@@ -1,3 +1,12 @@
+secubox-waf-ng (1.52.2-1~trixie1) trixie; urgency=medium
+
+  * Réévaluation des bans (ref #4003) : une prolongation ne descend plus
+    sous la durée configurée de la catégorie (ban_duree), plafonnée à 7 j et
+    à la chaîne de 30 j. aspirateur_ua (168 h) et les filtres IA critiques
+    étaient prolongés à 24 h par l'échelle générique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 05:24:53 +0100
+
 secubox-waf-ng (1.52.1-1~trixie1) trixie; urgency=medium
 
   * Leurres HTTP de sbxwaf (ref #3988) : ban de 24 h au premier contact,
