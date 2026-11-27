@@ -19,6 +19,7 @@ ExecStart=/usr/sbin/sbx-authwatch \
     --seuil 6 \
     --fenetre 10m \
     --duree-ban 4h \
+    --duree-ban-leurre 168h \
     --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche
 # #3924 : leurres de messagerie pendant l'arrêt du conteneur de courrier, ÉTEINTS tant que SBX_MAIL_CONTENEUR n'est pas
 # réglé dans /etc/default/secubox-authwatch (root, 0644 ou 0640) :

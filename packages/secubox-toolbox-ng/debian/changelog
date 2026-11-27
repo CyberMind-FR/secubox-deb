@@ -1,3 +1,11 @@
+secubox-toolbox-ng (0.22.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-authwatch : premier ban de leurre de service à 7 j
+    (--duree-ban-leurre 168h) au lieu de 24 h ; rapport IA accès distant :
+    76 retours sur 245 adresses relâchées, délai médian 6 j (ref #4027).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 27 Nov 2026 11:40:47 +0100
+
 secubox-toolbox-ng (0.22.1-1~trixie1) trixie; urgency=medium
 
   * reseau.Famille (ref #4020) : les étiquettes de la bibliothèque figée
