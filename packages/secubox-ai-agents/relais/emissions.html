@@ -1,0 +1,365 @@
+<!doctype html>
+<!--
+SPDX-License-Identifier: LicenseRef-CMSD-1.0
+Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+See LICENCE-CMSD-1.0.md for terms.
+Atelier des émissions (#4058) : onglet « Émissions » du relais IA de gk0. Aucun CDN ; tout texte venu de gk2 ou du
+LLM est posé par textContent. API : /api/v1/ai/emissions/* (relais, Host local seulement).
+-->
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atelier des émissions</title>
+<style>
+:root{--fond:#070d1a;--plan:#0e1a30;--plan2:#13223d;--trait:rgba(110,160,255,.18);--texte:#e8eefc;--doux:#9fb0d0;--faible:#6c7da0;
+  --cyan:#3fc1f2;--vert:#38d39f;--orange:#ffad42;--rouge:#ff5d6c;--violet:#a98bff;
+  --f-titre:Georgia,"Times New Roman",serif;--f-texte:"IBM Plex Sans",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(900px 420px at 80% -10%,rgba(63,193,242,.12),transparent 60%),var(--fond);color:var(--texte);font:14px/1.45 var(--f-texte)}
+.page{padding:18px 16px 40px;max-width:1440px;margin:0 auto;display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{font:600 1.7rem/1.1 var(--f-titre);margin:0}
+.sous{color:var(--doux);font-size:.85rem}
+.etat{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.pill{font:600 .7rem var(--f-mono);letter-spacing:.04em;border:1px solid var(--trait);border-radius:999px;padding:3px 10px;color:var(--doux);white-space:nowrap}
+.pill.ok{color:var(--vert);border-color:rgba(56,211,159,.5)}.pill.att{color:var(--orange);border-color:rgba(255,173,66,.5)}.pill.cy{color:var(--cyan);border-color:rgba(63,193,242,.5)}.pill.ko{color:var(--rouge);border-color:rgba(255,93,108,.5)}
+.grille{display:grid;gap:14px;grid-template-columns:minmax(0,290px) minmax(0,1fr) minmax(0,300px)}
+@media (max-width:1100px){.grille{grid-template-columns:1fr}}
+.pan{background:linear-gradient(160deg,var(--plan2),var(--plan));border:1px solid var(--trait);border-radius:14px;padding:14px;min-width:0;display:grid;gap:10px;align-content:start}
+.pan h2{font:600 .78rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faible);margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.src{border:1px solid var(--trait);border-radius:10px;padding:9px 10px;display:grid;gap:4px;cursor:pointer;background:rgba(8,16,32,.5)}
+.src:hover,.src:focus-visible{border-color:var(--cyan);outline:none}
+.src.on{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(63,193,242,.35)}
+.src .n{font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.src .n span{font:.72rem var(--f-mono);color:var(--doux)}
+.evo{font-size:.78rem;color:var(--doux)}.evo b{color:var(--texte);font-weight:600}
+.chaine{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+@media (max-width:700px){.chaine{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.et{border:1px solid var(--trait);border-radius:10px;padding:8px;display:grid;gap:3px;font-size:.74rem;background:rgba(8,16,32,.5)}
+.et b{font-size:.78rem}.et small{font:.68rem var(--f-mono);color:var(--faible)}
+.et.faite{border-color:rgba(56,211,159,.45)}.et.faite b::before{content:"✓ ";color:var(--vert)}
+.et.en_cours{border-color:var(--cyan);background:rgba(63,193,242,.08)}.et.en_cours b::before{content:"◐ ";color:var(--cyan)}
+.et.a_faire b::before{content:"○ ";color:var(--faible)}
+.et.erreur{border-color:var(--rouge)}.et.erreur b::before{content:"✗ ";color:var(--rouge)}
+.lecteur{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px}
+@media (max-width:800px){.lecteur{grid-template-columns:1fr}}
+.diapo{border:1px solid var(--trait);border-radius:12px;background:#050b17;aspect-ratio:16/10;position:relative;overflow:hidden;display:grid;place-items:center}
+.diapo img{max-width:100%;max-height:100%;object-fit:contain}
+.diapo .leg{position:absolute;left:10px;bottom:8px;font:.7rem var(--f-mono);color:var(--doux)}
+.timeline{display:flex;gap:3px;align-items:center}
+.timeline i{height:8px;flex:1;border-radius:2px;background:rgba(110,160,255,.2);cursor:pointer}
+.timeline i.a{background:var(--cyan)}.timeline i.b{background:var(--violet)}.timeline i.cur{outline:2px solid var(--texte)}
+audio{width:100%}
+.dial{display:grid;gap:6px;max-height:520px;overflow:auto;padding-right:4px}
+.rep{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start;padding:7px 8px;border-radius:8px;border:1px solid transparent}
+.rep.cur{border-color:var(--cyan);background:rgba(63,193,242,.07)}
+.rep .v{font:600 .68rem var(--f-mono);padding:2px 6px;border-radius:5px}
+.rep .v.a{color:#04131c;background:var(--cyan)}.rep .v.b{color:#120a26;background:var(--violet)}
+.rep p{margin:0}.rep textarea{width:100%;min-height:60px;background:#050b17;color:var(--texte);border:1px solid var(--cyan);border-radius:6px;font:inherit;padding:6px}
+.rep .motifs{font:.7rem var(--f-mono);color:var(--rouge);margin-top:3px}
+.rep .outils{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.rep .prop{border:1px dashed var(--vert);border-radius:6px;padding:6px;margin-top:4px;font-size:.85rem}
+.chip{font:.66rem var(--f-mono);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.chip.ok{color:var(--vert);background:rgba(56,211,159,.12)}.chip.att{color:var(--orange);background:rgba(255,173,66,.12)}.chip.ko{color:var(--rouge);background:rgba(255,93,108,.12)}.chip.img{color:var(--cyan);background:rgba(63,193,242,.12)}
+.rep.retiree{border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.06)}.rep.retiree p{color:var(--faible);text-decoration:line-through}
+.btn{font:600 .8rem var(--f-texte);border-radius:9px;border:1px solid var(--trait);background:rgba(8,16,32,.7);color:var(--texte);padding:8px 12px;cursor:pointer;min-height:36px}
+.btn.petit{min-height:26px;padding:3px 8px;font-size:.72rem}
+.btn:hover{border-color:var(--cyan)}.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.btn.prim{background:var(--vert);color:#03160e;border-color:var(--vert)}.btn.sec{border-color:rgba(63,193,242,.5)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.l{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;border-top:1px solid var(--trait);padding-top:6px}
+.l:first-child{border-top:0;padding-top:0}.l span:last-child{font-family:var(--f-mono)}
+.note{font-size:.74rem;color:var(--faible);margin:0}
+.actions{display:grid;gap:8px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font:.68rem var(--f-mono);text-align:center;color:var(--doux)}
+.cal div{border:1px solid var(--trait);border-radius:6px;padding:5px 0}.cal .x{border-color:var(--vert);color:var(--vert)}
+label{display:grid;gap:3px;font-size:.78rem;color:var(--doux)}
+input,select{background:#050b17;color:var(--texte);border:1px solid var(--trait);border-radius:6px;padding:5px 7px;font:inherit}
+.controle li{font:.72rem var(--f-mono);color:var(--rouge)}
+.cap{display:grid;gap:4px;border:1px solid var(--trait);border-radius:8px;padding:6px}.cap img{max-width:100%}
+.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--plan2);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;transition:.2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<div class="page">
+  <header>
+    <h1>Atelier des émissions</h1>
+    <span class="sous">Analyses de gk2 → dialogue vérifié → voix Voice Studio gk0 → diaporama synchronisé → billets, après votre validation</span>
+    <div class="etat"><span class="pill" id="pLlm">LLM …</span><span class="pill" id="pVoix">voix …</span><span class="pill" id="pFile">file …</span></div>
+  </header>
+  <div class="grille">
+    <section class="pan" aria-labelledby="hSrc">
+      <h2 id="hSrc">Sources <span class="pill">évolutions</span></h2>
+      <p class="note">Chaque fiche part des interprétations déjà validées et ne garde que ce qui a changé. Sélection multiple : une synthèse.</p>
+      <div id="sources"><p class="note">Chargement…</p></div>
+      <button class="btn sec" type="button" id="lancer" disabled>Lancer une émission sur la sélection</button>
+      <h2>Brouillons</h2>
+      <select id="brouillons" aria-label="Brouillon affiché"></select>
+    </section>
+
+    <section class="pan" aria-labelledby="hBr">
+      <h2 id="hBr"><span id="titre">Aucun brouillon</span> <span class="pill cy" id="fmt"></span></h2>
+      <div class="chaine" id="chaine" aria-label="Étapes de la chaîne"></div>
+      <p class="note" id="erreur" hidden></p>
+      <div class="lecteur">
+        <div style="display:grid;gap:8px;min-width:0">
+          <div class="diapo" id="diapo" role="img" aria-label="Diapositive de la réplique en cours"><img id="img" alt="" hidden><span class="leg" id="leg">diaporama : après le montage</span></div>
+          <div class="timeline" id="timeline" aria-label="Diapositives sur la durée de l'émission"></div>
+          <audio id="audio" controls preload="none"></audio>
+          <p class="note">La diapo suit la réplique en cours (chronologie du montage).</p>
+        </div>
+        <div class="dial" id="dial" aria-label="Dialogue vérifié"></div>
+      </div>
+    </section>
+
+    <section class="pan" aria-labelledby="hVal">
+      <h2 id="hVal">Votre validation</h2>
+      <div>
+        <div class="l"><span>Répliques vérifiées</span><span id="nOk">—</span></div>
+        <div class="l"><span>À relire (lecture IA seule)</span><span id="nAtt" style="color:var(--orange)">—</span></div>
+        <div class="l"><span>Retirées par le contrôle (jamais dites)</span><span id="nKo" style="color:var(--rouge)">—</span></div>
+        <div class="l"><span>Diapos · captures validées</span><span id="nDia">—</span></div>
+        <div class="l"><span>Balayage final (adresses, noms, jetons)</span><span id="nBal">—</span></div>
+      </div>
+      <ul class="controle" id="controle"></ul>
+      <p class="note">Rien n'est publié sans votre clic. Modifier une réplique ne refait que sa voix.</p>
+      <div class="actions">
+        <label>Titre<input id="eTitre" maxlength="140"></label>
+        <label>Chapeau<input id="eChapeau" maxlength="400"></label>
+        <button class="btn" type="button" id="bEntete">Enregistrer titre et chapeau</button>
+        <details><summary class="btn">＋ Ajouter une capture d'admin</summary>
+          <label>Page (liste blanche)<input id="cUrl" placeholder="http://127.0.0.1:…/"></label>
+          <label>Zone (sélecteur CSS, facultatif)<input id="cZone"></label>
+          <label>Sur la réplique n°<input id="cRang" type="number" min="0"></label>
+          <button class="btn" type="button" id="bCapture">Capturer et masquer</button>
+        </details>
+        <div id="captures"></div>
+        <button class="btn" type="button" id="mp4" disabled>Générer la vidéo MP4</button>
+        <button class="btn prim" type="button" id="publier" disabled>Publier sur les billets</button>
+        <p class="note" id="pourquoi">Publier : brouillon prêt, balayage vide et captures validées requis.</p>
+      </div>
+      <h2>Rythme hebdomadaire</h2>
+      <div class="cal" aria-label="Brouillons préparés chaque lundi 06:00"><div class="x">lun</div><div>mar</div><div>mer</div><div>jeu</div><div>ven</div><div>sam</div><div>dim</div></div>
+      <p class="note">Lundi 06:00 : une synthèse, puis une émission par sujet au-dessus du seuil. Brouillons seulement.</p>
+      <label>Seuil (évolutions marquantes)<input id="rSeuil" type="number" min="1" max="50"></label>
+      <label>Écart marquant d'un chiffre (%)<input id="rEcart" type="number" min="1" max="500"></label>
+      <label>Voix 1<input id="rVoix1" maxlength="40"></label>
+      <label>Voix 2<input id="rVoix2" maxlength="40"></label>
+      <label>Rétention des MP4 (jours)<input id="rMp4" type="number" min="1" max="365"></label>
+      <label><span><input id="rGpu" type="checkbox"> voix sur GPU (suspend Gemma pendant la voix)</span></label>
+      <button class="btn" type="button" id="bReglages">Enregistrer les réglages</button>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script>
+(function () {
+  'use strict';
+  var API = '/api/v1/ai/emissions';
+  var ETAPES = [['faits', 'Faits', 'dossiers gk2'], ['evolutions', 'Évolutions', 'vs lectures validées'], ['consigne', 'Consigne', 'plan 7 parties'],
+    ['dialogue', 'Dialogue', 'répliques'], ['verification', 'Vérif', '✓ ⚠ ✗'], ['voix', 'Voix', 'Voice Studio'], ['montage', 'Montage', 'diapo + MP3']];
+  var MARQUES = { verifiee: ['ok', '✓ vérifiée'], ia_seule: ['att', '⚠ lecture IA seule'], retiree: ['ko', '✗ retirée'] };
+  var choix = {}, courant = null, ETAT = null, CONTROLE = null, minuterie = null, edition = null;
+  function $(i) { return document.getElementById(i); }
+  function el(t, c, x) { var e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
+  function vider(e) { while (e.firstChild) e.removeChild(e.firstChild); }
+  function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(e.h); e.h = setTimeout(function () { e.classList.remove('on'); }, 3200); }
+  function api(chemin, methode, corps) {
+    var o = { method: methode || 'GET', headers: {} };
+    if (corps !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API + chemin, o).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) {
+      if (!r.ok) { var m = d.detail; throw new Error(typeof m === 'string' ? m : (m && m.message) || ('Erreur ' + r.status)); } return d; }); });
+  }
+  function fichier(nom) { return API + '/' + encodeURIComponent(courant) + '/fichier/' + nom.split('/').map(encodeURIComponent).join('/'); }
+
+  // ---- état du service ----
+  function chargerEtat() {
+    api('/etat').then(function (s) {
+      $('pLlm').textContent = s.llm_pret ? 'LLM gk0 prêt' : 'LLM arrêté'; $('pLlm').className = 'pill ' + (s.llm_pret ? 'ok' : 'ko');
+      $('pVoix').textContent = s.voix_en_cours ? 'GPU : voix (Gemma suspendu)' : (s.voix_gpu ? 'voix : GPU' : 'voix : CPU, Gemma actif'); $('pVoix').className = 'pill ' + (s.voix_en_cours ? 'cy' : '');
+      var n = s.attente.length + (s.en_cours ? 1 : 0); $('pFile').textContent = n ? n + ' en production' : 'file vide'; $('pFile').className = 'pill ' + (n ? 'att' : 'ok');
+    }).catch(function () { $('pLlm').textContent = 'service arrêté'; $('pLlm').className = 'pill ko'; });
+  }
+
+  // ---- sources ----
+  function chargerSources() {
+    api('/sources').then(function (r) {
+      var z = $('sources'); vider(z);
+      if (!r.sujets.length) z.appendChild(el('p', 'note', 'Aucun sujet : gk2 n\'a pas encore de relevé.'));
+      r.sujets.forEach(function (s) {
+        var c = el('div', 'src' + (choix[s.cle] ? ' on' : '')); c.tabIndex = 0; c.setAttribute('role', 'checkbox'); c.setAttribute('aria-checked', choix[s.cle] ? 'true' : 'false');
+        var n = el('div', 'n', s.nom || s.id); n.appendChild(el('span', '', (s.bans_90j != null ? Number(s.bans_90j).toLocaleString('fr-FR') + ' bans' : s.genre)));
+        c.appendChild(n);
+        var e = el('div', 'evo'); e.appendChild(el('b', '', s.evolutions ? s.evolutions + ' évolution' + (s.evolutions > 1 ? 's' : '') : 'Stable'));
+        e.appendChild(document.createTextNode(' · ' + s.genre + (s.vagues != null ? ' · ' + s.vagues + ' vague(s)' : '') + (s.recurrences ? ' · ' + s.recurrences + ' retour(s)' : '')));
+        c.appendChild(e);
+        function basculer() { if (choix[s.cle]) delete choix[s.cle]; else choix[s.cle] = true; c.classList.toggle('on'); c.setAttribute('aria-checked', choix[s.cle] ? 'true' : 'false'); $('lancer').disabled = !Object.keys(choix).length; }
+        c.addEventListener('click', basculer);
+        c.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); basculer(); } });
+        z.appendChild(c);
+      });
+    }).catch(function (e) { var z = $('sources'); vider(z); z.appendChild(el('p', 'note', 'Sources indisponibles : ' + e.message)); });
+  }
+  $('lancer').addEventListener('click', function () {
+    var s = Object.keys(choix);
+    api('/produire', 'POST', { sources: s, format: s.length > 1 ? 'synthese' : 'sujet' }).then(function (r) { toast('Brouillon mis en file.'); courant = r.id; chargerBrouillons(); })
+      .catch(function (e) { toast(e.message); });
+  });
+
+  // ---- brouillons ----
+  function chargerBrouillons() {
+    api('/brouillons').then(function (r) {
+      var s = $('brouillons'); vider(s);
+      r.brouillons.forEach(function (b) { var o = el('option', '', (b.titre || b.id) + ' · ' + b.statut); o.value = b.id; s.appendChild(o); });
+      if (!courant && r.brouillons.length) courant = r.brouillons[0].id;
+      if (courant) { s.value = courant; chargerBrouillon(); }
+    }).catch(function () { /* service arrêté : l'en-tête le dit */ });
+  }
+  $('brouillons').addEventListener('change', function () { courant = this.value; edition = null; chargerBrouillon(); });
+
+  function chargerBrouillon() {
+    if (!courant) return;
+    api('/' + encodeURIComponent(courant)).then(function (e) {
+      var change = !ETAT || ETAT.id !== e.id || ETAT.maj_le !== e.maj_le; ETAT = e;
+      if (change) rendre();
+      if (e.statut === 'pret') controler(); else { CONTROLE = null; rendreValidation(); }
+      clearTimeout(minuterie); if (e.statut === 'en_cours' || e.statut === 'en_file') minuterie = setTimeout(chargerBrouillon, 3000);
+    }).catch(function (x) { toast(x.message); });
+  }
+  function controler() { api('/' + encodeURIComponent(courant) + '/controle').then(function (c) { CONTROLE = c; rendreValidation(); }).catch(function () { CONTROLE = null; rendreValidation(); }); }
+
+  function rendre() {
+    var e = ETAT; $('titre').textContent = 'Brouillon · « ' + (e.titre || e.id) + ' »'; $('fmt').textContent = e.format + ' · ' + e.statut;
+    if (document.activeElement !== $('eTitre')) $('eTitre').value = e.titre || '';
+    if (document.activeElement !== $('eChapeau')) $('eChapeau').value = e.chapeau || '';
+    var ch = $('chaine'); vider(ch);
+    var v = e.verification || {};
+    ETAPES.forEach(function (t, i) {
+      var st = (e.etapes[i] || {}).etat || 'a_faire', d = el('div', 'et ' + st); d.appendChild(el('b', '', t[1]));
+      var info = t[2]; if (t[0] === 'dialogue' && e.repliques.length) info = e.repliques.length + ' répliques';
+      if (t[0] === 'verification' && st === 'faite') info = (v.verifiee || 0) + ' ✓ · ' + (v.ia_seule || 0) + ' ⚠ · ' + (v.retiree || 0) + ' ✗';
+      d.appendChild(el('small', '', info)); ch.appendChild(d);
+    });
+    $('erreur').hidden = !e.erreur; $('erreur').textContent = e.erreur ? 'Arrêt : ' + e.erreur : '';
+    rendreDialogue(); rendreLecteur();
+  }
+
+  function rendreDialogue() {
+    var z = $('dial'); vider(z);
+    ETAT.repliques.forEach(function (r) {
+      var l = el('div', 'rep' + (r.statut === 'retiree' ? ' retiree' : '')); l.dataset.rang = r.rang;
+      l.appendChild(el('span', 'v ' + (r.voix === 2 ? 'b' : 'a'), 'V' + r.voix));
+      var corps = el('div');
+      if (edition === r.rang) {
+        var ta = el('textarea'); ta.value = r.texte; ta.maxLength = 2000; corps.appendChild(ta);
+        var o = el('div', 'outils'), ok = el('button', 'btn petit prim', 'Revérifier et refaire sa voix'), an = el('button', 'btn petit', 'Annuler'); ok.type = an.type = 'button';
+        ok.addEventListener('click', function () { appliquer(r.rang, ta.value); }); an.addEventListener('click', function () { edition = null; rendreDialogue(); });
+        o.appendChild(ok); o.appendChild(an); corps.appendChild(o);
+      } else {
+        corps.appendChild(el('p', '', r.texte));
+        if (r.motifs && r.motifs.length && r.statut !== 'verifiee') corps.appendChild(el('div', 'motifs', r.motifs.join(' · ')));
+        var outils = el('div', 'outils'), m = el('button', 'btn petit', 'Modifier'); m.type = 'button';
+        m.addEventListener('click', function () { edition = r.rang; rendreDialogue(); }); outils.appendChild(m);
+        if (r.statut === 'retiree' || r.statut === 'ia_seule') {
+          var re = el('button', 'btn petit sec', 'Réécrire cette réplique'); re.type = 'button';
+          re.addEventListener('click', function () { reecrire(r.rang, corps, re); }); outils.appendChild(re);
+        }
+        corps.appendChild(outils);
+      }
+      l.appendChild(corps);
+      var mq = MARQUES[r.statut]; var droite = el('div'); droite.style.display = 'grid'; droite.style.gap = '3px';
+      if (mq) droite.appendChild(el('span', 'chip ' + mq[0], mq[1]));
+      var g = (ETAT.diapos || {})[String(r.rang)]; if (g && r.statut !== 'retiree') droite.appendChild(el('span', 'chip img', '📊 ' + g));
+      l.appendChild(droite); z.appendChild(l);
+    });
+  }
+  function appliquer(rang, texte) {
+    api('/' + encodeURIComponent(courant) + '/replique/' + rang, 'POST', { texte: texte }).then(function (r) {
+      edition = null; toast('Réplique ' + (MARQUES[r.statut] || ['', r.statut])[1] + ' ; seule sa voix est refaite.'); ETAT = null; chargerBrouillon(); chargerBrouillons();
+    }).catch(function (e) { toast(e.message); });
+  }
+  function reecrire(rang, corps, bouton) {
+    bouton.disabled = true; bouton.textContent = 'Réécriture…';
+    api('/' + encodeURIComponent(courant) + '/replique/' + rang + '/reecrire', 'POST').then(function (p) {
+      var b = el('div', 'prop'); b.appendChild(el('div', '', 'Proposition (' + (MARQUES[p.statut] || ['', p.statut])[1] + ') :'));
+      b.appendChild(el('p', '', p.texte)); if (p.motifs && p.motifs.length) b.appendChild(el('div', 'motifs', p.motifs.join(' · ')));
+      var o = el('div', 'outils'), a = el('button', 'btn petit prim', 'Accepter'), n = el('button', 'btn petit', 'Écarter'); a.type = n.type = 'button';
+      a.addEventListener('click', function () { appliquer(rang, p.texte); }); n.addEventListener('click', function () { b.remove(); });
+      o.appendChild(a); o.appendChild(n); b.appendChild(o); corps.appendChild(b); bouton.textContent = 'Réécrire cette réplique'; bouton.disabled = false;
+    }).catch(function (e) { toast(e.message); bouton.textContent = 'Réécrire cette réplique'; bouton.disabled = false; });
+  }
+
+  // ---- lecteur : diapo synchronisée sur la chronologie (même logique que les billets) ----
+  function rendreLecteur() {
+    var chrono = ETAT.chronologie || [], imgs = ETAT.images || [], a = $('audio'), t = $('timeline'); vider(t);
+    if (!chrono.length || ETAT.statut !== 'pret') { a.removeAttribute('src'); $('img').hidden = true; $('leg').textContent = 'diaporama : après le montage'; return; }
+    a.src = fichier('emission.mp3');
+    chrono.forEach(function (c, k) { var i = el('i', k % 2 ? 'b' : 'a'); i.title = c.replique; i.addEventListener('click', function () { a.currentTime = c.debut_s; a.play(); }); t.appendChild(i); });
+    montrer(0);
+  }
+  var dernier = -1;
+  function montrer(k) {
+    var c = (ETAT.chronologie || [])[k]; if (!c || k === dernier) return; dernier = k;
+    var src = (ETAT.images || [])[c.diapo]; if (src) { $('img').src = fichier(src); $('img').hidden = false; }
+    $('leg').textContent = 'diapo ' + (c.diapo + 1) + '/' + (ETAT.images || []).length + ' · sans adresse IP';
+    Array.prototype.forEach.call($('timeline').children, function (i, n) { i.classList.toggle('cur', n === k); });
+    var reps = ETAT.repliques.filter(function (r) { return r.statut !== 'retiree'; }), r = reps[k];
+    Array.prototype.forEach.call($('dial').children, function (l) { l.classList.toggle('cur', r && String(r.rang) === l.dataset.rang); });
+  }
+  $('audio').addEventListener('timeupdate', function () {
+    var t = this.currentTime, ch = (ETAT && ETAT.chronologie) || [], k = 0;
+    for (var i = 0; i < ch.length; i++) if (ch[i].debut_s <= t) k = i;
+    montrer(k);
+  });
+
+  // ---- validation ----
+  function rendreValidation() {
+    var e = ETAT; if (!e) return; var v = e.verification || {};
+    $('nOk').textContent = (v.verifiee || 0) + ' / ' + e.repliques.length; $('nAtt').textContent = v.ia_seule || 0; $('nKo').textContent = v.retiree || 0;
+    var caps = e.captures || {}, ids = Object.keys(caps), valid = ids.filter(function (i) { return caps[i].etat === 'validee'; });
+    $('nDia').textContent = (e.images || []).length + ' · ' + valid.length;
+    var ul = $('controle'); vider(ul);
+    if (CONTROLE) { $('nBal').textContent = CONTROLE.motifs.length ? CONTROLE.motifs.length + ' motif(s)' : '0 — publiable'; $('nBal').style.color = CONTROLE.motifs.length ? 'var(--rouge)' : 'var(--vert)';
+      CONTROLE.motifs.forEach(function (m) { ul.appendChild(el('li', '', m.motif + ' — ' + m.ou)); }); }
+    else { $('nBal').textContent = '—'; $('nBal').style.color = ''; }
+    var z = $('captures'); vider(z);
+    ids.forEach(function (i) {
+      var c = caps[i], b = el('div', 'cap'); var im = el('img'); im.alt = 'capture ' + i; im.src = fichier('captures/' + c.png); b.appendChild(im);
+      b.appendChild(el('span', 'chip ' + (c.etat === 'validee' ? 'ok' : c.etat === 'refusee' || c.etat === 'rejetee' ? 'ko' : 'att'), c.etat + ' · ' + c.masques + ' zone(s) masquée(s)'));
+      (c.controle || []).forEach(function (m) { b.appendChild(el('div', 'motifs', m.motif + ' — ' + m.ou)); });
+      if (c.etat === 'a_valider') { var o = el('div', 'outils'), a = el('button', 'btn petit prim', 'Floutage correct : valider'), n = el('button', 'btn petit', 'Rejeter'); a.type = n.type = 'button';
+        a.addEventListener('click', function () { valider(i, true); }); n.addEventListener('click', function () { valider(i, false); }); o.appendChild(a); o.appendChild(n); b.appendChild(o); }
+      z.appendChild(b);
+    });
+    var enAttente = ids.some(function (i) { return caps[i].etat === 'a_valider'; });
+    var ok = e.statut === 'pret' && CONTROLE && !CONTROLE.motifs.length && !enAttente;
+    $('publier').disabled = !ok; $('mp4').disabled = e.statut !== 'pret';
+    $('pourquoi').textContent = e.statut === 'publie' ? 'Publié.' : ok ? 'Prêt : la publication attend votre clic.' :
+      'Publier : ' + (e.statut !== 'pret' ? 'production non terminée' : !CONTROLE ? 'balayage en cours' : CONTROLE.motifs.length ? 'le balayage a trouvé des motifs' : 'captures à valider');
+  }
+  function valider(cid, accord) { api('/' + encodeURIComponent(courant) + '/capture/' + encodeURIComponent(cid) + '/valider', 'POST', { accord: accord }).then(function () { ETAT = null; chargerBrouillon(); }).catch(function (e) { toast(e.message); }); }
+  $('bCapture').addEventListener('click', function () {
+    var rang = $('cRang').value === '' ? null : Number($('cRang').value);
+    api('/' + encodeURIComponent(courant) + '/capture', 'POST', { url: $('cUrl').value.trim(), zone: $('cZone').value.trim() || null, rang: rang })
+      .then(function (c) { toast(c.etat === 'refusee' ? 'Capture refusée par le contrôle : non publiable.' : 'Capture à valider visuellement.'); ETAT = null; chargerBrouillon(); })
+      .catch(function (e) { toast(e.message); });
+  });
+  $('bEntete').addEventListener('click', function () { api('/' + encodeURIComponent(courant) + '/entete', 'POST', { titre: $('eTitre').value, chapeau: $('eChapeau').value }).then(function () { toast('Titre enregistré.'); ETAT = null; chargerBrouillon(); }).catch(function (e) { toast(e.message); }); });
+  $('mp4').addEventListener('click', function () { api('/' + encodeURIComponent(courant) + '/mp4', 'POST').then(function () { toast('Vidéo MP4 mise en file.'); }).catch(function (e) { toast(e.message); }); });
+  $('publier').addEventListener('click', function () {
+    if (!window.confirm('Publier sur les billets (public, Internet) ?')) return;
+    $('publier').disabled = true;
+    api('/' + encodeURIComponent(courant) + '/publier', 'POST').then(function (r) { toast('Publié : ' + (r.url || r.billet)); ETAT = null; chargerBrouillon(); chargerBrouillons(); })
+      .catch(function (e) { toast('Refusé : ' + e.message); controler(); });
+  });
+
+  // ---- réglages ----
+  function chargerReglages() { api('/reglages').then(function (r) { $('rSeuil').value = r.seuil; $('rEcart').value = Math.round(r.ecart * 100); $('rVoix1').value = r.voix1; $('rVoix2').value = r.voix2; $('rMp4').value = r.mp4_jours; $('rGpu').checked = !!r.voix_gpu; }).catch(function () {}); }
+  $('bReglages').addEventListener('click', function () {
+    api('/reglages', 'POST', { seuil: Number($('rSeuil').value), ecart: Number($('rEcart').value) / 100, voix1: $('rVoix1').value.trim(), voix2: $('rVoix2').value.trim(), mp4_jours: Number($('rMp4').value), voix_gpu: $('rGpu').checked })
+      .then(function () { toast('Réglages enregistrés.'); chargerEtat(); }).catch(function (e) { toast(e.message); });
+  });
+
+  chargerEtat(); chargerSources(); chargerBrouillons(); chargerReglages();
+  setInterval(function () { if (!document.hidden) chargerEtat(); }, 10000);
+})();
+</script>
+</body></html>

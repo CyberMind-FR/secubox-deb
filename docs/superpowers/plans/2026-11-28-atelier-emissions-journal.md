@@ -143,3 +143,65 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 11** — Note : tests sur de VRAIS MP3 produits par ffmpeg (sinus), MP4 vérifié par ffprobe ; ffmpeg 7 de gk0
   avec libmp3lame et libx264. Suite du paquet : 62 réussis, 4 sautés (`test_voix_4000::test_transcription_reelle`
   instable : un échec puis une réussite au rejeu, hors #4058).
+
+## Vague 4
+
+- **Task 14** — Décision : voix = Voice Studio LOCAL de gk0 (`voicestudio-worker`, `http://127.0.0.1:3910`, réglage
+  `voix_url`) et plus le tunnel 7443 vers gk3 ; clé du worker FACULTATIVE (fichier absent → aucun en-tête : le worker
+  n'exige pas de clé sur la boucle locale) — décision du propriétaire du 28/11 — coût si faux : poser
+  `~/.config/secubox-ai-jeton/voicestudio`.
+- **Task 14** — Décision : suspension de Gemma conditionnelle au réglage `voix_gpu` (défaut `false`, CUDA en panne) ;
+  `gpu.SansSuspension` (aucun verrou, relais disponible) sinon `par_relais()` ; mécanisme gardé intact — coût si faux :
+  contention GPU si quelqu'un passe la voix sur CUDA sans basculer le réglage.
+- **Task 14** — Décision : réseau de l'unité = boucle locale + adresses de `admin.gk2.secubox.in` et
+  `billets.gk2.secubox.in` résolues à l'installation (drop-in `reseau.conf`), pas « 127.0.0.1 seul » comme le plan —
+  parce qu'il n'existe pas de tunnel vers l'API de gk2 : le relais lui-même lit gk2 en HTTPS public — coût si faux :
+  relancer l'installateur si l'adresse publique de gk2 change (sinon gk2 injoignable, rien d'autre).
+- **Task 14** — Décision : le service tourne sur le venv du dépôt (celui du relais : fastapi, httpx, uvicorn,
+  playwright), code copié par `installer-emissions.sh` dans `~/.local/lib/secubox-ai-emissions/src` — parce que
+  `/opt/secubox-ai-agents/venv` est à root et n'a pas playwright (pas de sudo) ; `secubox-ai-agents-construire` copie
+  aussi `emissions/` pour la suite — coût si faux : nul.
+- **Task 14** — Décision : jeton local = le même que `secubox-ai-agents` (`~/.config/secubox-ai-jeton/jeton`), garde
+  recopiée (pas d'import de `agents/`) — coût si faux : nul.
+- **Task 14** — Décision : synthèse à plusieurs sujets → chaque réplique garde le MEILLEUR verdict contre l'un des
+  dossiers ; graphiques préfixés `s<k>-` ; titre/chapeau automatiques, modifiables (`POST {id}/entete`, route ajoutée) ;
+  `POST {id}/replique/{rang}/reecrire` ajoutée (Gemma invente des chiffres : proposition vérifiée, appliquée seulement
+  par le propriétaire) ; captures validées posées sur une réplique (`rang`) → elles entrent au diaporama, seul le montage
+  est refait.
+- **Task 14** — Décision : « client non local » → c'est le `local` du relais qui répond (404 dans le relais réel, 403
+  dans le test qui le simule) ; le relais ne touche ni au relais en marche ni à poc-llama : branchement par
+  `installer-emissions.sh` (2 lignes en fin de relais.py, onglet « Émissions » après « Filtres WAF » dans
+  `index.html` = entrée `['emissions', 'Émissions']` dans `ONGLETS` + `<section data-o="emissions">` contenant une
+  iframe `/emissions`, sauvegardes `.avant-emissions`) — NON exécuté, à lancer par le propriétaire.
+- **Task 14** — Note : `lecture-gk2` (jeton de lecture des dossiers) ABSENT de `~/.config/secubox-ai-jeton/` sur gk0 :
+  sans lui, `GET sources` répond 502. Chromium par Playwright sous le durcissement de l'unité (ProtectHome=read-only,
+  sans PrivateUsers) non essayé.
+- **Task 15** — Décision : page fidèle à la maquette (trois colonnes, chaîne 7 étapes, lecteur + diapo synchronisée,
+  dialogue, validation, rythme hebdo) mais SANS Google Fonts (aucun CDN : polices système en repli) ; ✗ sur fond rouge
+  avec leurs motifs, boutons « Modifier » et « Réécrire cette réplique » (proposition vérifiée → Accepter/Écarter) ;
+  « Publier » désactivé tant que le brouillon n'est pas prêt, que `GET {id}/controle` (balayage, Task 17) n'est pas vide
+  ou qu'une capture attend sa validation ; aucun `innerHTML` (textes de gk2 et du LLM par textContent) — coût si faux : nul.
+- **Task 15** — Décision : l'onglet « Émissions » de la barre du relais = iframe `/emissions` (même origine, Host local)
+  ajoutée par l'installateur, plutôt qu'une copie du panneau dans `index.html` (fichier vivant du POC, hors dépôt) —
+  coût si faux : une hauteur d'iframe fixe (calc(100vh − 140px)).
+- **Task 16** — Décision : l'hebdo parle au SERVICE (socket Unix + jeton local) : `GET /reglages`, `GET /evolutions`
+  (évolutions complètes, chaque dossier relu), puis `POST /produire` par entrée du plan ; la file fait passer la synthèse
+  d'abord et une production à la fois ; sujet « changé » = au moins une évolution ; seuil = nombre d'évolutions
+  marquantes (défaut 3), écart d'un chiffre marquant = réglage `ecart` (défaut 25 %, passé à `evolutions`) — coût si
+  faux : nul. L'unité hebdo n'a que AF_UNIX, aucun chemin vers `/publier` (vérifié par le test sur le source).
+- **Task 16** — Décision : la rétention `mp4_jours` purge les MP4 LOCAUX des brouillons à chaque passage hebdo ; la
+  rétention des MP4 publiés reste celle des billets sur gk2 (`secubox-billets-purge-mp4.timer`) — coût si faux : nul.
+- **Task 17** — Décision : `publier(brouillon, billets, jeton, *, client=None, ocr=None, noms_internes=None,
+  magasin=None)` ; ordre : billet `draft` → MP3 → PNG dans l'ordre de `images` (rang `diapo`) → MP4 s'il existe → `PUT`
+  chronologie + `published` ; un échec après création SUPPRIME le billet distant et laisse le brouillon `pret` ; corps =
+  `## titre` + chapeau (le lecteur audio vient du diaporama des billets, pas d'une référence dans le corps) — coût si
+  faux : nul.
+- **Task 17** — Décision : balayage final = titre, chapeau, corps, répliques DITES, textes de la chronologie, toutes les
+  images (OCR) ; s'ajoutent `non_pret`, `montage_absent`, `capture_non_validee` ; `GET {id}/controle` rend le même
+  résultat à blanc pour le panneau ; refus = 409 `{"message", "motifs"}`, aucune requête vers les billets — coût si
+  faux : nul.
+- **Task 17** — Décision : au succès, `Magasin.retenir` de CHAQUE sujet du brouillon avec les répliques dites
+  (`ia_seule` → `hypothese`) — pour une synthèse, les phrases d'un sujet sont aussi rangées sous les autres (pas
+  d'attribution par sujet) — coût si faux : lectures évolutives d'une synthèse un peu bavardes ; à affiner en attribuant
+  chaque réplique au dossier qui l'a vérifiée.
+- **Task 17** — Note : testé contre un FAUX serveur billets (httpx MockTransport) ; jamais contre billets.gk2.

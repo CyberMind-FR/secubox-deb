@@ -149,3 +149,32 @@ def test_voix_reglables_et_validation(banc):
     assert (c.arrets, c.relances) == (1, 1)                                     # validation AVANT le verrou
     with contextlib.suppress(FileNotFoundError):
         assert not verrou.fichier.exists()
+
+
+def test_voix_cpu_ne_suspend_pas_gemma(banc, tmp_path):
+    """voix_gpu = false (CUDA en panne) : aucun verrou posé, Gemma jamais arrêté ; voix_gpu = true : le verrou réel."""
+    from emissions import gpu
+    br, c, verrou, worker, moteur = banc
+    v = gpu.selon_reglage(False, tmp_path / "v.verrou")
+
+    async def go():
+        async with worker:
+            return await dire_tout(br, REPLIQUES, moteur=moteur, verrou=v)
+    assert len(asyncio.run(go())) == 3
+    assert not (tmp_path / "v.verrou").exists() and (c.arrets, c.relances) == (0, 0)
+    assert isinstance(gpu.selon_reglage(True, tmp_path / "v.verrou"), VerrouGPU)
+    assert asyncio.run(v.reparer()) is False
+
+
+def test_cle_absente_aucun_entete(tmp_path):
+    """Le Voice Studio local de gk0 (127.0.0.1:3910) ne demande pas de clé : fichier absent → pas d'en-tête."""
+    from emissions.voix import WORKER, cle_fichier
+    assert WORKER.endswith(":3910") or WORKER.startswith("http")
+    worker = FauxWorker(tmp_path / "w.sock")
+    m = MoteurVoix("http://worker", cle=cle_fichier(tmp_path / "absente"), uds=str(tmp_path / "w.sock"))
+
+    async def go():
+        async with worker:
+            return await m.dire("Bonjour.", "nova")
+    assert asyncio.run(go()).startswith(b"ID3")
+    assert worker.requetes[0]["auth"] is None

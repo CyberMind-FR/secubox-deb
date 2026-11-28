@@ -63,6 +63,8 @@ fi
 rm -rf "$neuf/agents-src"
 install -d "$neuf/agents-src"
 cp -r "$paquet/agents" "$neuf/agents-src/"
+# Atelier des émissions (#4058) : livré avec le code des agents (sur gk0, installer-emissions.sh l installe sans root).
+cp -r "$paquet/emissions" "$neuf/agents-src/"
 find "$neuf" -name __pycache__ -type d -prune -exec rm -rf {} +
 "$neuf/bin/python" -I -m compileall -q "$neuf/agents-src" "$site" >/dev/null
 # Pont SearXNG (#3990) : bibliothèque standard, lancé par /usr/bin/python3 -I ; hors du venv.
