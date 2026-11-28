@@ -539,7 +539,7 @@ def test_service_root_durci_et_exception_ecrite():
     u = _unite("secubox-dns-listes.service")
     for cle, val in {"NoNewPrivileges": "yes", "ProtectSystem": "strict", "ProtectHome": "yes", "PrivateTmp": "yes",
                      "ProtectKernelTunables": "yes", "ProtectControlGroups": "yes", "RestrictSUIDSGID": "yes",
-                     "LockPersonality": "yes", "Type": "oneshot", "Nice": "10", "IOSchedulingClass": "idle",
+                     "LockPersonality": "yes", "Type": "oneshot", "Nice": "19", "IOSchedulingClass": "idle",
                      "ProtectKernelModules": "yes", "ProtectKernelLogs": "yes", "RestrictNamespaces": "yes",
                      "RestrictRealtime": "yes", "SystemCallArchitectures": "native", "UMask": "0027",
                      "CapabilityBoundingSet": "CAP_DAC_OVERRIDE", "IPAddressDeny": "any", "IPAddressAllow": "localhost",
