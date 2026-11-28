@@ -34,6 +34,15 @@ Socket Unix : `/run/secubox/aggregator.sock`.
 
 4 fichier(s) de test. Lancer : `python3 -m pytest packages/secubox-ytsas`.
 
+## Refus d'authentification mis en cache (0.8.13)
+
+Un `POST /add` (ou `/retry`, `/title`) refusé faute de cookies valables rend `401 {error, auth_required: true,
+cookies_a_renouveler: true}`. Le refus est mémorisé par adresse : tant que le coffre de cookies n'a pas changé (inode, taille,
+mtime) et pendant `YTSAS_REFUS_AUTH_MIN` minutes (30 par défaut), la même adresse reçoit aussitôt le même 401 **sans relancer
+yt-dlp**. Un dépôt `POST /cookies` lève le cache immédiatement. Chaque yt-dlp est lancé dans son propre groupe de processus et,
+au délai (sonde 120 s, playlist 90 s, flux 90 s, téléchargement `YTSAS_DELAI_TELECHARGEMENT_S`, 3 h par défaut), le groupe
+entier est tué : deno et bgutil compris, aucun orphelin (#4055).
+
 ## Flux du compte YouTube (0.4.0, chaînes et playlists 0.7.0)
 
 `GET /api/v1/ytsas/flux?type=envie|propositions|abonnements|historique|chaines|playlists&limite=24` : les listes que YouTube tient pour le compte dont

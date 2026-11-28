@@ -1,3 +1,17 @@
+secubox-ytsas (0.8.13-1~trixie1) trixie; urgency=medium
+
+  * Cache négatif des refus d'authentification (#4055) : une adresse refusée faute
+    de cookies valables n'est plus soumise à yt-dlp tant que le coffre n'a pas
+    changé (inode, taille, mtime) ni avant YTSAS_REFUS_AUTH_MIN minutes (30) ;
+    réponse 401 immédiate, même message, `cookies_a_renouveler: true`. Un dépôt
+    de cookies lève le cache aussitôt. Constaté sur gk2 : 2 737 sondes refusées
+    (yt-dlp + deno) venues de secubox-radiod, charge 92.
+  * yt-dlp lancé dans sa propre session : au délai, le GROUPE est tué (deno,
+    bgutil, ffmpeg compris) ; le téléchargement est désormais borné
+    (YTSAS_DELAI_TELECHARGEMENT_S, 3 h par défaut). Le flux du compte aussi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 10:05:00 +0100
+
 secubox-ytsas (0.8.12-1~trixie1) trixie; urgency=medium
 
   * Cookies : le dépôt (POST /cookies) refuse désormais un fichier SANS cookie

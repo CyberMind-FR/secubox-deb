@@ -27,9 +27,17 @@ import os
 import re
 import time
 
+import sousproc
+
 # Délais des sondes de métadonnées (#3036) : bornés ET tués au dépassement (voir _attend_borne).
 DELAI_SONDE = 120
 DELAI_PLAYLIST = 90
+# Un téléchargement peut être long, mais jamais infini : au-delà, le groupe yt-dlp (deno, ffmpeg compris) est tué (#4055).
+DELAI_TELECHARGEMENT = int(os.environ.get("YTSAS_DELAI_TELECHARGEMENT_S", str(3 * 3600)))
+# Cache NÉGATIF d'un refus d'authentification (#4055) : une même adresse refusée faute de cookies valables
+# n'est plus soumise à yt-dlp tant que le coffre n'a pas changé, ni avant ce délai (minutes, réglable).
+REFUS_AUTH_S = int(os.environ.get("YTSAS_REFUS_AUTH_MIN", "30")) * 60
+_REFUS_AUTH_MAX = 512
 
 # Progress lines from `yt-dlp --newline`: "[download]  12.3% of ...".
 _TOR_PROXY_RE = re.compile(r"socks5h://(?:\d{1,3}\.){3}\d{1,3}:\d{2,5}")
@@ -98,6 +106,37 @@ class Engine:
         # Flipped True when a gated download fails WHILE cookies are present —
         # i.e. the cookies are stale. Cleared on a fresh cookie upload.
         self.cookies_stale = False
+        # Cache négatif des refus d'authentification (#4055) : { adresse: (empreinte_coffre, échéance, message) }.
+        self._refus_auth = {}
+
+    # ------------------------------------------------------------ refus d'auth
+    def _empreinte_coffre(self):
+        """Identité du coffre de cookies (inode, taille, mtime ns), None s'il est absent. Jamais son contenu."""
+        try:
+            st = os.stat(self.cookie_path) if self.cookie_path else None
+        except OSError:
+            return None
+        return (st.st_ino, st.st_size, st.st_mtime_ns) if st else None
+
+    def refus_en_cache(self, url):
+        """Message du refus mis en cache pour cette adresse, ou None (coffre changé, délai écoulé, aucun refus)."""
+        r = self._refus_auth.get(url)
+        if not r:
+            return None
+        empreinte, echeance, message = r
+        if empreinte != self._empreinte_coffre() or time.time() >= echeance:
+            self._refus_auth.pop(url, None)
+            return None
+        return message
+
+    def note_refus(self, url, message):
+        if len(self._refus_auth) >= _REFUS_AUTH_MAX:
+            self._refus_auth.pop(next(iter(self._refus_auth)))
+        self._refus_auth[url] = (self._empreinte_coffre(), time.time() + REFUS_AUTH_S, message)
+
+    def oublie_refus(self):
+        """Un dépôt de cookies lève tous les refus mis en cache, immédiatement."""
+        self._refus_auth.clear()
 
     # ------------------------------------------------------------------ helpers
     def _tor_args(self, tor):
@@ -153,14 +192,7 @@ class Engine:
         try:
             return await asyncio.wait_for(proc.communicate(), timeout=delai)
         except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                pass
+            await sousproc.tuer(proc)       # le GROUPE : deno/bgutil lancés par yt-dlp compris (#4055)
             raise
 
     def reprend_incomplets(self):
@@ -178,7 +210,13 @@ class Engine:
     async def _probe(self, url, tor=False):
         """Fetch id + title without downloading. Raises AuthRequired/EngineError.
 
-        Via Tor (#3618) : JAMAIS les cookies du compte — ils relieraient la requête anonyme à l'identité."""
+        Via Tor (#3618) : JAMAIS les cookies du compte — ils relieraient la requête anonyme à l'identité.
+        Un refus d'authentification déjà constaté pour cette adresse, coffre inchangé, répond SANS relancer
+        yt-dlp (#4055) : sinon chaque réessai d'un appelant coûtait une sonde complète (yt-dlp + deno)."""
+        if not tor:
+            deja = self.refus_en_cache(url)
+            if deja:
+                raise AuthRequired(deja)
         argv = [self.ytdlp_bin, "-j", "--no-download", "--no-playlist", *self._tor_args(tor),
                 # YouTube gates real formats behind a JS "n challenge"; deno alone
                 # is skipped without the EJS solver script — pull it from GitHub so
@@ -186,16 +224,19 @@ class Engine:
                 "--remote-components", "ejs:github",
                 *([] if tor else self._cookie_args()), url]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE)
+            proc = await sousproc.lancer(*argv)
             out, err = await self._attend_borne(proc, DELAI_SONDE)
         except asyncio.TimeoutError:
             raise EngineError("délai dépassé — le site ne répond pas")
         except FileNotFoundError:
             raise EngineError("yt-dlp introuvable dans le conteneur")
         if proc.returncode != 0:
-            self._raise_for_stderr(err.decode("utf-8", "replace"))
+            try:
+                self._raise_for_stderr(err.decode("utf-8", "replace"))
+            except AuthRequired as e:
+                if not tor:
+                    self.note_refus(url, str(e))
+                raise
         try:
             meta = json.loads(out.decode("utf-8", "replace").splitlines()[0])
         except (ValueError, IndexError):
@@ -260,9 +301,7 @@ class Engine:
                 "--playlist-end", str(limit), "--no-warnings", *self._tor_args(tor),
                 *([] if tor else self._cookie_args()), url]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv, stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE)
+            proc = await sousproc.lancer(*argv)
             out, err = await self._attend_borne(proc, DELAI_PLAYLIST)
         except asyncio.TimeoutError:
             raise PlaylistTimeout("énumération trop longue")
@@ -360,9 +399,7 @@ class Engine:
                     url,
                 ]
                 try:
-                    proc = await asyncio.create_subprocess_exec(
-                        *argv, stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE)
+                    proc = await sousproc.lancer(*argv)
                 except FileNotFoundError:
                     return None, ""
                 stderr_buf = []
@@ -388,7 +425,12 @@ class Engine:
                             break
                         stderr_buf.append(line.decode("utf-8", "replace"))
 
-                await asyncio.gather(_read_progress(), _read_err())
+                try:
+                    await asyncio.wait_for(asyncio.gather(_read_progress(), _read_err()),
+                                           timeout=DELAI_TELECHARGEMENT)
+                except asyncio.TimeoutError:
+                    await sousproc.tuer(proc)   # jamais d'orphelin : yt-dlp, deno, ffmpeg (#4055)
+                    return -1, "délai de téléchargement dépassé"
                 return await proc.wait(), "".join(stderr_buf)
 
             rc, stderr = await essai(avec_cookies=not tor)       # via Tor : jamais les cookies (#3618)
@@ -418,6 +460,8 @@ class Engine:
                 else:
                     job.update(status="auth_required",
                                error="auth requise — dépose tes cookies")
+                if not tor:
+                    self.note_refus(url, job["error"])       # le prochain ajout de cette adresse ne relance pas yt-dlp (#4055)
             else:
                 tail = stderr.strip().splitlines()
                 job.update(status="error",
