@@ -36,3 +36,15 @@ See LICENCE-CMSD-1.0.md for terms.
   réveil normal (le relais le relance à la demande).
 - **Task 9** — Note : `emissions_relais.py` n'est PAS copié dans `~/poc-secubox-ai/relais/` (relais en marche
   intouché) ; branchement à faire à la Task 14.
+- **Task 12** — Décision : `balayer(..., ocr=None)` prend un lecteur OCR remplaçable (défaut : `tesseract -l
+  fra+eng`) ; tesseract absent ou en erreur → `ocr_echec` (bloquant) — parce que tesseract n'est pas installé sur
+  gk0 (rien installé par sudo) — coût si faux : aucun ; en production sans tesseract, rien d'illustré n'est publiable
+  tant que `tesseract-ocr tesseract-ocr-fra` n'est pas installé.
+- **Task 12** — Note : `test_balayage_bloque_ip_dans_png` tourne avec un FAUX OCR (texte dessiné rangé dans un bloc
+  tEXt du PNG) ; la variante « tesseract » s'ajoute d'elle-même quand l'outil est présent. À rejouer après
+  installation de tesseract.
+- **Task 12** — Décision : liste par défaut des noms internes (gk0…gk7, `.lan`, `.local`, `.internal`,
+  `.home.arpa`) quand le fichier manque ; un nom commençant par « . » est un suffixe — parce que le fichier peut ne
+  pas exister au premier lancement — coût si faux : un nom interne non listé passe (à ajouter au fichier).
+- **Task 12** — Décision : toute suite ≥ 32 caractères base64/hex est un `jeton`, empreintes sha256 comprises —
+  parce que la consigne est stricte — coût si faux : faux positif, l'auteur reformule.
