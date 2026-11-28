@@ -74,7 +74,8 @@ def test_autorisations_echeances_et_zones():
     assert T.autoriser(a, "tv-banc", S1, 600, maintenant=1100) is False          # prolongé, déjà posé
     assert a["tv-banc"][S1] == 1700
     lignes = T.zones_vue("tv-banc", ETAT, a, maintenant=1200)
-    assert lignes == ['    local-zone: "oca.nflxvideo.net." always_nxdomain', f'    local-zone: "{S1}." transparent']
+    assert lignes == ['    local-zone: "oca.nflxvideo.net." always_nxdomain', '    local-zone: "1.nflxso.net." always_nxdomain',
+                      f'    local-zone: "{S1}." transparent']                # #4047 : caches de l'opérateur refusés
     assert T.echus(a, maintenant=1700) == [("tv-banc", S1)] and a["tv-banc"] == {}
     assert T.zones_vue("autre", ETAT, a) == []                                  # appareil non trié : rien
     assert T.charger_autorises({"tv-banc": {S1: 5, "evil\n.com": 9}, "../x": {S1: 1}}) == {"tv-banc": {S1: 5}}
@@ -261,7 +262,8 @@ def test_reglage_par_zone_borne_et_compatible():
 def test_rendu_garde_toujours_le_refus_de_zone():
     """L'ouverture n'existe qu'à chaud : un rendu (puis rechargement) pendant l'ouverture referme la zone (échec fermé)."""
     lignes = T.zones_vue("tv-banc", ETAT, {"tv-banc": {S1: 4_000_000_000}}, maintenant=100, ouvertures={"tv-banc": 200})
-    assert lignes == ['    local-zone: "oca.nflxvideo.net." always_nxdomain', f'    local-zone: "{S1}." transparent']
+    assert lignes == ['    local-zone: "oca.nflxvideo.net." always_nxdomain', '    local-zone: "1.nflxso.net." always_nxdomain',
+                      f'    local-zone: "{S1}." transparent']                # #4047 : caches de l'opérateur refusés
 
 
 def test_ouverture_ni_prolongee_ni_redemandee(tmp_path, monkeypatch):

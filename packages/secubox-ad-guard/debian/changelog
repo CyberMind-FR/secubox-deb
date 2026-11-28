@@ -1,3 +1,12 @@
+secubox-ad-guard (1.33.10-1~trixie1) trixie; urgency=medium
+
+  * Tri Netflix (ref #4047) : *.1.nflxso.net (caches Netflix chez l opérateur)
+    toujours refusé aux TV triées, jamais ouvert par le tri. Essai du 28/11 sur
+    le banc : pubs nettement moins nombreuses, menu intact, démarrage un peu
+    plus lent ; des pubs subsistent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 08:24:53 +0100
+
 secubox-ad-guard (1.33.9-1~trixie1) trixie; urgency=medium
 
   * regles-appliquer (ref #4040) : poses à chaud et rechargement sous le

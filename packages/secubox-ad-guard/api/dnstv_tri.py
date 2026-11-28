@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 ZONE = "oca.nflxvideo.net"
+# #4047 : caches Netflix chez l'opérateur (occ-*.1.nflxso.net) toujours refusés aux TV triées ; essai du 28/11 sur le
+# banc : pubs nettement moins nombreuses, menu intact, démarrage un peu plus lent. Jamais ouverts par le tri.
+ZONES_FIXES = ("1.nflxso.net",)
 # Motifs ENTIERS (fullmatch partout) : « $ » accepterait un saut de ligne final, qui finirait dans le drop-in Unbound.
 SERVEUR_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}\.[0-9]{1,3}\.oca\.nflxvideo\.net")
 SLUG_RE = re.compile(r"[a-z0-9-]{1,40}")
@@ -198,7 +201,7 @@ def zones_vue(slug: str, etat: dict, autorises: Dict[str, Dict[str, int]], maint
     if slug not in r["appareils"]:
         return []
     maintenant = int(maintenant if maintenant is not None else time.time())
-    lignes = [f'    local-zone: "{ZONE}." always_nxdomain']
+    lignes = [f'    local-zone: "{ZONE}." always_nxdomain'] + [f'    local-zone: "{z}." always_nxdomain' for z in ZONES_FIXES]
     for nom, e in sorted((autorises.get(slug) or {}).items()):
         if e > maintenant and SERVEUR_RE.fullmatch(nom):
             lignes.append(f'    local-zone: "{nom}." transparent')
