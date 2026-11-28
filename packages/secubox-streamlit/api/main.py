@@ -385,10 +385,65 @@ def _get_apps(*, enrichir: bool = True, timeout: int = 30,
     return apps
 
 
+# INVENTAIRE SANS SOUS-PROCESSUS DANS LA REQUÊTE (#4053). Mesuré sur gk2
+# (charge 35) : `GET /apps` et `GET /access` lançaient `streamlitctl app list`
+# (≈ 11 s au calme, bien plus sous charge) + un `git describe` par appli, DANS
+# la boucle d'événements (route `async def`) : 504 de nginx à 30 s, et la
+# boucle figée pendant ce temps (`/apps/audit`, une lecture de fichier, en
+# prenait 29 s). Les onglets Applis et Accès étaient morts. La source est
+# désormais l'inventaire que la minuterie root écrit (audit.json, #956) ;
+# instances et réglages se lisent dans streamlit.toml, en Python.
+
+def _lire_audit() -> tuple:
+    """(applis, résumé, âge en s ou None) du dernier inventaire complet ; ([], {}, None) s'il manque."""
+    try:
+        raw = json.loads(APPS_AUDIT_CACHE.read_text())
+        if not isinstance(raw, dict):
+            raise ValueError("cache content is not a JSON object")
+    except FileNotFoundError:
+        return [], {}, None
+    except (OSError, ValueError) as exc:
+        log.warning("apps audit cache unreadable: %s", exc)
+        return [], {}, None
+    try:
+        age = int(time.time() - APPS_AUDIT_CACHE.stat().st_mtime)
+    except OSError:
+        age = None
+    apps = [a for a in raw.get("apps", []) if isinstance(a, dict)]
+    return apps, raw.get("summary", {}) or {}, age
+
+
+def _apps_inventaire() -> List[dict]:
+    """Les applis au format de `app list` (nom, point d'entrée, en ligne, port, veille), depuis l'inventaire."""
+    out = []
+    for a in _lire_audit()[0]:
+        nom = a.get("name")
+        if not nom or not _NOM_APPLI_RE.fullmatch(str(nom)):
+            continue
+        out.append({"name": nom, "main": a.get("entrypoint", ""), "running": bool(a.get("running")),
+                    "port": a.get("port") or 0, "state": a.get("state") or ("running" if a.get("running") else "sleeping"),
+                    "archived": bool(a.get("archived")), "domain": a.get("domain") or "",
+                    "last_active": a.get("last_active", 0), "idle_seconds": a.get("idle_seconds", 0),
+                    "sleep_after_seconds": a.get("sleep_after_seconds"), "veille": a.get("veille", True),
+                    "veille_minutes": a.get("veille_minutes") or 0, "autostart": bool(a.get("autostart")),
+                    "issues": a.get("issues") or []})
+    return out
+
+
 def _get_instances() -> List[dict]:
-    """Get list of instances from streamlitctl."""
-    result = _run_ctl("instance", "list")
-    return result.get("instances", [])
+    """Instances déclarées ([instances.*] de streamlit.toml), lues en Python ; « en ligne » d'après l'inventaire.
+
+    Avant #4053 : `streamlitctl instance list`, qui sondait le port par `ss` SUR L'HÔTE — les applis écoutent dans le
+    conteneur, toutes les instances se lisaient arrêtées."""
+    en_ligne = {a["name"] for a in _apps_inventaire() if a["running"]}
+    dom = domaine_box()
+    out = []
+    for inst in _pub.instances(_conf_texte()):
+        out.append({"id": inst["id"], "app": inst["app"], "port": inst["port"] or 0, "enabled": inst["enabled"],
+                    "domain": _pub.domaine_de(inst, dom) if inst["enabled"] else (inst["domain"] or ""),
+                    "geree": inst["valeurs"].get("publication_geree") is True,
+                    "running": inst["app"] in en_ligne})
+    return out
 
 
 def _refresh_instant_cache():
@@ -412,8 +467,8 @@ def _refresh_instant_cache():
 
 
 def _refresh_details_cache():
-    """Refresh details cache with full data."""
-    apps = _get_apps()
+    """Refresh details cache with full data — depuis l'inventaire et le TOML, jamais `app list` en direct (#4053)."""
+    apps = _apps_inventaire()
     instances = _get_instances()
     cfg = _cfg()
 
@@ -584,8 +639,8 @@ async def status():
             "cache_age": _cache.age(),
         }
 
-    # Fallback to direct fetch if cache not ready
-    apps = _get_apps()
+    # Fallback to direct fetch if cache not ready (inventaire + TOML, #4053)
+    apps = _apps_inventaire()
     instances = _get_instances()
     cfg = _cfg()
 
@@ -639,9 +694,9 @@ async def health():
 # How to connect to services
 
 @router.get("/access", dependencies=[Depends(require_lecture)])
-async def access():
-    """Get access information for running apps (public)."""
-    apps = _get_apps()
+def access():
+    """Points d'accès des applis en ligne. `def` et inventaire en cache (#4053) : plus de 504 ni de boucle figée."""
+    apps = _apps_inventaire()
     instances = _get_instances()
     cfg = _cfg()
 
@@ -682,9 +737,10 @@ async def access():
 # ═══════════════════════════════════════════════════════════════════════
 
 @router.get("/apps", dependencies=[Depends(require_lecture)])
-async def list_apps():
-    """List all apps (public)."""
-    return {"apps": _get_apps()}
+def list_apps():
+    """Toutes les applis, depuis l'inventaire en cache (#4053) — jamais `streamlitctl app list` dans la requête."""
+    _apps, resume, age = _lire_audit()
+    return {"apps": _apps_inventaire(), "cache_age_seconds": age, "partiel": bool(resume.get("partiel"))}
 
 
 APPS_AUDIT_CACHE = Path("/var/cache/secubox/streamlit/audit.json")
@@ -789,7 +845,7 @@ def apps_vitrine():
         if inst.get("enabled", True) and appli not in domaines:
             domaines[appli] = inst.get("domain") or hote_box(ident)
     lignes = []
-    for a in _get_apps(enrichir=False, timeout=10):
+    for a in _apps_inventaire():
         nom = a.get("name")
         if not nom or not _NOM_APPLI_RE.fullmatch(str(nom)):
             continue
@@ -874,18 +930,93 @@ def app_recapture(name: str, user=Depends(require_jwt)):
     return {"ok": True, "triggered": True, "name": name}
 
 
-@router.get("/app/{name}")
-async def get_app(name: str, user=Depends(require_jwt)):
-    """Get app details."""
-    apps = _get_apps()
-    for a in apps:
-        if a.get("name") == name:
-            # Add extra details
-            app_dir = Path(_cfg()["apps_dir"]) / name
-            a["path"] = str(app_dir)
-            a["has_requirements"] = (app_dir / "requirements.txt").exists()
-            return a
-    raise HTTPException(404, f"App not found: {name}")
+@router.get("/app/{name}", dependencies=[Depends(require_lecture)])
+def get_app(name: str):
+    """FICHE d'une appli (#4053) : état, port, veille, démarrage automatique, publications, anomalies — tout ce que
+    le panneau paramètre. Inventaire en cache + streamlit.toml : aucun sous-processus dans la requête."""
+    _exiger_nom_appli(name)
+    audit = {a.get("name"): a for a in _lire_audit()[0]}
+    a = audit.get(name)
+    if a is None:
+        raise HTTPException(404, f"appli inconnue : {name}")
+    texte = _conf_texte()
+    decl = _pub.applis_declarees(texte).get(name, {})
+    fiche = dict(a)
+    fiche.update({
+        "port_declare": _pub._port(decl.get("port")),
+        "veille": a.get("veille", decl.get("veille", True) is not False),
+        "veille_minutes": a.get("veille_minutes") or (decl.get("veille_minutes") if isinstance(decl.get("veille_minutes"), int) else 0),
+        "autostart": bool(a.get("autostart", decl.get("autostart") is True)),
+        "veille_commune_minutes": _veille_commune_minutes(texte),
+        "publications": _pub.publications(texte, domaine_box()).get(name, []),
+        "depubliee": str(decl.get("depubliee") or ""),
+        "domaine_retire": str(decl.get("domaine_retire") or ""),
+        "has_requirements": (Path(_cfg()["apps_dir"]) / name / "requirements.txt").exists(),
+    })
+    return fiche
+
+
+def _veille_commune_minutes(texte: str) -> int:
+    v = next((v for e, _d, _f, v in _pub.sections(texte) if e == "idle"), {})
+    m = v.get("timeout_minutes")
+    return m if isinstance(m, int) and m > 0 else 30
+
+
+class ReglagePort(BaseModel):
+    port: int = 0
+
+
+class ReglageVeille(BaseModel):
+    actif: bool = True
+    minutes: int = 0
+
+
+class ReglageAutostart(BaseModel):
+    actif: bool
+
+
+@router.post("/app/{name}/port")
+def set_port(name: str, req: ReglagePort, user=Depends(require_jwt)):
+    """Change le port de l'appli (0 = premier libre) : choisi et persisté par le ctl (seul à voir ce qui écoute dans
+    le conteneur) ; une appli en ligne est redémarrée sur le nouveau port, sa publication suit."""
+    _exiger_nom_appli(name)
+    _exiger_port(req.port)
+    en_ligne = any(a["name"] == name and a["running"] for a in _apps_inventaire())
+    attrib = _attribuer_port(name, req.port)
+    p = int(attrib["port"])
+    redemarrage = None
+    if en_ligne:
+        _run_ctl("app", "stop", name, timeout=30)
+        r = _run_ctl("app", "start", name, str(p), timeout=30)
+        redemarrage = {"ok": r.get("code") == 0, **({"erreur": r["error"]} if r.get("code") else {})}
+    publication = _publication_apres(name, user) if _publications_de(name) else None
+    return {"success": True, "name": name, "port": p, "port_source": attrib.get("source"),
+            "redemarrage": redemarrage, "publication": publication,
+            "avertissements": attrib.get("avertissements") or []}
+
+
+@router.post("/app/{name}/veille")
+def set_veille(name: str, req: ReglageVeille, user=Depends(require_jwt)):
+    """Veille de l'appli : active ou non, délai propre en minutes (0 = délai commun). Écrit par le ctl, audité."""
+    _exiger_nom_appli(name)
+    if not 0 <= req.minutes <= _pub.VEILLE_MINUTES_MAX:
+        raise HTTPException(400, f"délai de veille hors limites : 1 à {_pub.VEILLE_MINUTES_MAX} minutes, ou 0")
+    r = _ctl_ok("app", "veille", name, "on" if req.actif else "off", str(req.minutes),
+                "--par", _acteur(user), "--apply", timeout=WAKE_CHECK_TIMEOUT_S)
+    return {"success": True, "name": name, "veille": r.get("veille", req.actif),
+            "veille_minutes": r.get("veille_minutes"),
+            "note": "pris en compte au prochain passage de la veille (5 min) ; la fiche suit au prochain inventaire"}
+
+
+@router.post("/app/{name}/autostart")
+def set_autostart(name: str, req: ReglageAutostart, user=Depends(require_jwt)):
+    """Démarrage automatique au boot du conteneur (`[apps.<nom>].autostart`) ; refusé sans port déclaré."""
+    _exiger_nom_appli(name)
+    r = _ctl_ok("app", "autostart", name, "on" if req.actif else "off", "--apply", timeout=WAKE_CHECK_TIMEOUT_S)
+    action = (r.get("actions") or [{}])[0]
+    if action.get("blocked"):
+        raise HTTPException(409, action.get("reason") or "démarrage automatique refusé")
+    return {"success": True, "name": name, "autostart": bool(action.get("autostart", req.actif))}
 
 
 # ── DÉPÔT, PORT, PUBLICATION (#3247) ──────────────────────────────────
@@ -1226,7 +1357,10 @@ def put_env(name: str, req: EnvAppli, user=Depends(require_jwt)):
 def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
     """Get app logs."""
     _exiger_nom_appli(name)
-    result = _run_ctl("app", "logs", name, str(lines), brut=True)
+    lines = max(1, min(int(lines), 1000))
+    result = _run_ctl("app", "logs", name, str(lines), brut=True, timeout=WAKE_CHECK_TIMEOUT_S + 15)
+    if result.get("timeout"):
+        raise HTTPException(504, result["error"])
     return {"logs": result.get("output", "").splitlines()}
 
 
@@ -1461,9 +1595,9 @@ def wake_app(name: str, background_tasks: BackgroundTasks, user=Depends(require_
 # INSTANCES
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.get("/instances")
-async def list_instances(user=Depends(require_jwt)):
-    """List all instances."""
+@router.get("/instances", dependencies=[Depends(require_lecture)])
+def list_instances():
+    """Instances (publications) déclarées : lecture gardée comme /publications, sans sous-processus (#4053)."""
     return {"instances": _get_instances()}
 
 

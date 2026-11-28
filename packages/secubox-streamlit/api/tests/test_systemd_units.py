@@ -360,23 +360,18 @@ def test_autostart_false_never_enables_the_unit(tmp_path):
     assert "enable streamlit-app@occasional" not in captured
 
 
-def test_idle_check_never_stops_an_autostart_declared_app(tmp_path):
-    """The declarative "always on" flag also exempts the app from
-    idle-check — otherwise a pinned app would still be silently put to
-    sleep by the timer and, with Restart=no, never come back on its own."""
+def _idle_pinned(tmp_path, extra=""):
     apps_dir, idle_dir, conf = _setup(tmp_path)
     (apps_dir / "pinned.py").write_text("import streamlit\n")
     conf.write_text(
         '[idle]\nenabled = true\ntimeout_minutes = 1\n\n'
-        '[apps.pinned]\nname = "pinned"\nautostart = true\nport = 8720\n'
+        '[apps.pinned]\nname = "pinned"\nautostart = true\nport = 8720\n' + extra
     )
     ps_file = tmp_path / "ps.txt"
     ps_file.write_text("streamlit run pinned.py --server.port=8720\n")
     _mock_lxc_info(tmp_path)
     capture = tmp_path / "captured.txt"
     _mock_lxc_attach_capture(tmp_path, capture)
-
-    # Idle for a very long time — would normally be stopped.
     import os
     import time
     idle_dir.mkdir(exist_ok=True)
@@ -384,13 +379,27 @@ def test_idle_check_never_stops_an_autostart_declared_app(tmp_path):
     f.write_text("")
     ts = time.time() - 999999
     os.utime(f, (ts, ts))
-
     env = _env(apps_dir, conf, idle_dir, str(tmp_path), ps_file=ps_file)
-    r = subprocess.run(["bash", str(CTL), "app", "idle-check"],
-                        capture_output=True, text=True, env=env, timeout=30)
+    return subprocess.run(["bash", str(CTL), "app", "idle-check"],
+                          capture_output=True, text=True, env=env, timeout=30)
 
+
+def test_idle_check_stops_an_idle_autostart_app_4053(tmp_path):
+    """#4053 : « démarrée au boot » n'est plus « jamais endormie ». Sur gk2,
+    diapvid, enhance_app et files_51 (autostart = true) tournaient depuis
+    29 jours : la veille ne les voyait jamais. Une appli publiée endormie est
+    réveillée à la demande par sbxwaf."""
+    r = _idle_pinned(tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "idle-stop: pinned" in r.stdout, r.stdout
+
+
+def test_idle_check_never_stops_an_app_with_veille_off_4053(tmp_path):
+    """Seule exemption : `veille = false` (posée par `app veille <nom> off`)."""
+    r = _idle_pinned(tmp_path, "veille = false\n")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "idle-stop: pinned" not in r.stdout
+    assert "veille désactivée" in r.stdout
     assert "active=1" in r.stdout, r.stdout
 
 

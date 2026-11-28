@@ -28,6 +28,25 @@ case "$1" in
       ln -sf /data/lxc/streamlit /var/lib/lxc/streamlit
     fi
 
+    # COPIES ANCIENNES des unités d'inventaire sous /etc/systemd/system (#4053) :
+    # posées à la main sur gk2 le 2026-08-02, elles masquaient celles du paquet
+    # (TimeoutStartSec=60, minuterie à 5 min) — inventaire tué une fois sur deux.
+    # Retirées seulement si dpkg ne les possède pas et qu'elles sont bien les
+    # nôtres (#956) ; sauvegarde hors des dossiers de systemd.
+    for _u in streamlit-audit.service streamlit-audit.timer; do
+      _e=/etc/systemd/system/$_u
+      if [ -f "$_e" ] && [ ! -L "$_e" ] && ! dpkg -S "$_e" >/dev/null 2>&1 \
+         && grep -q 'issues/956\|app-fleet audit cache' "$_e"; then
+        install -d -m 0700 /var/backups/secubox/streamlit-avant-4053
+        cp -p "$_e" /var/backups/secubox/streamlit-avant-4053/
+        [ "$_u" = streamlit-audit.timer ] && systemctl disable streamlit-audit.timer >/dev/null 2>&1 || true
+        rm -f "$_e"
+        echo "secubox-streamlit : copie ancienne $_e retirée (sauvegarde /var/backups/secubox/streamlit-avant-4053)"
+      fi
+    done
+    # Temporaire d'un inventaire interrompu : jamais lu, il ne doit pas traîner.
+    rm -f /var/cache/secubox/streamlit/.audit.tmp
+
     systemctl daemon-reload
     systemctl enable secubox-streamlit.service
     systemctl start secubox-streamlit.service || true

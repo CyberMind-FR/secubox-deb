@@ -40,7 +40,9 @@ Configuration file: `/etc/secubox/streamlit.toml` (example: `config/streamlit.to
 |---|---|---|
 | `[ports] min`, `max` | `8501`, `8600` | Range of the automatic port (first free port, see below) |
 | `[publication] auto` | `false` | `false`: publication **on demand** (“Publier” button, “Nom public” at deposit). `true`: an app deployed or started without a public name is published as `<folder>.<box domain>` |
-| `[publication] autostart` | `true` | A published app stays up (`[apps.<name>] autostart = true`, exempt from idle sleep) and the container is started at boot by `secubox-streamlit-demarrage.service`; `false`: idle sleep applies (nothing wakes an app from its vhost yet, #746) |
+| `[publication] autostart` | `true` | A published app is started at boot (`[apps.<name>] autostart = true`) and the container is started at boot by `secubox-streamlit-demarrage.service`. Since #4053 autostart **no longer exempts from idle sleep**: a sleeping published app is woken by sbxwaf on the first request |
+| `[idle] timeout_minutes` | `30` | Common idle delay before an app is stopped (`secubox-streamlit-idle.timer`, every 5 min) |
+| `[apps.<name>] veille`, `veille_minutes` | `true`, — | Per-app idle sleep (#4053): `veille = false` = never stopped by the idle sweep (the only exemption); `veille_minutes` = own delay instead of the common one. Set by `streamlitctl app veille` / the app sheet |
 | `[publication] ip_conteneur` | — | Container address for nginx `proxy_pass`; empty: live address (`lxc-info -i`), else the one of existing publications — both only inside the container's bridge subnet |
 
 Declarations written by `streamlitctl` (root): `[apps.<folder>]` (port, enabled, autostart) and, for a
@@ -165,7 +167,15 @@ streamlitctl frontal set couture --domaine couture.gk2.secubox.in --cible 10.100
 
 ## API Endpoints
 
-- `GET /api/v1/streamlit/status` - Module status
+- `GET /api/v1/streamlit/status` - Module status (from the inventory cache, #4053)
+- `GET /api/v1/streamlit/apps` (lecture gardée) - App list read from the inventory cache (`audit.json`), never `streamlitctl app list` in the request (#4053: it caused 504s on gk2); `cache_age_seconds`, `partiel`
+- `GET /api/v1/streamlit/access` (lecture gardée) - Running apps and instances, from the cache
+- `GET /api/v1/streamlit/app/{name}` (lecture gardée) - App sheet (#4053): inventory row + `port_declare`, `veille`, `veille_minutes`, `veille_commune_minutes`, `autostart`, `publications[]`, `domaine_retire`/`depubliee` (legacy publication removed), `has_requirements`
+- `POST /api/v1/streamlit/app/{name}/port` (`require_jwt`, body `{"port": N}`, 0 = first free) - Assign the port (chosen by the ctl); a running app is restarted on it, its publication follows
+- `POST /api/v1/streamlit/app/{name}/veille` (`require_jwt`, body `{"actif": bool, "minutes": N}`, 0 = common delay) - Per-app idle sleep, audited
+- `POST /api/v1/streamlit/app/{name}/autostart` (`require_jwt`, body `{"actif": bool}`) - Start at container boot; 409 without a declared port
+- `GET /api/v1/streamlit/app/{name}/logs?lines=N` (`require_jwt`, 1..1000) - Recent journal of `streamlit-app@<name>` inside the container (bounded)
+- `GET /api/v1/streamlit/instances` (lecture gardée) - `[instances.*]` read in Python (`id`, `app`, `port`, `domain`, `enabled`, `geree`, `running` from the inventory); create = `publish`, delete = `unpublish`
 - `GET /api/v1/streamlit/health` - Health check
 - `GET /api/v1/streamlit/apps/audit` - Fleet-wide inventory (disk/declared/running), feeds the Mosaïque tab, cached every 30 min (lecture gardée : jeton, cookie de session ou tableau de bord LAN)
 - `GET /api/v1/streamlit/apps/ressources` - Charge par appli (#4050) : `total` (éveillées, cpu_pct en % de la box, memoire, conteneur, histo_cpu) et `applis[]` (name, eveillee, etat eveillee/endormie/archivee, cpu_pct, memoire, histo_cpu, age_s, dernier_acces) ; éveillées d’abord, endormies à zéro. Cgroup `streamlit-app@<nom>` lu depuis l’hôte, relevé en fond toutes les 10 s tant que la route est lue, cache `/var/lib/secubox/streamlit-ressources/ressources.json` (lecture gardée)
@@ -194,6 +204,7 @@ App names reaching `streamlitctl` must match `[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}`
 `streamlitctl app port <name> [port] [--apply]`, `app publish <name> [public-name] [--par who] [--apply]`,
 `app unpublish <name> [--par who] [--apply]`, `app publication <name>`,
 `app env <name> list|set [--unset KEY]... [--par who] [--apply]`, `app depublier-anciennes [--par who] [--apply]`,
+`app veille <name> on|off [minutes] [--par who] [--apply]` (#4053),
 `boot`. Dry-run without `--apply`.
 Exit codes: 2 unknown app, 3 state, 4 conflict, 5 no free port, 6 dependencies not installed (pip),
 64 refused argument, 75 container unavailable.
@@ -214,6 +225,11 @@ direct route without the bridge subnet…) leaves the entry declared so that a s
 (`reliquat` in the JSON report). The app stays deployed. Audit line per entry, with the real state of each link.
 Follow-ups (bridge host address, nginx 300 s on `/deploy`, exact-argv sudoers, per-app isolation, wake by vhost):
 issue #3252.
+
+Inventory (`streamlit-audit.timer`, every 30 min, #4053): every container read (`ps`, `ss`, `journalctl`) is
+bounded (`SECUBOX_STREAMLIT_LXC_TIMEOUT`, 25 s); past it the inventory is still written from disk + TOML with
+`summary.partiel = true`. The whole run is `timeout 240`; an empty or failed run never replaces the last complete
+`audit.json`, and the temporary file is removed.
 
 Thumbnails are captured on event only (first registration, source update,
 or a manual recapture) — never on a timer, and never for an app that isn't

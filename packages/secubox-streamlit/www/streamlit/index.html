@@ -113,6 +113,18 @@
         .val{font-variant-numeric:tabular-nums}
         .histo{display:flex;align-items:flex-end;gap:1px;height:24px} .histo b{flex:1 1 0;min-width:2px;background:var(--cyan);opacity:.55;border-radius:1px 1px 0 0} .histo b:last-child{opacity:1}
         @container a (max-width:640px){.cl{grid-template-columns:1fr 1fr} .cl.tete-cl{display:none}}
+        /* Fiche d'une appli (#4053) : paramétrage depuis la Mosaïque, les Applis et les Instances */
+        .fiche{border-color:var(--cyan);box-shadow:0 0 24px rgba(41,182,246,.14)}
+        .ftete{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:8px} .ftete h2{margin:0;font-size:1.05rem;color:var(--cyan);overflow-wrap:anywhere}
+        .ftete .fin{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+        .fgrille{display:grid;gap:10px;grid-template-columns:1fr} @container a (min-width:900px){.fgrille{grid-template-columns:1fr 1fr}}
+        .fbloc{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;display:grid;gap:7px;align-content:start;min-width:0;background:rgba(8,18,38,.45)}
+        .fbloc h4{margin:0;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);font-weight:600}
+        .kv{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;flex-wrap:wrap} .kv>span:first-child{color:var(--doux)} .kv>*{min-width:0;overflow-wrap:anywhere}
+        .fligne{display:flex;flex-wrap:wrap;gap:6px;align-items:center} .fligne input{width:auto;flex:1 1 110px;max-width:220px}
+        label.coche{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--texte);cursor:pointer} label.coche input{width:auto;accent-color:var(--cyan)}
+        pre.journal{max-height:280px;overflow:auto;margin:0;font-size:.7rem;line-height:1.35;background:rgba(4,10,22,.85);border:1px solid var(--trait);border-radius:8px;padding:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+        .btn.lienfiche{background:none;border:0;padding:0;min-height:0;color:var(--cyan);font-weight:700;font-size:.8rem;text-align:left} .btn.lienfiche:hover{text-decoration:underline}
         .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
         .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge);pointer-events:auto}
         .toast button{margin-left:10px;font:inherit;background:none;border:0;color:var(--texte);cursor:pointer}
@@ -151,6 +163,13 @@
             <button class="onglet" role="tab" id="t-applis" aria-controls="v-applis" aria-selected="false" tabindex="-1" data-onglet="applis" type="button">Applis</button>
             <button class="onglet" role="tab" id="t-instances" aria-controls="v-instances" aria-selected="false" tabindex="-1" data-onglet="instances" type="button">Instances</button>
         </div>
+
+        <!-- FICHE D'UNE APPLI (#4053) : ouverte depuis la Mosaïque, les Applis, les Instances -->
+        <section class="pan fiche" id="fiche" hidden aria-labelledby="fTitre" tabindex="-1">
+            <div class="ftete"><h2 id="fTitre">—</h2><span id="fEtat"></span><div class="fin"><button class="btn sm" id="fActu" type="button">⟳</button><button class="btn sm" id="fFermer" type="button">✕ Fermer</button></div></div>
+            <div id="fRetour" class="retour" hidden></div>
+            <div id="fCorps"><div class="vide">Chargement…</div></div>
+        </section>
 
         <!-- CHARGE (#4050) -->
         <section class="volet" id="v-charge" role="tabpanel" aria-labelledby="t-charge" hidden>
@@ -239,10 +258,18 @@
 
         <!-- INSTANCES -->
         <section class="volet" id="v-instances" role="tabpanel" aria-labelledby="t-instances" hidden>
+            <div class="pan"><h3>Nouvelle instance <i>POST /app/…/publish</i></h3>
+                <form class="saisie" id="fInst">
+                    <label>Appli<select id="iApp" aria-label="Appli à publier"><option value="">—</option></select></label>
+                    <label>Nom public<input id="iNom" placeholder="mon-appli" autocomplete="off" spellcheck="false" maxlength="63"></label>
+                    <div class="bout" style="margin:0"><button class="btn prim" type="submit">Créer l’instance</button></div>
+                </form>
+                <p class="note">Une instance est une publication : <span class="mono" id="iDomaine">nom.domaine</span> → HAProxy → WAF → nginx → l’appli dans le conteneur. Nom vide : dérivé du nom de l’appli.</p>
+            </div>
             <div class="pan"><h3>Instances <i>GET /instances</i></h3>
-                <p class="note" style="margin:0 0 6px">Plusieurs instances peuvent faire tourner la même appli sur des ports différents.</p>
+                <p class="note" style="margin:0 0 6px">Une ligne par nom public déclaré ; « En ligne » = un processus de l’appli tourne dans le conteneur (dernier inventaire).</p>
                 <div id="rInst" class="retour" hidden></div>
-                <div class="defile"><table><thead><tr><th>Identifiant</th><th>Appli</th><th>Port</th><th>État</th><th>Actions</th></tr></thead><tbody id="bInst"></tbody></table></div>
+                <div class="defile"><table><thead><tr><th>Nom public</th><th>Appli</th><th>Port</th><th>Domaine</th><th>État</th><th>Actions</th></tr></thead><tbody id="bInst"></tbody></table></div>
             </div>
         </section>
     </div></div></main>
@@ -319,13 +346,29 @@
                 'tableau-capteurs': [{ nom_public: 'capteurs', domaine: 'capteurs.example.org', port: 8501, enabled: true }],
                 'rapports-mensuels': [{ nom_public: 'rapports', domaine: 'rapports.example.org', port: 8503, enabled: true }] } },
             '/instances': { instances: [
-                { id: 'capteurs-sud', app: 'tableau-capteurs', port: 8511, running: true },
-                { id: 'capteurs-nord', app: 'tableau-capteurs', port: 8512, running: false }] }
+                { id: 'capteurs', app: 'tableau-capteurs', port: 8501, domain: 'capteurs.example.org', enabled: true, running: true },
+                { id: 'rapports', app: 'rapports-mensuels', port: 8503, domain: 'rapports.example.org', enabled: true, running: false }] }
         };
+        // Fiche en démonstration : construite à partir de l'inventaire fictif.
+        function ficheDemo(nom) {
+            const a = (DEMO_DATA['/apps/audit'].apps || []).find(x => x.name === nom);
+            if (!a) return { erreur: 404, detail: 'appli inconnue' };
+            const pubs = (DEMO_DATA['/publications'].apps[nom] || []);
+            return Object.assign({ veille: true, veille_minutes: 0, autostart: false, veille_commune_minutes: 15, port_declare: a.port || null,
+                depubliee: '', domaine_retire: '', publications: pubs, running: a.state === 'running', entrypoint: a.shape }, a);
+        }
+        const DEMO_JOURNAL = ['2026-11-28T09:12:04+0100 streamlit streamlit-launch[139]:   You can now view your Streamlit app in your browser.',
+            '2026-11-28T09:12:04+0100 streamlit streamlit-launch[139]:   Local URL: http://localhost:8501'];
 
         // Même contrat que l'ancienne page : Content-Type JSON + Bearer, cookie de session, nouvel essai sans jeton sur 401.
         async function api(path, opts = {}) {
-            if (DEMO) return (opts.method && opts.method !== 'GET') ? { demo: true } : (DEMO_DATA[path.split('?')[0]] || {});
+            if (DEMO) {
+                if (opts.method && opts.method !== 'GET') return { demo: true };
+                const ch = path.split('?')[0];
+                if (/^\/app\/[^/]+\/logs$/.test(ch)) return { logs: DEMO_JOURNAL };
+                if (/^\/app\/[^/]+$/.test(ch)) return ficheDemo(decodeURIComponent(ch.slice(5)));
+                return DEMO_DATA[ch] || {};
+            }
             APPELS++;
             try {
                 let res = await fetch(API + path, { ...opts, headers: headers(), credentials: 'same-origin', cache: 'no-store' });
@@ -413,6 +456,7 @@
         function tempoLabel(a) {
             if (appState(a) === 'archived') return null;
             if (!(typeof a.last_active === 'number' && typeof a.sleep_after_seconds === 'number')) return null;
+            if (appState(a) === 'running' && (a.veille === false || a.sleep_after_seconds === 0)) return 'veille désactivée';
             if (!a.last_active) return 'jamais vue';
             const idle = Date.now() / 1000 - a.last_active;
             if (appState(a) === 'running') { const left = a.sleep_after_seconds - idle; return left > 0 ? 'veille dans ' + formatDuration(left) : 'veille imminente'; }
@@ -559,7 +603,9 @@
                 if (domain) b.dataset.domain = domain;
                 pied.appendChild(b);
             }
-            if (pied.childNodes.length) node.appendChild(pied);
+            const fb = el('button', 'btn sm', '⚙ fiche'); fb.type = 'button'; fb.dataset.fiche = rawName; fb.title = 'Port, publication, veille, journaux de ' + rawName;
+            pied.appendChild(fb);
+            node.appendChild(pied);
             return { node, tempo };
         }
         function startTick() {
@@ -606,6 +652,8 @@
         }
         $('mur').addEventListener('click', async ev => {
             const wakeBtn = ev.target.closest('button[data-wake]'), recapBtn = ev.target.closest('button[data-recapture]');
+            const ficheBtn = ev.target.closest('button[data-fiche]');
+            if (ficheBtn) { ouvrirFiche(ficheBtn.dataset.fiche); return; }
             if (wakeBtn) {
                 if (DEMO) { inerte(); return; }
                 const name = wakeBtn.dataset.wake, domain = wakeBtn.dataset.domain || null;
@@ -715,6 +763,7 @@
             DOMAINE_BOX = ko(p) ? '' : (p.domaine || '');
             $('dDomaine').textContent = 'nom.' + (DOMAINE_BOX || 'domaine');
             LISTE_APPS = ko(d) ? null : (d.apps || []);
+            if (LISTE_APPS) LISTE_APPS.sort((x, y) => (y.running ? 1 : 0) - (x.running ? 1 : 0) || String(x.name).localeCompare(String(y.name)));
             rendreApplis();
         }
         let LISTE_APPS = null;
@@ -726,12 +775,12 @@
             LISTE_APPS.forEach(a => {
                 const pub = PUBS.get(a.name) || null;
                 const tr = el('tr'), domain = (pub && pub.domaine) || DOMAINES.get(a.name) || '';
-                const n = el('td'); n.appendChild(el('strong', '', tiret(a.name))); tr.appendChild(n);
-                tr.appendChild(el('td', 'mono', tiret(a.main))); tr.appendChild(el('td', '', tiret(a.port)));
+                const n = el('td'); n.appendChild(boutonFiche(a.name)); tr.appendChild(n);
+                tr.appendChild(el('td', 'mono', tiret(a.main))); tr.appendChild(el('td', '', a.port ? String(a.port) : '—'));
                 const np = el('td');
                 if (domain) np.appendChild(lien(domain)); else np.appendChild(el('span', 'nonpub', 'non publiée'));
                 tr.appendChild(np);
-                const e = el('td'); e.appendChild(el('span', 'pill ' + (a.running ? 'ok' : ''), a.running ? 'En ligne' : 'Arrêtée')); tr.appendChild(e);
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (a.running ? 'ok' : a.archived ? 'vi' : ''), a.running ? 'En ligne' : a.archived ? 'Archivée' : 'Endormie')); tr.appendChild(e);
                 const act = el('td', 'act');
                 if (DEMARRE === a.name) {
                     const p = el('input'); p.type = 'number'; p.min = 1024; p.max = 65535; p.placeholder = 'auto'; p.setAttribute('aria-label', 'Port de ' + a.name + ' (vide : automatique)'); p.id = 'portDemarre';
@@ -756,6 +805,7 @@
                         act.appendChild(bouton('Renommer', '', () => { PUBLIE = { name: a.name, mode: 'renommer' }; DEMARRE = null; rendreApplis(); }));
                         act.appendChild(bouton('Retirer', '', () => { PUBLIE = { name: a.name, mode: 'retirer' }; DEMARRE = null; rendreApplis(); }));
                     } else act.appendChild(bouton('Publier', 'ok', () => { PUBLIE = { name: a.name, mode: 'publier' }; DEMARRE = null; rendreApplis(); }));
+                    act.appendChild(bouton('⚙ Fiche', '', () => ouvrirFiche(a.name)));
                     act.appendChild(bouton('Supprimer', 'danger', () => { SUPPR = a.name; rendreApplis(); }));
                 }
                 tr.appendChild(act); tb.appendChild(tr);
@@ -856,18 +906,34 @@
             if (ko(r)) retour('rGitea', false, 'Clonage impossible : ' + (r.detail || (r.erreur ? 'HTTP ' + r.erreur : 'serveur injoignable'))); else { retour('rGitea', true, 'Dépôt cloné dans « ' + name + ' ».'); $('gNom').value = ''; $('gDepot').value = ''; rafraichir(); }
         });
 
-        // ───── Instances ─────
+        // ───── Instances (#4053 : lister, créer = publier, démarrer, arrêter, supprimer = retirer la publication) ─────
+        let INST_SUPPR = null;
         async function chargerInstances() {
-            const d = await api('/instances'), tb = $('bInst'); tb.replaceChildren();
-            if (ko(d)) { vide(tb, 5, !SESSION_OK ? '—' : d.erreur === 403 ? 'Réservé à l’administrateur' : '—'); return; }
+            const [d, p] = await Promise.all([api('/instances'), api('/publications'), ensureAudit()]);
+            if (!ko(p)) DOMAINE_BOX = p.domaine || DOMAINE_BOX;
+            $('iDomaine').textContent = 'nom.' + (DOMAINE_BOX || 'domaine');
+            const sel = $('iApp'), garde = sel.value; sel.replaceChildren(el('option', '', '—')); sel.firstChild.value = '';
+            (((auditData && !ko(auditData) && auditData.apps) || []).filter(a => appState(a) !== 'archived').map(a => a.name).sort((x, y) => String(x).localeCompare(String(y))))
+                .forEach(n => { const o = el('option', '', n); o.value = n; sel.appendChild(o); });
+            sel.value = garde;
+            const tb = $('bInst'); tb.replaceChildren();
+            if (ko(d)) { vide(tb, 6, !SESSION_OK ? '—' : d.erreur === 403 ? 'Réservé à l’administrateur' : 'Instances illisibles' + (d.detail ? ' : ' + d.detail : '')); return; }
             const ins = d.instances || [];
-            if (!ins.length) { vide(tb, 5, 'Aucune instance configurée'); return; }
+            if (!ins.length) { vide(tb, 6, 'Aucune instance : publiez une appli ci-dessus ou depuis sa fiche.'); return; }
             ins.forEach(i => {
                 const tr = el('tr'); const n = el('td'); n.appendChild(el('strong', '', tiret(i.id))); tr.appendChild(n);
-                tr.appendChild(el('td', '', tiret(i.app))); tr.appendChild(el('td', '', tiret(i.port)));
-                const e = el('td'); e.appendChild(el('span', 'pill ' + (i.running ? 'ok' : ''), i.running ? 'En ligne' : 'Arrêtée')); tr.appendChild(e);
+                const ap = el('td'); ap.appendChild(boutonFiche(i.app)); tr.appendChild(ap);
+                tr.appendChild(el('td', '', i.port ? String(i.port) : '—'));
+                const dm = el('td'); if (i.domain && i.enabled !== false) dm.appendChild(lien(i.domain)); else dm.appendChild(el('span', 'nonpub', i.enabled === false ? 'désactivée' : '—')); tr.appendChild(dm);
+                const e = el('td'); e.appendChild(el('span', 'pill ' + (i.running ? 'ok' : ''), i.running ? 'En ligne' : 'Endormie')); tr.appendChild(e);
                 const act = el('td', 'act');
-                act.appendChild(i.running ? bouton('Arrêter', 'danger', () => actionInstance(i.id, 'stop')) : bouton('Démarrer', 'ok', () => actionInstance(i.id, 'start')));
+                if (INST_SUPPR === i.id) {
+                    act.append(el('span', 'note', 'Retirer la publication de « ' + i.app + ' » ?'), bouton('Confirmer', 'danger', () => supprimerInstance(i)), bouton('Annuler', '', () => { INST_SUPPR = null; chargerInstances(); }));
+                } else {
+                    act.appendChild(i.running ? bouton('Arrêter', 'danger', () => actionInstance(i.id, 'stop')) : bouton('Démarrer', 'ok', () => actionInstance(i.id, 'start')));
+                    act.appendChild(bouton('⚙ Fiche', '', () => ouvrirFiche(i.app)));
+                    act.appendChild(bouton('Supprimer', 'danger', () => { INST_SUPPR = i.id; chargerInstances(); }));
+                }
                 tr.appendChild(act); tb.appendChild(tr);
             });
             annoncer();
@@ -878,6 +944,130 @@
             if (ko(r)) retour('rInst', false, 'Action impossible : ' + (r.detail || (r.erreur ? 'HTTP ' + r.erreur : 'serveur injoignable'))); else retour('rInst', true, 'Instance « ' + id + ' » : ' + (cmd === 'start' ? 'démarrage demandé' : 'arrêtée') + '.');
             setTimeout(rafraichir, cmd === 'start' ? 1000 : 0);
         }
+        async function supprimerInstance(i) {
+            INST_SUPPR = null;
+            if (DEMO) { chargerInstances(); inerte(); return; }
+            const r = await api('/app/' + encodeURIComponent(i.app) + '/unpublish', { method: 'POST' });
+            if (ko(r)) retour('rInst', false, echec(r, 'Retrait impossible')); else retour('rInst', true, 'Publication de « ' + i.app + ' » retirée (' + ((r.retires || []).join(', ') || i.id) + ').');
+            chargerInstances();
+        }
+        $('fInst').addEventListener('submit', async ev => {
+            ev.preventDefault();
+            const app = $('iApp').value, nom = $('iNom').value.trim();
+            if (!app) { retour('rInst', false, 'Choisissez l’appli à publier.'); return; }
+            if (DEMO) { inerte(); return; }
+            retour('rInst', true, 'Publication de « ' + app + ' » en cours…');
+            const r = await api('/app/' + encodeURIComponent(app) + '/publish', { method: 'POST', body: JSON.stringify({ public_name: nom }) });
+            if (ko(r)) retour('rInst', false, echec(r, 'Création impossible'));
+            else { retour('rInst', true, 'Instance créée : https://' + r.domaine + '/' + ((r.avertissements || []).length ? ' — ' + r.avertissements.join(' ; ') : '')); $('iNom').value = ''; }
+            chargerInstances();
+        });
+
+        // ───── Fiche d'une appli (#4053) ─────
+        let FICHE = null, FICHE_NOM = null, FICHE_SUPPR = false;
+        const boutonFiche = nom => { const b = el('button', 'btn lienfiche', tiret(nom)); b.type = 'button'; b.title = 'Ouvrir la fiche de ' + nom; b.addEventListener('click', () => ouvrirFiche(nom)); return b; };
+        const kv = (k, v) => { const d = el('div', 'kv'); d.append(el('span', '', k), typeof v === 'string' ? el('span', '', v) : v); return d; };
+        async function ouvrirFiche(nom) {
+            FICHE_NOM = nom; FICHE = null; FICHE_SUPPR = false;
+            const f = $('fiche'); f.hidden = false; $('fTitre').textContent = nom; $('fEtat').replaceChildren(); $('fRetour').hidden = true;
+            $('fCorps').replaceChildren(el('div', 'vide', 'Chargement de la fiche…'));
+            f.scrollIntoView({ block: 'start', behavior: 'smooth' }); f.focus({ preventScroll: true });
+            await chargerFiche();
+        }
+        async function chargerFiche() {
+            if (!FICHE_NOM) return;
+            if (!DOMAINE_BOX) { const p = await api('/publications'); if (!ko(p)) DOMAINE_BOX = p.domaine || ''; }
+            const d = await api('/app/' + encodeURIComponent(FICHE_NOM));
+            if (ko(d)) { $('fCorps').replaceChildren(el('div', 'vide', !SESSION_OK ? 'Session requise.' : 'Fiche illisible' + (d.detail ? ' : ' + d.detail : (d.erreur ? ' (HTTP ' + d.erreur + ')' : '')))); annoncer(); return; }
+            FICHE = d; rendreFiche();
+        }
+        function fRetour(ok, msg) { retour('fRetour', ok, msg); }
+        async function actionFiche(libelle, chemin, corps, apres) {
+            if (DEMO) { inerte(); return; }
+            fRetour(true, libelle + '…');
+            const r = await api(chemin, Object.assign({ method: 'POST' }, corps === undefined ? {} : { body: JSON.stringify(corps) }));
+            if (ko(r)) { fRetour(false, echec(r, libelle + ' impossible')); return null; }
+            fRetour(true, apres(r)); setTimeout(() => { chargerFiche(); ensureAudit(true); }, 800);
+            return r;
+        }
+        function rendreFiche() {
+            const a = FICHE, nom = a.name, z = $('fCorps'); z.replaceChildren();
+            const st = appState(a), enc = encodeURIComponent(nom);
+            $('fEtat').replaceChildren(st === 'running' ? el('span', 'pill ok', '🟢 en ligne') : st === 'archived' ? el('span', 'pill vi', '📦 archivée') : el('span', 'pill', '😴 endormie'));
+            const g = el('div', 'fgrille');
+
+            // État et actions
+            const b1 = el('div', 'fbloc'); b1.appendChild(el('h4', '', 'État et actions'));
+            b1.append(kv('Point d’entrée', el('span', 'mono', tiret(a.entrypoint))), kv('Port', a.port ? String(a.port) : (a.port_declare ? a.port_declare + ' (déclaré)' : '—')));
+            const tl = tempoLabel(a); b1.appendChild(kv('Veille', a.veille === false ? 'désactivée' : (tl || '—')));
+            b1.appendChild(kv('Dernier accès', a.last_active ? 'il y a ' + formatDuration(Date.now() / 1000 - a.last_active) : 'jamais vu'));
+            if ((a.issues || []).length) { const fl = el('div', 'drap'); a.issues.forEach(i => fl.appendChild(el('span', 'pill att', ISSUE_LABELS[i] || i))); b1.appendChild(fl); }
+            const ac = el('div', 'fligne');
+            if (FICHE_SUPPR) {
+                ac.append(el('span', 'note', 'Supprimer « ' + nom + ' » (publication retirée d’abord) ?'),
+                    bouton('Confirmer', 'danger', async () => { FICHE_SUPPR = false; if (DEMO) { inerte(); rendreFiche(); return; } const r = await api('/app/' + enc, { method: 'DELETE' }); if (ko(r)) { fRetour(false, echec(r, 'Suppression impossible')); rendreFiche(); } else { $('fiche').hidden = true; FICHE_NOM = null; toast('« ' + nom + ' » supprimée.'); rafraichir(); } }),
+                    bouton('Annuler', '', () => { FICHE_SUPPR = false; rendreFiche(); }));
+            } else {
+                if (st === 'running') {
+                    ac.appendChild(bouton('Arrêter', 'danger', () => actionFiche('Arrêt', '/app/' + enc + '/stop', undefined, () => '« ' + nom + ' » arrêtée.')));
+                    ac.appendChild(bouton('Redémarrer', '', () => actionFiche('Redémarrage', '/app/' + enc + '/start', undefined, r => 'Redémarrage demandé (port ' + tiret(r.port) + ').')));
+                } else if (st !== 'archived') {
+                    ac.appendChild(bouton('☕ Réveiller', 'ok', () => actionFiche('Réveil', '/apps/' + enc + '/wake', undefined, r => r.status === 'running' ? '« ' + nom + ' » est en ligne.' : 'Réveil lancé : la fiche se met à jour d’elle-même.')));
+                    ac.appendChild(bouton('Démarrer', '', () => actionFiche('Démarrage', '/app/' + enc + '/start', undefined, r => 'Démarrage demandé (port ' + tiret(r.port) + ').' + phrasePublication(r.publication))));
+                }
+                ac.appendChild(bouton('Supprimer', 'danger', () => { FICHE_SUPPR = true; rendreFiche(); }));
+            }
+            b1.appendChild(ac); g.appendChild(b1);
+
+            // Port
+            const b2 = el('div', 'fbloc'); b2.appendChild(el('h4', '', 'Port'));
+            const ip = el('input'); ip.type = 'number'; ip.min = 1024; ip.max = 65535; ip.placeholder = 'auto'; ip.value = a.port || a.port_declare || ''; ip.setAttribute('aria-label', 'Port de ' + nom);
+            const lp = el('div', 'fligne'); lp.append(ip, bouton('Appliquer', 'prim', () => actionFiche('Changement de port', '/app/' + enc + '/port', { port: parseInt(ip.value, 10) || 0 },
+                r => 'Port ' + r.port + ' attribué' + (r.redemarrage ? (r.redemarrage.ok ? ', appli redémarrée' : ', redémarrage en échec : ' + (r.redemarrage.erreur || '?')) : '') + '.' + phrasePublication(r.publication))));
+            b2.append(lp, el('p', 'note', 'Vide : premier port libre de la plage. En ligne, l’appli est redémarrée ; sa publication suit le nouveau port.'));
+            g.appendChild(b2);
+
+            // Publication
+            const b3 = el('div', 'fbloc'); b3.appendChild(el('h4', '', 'Publication'));
+            const pubs = a.publications || [];
+            if (pubs.length) pubs.forEach(p => b3.appendChild(kv(p.nom_public, lien(p.domaine))));
+            else b3.appendChild(kv('Domaine', el('span', 'nonpub', 'non publiée')));
+            if (!pubs.length && a.domaine_retire) b3.appendChild(el('p', 'note', 'Ancienne publication ' + a.domaine_retire + ' retirée' + (a.depubliee ? ' le ' + new Date(a.depubliee).toLocaleDateString('fr-FR') : '') + ' (nettoyage des publications historiques). Republiez-la ci-dessous pour la remettre en ligne.'));
+            const inom = el('input'); inom.autocomplete = 'off'; inom.spellcheck = false; inom.maxLength = 63; inom.setAttribute('aria-label', 'Nom public de ' + nom);
+            inom.value = pubs.length ? pubs[0].nom_public : nomParDefaut(nom);
+            const lpub = el('div', 'fligne'); lpub.append(inom, el('span', 'note', '.' + (DOMAINE_BOX || 'domaine')));
+            if (pubs.length) {
+                lpub.appendChild(bouton('Renommer', 'prim', () => actionFiche('Renommage', '/app/' + enc + '/rename', { public_name: inom.value.trim() }, r => 'Publiée sous https://' + r.domaine + '/.')));
+                lpub.appendChild(bouton('Retirer', 'danger', () => actionFiche('Retrait', '/app/' + enc + '/unpublish', undefined, () => 'Publication retirée.')));
+            } else lpub.appendChild(bouton('Publier', 'ok', () => actionFiche('Publication', '/app/' + enc + '/publish', { public_name: inom.value.trim() }, r => 'Publiée : https://' + r.domaine + '/' + ((r.avertissements || []).length ? ' — ' + r.avertissements.join(' ; ') : ''))));
+            b3.append(lpub, el('p', 'note', 'HAProxy (TLS) → WAF → nginx → appli. Une appli publiée endormie est réveillée à la première visite.'));
+            g.appendChild(b3);
+
+            // Veille et démarrage
+            const b4 = el('div', 'fbloc'); b4.appendChild(el('h4', '', 'Veille et démarrage'));
+            const cv = el('input'); cv.type = 'checkbox'; cv.checked = a.veille !== false;
+            const lv = el('label', 'coche'); lv.append(cv, 'Mise en veille automatique quand personne ne s’en sert'); b4.appendChild(lv);
+            const im = el('input'); im.type = 'number'; im.min = 1; im.max = 10080; im.placeholder = String(a.veille_commune_minutes || 30); im.value = a.veille_minutes || ''; im.setAttribute('aria-label', 'Délai de veille en minutes');
+            const lm = el('div', 'fligne'); lm.append(el('span', 'note', 'Délai'), im, el('span', 'note', 'min (vide : ' + (a.veille_commune_minutes || 30) + ' min, délai commun)'));
+            lm.appendChild(bouton('Enregistrer', 'prim', () => actionFiche('Réglage de la veille', '/app/' + enc + '/veille', { actif: cv.checked, minutes: parseInt(im.value, 10) || 0 },
+                r => r.veille ? 'Veille active' + (r.veille_minutes ? ' après ' + r.veille_minutes + ' min' : ' (délai commun)') + '.' : 'Veille désactivée : l’appli reste en ligne.')));
+            b4.appendChild(lm);
+            const ca = el('input'); ca.type = 'checkbox'; ca.checked = !!a.autostart;
+            ca.addEventListener('change', () => actionFiche('Démarrage automatique', '/app/' + enc + '/autostart', { actif: ca.checked }, r => r.autostart ? 'Démarrée au boot du conteneur.' : 'Plus démarrée au boot.'));
+            const la = el('label', 'coche'); la.append(ca, 'Démarrer au boot du conteneur'); b4.appendChild(la);
+            b4.appendChild(el('p', 'note', 'Le démarrage au boot n’empêche plus la veille : seule la case ci-dessus le fait.'));
+            g.appendChild(b4);
+            z.appendChild(g);
+
+            // Journaux
+            const b5 = el('div', 'fbloc'); b5.style.marginTop = '10px'; b5.appendChild(el('h4', '', 'Journaux récents'));
+            const pre = el('pre', 'journal', 'Cliquez pour charger les 100 dernières lignes du journal de l’unité streamlit-app@' + nom + '.');
+            const bj = bouton('Charger le journal', '', async () => { pre.textContent = 'Chargement…'; const r = await api('/app/' + enc + '/logs?lines=100'); pre.textContent = ko(r) ? echec(r, 'Journal illisible') : ((r.logs || []).join('\n') || '(vide)'); annoncer(); });
+            b5.append(bj, pre); z.appendChild(b5);
+            annoncer();
+        }
+        $('fFermer').addEventListener('click', () => { $('fiche').hidden = true; FICHE_NOM = null; annoncer(); });
+        $('fActu').addEventListener('click', chargerFiche);
 
         // ───── Chargement, actualisation, hauteur ─────
         let CHARGE = false;
@@ -909,10 +1099,10 @@
         setTimeout(() => { CHARGE = true; rendreEtat(); bandeaux(); }, 1500);
         // Pas d'actualisation onglet masqué, ni pendant une saisie ou une confirmation ouverte, ni en démonstration.
         setInterval(() => {
-            if (document.hidden || DEMO || DEMARRE || SUPPR || PUBLIE || wakingApps.size) return;
+            if (document.hidden || DEMO || DEMARRE || SUPPR || PUBLIE || INST_SUPPR || FICHE_SUPPR || wakingApps.size) return;
             const a = document.activeElement;
             if (a && (a.tagName === 'INPUT' || a.tagName === 'SELECT')) return;
-            if ($('dNom').value || $('dPublic').value || $('gNom').value || $('gDepot').value) return;
+            if ($('dNom').value || $('dPublic').value || $('gNom').value || $('gDepot').value || $('iNom').value) return;
             rafraichir();
         }, 60000);
     </script>

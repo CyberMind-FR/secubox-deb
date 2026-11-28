@@ -10,7 +10,7 @@ from api import main
 
 
 def test_la_vitrine_assemble_applis_instances_et_vignettes(monkeypatch, tmp_path):
-    monkeypatch.setattr(main, "_get_apps", lambda **k: [
+    monkeypatch.setattr(main, "_apps_inventaire", lambda: [
         {"name": "bazi_calculator", "running": False}, {"name": "generix", "running": True}, {"name": "mauvais nom!", "running": True}])
     monkeypatch.setattr(main, "_load_streamlit_config", lambda: {"instances": {
         "pix": {"app": "bazi_calculator", "domain": "bazi.gk2.secubox.in", "enabled": True},
