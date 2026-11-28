@@ -20,11 +20,25 @@ Type=oneshot
 # #4050 : sur gk2 chargé (charge 20-30), l'inventaire dépassait 60 s, était
 # tué, et recommençait à chaque tour sans jamais écrire : du CPU pour rien.
 # Priorité basse (il cède la place aux services) et délai qui le laisse finir.
+# #4053 : sur gk2, une COPIE ANCIENNE de cette unité sous /etc/systemd/system
+# (posée à la main le 2026-08-02, TimeoutStartSec=60, ni Nice ni minuterie à
+# 30 min) masquait celle du paquet : l'inventaire, qui prend 35 à 60 s sous
+# charge, était tué une fois sur deux. Le postinst retire désormais ces
+# copies. Et l'inventaire est borné de lui-même : chaque lxc-attach de
+# streamlitctl a son délai (résultat partiel, summary.partiel), le tout
+# `timeout 240`, sous les 300 s de systemd. Un résultat vide ou un échec
+# (ou un JSON illisible) n'écrase JAMAIS le dernier inventaire complet (double tampon) et le
+# temporaire ne traîne plus.
 TimeoutStartSec=300
 Nice=15
 CPUWeight=20
 IOSchedulingClass=idle
 ExecStart=/bin/sh -c 'install -d -m 0755 /var/cache/secubox/streamlit && \
-  /usr/sbin/streamlitctl app audit > /var/cache/secubox/streamlit/.audit.tmp && \
-  mv /var/cache/secubox/streamlit/.audit.tmp /var/cache/secubox/streamlit/audit.json'
+  if timeout -k 10 240 /usr/sbin/streamlitctl app audit > /var/cache/secubox/streamlit/.audit.tmp && \
+     [ -s /var/cache/secubox/streamlit/.audit.tmp ] && \
+     python3 -I -m json.tool /var/cache/secubox/streamlit/.audit.tmp > /dev/null; then \
+    mv /var/cache/secubox/streamlit/.audit.tmp /var/cache/secubox/streamlit/audit.json; \
+  else \
+    rm -f /var/cache/secubox/streamlit/.audit.tmp; exit 1; \
+  fi'
 StandardError=journal

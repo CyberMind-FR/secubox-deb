@@ -1,3 +1,30 @@
+secubox-streamlit (1.9.0-1~trixie1) trixie; urgency=medium
+
+  * Inventaire (streamlit-audit) : chaque lecture du conteneur (ps, ss,
+    journalctl) est bornée ; au-delà, inventaire partiel (summary.partiel)
+    plutôt qu'une attente sans fin ; unité bornée (timeout 240), un résultat
+    vide n'écrase plus l'inventaire complet, plus de .audit.tmp qui traîne.
+    Le postinst retire les copies anciennes de streamlit-audit.{service,timer}
+    sous /etc/systemd/system (délai 60 s, minuterie 5 min) qui masquaient
+    celles du paquet sur gk2 (ref #4053).
+  * Veille : `autostart = true` n'exempte plus de la mise en veille ; seule
+    `[apps.<nom>] veille = false` le fait ; délai propre `veille_minutes`.
+    Nouveau verbe `streamlitctl app veille <nom> on|off [minutes]`, audité
+    (ref #4053).
+  * API : /apps, /access, /status, /apps/vitrine et /instances lus dans
+    l'inventaire en cache et le TOML, plus jamais `streamlitctl app list` dans
+    la requête (504 et boucle figée sur gk2) ; /instances en lecture gardée,
+    « en ligne » d'après les processus du conteneur (ref #4053).
+  * Fiche par appli : GET /app/{nom} (lecture gardée), POST /app/{nom}/port,
+    /veille, /autostart (require_jwt) ; journaux de l'unité dans le conteneur
+    (ref #4053).
+  * Panneau : fiche ouverte depuis la Mosaïque, les Applis et les Instances
+    (état, actions, port, publication, veille, démarrage au boot, journaux) ;
+    onglet Instances : créer (publier), démarrer, arrêter, supprimer ; mode
+    démonstration conservé (ref #4053).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 10:00:00 +0100
+
 secubox-streamlit (1.8.0-1~trixie1) trixie; urgency=medium
 
   * Panneau « Charge » (onglet par défaut) : applis éveillées en haut avec CPU %,

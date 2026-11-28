@@ -1174,6 +1174,40 @@ def verbe_port(a, conf: Path, apps: Path) -> dict:
             "avertissements": avert}
 
 
+VEILLE_MINUTES_MAX = 7 * 24 * 60   # une semaine : au-delà, désactiver la veille plutôt qu'un délai démesuré
+
+
+def verbe_veille(a, conf: Path, apps: Path) -> dict:
+    """Veille PAR APPLI (#4053) : `[apps.<appli>] veille = true|false` et `veille_minutes` (délai propre, sinon
+    `[idle] timeout_minutes`). Lu par `streamlitctl app idle-check` et rendu par `app audit`. L'appli est déclarée
+    si elle ne l'était pas (sans port : le port reste l'affaire de `port`). Audité."""
+    if not appli_existe(apps, a.appli):
+        raise Refus(INCONNUE, f"appli inconnue : {a.appli}")
+    if a.minutes is not None and not 0 <= a.minutes <= VEILLE_MINUTES_MAX:
+        raise Refus(ARGUMENT, f"délai de veille hors limites : 1 à {VEILLE_MINUTES_MAX} minutes (0 = délai commun)")
+    actif = a.actif == "oui"
+    with verrou() if a.apply else contextlib.nullcontext():
+        texte = _lire_conf(conf)
+        entete = f"apps.{a.appli}"
+        champs = {"veille": actif}
+        if "enabled" not in applis_declarees(texte).get(a.appli, {}):
+            champs = {"enabled": True, **champs}
+        nouveau = poser_cles(texte, entete, champs)
+        if a.minutes:
+            nouveau = poser_cles(nouveau, entete, {"veille_minutes": a.minutes})
+        elif a.minutes == 0:
+            nouveau = retirer_cles(nouveau, entete, {"veille_minutes"})
+        if a.apply:
+            journal = Journal(a.par)
+            try:
+                _ecrire_conf(conf, texte, nouveau)
+                journal.ecrire(action="veille", appli=a.appli, veille=actif, veille_minutes=a.minutes)
+            finally:
+                journal.fermer()
+    return {"ok": True, "appli": a.appli, "veille": actif, "veille_minutes": a.minutes or None,
+            "applique": bool(a.apply)}
+
+
 def verbe_publier(a, conf: Path, apps: Path) -> dict:
     if not appli_existe(apps, a.appli):
         raise Refus(INCONNUE, f"appli inconnue : {a.appli}")
@@ -2187,6 +2221,12 @@ def _parseur() -> _Parseur:
     s.add_argument("--lxc-config", dest="lxc_config")
     s.add_argument("--par", type=_type_acteur, default="inconnu")
     s.add_argument("--apply", action="store_true")
+    s = sub.add_parser("veille")
+    s.add_argument("appli", type=_type_appli)
+    s.add_argument("--actif", required=True, choices=["oui", "non"])
+    s.add_argument("--minutes", type=int)
+    s.add_argument("--par", type=_type_acteur, default="inconnu")
+    s.add_argument("--apply", action="store_true")
     s = sub.add_parser("depublier")
     s.add_argument("appli", type=_type_appli)
     s.add_argument("--par", type=_type_acteur, default="inconnu")
@@ -2247,6 +2287,8 @@ def main(argv: list[str] | None = None, entree: str | None = None) -> int:
             r = verbe_publier(a, conf, apps)
         elif a.verbe == "depublier":
             r = verbe_depublier(a, conf, apps)
+        elif a.verbe == "veille":
+            r = verbe_veille(a, conf, apps)
         elif a.verbe == "etat":
             r = verbe_etat(a, conf, apps)
         elif a.verbe == "ecrire-port":

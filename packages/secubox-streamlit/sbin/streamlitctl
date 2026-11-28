@@ -34,6 +34,15 @@ load_config() {
 lxc_running() { lxc-info -n "$LXC_NAME" -s 2>/dev/null | grep -q "RUNNING"; }
 lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 
+# Appel BORNÉ au conteneur pour les LECTURES (#4053) : ps, ss, journalctl.
+# Mesuré sur gk2 (charge 35 sur 4 cœurs) : un lxc-attach met 3 s d'ordinaire,
+# mais rien ne l'empêchait de pendre — et l'inventaire entier (minuterie
+# streamlit-audit, veille) pendait avec lui jusqu'au délai de systemd, sans
+# rien écrire. Rend 124 (ou 137 après -k) au-delà du délai : l'appelant
+# décide d'un résultat partiel, jamais d'une attente sans fin.
+LXC_ATTACH_TIMEOUT="${SECUBOX_STREAMLIT_LXC_TIMEOUT:-25}"
+_lxc_borne() { timeout -k 5 "$LXC_ATTACH_TIMEOUT" lxc-attach -n "$LXC_NAME" -- "$@"; }
+
 # ─────────────────────────────────────────────────────────────────────
 # IDLE-TRACKING HELPERS (#331)
 # ─────────────────────────────────────────────────────────────────────
@@ -65,7 +74,7 @@ _app_running() {
     local port; port=$(_lire_port_fichier "$(_app_port_file "$name")")
     [ -z "$port" ] && return 1
     lxc_running || return 1
-    lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
+    _lxc_borne ss -tln "sport = :$port" 2>/dev/null \
         | awk -v p="$port" 'NR>1 && $4 ~ ":"p"$" {found=1} END {exit found?0:1}'
 }
 
@@ -269,8 +278,15 @@ _ps_lines() {
     # No -P here: it would force a specific lxcpath. lxc-attach must resolve
     # the container's own lxc.lxcpath (see /etc/lxc/lxc.conf on the board) —
     # hardcoding one here duplicated (and drifted from) that configuration.
-    lxc-attach -n "$LXC_NAME" -- \
-        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+    # Borné (#4053) : 124 = délai dépassé, distingué d'« aucune appli en
+    # ligne » pour que l'inventaire se déclare PARTIEL au lieu de mentir.
+    local raw rc=0
+    raw=$(_lxc_borne ps -eo args 2>/dev/null) || rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+        error "ps du conteneur : délai de ${LXC_ATTACH_TIMEOUT} s dépassé — processus inconnus (inventaire partiel)"
+        return 124
+    fi
+    printf '%s\n' "$raw" | grep "streamlit run" | grep -v grep || true
 }
 
 # Nom d'appli déduit d'un chemin de script : "a/app.py" -> "a", "b.py" -> "b".
@@ -339,7 +355,15 @@ _declared_path_to_name() {
 # appli, cf. note perf de `_ps_lines`.
 _scan_running_apps() {
     declare -gA _RUN_SEEN=() _RUN_PORT=() _RUN_TOKEN=()
+    # Processus inconnus (ps du conteneur hors délai, #4053) : les appelants
+    # le rapportent (`app audit` : summary.partiel) au lieu de croire le parc
+    # entier endormi.
+    _RUN_PARTIEL=false
     _declared_path_to_name
+
+    local ps_out ps_rc=0
+    ps_out=$(_ps_lines) || ps_rc=$?
+    [ "$ps_rc" -eq 124 ] && _RUN_PARTIEL=true
 
     local ps_line script port app
     while IFS= read -r ps_line; do
@@ -364,7 +388,54 @@ _scan_running_apps() {
         _RUN_SEEN["$app"]=1
         _RUN_TOKEN["$app"]="$script"
         _RUN_PORT["$app"]="${port:-0}"
-    done < <(_ps_lines)
+    done <<< "$ps_out"
+}
+
+# Réglages de veille et de démarrage de TOUTES les applis déclarées, en un
+# seul passage awk (#4053) — jamais un sed par appli et par clé (64 applis ×
+# 3 clés sur gk2 : des centaines de processus sur une box déjà saturée).
+# Tableaux globaux : _REG_AUTOSTART, _REG_VEILLE, _REG_VEILLE_MIN (nom ->
+# valeur brute, guillemets retirés ; la première occurrence l'emporte).
+_apps_reglages() {
+    declare -gA _REG_AUTOSTART=() _REG_VEILLE=() _REG_VEILLE_MIN=()
+    [ -f "$CONF_PATH" ] || return 0
+    local n k v
+    while IFS=$'\t' read -r n k v; do
+        [ -n "$n" ] || continue
+        case "$k" in
+            autostart) _REG_AUTOSTART["$n"]="$v" ;;
+            veille) _REG_VEILLE["$n"]="$v" ;;
+            veille_minutes) _REG_VEILLE_MIN["$n"]="$v" ;;
+        esac
+    done < <(awk '
+        /^[ \t]*\[/ {
+            sec = ""
+            if (match($0, /^\[apps\.[^]]+\]/)) sec = substr($0, 7, RLENGTH - 7)
+            next
+        }
+        sec != "" && /^[ \t]*(autostart|veille|veille_minutes)[ \t]*=/ {
+            l = $0; sub(/^[ \t]*/, "", l)
+            k = l; sub(/[ \t]*=.*$/, "", k)
+            v = l; sub(/^[^=]*=[ \t]*/, "", v); sub(/[ \t]*#.*$/, "", v); gsub(/"/, "", v); gsub(/[ \t]+$/, "", v)
+            if (!((sec SUBSEP k) in vu)) { vu[sec SUBSEP k] = 1; printf "%s\t%s\t%s\n", sec, k, v }
+        }' "$CONF_PATH" 2>/dev/null)
+}
+
+# Délai de veille de l'appli $1, en secondes, dans _VEILLE_S (#4053) :
+# 0 = veille désactivée (`veille = false`) ; sinon `veille_minutes` propre à
+# l'appli, sinon le délai commun $2 (secondes). Suppose _apps_reglages fait.
+_veille_de() {
+    local n="$1" defaut="$2" m
+    if [ "${_REG_VEILLE[$n]:-}" = "false" ]; then
+        _VEILLE_S=0
+        return 0
+    fi
+    m="${_REG_VEILLE_MIN[$n]:-}"
+    if [[ "$m" =~ ^[0-9]{1,5}$ ]] && [ "$m" -gt 0 ]; then
+        _VEILLE_S=$(( m * 60 ))
+    else
+        _VEILLE_S="$defaut"
+    fi
 }
 
 # Entrées de $APPS_PATH à exclure de l'inventaire (#956) : ce ne sont
@@ -1043,6 +1114,7 @@ cmd_app_list() {
 
     local now; now=$(date +%s)
     local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+    _apps_reglages
 
     local name
     for name in $(printf '%s\n' "${!disk_names[@]}" | sort); do
@@ -1068,11 +1140,12 @@ cmd_app_list() {
 
         local escaped_name; escaped_name=$(_json_escape "$name")
         local escaped_main; escaped_main=$(_json_escape "$main_py")
+        _veille_de "$name" $(( tmo * 60 ))
 
         cat << EOF
   {"name": "$escaped_name", "main": "$escaped_main", "running": $running, "port": ${port:-0},
    "state": "$state", "last_active": $last, "idle_seconds": $idle,
-   "sleep_after_seconds": $(( tmo * 60 ))}
+   "sleep_after_seconds": $_VEILLE_S}
 EOF
     done
 
@@ -1249,6 +1322,7 @@ cmd_app_audit() {
     local now; now=$(date +%s)
     local tmo; tmo=$(_idle_config "timeout_minutes" "30")
     local sleep_after=$(( tmo * 60 ))
+    _apps_reglages
 
     while IFS= read -r n; do
         [ -z "$n" ] && continue
@@ -1382,6 +1456,14 @@ cmd_app_audit() {
             fi
         fi
 
+        # Réglages propres (#4053) : veille (délai, désactivée = 0) et
+        # démarrage automatique, pour la fiche de l'appli dans le panneau.
+        _veille_de "$n" "$sleep_after"
+        local app_veille=true app_autostart=false app_veille_min=0
+        [ "$_VEILLE_S" -eq 0 ] && app_veille=false
+        [ "${_REG_AUTOSTART[$n]:-}" = "true" ] && app_autostart=true
+        [[ "${_REG_VEILLE_MIN[$n]:-}" =~ ^[0-9]{1,5}$ ]] && app_veille_min="${_REG_VEILLE_MIN[$n]}"
+
         local ename eentry edomain eshotcap
         ename=$(_json_escape "$n")
         eentry=$(_json_escape "$entrypoint")
@@ -1390,13 +1472,13 @@ cmd_app_audit() {
 
         $first || out+=","
         first=false
-        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"domain\":\"$edomain\",\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after,\"screenshot_available\":$shot_available,\"screenshot_ok\":$shot_ok,\"screenshot_stale\":$shot_stale,\"screenshot_captured_at\":\"$eshotcap\"}"
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"domain\":\"$edomain\",\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$_VEILLE_S,\"veille\":$app_veille,\"veille_minutes\":$app_veille_min,\"autostart\":$app_autostart,\"screenshot_available\":$shot_available,\"screenshot_ok\":$shot_ok,\"screenshot_stale\":$shot_stale,\"screenshot_captured_at\":\"$eshotcap\"}"
     done <<< "$names_sorted"
 
     out+="]"
 
     cat <<EOF
-{"apps":$out,"summary":{"total":$total,"running":$running_count,"archived":$archived_count}}
+{"apps":$out,"summary":{"total":$total,"running":$running_count,"archived":$archived_count,"partiel":$_RUN_PARTIEL,"genere_a":$now}}
 EOF
 }
 
@@ -2200,7 +2282,7 @@ _idle_snapshot_ensure() {
     lxc_running || return 0
 
     local raw
-    raw=$(lxc-attach -n "$LXC_NAME" -- sh -c '
+    raw=$(_lxc_borne sh -c '
         echo "@@SBX-PS@@"
         ps -eo args
         echo "@@SBX-SS@@"
@@ -2307,6 +2389,7 @@ cmd_app_idle_check() {
     _idle_snapshot_ensure
 
     _scan_running_apps
+    _apps_reglages
 
     # ── Connexions ESTABLISHED par port local, du même instantané ────────
     local -A established=()
@@ -2328,17 +2411,20 @@ cmd_app_idle_check() {
             continue
         fi
 
-        # Declared always-on (`[apps.$name].autostart = true`, the same
-        # flag `cmd_autostart` uses to `systemctl enable` this app's
-        # unit) is never a stop candidate — under Restart=no an idle-stop
-        # here would never come back on its own, defeating the whole
-        # point of declaring the app always-on in the first place.
-        if _app_declared "$name" && [ "$(_toml_section_value "$CONF_PATH" "$name" autostart)" = "true" ]; then
-            log "idle-check: $name is declared autostart — never a stop candidate"
+        # Veille désactivée PAR APPLI (`[apps.$name].veille = false`, #4053) :
+        # seule exemption. Avant #4053, `autostart = true` exemptait aussi —
+        # mais « démarrée au boot » n'est pas « jamais endormie » : sur gk2,
+        # diapvid, enhance_app et files_51 tournaient depuis 29 jours sans
+        # jamais être endormies. Une appli publiée endormie est réveillée à
+        # la première requête par le réveilleur de sbxwaf (waker.sock).
+        _veille_de "$name" "$timeout_sec"
+        if [ "$_VEILLE_S" -eq 0 ]; then
+            log "idle-check: $name a la veille désactivée (veille = false) — jamais arrêtée"
             _app_touch_active "$name"
             active=$(( active + 1 ))
             continue
         fi
+        local app_timeout="$_VEILLE_S"
 
         local port="${_RUN_PORT[$name]:-0}"
         if [ -z "$port" ] || [ "$port" = "0" ]; then
@@ -2376,11 +2462,11 @@ cmd_app_idle_check() {
         fi
         local idle_sec=$(( now - last ))
 
-        if [ "$idle_sec" -ge "$timeout_sec" ]; then
+        if [ "$idle_sec" -ge "$app_timeout" ]; then
             if [ "$dry_run" = "true" ]; then
-                log "idle-check: [dry-run] would stop $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+                log "idle-check: [dry-run] would stop $name (idle ${idle_sec}s >= ${app_timeout}s)"
             else
-                log "idle-stop: $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+                log "idle-stop: $name (idle ${idle_sec}s >= ${app_timeout}s)"
                 cmd_app_stop "$name" >/dev/null 2>&1 || true
             fi
             stopped=$(( stopped + 1 ))
@@ -2692,13 +2778,27 @@ cmd_app_logs() {
     local lines="${2:-100}"
 
     [ -z "$name" ] && { error "Usage: streamlitctl app logs <name> [lines]"; return 1; }
+    case "$lines" in ''|*[!0-9]*) lines=100 ;; esac
+    [ "$lines" -gt 1000 ] && lines=1000
+    [ "$lines" -lt 1 ] && lines=1
 
     local log_file="$DATA_PATH/logs/$name.log"
     if [ -f "$log_file" ]; then
         tail -n "$lines" "$log_file"
-    else
-        echo "No logs found for $name"
+        return 0
     fi
+    # Les applis tournent en unités streamlit-app@<nom> DANS le conteneur
+    # (#4053) : leur sortie est au journal du conteneur, jamais dans
+    # $DATA_PATH/logs (absent sur gk2 : « No logs found » pour toutes).
+    if lxc_running; then
+        local out rc=0
+        out=$(_lxc_borne journalctl -u "$(_unit_instance "$name")" -n "$lines" --no-pager -o short-iso 2>&1) || rc=$?
+        if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
+            printf '%s\n' "$out"
+            return 0
+        fi
+    fi
+    echo "No logs found for $name"
 }
 
 # app autostart — the declarative "always on" flag: `[apps.<name>]
@@ -2709,9 +2809,9 @@ cmd_app_logs() {
 # that part. autostart=false/absent never enables anything: nothing here
 # starts the whole fleet by default (the defect being fixed).
 #
-# The SAME flag also exempts the app from `app idle-check` (see below):
-# a declared always-on app that idle-check silently stopped would, under
-# Restart=no, never come back on its own.
+# Depuis #4053 ce drapeau n'exempte PLUS de `app idle-check` : seule
+# `[apps.<name>] veille = false` le fait (`app veille <name> off`). Une
+# appli publiée endormie est réveillée à la demande par sbxwaf.
 cmd_autostart() {
     if [ -f "$CONF_PATH" ]; then
         local apps; apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
@@ -2740,6 +2840,10 @@ cmd_autostart() {
 # ─────────────────────────────────────────────────────────────────────
 
 cmd_instance_list() {
+    # En ligne = un processus de l'appli DANS le conteneur (#4053), jamais un
+    # `ss` sur l'hôte : les applis n'écoutent pas sur l'hôte, toutes les
+    # instances se lisaient arrêtées.
+    _scan_running_apps
     echo '{"instances":['
     local first=true
 
@@ -2754,7 +2858,7 @@ cmd_instance_list() {
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'true' && echo "true" || echo "false")
 
             local running="false"
-            [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running="true"
+            [ -n "$app" ] && [ -n "${_RUN_SEEN[$app]:-}" ] && running="true"
 
             $first || echo ","
             first=false
@@ -2956,7 +3060,7 @@ _publication() {
 # Ports en écoute dans le conteneur, tous processus confondus (un seul lxc-attach).
 _ports_en_ecoute() {
     lxc_running || return 0
-    lxc-attach -n "$LXC_NAME" -- ss -Htln 2>/dev/null \
+    _lxc_borne ss -Htln 2>/dev/null \
         | awk '{print $4}' | sed -nE 's/.*:([0-9]+)$/\1/p' | sort -un | tr '\n' ' '
 }
 
@@ -3022,6 +3126,29 @@ cmd_app_unpublish() {
         case "$1" in
             --apply) args+=(--apply) ;;
             --par) args+=(--par "${2:-}"); shift ;;
+        esac
+        shift
+    done
+    _publication "${args[@]}"
+}
+
+# app veille <name> <on|off> [<minutes>] [--par <qui>] [--apply] — veille
+# propre à l'appli (#4053) : `[apps.<name>] veille` et `veille_minutes`
+# (0 = délai commun de [idle]). Écrit par publication.py (verrou, double
+# tampon, audit), lu par `app idle-check` et `app audit`.
+cmd_app_veille() {
+    local name="$1" mode="${2:-}"; shift 2 || true
+    local args=(veille "$name") a
+    case "$mode" in
+        on) args+=(--actif oui) ;;
+        off) args+=(--actif non) ;;
+        *) error "Usage: streamlitctl app veille <name> <on|off> [minutes] [--par <qui>] [--apply]"; return 64 ;;
+    esac
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --apply) args+=(--apply) ;;
+            --par) args+=(--par "${2:-}"); shift ;;
+            *) args+=(--minutes "$1") ;;
         esac
         shift
     done
@@ -3229,6 +3356,23 @@ case "${1:-}:${2:-}" in
             esac
         done
         [ -z "$_attendu" ] || _refuser "--par" ;;
+    app:veille)
+        _exiger_nom "${3:-}"
+        case "${4:-}" in on|off) ;; *) _refuser "${4:-}" ;; esac
+        _attendu=""
+        for _a in "${@:5}"; do
+            if [ "$_attendu" = "par" ]; then
+                _acteur_admis "$_a" || _refuser "$_a"
+                _attendu=""
+                continue
+            fi
+            case "$_a" in
+                --apply) ;;
+                --par) _attendu=par ;;
+                *) _entier_admis "$_a" || _refuser "$_a" ;;
+            esac
+        done
+        [ -z "$_attendu" ] || _refuser "--par" ;;
     app:port)
         _exiger_nom "${3:-}"
         for _a in "${@:4}"; do
@@ -3333,9 +3477,10 @@ case "${1:-}" in
             publish)     cmd_app_publish "${@:3}" ;;
             unpublish)   cmd_app_unpublish "${@:3}" ;;
             publication) cmd_app_publication "$3" ;;
+            veille)      cmd_app_veille "${@:3}" ;;
             env)         cmd_app_env "${@:3}" ;;
             depublier-anciennes) cmd_app_depublier_anciennes "${@:3}" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target|port|publish|unpublish|publication|env} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target|port|publish|unpublish|publication|veille|env} [args]" ;;
         esac
         ;;
 
@@ -3392,7 +3537,8 @@ Apps:
   app archive <name> [--apply] [--force]   Mark an app archived=true, enabled=false (dry-run by default)
   app archive --undeclared [--apply] [--force]  Declare+archive all undeclared on-disk apps
   app unarchive <name> [--apply]           Reverse of archive (dry-run by default)
-  app autostart <name> <on|off> [--apply]  Declarative always-on: systemd enable + idle-check exempt
+  app autostart <name> <on|off> [--apply]  Declarative boot start: systemd enable (veille unchanged)
+  app veille <name> <on|off> [minutes] [--par who] [--apply]  Per-app idle sleep (#4053)
   app start <name> [port]   Start an app (drives streamlit-app@<name>.service; refuses without a resolvable port)
   app stop <name>           Stop an app (drives streamlit-app@<name>.service)
   app wake-by-port <port> [wait]  Wake whatever app owns <port> (on-access path, #746; exit 2 = no owner)
