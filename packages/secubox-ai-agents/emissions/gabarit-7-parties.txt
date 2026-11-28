@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# See LICENCE-CMSD-1.0.md for terms.
+# Gabarit éditable de l'émission (#4058) ; les lignes commençant par « # » ne sont pas envoyées au moteur.
+Plan de l'émission en sept parties :
+1. Ouverture : de quoi parle-t-on cette fois, en une phrase.
+2. Ce qui a changé : les évolutions, de la plus marquante à la moins marquante.
+3. Les chiffres : bans, adresses, réseaux, jours actifs, cités tels quels.
+4. Le déroulé : vagues et phases dans l'ordre des dates.
+5. Ce que cela veut dire, et ce que cela ne veut pas dire.
+6. Ce qu'on surveille pour la suite.
+7. Clôture : une phrase de résumé, sans slogan.
