@@ -167,7 +167,8 @@ streamlitctl frontal set couture --domaine couture.gk2.secubox.in --cible 10.100
 
 - `GET /api/v1/streamlit/status` - Module status
 - `GET /api/v1/streamlit/health` - Health check
-- `GET /api/v1/streamlit/apps/audit` - Fleet-wide inventory (disk/declared/running), feeds the Mosaïque tab, cached every 5 min (lecture gardée : jeton, cookie de session ou tableau de bord LAN)
+- `GET /api/v1/streamlit/apps/audit` - Fleet-wide inventory (disk/declared/running), feeds the Mosaïque tab, cached every 30 min (lecture gardée : jeton, cookie de session ou tableau de bord LAN)
+- `GET /api/v1/streamlit/apps/ressources` - Charge par appli (#4050) : `total` (éveillées, cpu_pct en % de la box, memoire, conteneur, histo_cpu) et `applis[]` (name, eveillee, etat eveillee/endormie/archivee, cpu_pct, memoire, histo_cpu, age_s, dernier_acces) ; éveillées d’abord, endormies à zéro. Cgroup `streamlit-app@<nom>` lu depuis l’hôte, relevé en fond toutes les 10 s tant que la route est lue, cache `/var/lib/secubox/streamlit-ressources/ressources.json` (lecture gardée)
 - `POST /api/v1/streamlit/apps/{name}/wake` - Wake an idle-stopped app without blocking: answers `running` or `waking` within 25 s, the wall re-polls until `running`; the failure of a background wake is returned once (404/503/504) on the next poll — the container itself is woken if it sleeps; also fires a lazy thumbnail capture if stale
 - `GET /api/v1/streamlit/apps/{name}/screenshot` - Serve the conserved thumbnail (lecture gardée depuis #1776 — the wall's `<img>` carries the session cookie; no longer public)
 - `POST /api/v1/streamlit/apps/{name}/recapture` - Manually trigger a thumbnail recapture (detached, returns immediately)

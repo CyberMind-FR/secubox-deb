@@ -101,6 +101,18 @@
         @keyframes sbx-spin{to{transform:rotate(360deg)}}
         @media (prefers-reduced-motion:reduce){.reveil .tourne{animation:none}}
         .echec{color:var(--rouge);font-size:.68rem}
+        /* Charge (#4050) : éveillées en haut, endormies estompées en bas */
+        .chg{display:grid;gap:0}
+        .cl{display:grid;grid-template-columns:minmax(120px,1.3fr) minmax(110px,1fr) minmax(110px,1fr) minmax(90px,.8fr) minmax(110px,1fr);gap:6px 12px;align-items:center;padding:8px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.85rem}
+        .cl:first-child{border-top:0} .cl.tete-cl{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible)}
+        .cl.dort{opacity:.38;filter:grayscale(.8)} .cl.dort .jauge i{background:var(--faible)}
+        .cl .n{font-weight:700;color:var(--cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .cl.dort .n{color:var(--doux)}
+        .cl .sub{display:block;font-size:.7rem;color:var(--faible);font-weight:400}
+        .jauge{height:8px;border-radius:4px;background:rgba(86,150,255,.14);overflow:hidden;margin-top:3px} .jauge i{display:block;height:100%;background:var(--vert);border-radius:4px}
+        .jauge i.att{background:var(--orange)} .jauge i.hors{background:var(--rouge)} .jauge i.mem{background:var(--violet)}
+        .val{font-variant-numeric:tabular-nums}
+        .histo{display:flex;align-items:flex-end;gap:1px;height:24px} .histo b{flex:1 1 0;min-width:2px;background:var(--cyan);opacity:.55;border-radius:1px 1px 0 0} .histo b:last-child{opacity:1}
+        @container a (max-width:640px){.cl{grid-template-columns:1fr 1fr} .cl.tete-cl{display:none}}
         .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw;overflow-wrap:anywhere}
         .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ko{border-color:var(--rouge);pointer-events:auto}
         .toast button{margin-left:10px;font:inherit;background:none;border:0;color:var(--texte);cursor:pointer}
@@ -122,7 +134,7 @@
         <div id="erreur" role="alert" hidden></div>
 
         <section class="tuiles" aria-label="Parc d’applications">
-            <div class="tuile cy" title="Nombre d’applications de tout le parc, lu dans l’inventaire croisé disque, déclarations et processus (/apps/audit), mis à jour toutes les 5 minutes en tâche de fond."><span class="l">Applis</span><span class="v" id="fTotal">—</span><span class="s">dans l’inventaire</span></div>
+            <div class="tuile cy" title="Nombre d’applications de tout le parc, lu dans l’inventaire croisé disque, déclarations et processus (/apps/audit), mis à jour toutes les 30 minutes en tâche de fond."><span class="l">Applis</span><span class="v" id="fTotal">—</span><span class="s">dans l’inventaire</span></div>
             <div class="tuile ok" id="cEnLigne" title="Applis dont le processus tourne maintenant. Zéro est normal : les applis s’endorment après un temps d’inactivité (#982) et se réveillent à la demande."><span class="l">En ligne</span><span class="v" id="fEnLigne">—</span><span class="s">éveillées maintenant</span></div>
             <div class="tuile bl" title="Applis arrêtées par la mise en veille automatique. Elles redémarrent au premier accès, ou via « réveiller »."><span class="l">Endormies</span><span class="v" id="fDort">—</span><span class="s">réveil à la demande</span></div>
             <div class="tuile vi" title="Applis archivées : un choix délibéré, jamais démarrées seules."><span class="l">Archivées</span><span class="v" id="fArch">—</span><span class="s">jamais démarrées seules</span></div>
@@ -132,12 +144,27 @@
         <div class="info" id="veilleNote" hidden>Aucune appli en ligne : ce n’est pas une panne. Par conception, les applis s’endorment quand on ne s’en sert pas et se réveillent à la demande (« réveiller et ouvrir » dans la Mosaïque).</div>
 
         <div class="onglets" role="tablist" aria-label="Sections">
+            <button class="onglet" role="tab" id="t-charge" aria-controls="v-charge" aria-selected="false" tabindex="-1" data-onglet="charge" type="button">📊 Charge</button>
             <button class="onglet" role="tab" id="t-mosaic" aria-controls="v-mosaic" aria-selected="false" tabindex="-1" data-onglet="mosaic" type="button">🧩 Mosaïque</button>
             <button class="onglet" role="tab" id="t-etat" aria-controls="v-etat" aria-selected="true" tabindex="0" data-onglet="etat" type="button">État</button>
             <button class="onglet" role="tab" id="t-acces" aria-controls="v-acces" aria-selected="false" tabindex="-1" data-onglet="acces" type="button">Accès</button>
             <button class="onglet" role="tab" id="t-applis" aria-controls="v-applis" aria-selected="false" tabindex="-1" data-onglet="applis" type="button">Applis</button>
             <button class="onglet" role="tab" id="t-instances" aria-controls="v-instances" aria-selected="false" tabindex="-1" data-onglet="instances" type="button">Instances</button>
         </div>
+
+        <!-- CHARGE (#4050) -->
+        <section class="volet" id="v-charge" role="tabpanel" aria-labelledby="t-charge" hidden>
+            <section class="tuiles q4" aria-label="Ressources consommées par Streamlit">
+                <div class="tuile ok" title="Applis dont l’unité systemd tourne maintenant (cgroup présent)."><span class="l">Éveillées</span><span class="v" id="kEv">—</span><span class="s" id="kEvS">sur — applis</span></div>
+                <div class="tuile cy" title="Somme du CPU des applis éveillées, en % de la box entière (100 % = tous les cœurs). Mini-série : CPU du conteneur, un relevé toutes les 10 s."><span class="l">CPU Streamlit</span><span class="v" id="kCpu">—</span><div class="histo" id="kHisto" aria-hidden="true"></div><span class="s" id="kCpuS">—</span></div>
+                <div class="tuile vi" title="Somme de memory.current des unités éveillées."><span class="l">Mémoire des applis</span><span class="v" id="kMem">—</span><span class="s" id="kMemS">—</span></div>
+                <div class="tuile bl" title="Âge du dernier relevé de cgroup."><span class="l">Relevé</span><span class="v long" id="kAge">—</span><span class="s" id="kAgeS">toutes les 10 s, tant que le panneau est ouvert</span></div>
+            </section>
+            <div class="pan"><h3>Applis par charge <i>GET /apps/ressources</i></h3>
+                <div class="chg" id="charge"><div class="vide">Chargement…</div></div>
+                <p class="note">Mesures du cgroup de chaque unité <span class="mono">streamlit-app@&lt;nom&gt;</span> : CPU différencié entre deux relevés, mémoire courante. Une appli endormie ne consomme rien : sa ligne est estompée, en bas.</p>
+            </div>
+        </section>
 
         <!-- MOSAÏQUE -->
         <section class="volet" id="v-mosaic" role="tabpanel" aria-labelledby="t-mosaic" hidden>
@@ -262,6 +289,18 @@
                 { name: 'rapports-mensuels', state: 'sleeping', shape: 'app.py', domain: 'rapports.example.org', last_active: NOW0 - 7200, sleep_after_seconds: 900 },
                 { name: 'analyse-journaux', state: 'sleeping', shape: 'main.py', domain: '', last_active: NOW0 - 86400, sleep_after_seconds: 900, issues: ['stale-port', 'no-entrypoint'] },
                 { name: 'essai-ancien', state: 'archived', shape: 'app.py', domain: '' }] },
+            '/apps/ressources': { disponible: true, age_s: 4, intervalle_s: 10, coeurs: 4,
+                total: { eveillees: 3, applis: 8, cpu_pct: 41.7, memoire: 1288490188, conteneur_cpu_pct: 43.2, conteneur_memoire: 1503238553,
+                    histo_cpu: [22, 25, 31, 28, 35, 40, 38, 44, 51, 47, 42, 39, 45, 48, 43, 41, 46, 52, 49, 44, 40, 43, 47, 45, 42, 44, 46, 41, 43, 43] },
+                applis: [
+                    { name: 'enhance_app', eveillee: true, etat: 'eveillee', cpu_pct: 27.4, memoire: 734003200, histo_cpu: [12, 15, 22, 19, 25, 30, 28, 31, 35, 29, 27, 26, 30, 33, 28, 27, 29, 34, 31, 28, 25, 27, 30, 29, 26, 28, 30, 26, 27, 27], age_s: 2460, dernier_acces: NOW0 - 35, port: 8521, domain: 'enhance.example.org' },
+                    { name: 'files_51', eveillee: true, etat: 'eveillee', cpu_pct: 11.2, memoire: 377487360, histo_cpu: [8, 7, 6, 6, 8, 7, 7, 9, 11, 13, 12, 10, 11, 12, 11, 10, 12, 13, 12, 11, 10, 11, 12, 11, 11, 11, 12, 10, 11, 11], age_s: 5400, dernier_acces: NOW0 - 120, port: 8530, domain: 'fichiers.example.org' },
+                    { name: 'diapvid', eveillee: true, etat: 'eveillee', cpu_pct: 3.1, memoire: 176999628, histo_cpu: [2, 2, 3, 3, 2, 3, 3, 4, 5, 5, 3, 3, 4, 3, 4, 4, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 4, 5, 5, 3], age_s: 780, dernier_acces: NOW0 - 410, port: 8540, domain: '' },
+                    { name: 'tableau-capteurs', eveillee: false, etat: 'endormie', cpu_pct: 0, memoire: 0, histo_cpu: [], age_s: null, dernier_acces: NOW0 - 3600 },
+                    { name: 'carte-reseau', eveillee: false, etat: 'endormie', cpu_pct: 0, memoire: 0, histo_cpu: [], age_s: null, dernier_acces: NOW0 - 14400 },
+                    { name: 'rapports-mensuels', eveillee: false, etat: 'endormie', cpu_pct: 0, memoire: 0, histo_cpu: [], age_s: null, dernier_acces: NOW0 - 86400 * 2 },
+                    { name: 'analyse-journaux', eveillee: false, etat: 'endormie', cpu_pct: 0, memoire: 0, histo_cpu: [], age_s: null, dernier_acces: NOW0 - 86400 * 6 },
+                    { name: 'essai-ancien', eveillee: false, etat: 'archivee', cpu_pct: 0, memoire: 0, histo_cpu: [], age_s: null, dernier_acces: null }] },
             '/status': { app_count: 5, running_apps: 2, instance_count: 2, container_status: 'running' },
             '/health': { checks: { api: 'ok', streamlitctl: 'ok', apps_dir: 'ok', container: 'running' } },
             '/components': { components: [
@@ -303,8 +342,8 @@
         const ko = d => !d || d.erreur !== undefined;
 
         // ───── Onglets ─────
-        const ONGLETS = ['mosaic', 'etat', 'acces', 'applis', 'instances'];
-        let ACTIF = ONGLETS.indexOf(Q.get('onglet')) >= 0 ? Q.get('onglet') : 'etat';
+        const ONGLETS = ['charge', 'mosaic', 'etat', 'acces', 'applis', 'instances'];
+        let ACTIF = ONGLETS.indexOf(Q.get('onglet')) >= 0 ? Q.get('onglet') : 'charge';
         function montrer(nom, focus) {
             ACTIF = nom;
             ONGLETS.forEach(o => {
@@ -318,7 +357,8 @@
             annoncer();
         }
         function chargerOnglet(nom, force) {
-            if (nom === 'mosaic') chargerMur(force);
+            if (nom === 'charge') chargerCharge();
+            else if (nom === 'mosaic') chargerMur(force);
             else if (nom === 'etat') { chargerEtat(); chargerSante(); chargerComposants(); }
             else if (nom === 'acces') chargerAcces();
             else if (nom === 'applis') chargerApplis();
@@ -389,7 +429,7 @@
             $('cAnom').className = 'tuile ' + (c && c.issues > 0 ? 'att' : 'ok');
             let note = '';
             if (auditData && !ko(auditData)) {
-                if (!auditData.available) note = 'Inventaire pas encore calculé' + (auditData.reason ? ' (' + auditData.reason + ')' : '') + ' — le relevé s’exécute toutes les 5 minutes en tâche de fond, réessayez dans un instant.';
+                if (!auditData.available) note = 'Inventaire pas encore calculé' + (auditData.reason ? ' (' + auditData.reason + ')' : '') + ' — le relevé s’exécute toutes les 30 minutes en tâche de fond, réessayez dans un instant.';
                 else note = formatCacheAge(auditData.cache_age_seconds);
             }
             $('fnote').textContent = note;
@@ -406,6 +446,54 @@
             const age = formatCacheAge(auditData.cache_age_seconds); if (age) r.append(' · ' + age);
         }
 
+        // ───── Charge (#4050) ─────
+        let chargeTimer = null;
+        function octets(n) { if (n == null) return '—'; if (n < 1048576) return Math.round(n / 1024) + ' Kio'; if (n < 1073741824) return Math.round(n / 1048576) + ' Mio'; return (n / 1073741824).toFixed(2) + ' Gio'; }
+        const pct = v => (v == null ? '—' : v.toFixed(1) + ' %');
+        function jauge(frac, cls) { const j = el('div', 'jauge'), i = el('i', cls || ''); i.style.width = Math.max(0, Math.min(100, frac * 100)).toFixed(1) + '%'; j.appendChild(i); return j; }
+        function histo(serie) {
+            const h = el('div', 'histo'); const max = Math.max(1, ...serie);
+            serie.forEach(v => { const b = el('b'); b.style.height = Math.max(4, v / max * 100) + '%'; b.title = v.toFixed(1) + ' %'; h.appendChild(b); });
+            if (serie.length) h.title = 'pic ' + Math.max(...serie).toFixed(1) + ' % sur ' + serie.length + ' relevés';
+            return h;
+        }
+        function ilya(ts) { if (!ts) return 'jamais vue'; return 'accès il y a ' + formatDuration(Date.now() / 1000 - ts); }
+        async function chargerCharge() {
+            const d = await api('/apps/ressources');
+            rendreCharge(d);
+            clearTimeout(chargeTimer);
+            if (ACTIF === 'charge' && !DEMO) chargeTimer = setTimeout(() => { if (ACTIF === 'charge' && !document.hidden) chargerCharge(); }, 10000);
+        }
+        function rendreCharge(d) {
+            const z = $('charge'); z.replaceChildren();
+            if (ko(d)) { z.appendChild(el('div', 'vide', !SESSION_OK ? '—' : 'Mesures illisibles : service arrêté ou injoignable.')); return; }
+            const t = d.total || {}, applis = d.applis || [];
+            $('kEv').textContent = nb(t.eveillees); $('kEvS').textContent = 'sur ' + nb(t.applis) + ' applis';
+            $('kCpu').textContent = pct(t.cpu_pct); $('kCpuS').textContent = 'conteneur ' + pct(t.conteneur_cpu_pct) + ' · ' + nb(d.coeurs) + ' cœurs';
+            $('kHisto').replaceChildren(...histo(t.histo_cpu || []).childNodes);
+            $('kMem').textContent = octets(t.memoire); $('kMemS').textContent = 'conteneur ' + octets(t.conteneur_memoire);
+            $('kAge').textContent = d.age_s == null ? '—' : 'il y a ' + d.age_s + ' s';
+            if (!d.disponible) { z.appendChild(el('div', 'vide', 'Cgroup du conteneur introuvable : conteneur arrêté ou non installé.')); return; }
+            if (!applis.length) { z.appendChild(el('div', 'vide', 'Aucune application détectée.')); return; }
+            const tete = el('div', 'cl tete-cl'); ['Appli', 'CPU (box)', 'Mémoire', 'Récent', 'Éveil / accès'].forEach(x => tete.appendChild(el('span', '', x))); z.appendChild(tete);
+            const memMax = Math.max(1, ...applis.map(a => a.memoire || 0));
+            applis.forEach(a => {
+                const r = el('div', 'cl' + (a.eveillee ? '' : ' dort'));
+                const n = el('div', 'n', a.name); n.title = a.name;
+                n.appendChild(el('span', 'sub', a.eveillee ? '🟢 éveillée' + (a.port ? ' · :' + a.port : '') : a.etat === 'archivee' ? '📦 archivée' : '😴 endormie'));
+                r.appendChild(n);
+                const c = el('div'); const cv = a.eveillee ? a.cpu_pct : 0;
+                c.appendChild(el('span', 'val', a.eveillee ? (cv == null ? 'mesure…' : pct(cv)) : '0 %'));
+                c.appendChild(jauge((cv || 0) / 100, cv >= 40 ? 'hors' : cv >= 20 ? 'att' : '')); r.appendChild(c);
+                const m = el('div'); m.appendChild(el('span', 'val', a.eveillee ? octets(a.memoire) : '0'));
+                m.appendChild(jauge((a.memoire || 0) / memMax, 'mem')); r.appendChild(m);
+                r.appendChild(a.eveillee ? histo(a.histo_cpu || []) : el('span', 'sub', '—'));
+                const e = el('div', 'sub'); e.textContent = (a.eveillee && a.age_s != null ? 'éveillée depuis ' + formatDuration(a.age_s) + ' · ' : '') + ilya(a.dernier_acces);
+                r.appendChild(e);
+                z.appendChild(r);
+            });
+        }
+
         // ───── Mosaïque ─────
         async function chargerMur(force) {
             if (!auditData) { const m = $('mur'); m.replaceChildren(el('div', 'vide', 'Chargement du parc d’applis…')); m.firstChild.style.gridColumn = '1/-1'; }
@@ -417,7 +505,7 @@
             const m = $('mur'); m.replaceChildren(); tempoCibles = [];
             if (!auditData) { m.appendChild(videMur('Chargement du parc d’applis…')); return; }
             if (ko(auditData)) { stopTick(); m.appendChild(videMur(!SESSION_OK ? '—' : 'Inventaire illisible : service arrêté ou injoignable.')); return; }
-            if (!auditData.available) { stopTick(); m.appendChild(videMur('Inventaire pas encore calculé' + (auditData.reason ? ' (' + auditData.reason + ')' : '') + ' — le relevé s’exécute toutes les 5 minutes en tâche de fond, réessayez dans un instant.')); return; }
+            if (!auditData.available) { stopTick(); m.appendChild(videMur('Inventaire pas encore calculé' + (auditData.reason ? ' (' + auditData.reason + ')' : '') + ' — le relevé s’exécute toutes les 30 minutes en tâche de fond, réessayez dans un instant.')); return; }
             const apps = auditData.apps || [];
             if (!apps.length) { stopTick(); m.appendChild(videMur('Aucune application détectée : rien n’est déployé. Déployez une appli depuis l’onglet Applis.')); return; }
             const rank = s => s === 'running' ? 0 : s === 'sleeping' ? 1 : 2;

@@ -7,6 +7,8 @@ case "$1" in
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     install -d -o secubox -g secubox -m 755 /srv/streamlit/apps /srv/streamlit/logs
+    # Cache des ressources par appli (#4050), écrit par l'API (utilisateur secubox).
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/streamlit-ressources
     # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
     [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
     [ -e /var/log/secubox/streamlit.log ] || install -m 0640 -o secubox -g secubox /dev/null /var/log/secubox/streamlit.log  # #3916 : le service ne peut pas créer dans le parent root

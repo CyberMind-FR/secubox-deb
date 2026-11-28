@@ -1,3 +1,19 @@
+secubox-streamlit (1.8.0-1~trixie1) trixie; urgency=medium
+
+  * Panneau « Charge » (onglet par défaut) : applis éveillées en haut avec CPU %,
+    mémoire, mini-histogramme, âge et dernier accès ; endormies estompées en bas,
+    mesures à zéro ; total Streamlit en tête (ref #4050).
+  * GET /apps/ressources (require_lecture) : cgroup de chaque unité
+    streamlit-app@<nom> (cpu.stat différencié, memory.current), relevé en fond
+    toutes les 10 s tant que le panneau est lu, cache en double tampon dans
+    /var/lib/secubox/streamlit-ressources/ (ref #4050).
+  * streamlit-audit : toutes les 30 min (au lieu de 15), Nice=15, CPUWeight=20,
+    IOSchedulingClass=idle, délai 300 s (tué à 60 s sous charge, sans écrire).
+  * Mode démonstration (?demo=1) du panneau Charge ; non repris : aucune
+    mesure disque ni réseau par appli.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 09:00:53 +0100
+
 secubox-streamlit (1.7.7-1~trixie1) trixie; urgency=medium
 
   * Création du conteneur : échange borné (512M), jamais interdit ; conteneur existant inchangé (ref #3941).

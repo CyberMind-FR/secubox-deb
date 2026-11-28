@@ -17,7 +17,13 @@ Type=oneshot
 # blanking the wall. Only the module's own subdirectory is created:
 # /var/cache/secubox is shared by ~29 modules and must keep its
 # secubox:secubox 0755 ownership — never let a unit chown a shared parent.
-TimeoutStartSec=60
+# #4050 : sur gk2 chargé (charge 20-30), l'inventaire dépassait 60 s, était
+# tué, et recommençait à chaque tour sans jamais écrire : du CPU pour rien.
+# Priorité basse (il cède la place aux services) et délai qui le laisse finir.
+TimeoutStartSec=300
+Nice=15
+CPUWeight=20
+IOSchedulingClass=idle
 ExecStart=/bin/sh -c 'install -d -m 0755 /var/cache/secubox/streamlit && \
   /usr/sbin/streamlitctl app audit > /var/cache/secubox/streamlit/.audit.tmp && \
   mv /var/cache/secubox/streamlit/.audit.tmp /var/cache/secubox/streamlit/audit.json'
