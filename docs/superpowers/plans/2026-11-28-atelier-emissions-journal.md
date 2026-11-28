@@ -176,3 +176,11 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 14** — Note : `lecture-gk2` (jeton de lecture des dossiers) ABSENT de `~/.config/secubox-ai-jeton/` sur gk0 :
   sans lui, `GET sources` répond 502. Chromium par Playwright sous le durcissement de l'unité (ProtectHome=read-only,
   sans PrivateUsers) non essayé.
+- **Task 15** — Décision : page fidèle à la maquette (trois colonnes, chaîne 7 étapes, lecteur + diapo synchronisée,
+  dialogue, validation, rythme hebdo) mais SANS Google Fonts (aucun CDN : polices système en repli) ; ✗ sur fond rouge
+  avec leurs motifs, boutons « Modifier » et « Réécrire cette réplique » (proposition vérifiée → Accepter/Écarter) ;
+  « Publier » désactivé tant que le brouillon n'est pas prêt, que `GET {id}/controle` (balayage, Task 17) n'est pas vide
+  ou qu'une capture attend sa validation ; aucun `innerHTML` (textes de gk2 et du LLM par textContent) — coût si faux : nul.
+- **Task 15** — Décision : l'onglet « Émissions » de la barre du relais = iframe `/emissions` (même origine, Host local)
+  ajoutée par l'installateur, plutôt qu'une copie du panneau dans `index.html` (fichier vivant du POC, hors dépôt) —
+  coût si faux : une hauteur d'iframe fixe (calc(100vh − 140px)).
