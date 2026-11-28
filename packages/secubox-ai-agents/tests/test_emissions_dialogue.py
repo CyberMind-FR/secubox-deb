@@ -62,7 +62,7 @@ def test_ecrire_faux_llm(tmp_path):
 
     async def client(r, w):
         tete = await r.readuntil(b"\r\n\r\n")
-        n = int([l for l in tete.split(b"\r\n") if l.lower().startswith(b"content-length")][0].split(b":")[1])
+        n = int([x for x in tete.split(b"\r\n") if x.lower().startswith(b"content-length")][0].split(b":")[1])
         recu.update(json.loads(await r.readexactly(n)))
         corps = json.dumps({"choices": [{"message": {"content": "V1: Bonjour.\nV2: Salut."}}]}).encode()
         w.write(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n" % len(corps) + corps)

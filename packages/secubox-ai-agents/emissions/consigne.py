@@ -25,7 +25,7 @@ FORMAT = ("Format : un dialogue entre deux voix, une réplique par ligne, chaque
 
 
 def consigne(sujets: List[Dict[str, Any]], faits: List[Dict[str, Any]], gabarit: str) -> str:
-    plan = "\n".join(l for l in gabarit.splitlines() if not l.lstrip().startswith("#")).strip()
+    plan = "\n".join(ln for ln in gabarit.splitlines() if not ln.lstrip().startswith("#")).strip()
     noms = ", ".join(f"{s.get('nom') or s.get('id')} ({s.get('genre', 'sujet')})" for s in sujets) or "aucun"
     lignes = [f"- {'[marquant] ' if f.get('marquant') else ''}{f.get('texte', '')}" for f in faits]
     return "\n\n".join([
