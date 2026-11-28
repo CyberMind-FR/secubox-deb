@@ -101,6 +101,18 @@ vide = effacée) et de `POST`/`PUT /admin/api/billets[/{id}]` (`billets.publish`
 = effacé). À la mise à jour, chaque `diapo` doit désigner une image existante (422 sinon) ; à la création par l'API les
 images arrivent ensuite, le rendu ignore donc une réplique dont l'image manque. `GET /admin/api/billets/{id}` la rend.
 
+## Atelier des émissions : auteur, garde d'espace, rétention MP4 (#4058)
+
+- **Auteur `emissions`** : `sudo secubox-billets-auteur-emissions` (idempotent) crée l'auteur et le jeton
+  `/etc/secubox/secrets/billets-emissions.jeton` (0600, `secubox:secubox`). Ce jeton, envoyé en
+  `Authorization: Bearer`, ouvre l'**écriture** de `/admin/api/billets` (création, mise à jour, médias, suppression),
+  comparé en temps constant ; sans lui, la garde reste la session portant `billets.publish`.
+- **Garde d'espace** : `media.espace_suffisant(octets, marge=512 Mio)` sur le volume de `media_dir()`. Faux → **507**
+  avant toute écriture (ni billet ni média), au formulaire `/admin/billets[/{id}]` et à `POST /admin/api/billets/{id}/media`.
+- **Rétention** : `media.purger_mp4(jours)` purge les `.mp4` plus vieux que `jours` (mtime) ; MP3 et images jamais.
+  Réglage `retention_mp4_jours = 14` dans `/etc/secubox/billets.toml` (chemin : `BILLETS_TOML`). Minuterie quotidienne
+  `secubox-billets-purge-mp4.timer` → `python -m api.manage purger-mp4 [--jours N]` (retire aussi les lignes média orphelines).
+
 ## Communiqué style + embed snapshot
 
 Each billet has a `style`: **`default`** (feed look) or **`communique`** (a

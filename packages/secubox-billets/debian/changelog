@@ -1,3 +1,14 @@
+secubox-billets (0.16.0-1~trixie1) trixie; urgency=medium
+
+  * Atelier des émissions (ref #4058) : auteur `emissions` et son jeton d'API 0600
+    (/usr/sbin/secubox-billets-auteur-emissions, idempotent) accepté en Bearer par l'API
+    d'écriture /admin/api/billets ; garde d'espace (507 avant toute écriture si le volume des
+    médias garderait moins de 512 Mio) au formulaire et à l'API ; rétention des MP4
+    (retention_mp4_jours, /etc/secubox/billets.toml, défaut 14 ; minuterie quotidienne
+    secubox-billets-purge-mp4.timer ; MP3 et images jamais purgés).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 18:00:00 +0100
+
 secubox-billets (0.15.0-1~trixie1) trixie; urgency=medium
 
   * Chronologie audio d'un billet : colonne `chronologie` (migration 0009), posée par le formulaire

@@ -9,6 +9,8 @@
   backfill-media             embed BBS /f/NN media into billets published before #1094
   backfill-embeds            promeut en embed les liens vidéo restés dans le corps
   backfill-posters           donne une vignette (image d'aperçu ffmpeg) aux vidéos stockées sans (#2395)
+  auteur-emissions [--jeton F]  crée l'auteur `emissions` et son jeton d'API 0600 (#4058, idempotent)
+  purger-mp4 [--jours N]     purge les MP4 plus vieux que N jours (défaut : billets.toml, 14) ; MP3 et images gardés
 """
 from __future__ import annotations
 
@@ -189,6 +191,45 @@ async def _backfill_embeds(dry: bool) -> int:
         await conn.close()
 
 
+async def _auteur_emissions(jeton: str = "/etc/secubox/secrets/billets-emissions.jeton") -> int:
+    """#4058 — auteur `emissions` (mot de passe aléatoire jamais montré : il ne se connecte pas au formulaire)
+    et jeton d'API écrit 0600 par création exclusive. Rejouer ne change ni l'auteur ni un jeton existant."""
+    import os
+    import secrets
+    conn = await db.connect(now=_now())
+    try:
+        if not await repo.get_author_by_username(conn, "emissions"):
+            await repo.create_author(conn, "emissions", sec.hash_password(secrets.token_urlsafe(48)), now=_now())
+            print("auteur 'emissions' créé")
+    finally:
+        await conn.close()
+    try:
+        fd = os.open(jeton, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        os.chmod(jeton, 0o600)
+        print(f"jeton déjà présent : {jeton}")
+        return 0
+    with os.fdopen(fd, "w", encoding="ascii") as f:
+        f.write(secrets.token_urlsafe(48) + "\n")
+    print(f"jeton écrit : {jeton}")
+    return 0
+
+
+async def _purger_mp4(jours: int | None) -> int:
+    """#4058 — purge des MP4 anciens puis des lignes média dont le fichier MP4 a disparu."""
+    from .services import media
+    n = media.purger_mp4(jours or media.retention_mp4_jours())
+    conn = await db.connect(now=_now())
+    try:
+        for m in await repo.all_media(conn):
+            if m["filename"].lower().endswith(".mp4") and not (media.media_dir() / m["filename"]).exists():
+                await repo.delete_media(conn, m["id"])
+    finally:
+        await conn.close()
+    print(f"{n} MP4 purgé(s)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="billets-manage")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -206,7 +247,16 @@ def main(argv: list[str] | None = None) -> int:
     spe = sub.add_parser("backfill-embeds")
     spe.add_argument("--dry-run", action="store_true",
                      help="montrer ce qui serait promu, sans rien écrire")
+    spa = sub.add_parser("auteur-emissions")
+    spa.add_argument("--jeton", default="/etc/secubox/secrets/billets-emissions.jeton")
+    spp = sub.add_parser("purger-mp4")
+    spp.add_argument("--jours", type=int, default=None)
     args = p.parse_args(argv)
+
+    if args.cmd == "auteur-emissions":
+        return asyncio.run(_auteur_emissions(args.jeton))
+    if args.cmd == "purger-mp4":
+        return asyncio.run(_purger_mp4(args.jours))
 
     if args.cmd == "backfill-tags":
         return asyncio.run(_backfill_tags())

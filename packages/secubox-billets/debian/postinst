@@ -130,6 +130,9 @@ esac
 case "$1" in
   configure)
     systemctl reload nginx 2>/dev/null || true
+    # #4058 : rétention des MP4 (retention_mp4_jours dans /etc/secubox/billets.toml, défaut 14)
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now secubox-billets-purge-mp4.timer 2>/dev/null || true
     echo "billets: create the first author with:" >&2
     echo "  sudo -u secubox $PREFIX/venv/bin/python -m api.manage create-author admin  (run in $PREFIX)" >&2
     ;;

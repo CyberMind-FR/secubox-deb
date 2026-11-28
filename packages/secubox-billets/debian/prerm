@@ -2,6 +2,7 @@
 set -e
 case "$1" in
   remove|deconfigure)
+    systemctl stop secubox-billets-purge-mp4.timer 2>/dev/null || true
     systemctl stop secubox-billets.service 2>/dev/null || true
     ;;
 esac

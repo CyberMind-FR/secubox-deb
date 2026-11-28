@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# #4058 — purge des MP4 des billets au-delà de retention_mp4_jours (/etc/secubox/billets.toml, défaut 14).
+[Unit]
+Description=SecuBox billets — purge des MP4 anciens (MP3 et images gardés)
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/billets
+Environment=BILLETS_DB=/var/lib/secubox/billets/billets.db
+ExecStart=/usr/lib/secubox/billets/venv/bin/python -m api.manage purger-mp4
+Nice=19
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox/billets
