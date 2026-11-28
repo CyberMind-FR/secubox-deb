@@ -95,3 +95,15 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 6** — Décision : identifiant filtré par le motif de gk2 (`[A-Za-z0-9_:.-]{1,80}`) plus refus de `..` ; jeton
   relu à chaque appel par `jeton_fichier()`, refusé s'il n'est pas 0600 ; client httpx `trust_env=False` — parce
   qu'un mandataire d'environnement ne doit pas voir le jeton — coût si faux : nul.
+- **Task 10** — Décision : `dire_tout(..., *, moteur=None, verrou=None)` — arguments nommés facultatifs en plus de la
+  signature du plan (défauts : `MoteurVoix()` vers `127.0.0.1:7443`, `gpu.par_relais()`) — parce que le plan ne dit pas
+  comment injecter le worker et le verrou — coût si faux : nul (l'appel du plan reste valide).
+- **Task 10** — Décision : client minimal propre (`MoteurVoix`, contrat OpenAI `POST /v1/audio/speech`), pas d'import de
+  `secubox-voicestudio/api/moteur.py` ; clé du worker lue de `~/.config/secubox-ai-jeton/voicestudio` (0600 exigé) —
+  parce que les deux paquets ne s'installent pas ensemble sur gk0 — coût si faux : chemin de clé à adapter au worker
+  #4057 quand il sera prêt.
+- **Task 10** — Décision : validation de toutes les répliques AVANT le verrou ; rien à faire → Gemma n'est pas
+  suspendu ; voix périmées (`<rang>-*` d'une empreinte ancienne ou réplique retirée) ôtées après un passage réussi ;
+  écriture atomique 0600 — parce qu'une voix restée d'une réplique retirée pourrait finir au montage — coût si faux : nul.
+- **Task 10** — Note : testé contre un FAUX worker HTTP sur socket Unix ; le worker GPU réel (#4057, CUDA en panne sur
+  gk0) n'est PAS testé : à rejouer contre lui (`rang`/`voix` nova/onyx, durée réelle, délai 120 s suffisant ?).
