@@ -260,6 +260,22 @@ func propre(s string) string {
 	return b.String()
 }
 
+// refusCookies retient, par proposition, la date du coffre de cookies au moment
+// ou la passerelle a refuse la sonde faute d'authentification (#4055). Tant que
+// le coffre n'a pas change, la proposition n'est pas redemandee.
+type refusCookies map[int64]int64
+
+func (r refusCookies) bloque(id, coffre int64) bool {
+	m, ok := r[id]
+	if ok && m != coffre {
+		delete(r, id) // nouveau depot : on retente, une fois
+		return false
+	}
+	return ok
+}
+
+func (r refusCookies) note(id, coffre int64) { r[id] = coffre }
+
 // recupere : la boucle qui rapatrie les clips.
 //
 // UNE PISTE A LA FOIS. La board est deja saturee cote processeur ; lancer trois
@@ -268,6 +284,7 @@ func propre(s string) string {
 func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 	var dernierCookie int64
 	var dernierReprise time.Time
+	refus := refusCookies{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -284,7 +301,13 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 		// On ne remet en jeu qu'UNE FOIS PAR DEPOT, la date du coffre servant
 		// de repere : sinon une piste durablement inaccessible serait reessayee
 		// toutes les vingt secondes, indefiniment.
-		if e, err := cli.Cookies(ctx); err == nil && e.Present && !e.Perimes && e.Mtime > dernierCookie {
+		// Date du coffre a CE tour : elle sert aussi de cle au refus memorise ci-dessous (#4055).
+		var coffre int64
+		e, errCoffre := cli.Cookies(ctx)
+		if errCoffre == nil {
+			coffre = e.Mtime
+		}
+		if errCoffre == nil && e.Present && !e.Perimes && e.Mtime > dernierCookie {
 			dernierCookie = e.Mtime
 			if n, err := st.RemetEnJeuBloqueesParCookies(); err == nil && n > 0 {
 				log.Printf("radio: cookies renouveles — %d piste(s) remise(s) en jeu", n)
@@ -335,10 +358,20 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 						if titre := strings.TrimSpace(e.Titre); titre != "" {
 							st.PoseTitre(pl.ID, titre)
 						}
-					} else {
+					} else if !refus.bloque(pl.ID, coffre) {
 						// Pas encore connue : on enfile la demande (qui sonde les
 						// métadonnées), et l'on repassera poser le titre.
-						cli.Demande(ctx, "https://www.youtube.com/watch?v="+ytID)
+						//
+						// UN REFUS FAUTE DE COOKIES NE SE REDEMANDE PAS A CHAQUE TOUR
+						// (#4055). L'erreur etait ignoree : deux propositions sans
+						// titre relancaient deux sondes yt-dlp + deno par minute sur
+						// gk2, toutes refusees (2 737 en deux jours). On note le refus
+						// avec la date du coffre et l'on ne redemande qu'apres un
+						// nouveau depot de cookies.
+						if err := cli.Demande(ctx, "https://www.youtube.com/watch?v="+ytID); errors.Is(err, ytsas.ErrCookies) {
+							refus.note(pl.ID, coffre)
+							log.Printf("radio: proposition %d : %v — en attente de nouveaux cookies", pl.ID, err)
+						}
 					}
 					continue
 				}
