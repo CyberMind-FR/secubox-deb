@@ -26,4 +26,11 @@
 .dz-dots{position:absolute;left:0;right:0;bottom:8px;z-index:4;display:flex;justify-content:center;gap:5px;flex-wrap:wrap;padding:0 40px}
 .dz-dots button{width:7px;height:7px;padding:0;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.4)}
 .dz-dots button[aria-current="true"]{background:var(--tone,#22c8e8);transform:scale(1.25)}
+/* #4058 — chronologie audio : lecteur en pied, sous-titre de la réplique au-dessus, points remontés */
+.dz-chrono .dz-dots{bottom:52px}
+.dz-chrono .dz-lien{bottom:74px}
+.dz-audio{position:absolute;left:8px;right:8px;bottom:8px;z-index:5;width:calc(100% - 16px);height:36px}
+.dz-replique{position:absolute;left:10%;right:10%;bottom:66px;z-index:5;margin:0;text-align:center;
+  font:500 15px/1.35 var(--sans,system-ui,sans-serif);color:#fff;text-shadow:0 1px 3px #000}
+.dz-replique:not(:empty){background:rgba(6,10,15,.66);padding:6px 12px;border-radius:8px}
 @media (prefers-reduced-motion:reduce){.dz{transition:none}}

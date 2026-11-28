@@ -72,7 +72,7 @@
   <!-- L'ECRAN : identique à celui des cartes du fil, en grand. -->
   <div class="vue-stage screen{{ '' if joue or poster or dia else ' flat' }}" id="scene"{% if hosted %} data-video="/media/{{ hosted.filename }}"{% endif %}>
     {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube · clic pour charger' }}</span>{% endif %}
-    {% if dia %}{% set lien = true %}{% include "_diaporama.html" %}
+    {% if dia %}{% set lien = true %}{% set chrono = billet.chrono %}{% include "_diaporama.html" %}
     {% elif poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
     {% if joue and souverain %}<div class="frame live">{{ cadre_src|safe }}</div>
     {% elif joue %}{# tiers : arme, pas charge — voir MODE SOUVERAIN plus haut #}

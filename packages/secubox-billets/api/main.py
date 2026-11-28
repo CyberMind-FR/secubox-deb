@@ -279,6 +279,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None,
     d["poster"] = _poster_for(d)
     d["cat"] = _categorie(d.get("id", ""))
     d["diapos"] = _diapos(d)
+    d["chrono"] = _chrono(d)
     # Billet ÉPHÉMÈRE (#2268) : secondes restantes À L'INSTANT DU RENDU. Le client arme son propre compte à rebours à partir de ce nombre (pas d'une heure
     # absolue) : l'horloge de l'appareil n'a donc aucune importance.
     d["expire_dans"] = None
@@ -317,6 +318,26 @@ def _diapos(d: dict) -> list[dict]:
     if not d.get("embed_is_video") and d.get("embed_snapshot_url"):
         out.append({"t": "embed", "src": d["embed_snapshot_url"], "alt": "contenu embarqué", "href": d.get("embed_url") or ""})
     return out
+
+
+def _chrono(d: dict) -> "dict | None":
+    """CHRONOLOGIE AUDIO (#4058) : {"audio": url, "lignes": [[debut, fin, index_dans_le_diaporama, replique], …]} ou None.
+
+    L'index `diapo` stocké compte les seules IMAGES ; il est traduit ici en rang dans le diaporama (qui mêle vidéos, PDF…). Une réplique
+    qui désigne une image absente (média retiré depuis) est ignorée. Sans audio joint, ou sans réplique valable : None (minuteur d'avant)."""
+    import json
+    raw = d.get("chronologie")
+    audio = next((m for m in d.get("media") or [] if str(m.get("mime", "")).startswith("audio/")), None)
+    if not raw or audio is None:
+        return None
+    try:
+        lignes = json.loads(raw)
+    except ValueError:
+        return None
+    rang = [i for i, s in enumerate(d.get("diapos") or []) if s.get("t") == "image"]
+    out = [[float(e["debut_s"]), float(e["fin_s"]), rang[e["diapo"]], str(e.get("replique") or "")]
+           for e in lignes if isinstance(e, dict) and isinstance(e.get("diapo"), int) and 0 <= e["diapo"] < len(rang)]
+    return {"audio": f"/media/{audio['filename']}", "mime": audio.get("mime"), "lignes": out} if out else None
 
 
 def _planifier_pdfs(vues: list[dict]) -> None:

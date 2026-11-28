@@ -99,6 +99,78 @@ def video_url_in(body: str | None) -> Optional[str]:
     return None
 
 
+# ── chronologie audio (#4058) ─────────────────────────────────────────────
+# Le diaporama d'un billet qui porte un AUDIO suit sa lecture : chaque réplique dit de quand à quand montrer quelle diapositive
+# (index 0-based dans l'ordre des médias IMAGE du billet). Bornes strictes : la chronologie vient d'une chaîne automatique.
+CHRONO_MAX_ENTREES = 2000
+CHRONO_MAX_OCTETS = 128 * 1024
+CHRONO_DUREE_MAX_S = 6 * 3600.0
+CHRONO_DIAPO_MAX = 499
+REPLIQUE_MAX = 500
+_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
+
+
+class Replique(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=False)
+    debut_s: float = Field(ge=0, le=CHRONO_DUREE_MAX_S, allow_inf_nan=False)
+    fin_s: float = Field(gt=0, le=CHRONO_DUREE_MAX_S, allow_inf_nan=False)
+    diapo: int = Field(ge=0, le=CHRONO_DIAPO_MAX)
+    replique: str = Field(default="", max_length=REPLIQUE_MAX * 2)
+
+    @field_validator("diapo", mode="before")
+    @classmethod
+    def _entier(cls, v):
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError("diapo doit être un entier")
+        return v
+
+    @field_validator("replique")
+    @classmethod
+    def _assainir(cls, v: str) -> str:
+        """Texte brut : contrôles et marques bidirectionnelles retirés, blancs repliés. L'échappement HTML reste à Jinja au rendu."""
+        v = " ".join(_CTRL.sub("", unicodedata.normalize("NFC", v)).split())
+        if len(v) > REPLIQUE_MAX:
+            raise ValueError(f"replique dépasse {REPLIQUE_MAX} caractères")
+        return v
+
+    @model_validator(mode="after")
+    def _ordre(self) -> "Replique":
+        if self.fin_s <= self.debut_s:
+            raise ValueError("fin_s doit être strictement supérieur à debut_s")
+        return self
+
+
+def valider_chronologie(v) -> Optional[list[dict]]:
+    """Chronologie validée (liste de dicts) ou None (vide/absente). Lève ValueError au moindre écart : bornes, ordre CROISSANT sans
+    chevauchement (debut_s >= fin_s de la précédente), taille. L'existence de la diapositive se vérifie contre les médias (repo)."""
+    if v is None:
+        return None
+    if isinstance(v, (str, bytes)):
+        if len(v) > CHRONO_MAX_OCTETS:
+            raise ValueError("chronologie trop volumineuse")
+        if not str(v).strip():
+            return None
+        import json
+        try:
+            v = json.loads(v)
+        except ValueError as exc:
+            raise ValueError("chronologie : JSON invalide") from exc
+    if not isinstance(v, list):
+        raise ValueError("chronologie : liste attendue")
+    if not v:
+        return None
+    if len(v) > CHRONO_MAX_ENTREES:
+        raise ValueError(f"chronologie : au plus {CHRONO_MAX_ENTREES} répliques")
+    out = [Replique.model_validate(e).model_dump() for e in v]
+    for a, b in zip(out, out[1:]):
+        if b["debut_s"] < a["fin_s"]:
+            raise ValueError("chronologie : répliques en ordre croissant, sans chevauchement")
+    import json
+    if len(json.dumps(out, ensure_ascii=False).encode()) > CHRONO_MAX_OCTETS:
+        raise ValueError("chronologie trop volumineuse")
+    return out
+
+
 class BilletIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     body: Annotated[str, StringConstraints(min_length=1, max_length=BODY_MAX)]
@@ -108,6 +180,13 @@ class BilletIn(BaseModel):
     publish: bool = False
     # Durée de vie en secondes (#2268) : le billet quitte le fil à publication + ttl_s. De 30 s à 24 h ; None = durable. Un brouillon n'expire pas.
     ttl_s: Optional[int] = None
+    # Chronologie audio (#4058) : liste de répliques (cf. Replique) ou None.
+    chronologie: Optional[list[dict]] = None
+
+    @field_validator("chronologie", mode="before")
+    @classmethod
+    def _chrono(cls, v):
+        return valider_chronologie(v)
 
     @field_validator("ttl_s")
     @classmethod
@@ -179,6 +258,7 @@ class Billet(BaseModel):
     embed_snapshot: Optional[str] = None
     view_count: int = 0
     expires_at: Optional[str] = None
+    chronologie: Optional[str] = None
 
 
 class Comment(BaseModel):
