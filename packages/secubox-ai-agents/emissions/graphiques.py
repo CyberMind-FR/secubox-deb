@@ -118,7 +118,7 @@ def graphiques(dossier: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def png(svg: str, sortie: Path) -> Path:
-    """SVG → PNG par `rsvg-convert`, puis compression sans perte (`oxipng -z`) si l'outil est présent."""
+    """SVG → PNG par `rsvg-convert`, puis compression sans perte facultative (oxipng, sinon optipng)."""
     sortie = Path(sortie)
     sortie.parent.mkdir(parents=True, exist_ok=True)
     rsvg = shutil.which("rsvg-convert")
@@ -126,10 +126,13 @@ def png(svg: str, sortie: Path) -> Path:
         raise RuntimeError("rsvg-convert absent (paquet librsvg2-bin)")
     subprocess.run([rsvg, "-f", "png", "-o", str(sortie)], input=svg.encode(), check=True, timeout=60,
                    capture_output=True)
-    oxi = shutil.which("oxipng")
+    # Compression sans perte FACULTATIVE : oxipng s'il est là, sinon optipng -o2, sinon PNG non optimisé (pas d'erreur).
+    oxi, opti = shutil.which("oxipng"), shutil.which("optipng")
     if oxi:
         subprocess.run([oxi, "-q", "-o", "2", "-z", "--strip", "safe", str(sortie)], check=False, timeout=120,
                        capture_output=True)
+    elif opti:
+        subprocess.run([opti, "-quiet", "-o2", str(sortie)], check=False, timeout=120, capture_output=True)
     return sortie
 
 
