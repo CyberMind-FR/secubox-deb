@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import capture, gpu, production, reglages
 from .magasin import Magasin
-from .sources import Sources, jeton_fichier
+from .sources import Sources, jeton_ai_lecture, jeton_fichier
 
 JETON_DEFAUT = Path.home() / ".config/secubox-ai-jeton/jeton"
 FICHIER_RE = re.compile(r"^(emission\.mp3|emission\.mp4|diapos/[0-9]{2}-[A-Za-z0-9_-]{1,80}\.png"
@@ -78,8 +78,8 @@ class Accord(BaseModel):
 
 def _outils_reels(base: Path) -> production.Outils:
     r = reglages.lire(base)
-    return production.Outils(sources=Sources(r["gk2_base"], jeton_fichier()), magasin=Magasin(base / "magasin.sqlite"),
-                             reglages=lambda: reglages.lire(base))
+    return production.Outils(sources=Sources(r["gk2_base"], jeton_ai_lecture(r["gk2_aud"])),
+                             magasin=Magasin(base / "magasin.sqlite"), reglages=lambda: reglages.lire(base))
 
 
 def _apercu(sujet: Dict[str, Any], dernier: Optional[Dict[str, Any]], ecart: float) -> int:

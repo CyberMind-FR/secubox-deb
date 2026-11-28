@@ -7,7 +7,8 @@
 #
 #   installer-emissions.sh <dossier-du-paquet secubox-ai-agents> [interpréteur python du venv]
 #
-# 1. code `emissions/` copié dans ~/.local/lib/secubox-ai-emissions/src (instantané, pas le dépôt vivant) ;
+# 1. code `emissions/` et `common/secubox_core/` (frappe des jetons ai-lecture, #4063) copiés dans
+#    ~/.local/lib/secubox-ai-emissions/src (instantané, pas le dépôt vivant) ; outil `secubox-ai-emissions-cle` ;
 #    lien `python` vers l'interpréteur (défaut : venv du dépôt, celui du relais : fastapi, httpx, uvicorn, playwright) ;
 # 2. unités utilisateur : service, hebdo (service + minuterie lundi 06:00) ; drop-in réseau = adresses de
 #    admin.gk2 et billets.gk2 résolues maintenant (à relancer si elles changent) ;
@@ -22,7 +23,10 @@ paquet="$(cd "${1:?dossier du paquet requis}" && pwd)"
 python="${2:-$HOME/CyberMindStudio/secubox-deb/secubox-deb/.venv/bin/python}"
 [[ -d "$paquet/emissions" && -f "$paquet/relais/emissions_relais.py" ]] || { echo "paquet invalide : $paquet" >&2; exit 2; }
 [[ $EUID -ne 0 ]] || { echo "à lancer SANS root (unités utilisateur)" >&2; exit 2; }
-"$python" -I -c 'import fastapi, httpx, uvicorn' || { echo "interpréteur sans fastapi/httpx/uvicorn : $python" >&2; exit 2; }
+core="$paquet/../../common/secubox_core"
+[[ -f "$core/compte_service.py" ]] || { echo "secubox_core introuvable : $core" >&2; exit 2; }
+"$python" -I -c 'import fastapi, httpx, uvicorn, jwt, cryptography' \
+  || { echo "interpréteur sans fastapi/httpx/uvicorn/jwt/cryptography : $python" >&2; exit 2; }
 
 lib="$HOME/.local/lib/secubox-ai-emissions"
 unites="$HOME/.config/systemd/user"
@@ -35,11 +39,14 @@ neuf="$lib/src.neuf"
 rm -rf "$neuf"
 install -d -m 0700 "$neuf"
 cp -r "$paquet/emissions" "$neuf/"
+cp -r "$core" "$neuf/secubox_core"
+rm -rf "$neuf/secubox_core/tests"
 find "$neuf" -name __pycache__ -type d -prune -exec rm -rf {} +
 rm -rf "$lib/src.avant"
 [[ -d "$lib/src" ]] && mv -T "$lib/src" "$lib/src.avant"
 mv -T "$neuf" "$lib/src"
 ln -sfn "$python" "$lib/python"
+install -m 0755 "$paquet/sbin/secubox-ai-emissions-cle" "$lib/secubox-ai-emissions-cle"
 
 # 2. unités
 install -m 0644 "$paquet/systemd/secubox-ai-emissions-gk0.service" "$unites/secubox-ai-emissions.service"
@@ -97,6 +104,9 @@ Installé (rien démarré). À faire :
   systemctl --user enable --now secubox-ai-emissions.service
   systemctl --user enable --now secubox-ai-emissions-hebdo.timer
   ~/poc-secubox-ai/relancer-poc.sh        # le relais charge emissions_relais (onglet « Émissions »)
-Prérequis : ~/.config/secubox-ai-jeton/lecture-gk2 (0600, lecture des dossiers de gk2),
+Prérequis : clé ai-lecture de gk0 (lecture des dossiers de gk2, un jeton signé par requête) :
+              $lib/python -I $lib/secubox-ai-emissions-cle
+            crée ~/.config/secubox-ai-jeton/ai-lecture.key (0600) si absente et affiche la commande root
+            à lancer sur gk2 (wafctl cle-ai-lecture ajouter) ; l'ancien fichier lecture-gk2 ne sert plus.
             ~/.config/secubox-ai-jeton/billets-emissions (0600, publication).
 FIN
