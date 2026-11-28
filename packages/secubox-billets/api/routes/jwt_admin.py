@@ -51,6 +51,8 @@ class BilletPayload(BaseModel):
     style: str = "default"
     status: str = "published"  # "published" | "draft"
     ttl_s: Optional[int] = None  # #2268 : durée de vie en secondes (30..86400), billet éphémère ; None = durable
+    # #4058 : chronologie audio (liste de répliques, cf. models.Replique). Au PUT : absente = inchangée, [] ou null = effacée.
+    chronologie: Optional[list] = None
 
 
 def _permalien(slug: Optional[str]) -> str:
@@ -98,7 +100,16 @@ def _view(row, tags: Optional[list] = None) -> dict:
         "published_at": d.get("published_at"),
         "created_at": d.get("created_at"),
         "tags": tags or [],
+        "chronologie": _chrono_vue(d.get("chronologie")),
     }
+
+
+def _chrono_vue(raw: Optional[str]):
+    import json
+    try:
+        return json.loads(raw) if raw else None
+    except ValueError:
+        return None
 
 
 def register_jwt_admin(app: FastAPI) -> None:
@@ -130,7 +141,8 @@ def register_jwt_admin(app: FastAPI) -> None:
     def _billet_in(p: BilletPayload) -> BilletIn:
         try:
             return BilletIn(body=p.body, ref_url=p.ref_url, embed_url=p.embed_url,
-                            style=p.style, publish=(p.status == "published"), ttl_s=p.ttl_s)
+                            style=p.style, publish=(p.status == "published"), ttl_s=p.ttl_s,
+                            chronologie=p.chronologie)
         except ValidationError as exc:
             raise HTTPException(422, f"invalid billet: {exc.errors()}")
 
@@ -193,6 +205,12 @@ def register_jwt_admin(app: FastAPI) -> None:
         if await repo.get_by_id(conn, billet_id) is None:
             raise HTTPException(404, "billet not found")
         data = _billet_in(payload)
+        if "chronologie" in payload.model_fields_set:
+            # #4058 : à la mise à jour les médias sont là : chaque `diapo` doit désigner une image existante.
+            from .admin import chrono_diapos_ok
+            if not await chrono_diapos_ok(conn, billet_id, data.chronologie):
+                raise HTTPException(422, "invalid billet: chronologie désigne une diapositive (image) absente")
+            await repo.set_chronologie(conn, billet_id, data.chronologie, now=_now())
         await repo.update_billet(conn, billet_id, body=data.body, ref_url=data.ref_url,
                                  embed_url=data.embed_url, now=_now())
         await _enrichir(request, billet_id, data)

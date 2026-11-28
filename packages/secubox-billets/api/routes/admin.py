@@ -191,6 +191,13 @@ async def _maybe_capture_snapshot(request: Request, billet_id: str, embed_url: s
         pass
 
 
+async def chrono_diapos_ok(conn, billet_id: str, chrono) -> bool:
+    """#4058 : chaque `diapo` d'une chronologie désigne une image EXISTANTE du billet (index 0-based dans l'ordre des médias image)."""
+    if not chrono:
+        return True
+    return max(e["diapo"] for e in chrono) < await repo.nb_images(conn, billet_id)
+
+
 def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     login_limiter = sec.RateLimiter(max_events=5, window_s=3600)
     app.state.login_limiter = login_limiter
@@ -358,7 +365,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     @app.post("/admin/billets")
     async def create(request: Request, body: str = Form(...), url: str = Form(""),
                      url_kind: str = Form("ref"), style: str = Form("default"),
-                     action: str = Form("draft"),
+                     action: str = Form("draft"), chronologie: str = Form(""),
                      csrf: str = Form(""), media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
         if author is None:
@@ -368,14 +375,18 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         ref_url, embed_url = _urls(url, url_kind)
         try:
             data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url,
-                            style=style, publish=(action == "publish"))
+                            style=style, publish=(action == "publish"), chronologie=chronologie)
         except ValidationError:
             resp = templates.TemplateResponse(request, "admin_edit.html",
-                {"billet": None, "error": "Entrée invalide (corps ou URL https).",
+                {"billet": None, "error": "Entrée invalide (corps, URL https ou chronologie).",
                  "csrf": request.cookies.get(CSRF_COOKIE) or ""})
             return resp
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
         skipped = await _save_uploads(request, billet_id, media_files)
+        if data.chronologie and not await chrono_diapos_ok(request.app.state.conn, billet_id, data.chronologie):
+            # #4058 : une diapo désignée n'existe pas parmi les images envoyées → chronologie refusée (le billet reste créé, sans elle)
+            await repo.set_chronologie(request.app.state.conn, billet_id, None, now=_now(request))
+            return _redirect("/admin?chrono_refusee=1")
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
         await _maybe_ref_card(request, billet_id, data.ref_url, data.embed_url)
         await _maybe_capture_snapshot(request, billet_id, data.embed_url, data.style)
@@ -403,7 +414,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
     @app.post("/admin/billets/{billet_id}")
     async def update(request: Request, billet_id: str, body: str = Form(...),
                      url: str = Form(""), url_kind: str = Form("ref"),
-                     style: str = Form("default"),
+                     style: str = Form("default"), chronologie: str = Form(""),
                      action: str = Form("save"), csrf: str = Form(""),
                      media_files: list[UploadFile] = File(default=[])):
         author = await _current_author(request)
@@ -419,7 +430,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         prev_snapshot = row["embed_snapshot"]
         ref_url, embed_url = _urls(url, url_kind)
         try:
-            data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url, style=style)
+            data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url, style=style, chronologie=chronologie)
         except ValidationError:
             resp = templates.TemplateResponse(request, "admin_edit.html",
                 {"billet": dict(row), "error": "Entrée invalide.",
@@ -428,6 +439,12 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         await repo.update_billet(conn, billet_id, body=body, ref_url=ref_url,
                                  embed_url=embed_url, style=data.style, now=_now(request))
         skipped = await _save_uploads(request, billet_id, media_files)
+        if not await chrono_diapos_ok(conn, billet_id, data.chronologie):
+            resp = templates.TemplateResponse(request, "admin_edit.html",
+                {"billet": dict(row), "error": "Chronologie : une diapositive désignée n'existe pas (images du billet).",
+                 "csrf": request.cookies.get(CSRF_COOKIE) or ""})
+            return resp
+        await repo.set_chronologie(conn, billet_id, data.chronologie, now=_now(request))
         if action in ("publish", "archive"):
             await repo.set_status(conn, billet_id,
                                   "published" if action == "publish" else "archived",

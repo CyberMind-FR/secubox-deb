@@ -7,8 +7,10 @@
 {#- DIAPORAMA (#4049) — tous les médias d'un billet : images, vignettes vidéo, pages des PDF rendues par la box, instantané d'un embed.
     Partagé par la carte du fil (_immersif_items.html) et la vue (billet.html). Attend `dia` (liste de diapositives, cf. main._diapos)
     et `lien` (True : les diapositives document/vidéo sont des liens — vue seule ; la carte entière est déjà cliquable).
-    Défilement automatique, pause, flèches, points et clavier : static/diaporama.js. Sans JS : la première diapositive reste visible. -#}
-<div class="diapo" data-diapo{% if dia|length > 1 %} data-multi tabindex="0"{% endif %} role="group" aria-roledescription="carrousel" aria-label="Médias du billet ({{ dia|length }})">
+    Défilement automatique, pause, flèches, points et clavier : static/diaporama.js. Sans JS : la première diapositive reste visible.
+    #4058 : `chrono` (vue seule, cf. main._chrono) = audio + chronologie ; le diaporama suit alors la lecture de l'audio, sans minuteur. -#}
+{%- set ch = chrono if (chrono is defined and chrono and lien) else none -%}
+<div class="diapo{{ ' dz-chrono' if ch }}" data-diapo{% if dia|length > 1 %} data-multi tabindex="0"{% endif %}{% if ch %} data-chrono="{{ ch.lignes|tojson|forceescape }}"{% endif %} role="group" aria-roledescription="carrousel" aria-label="Médias du billet ({{ dia|length }})">
   {%- for s in dia %}
   <figure class="dz dz-{{ s.t }}{{ ' on' if loop.first }}" role="group" aria-roledescription="diapositive" aria-label="{{ loop.index }} / {{ dia|length }} — {{ s.alt }}"{% if not loop.first %} aria-hidden="true"{% endif %}>
     {%- if s.src %}<img src="{{ s.src }}" alt="{{ s.alt }}" {% if not loop.first %}loading="lazy" {% endif %}decoding="async">{% endif %}
@@ -22,5 +24,9 @@
   <button class="dz-nav prev" type="button" data-dz="-1" aria-label="Diapositive précédente">‹</button>
   <button class="dz-nav next" type="button" data-dz="1" aria-label="Diapositive suivante">›</button>
   <div class="dz-dots">{% for s in dia %}<button type="button" data-dz-i="{{ loop.index0 }}" aria-label="Diapositive {{ loop.index }}"{% if loop.first %} aria-current="true"{% endif %}></button>{% endfor %}</div>
+  {%- endif %}
+  {%- if ch %}
+  <p class="dz-replique" aria-live="polite" data-dz-replique></p>
+  <audio class="dz-audio" controls preload="metadata" data-dz-audio src="{{ ch.audio }}"></audio>
   {%- endif %}
 </div>
