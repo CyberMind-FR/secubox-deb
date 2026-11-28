@@ -16,3 +16,22 @@ modules = [
     "cookies",
     "avatar",
 ]
+
+# Précache des lectures en double tampon (#4037) — actif par défaut, tout est facultatif.
+# [cache]
+# actif = true
+# ttl_defaut = 15          # s
+# perime_max = 600         # au-delà : recalcul attendu delai_synchrone s, sinon la vieille réponse
+# conservation = 3600      # entrée oubliée
+# delai_synchrone = 3.0
+# delai_recalcul = 90.0    # borne d'un recalcul d'arrière-plan
+# recalculs_max = 8        # recalculs simultanés, tous modules confondus
+# entrees_max = 2000
+# octets_max = 67108864
+# entree_octets_max = 2097152
+# exclus = ["ma-module/action-lente"]
+#
+# [cache.ttl]              # "module" ou "module/chemin", préfixe le plus long ; 0 = jamais en cache
+# "waf" = 30
+# "waf/categories" = 120
+# "waf/status" = 5

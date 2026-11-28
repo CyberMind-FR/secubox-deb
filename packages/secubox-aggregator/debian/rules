@@ -8,6 +8,8 @@ override_dh_auto_install:
 	  $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator/
 	install -m 644 aggregator/main.py \
 	  $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator/
+	install -m 644 aggregator/cache.py \
+	  $(CURDIR)/debian/secubox-aggregator/usr/lib/python3/dist-packages/aggregator/
 	install -d $(CURDIR)/debian/secubox-aggregator/etc/secubox
 	install -m 644 debian/aggregator.toml.example \
 	  $(CURDIR)/debian/secubox-aggregator/etc/secubox/aggregator.toml.example

@@ -45,6 +45,9 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from starlette.routing import Mount
 
+from aggregator.cache import CacheLecture, Reglages
+from aggregator import cache as _cache
+
 log = logging.getLogger("secubox.aggregator")
 
 CONFIG_FILE = Path("/etc/secubox/aggregator.toml")
@@ -272,6 +275,7 @@ def _load_config() -> dict:
             # Les sockets réservées (#3216, relecture) : montées ici, elles échapperaient à la garde et aux marques du relais
             # (Coffre : compte/*, personne/*, second facteur) — jamais, même citées à la main dans le TOML.
             ecartes = RETIRED_MODULES | DEDICATED_MODULES | _SOCKETS_ADMIN | _SOCKETS_JAMAIS_RELAYEES
+            cfg["cache"] = data.get("cache")
             cfg["modules"] = [m for m in data.get("modules", []) if m not in ecartes]
             ignores = [m for m in data.get("modules", []) if m in ecartes]
             if ignores:
@@ -466,6 +470,9 @@ def _build_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
     )
+    # Précache des lectures en double tampon (#4037), actif par défaut. Ajouté AVANT l'effaceur : celui-ci reste
+    # le plus extérieur, la clé et le rejeu ne voient que des en-têtes déjà nettoyés.
+    app.add_middleware(CacheLecture, reglages=Reglages.depuis_toml(cfg.get("cache")))
     app.add_middleware(_EffaceEntetesInternes)
 
     # LE CHEMIN PYTHON DU SERVEUR NE DOIT PAS DÉPENDRE DES MODULES (#1680).
@@ -499,6 +506,8 @@ def _build_app() -> FastAPI:
         if tache is not None and not tache.done():
             tache.cancel()
             await asyncio.gather(tache, return_exceptions=True)
+        if _cache.INSTANCE is not None:
+            await _cache.INSTANCE.fermer()
 
     @app.on_event("startup")
     async def _raise_threadpool() -> None:
@@ -529,6 +538,7 @@ def _build_app() -> FastAPI:
             "a_monter": list(_A_MONTER),
             "duree_montage_s": _MONTAGE["duree_s"],
             "interrompu": _MONTAGE["interrompu"],
+            "cache": _cache.INSTANCE.etat() if _cache.INSTANCE is not None else None,
         }
 
     @app.get("/")

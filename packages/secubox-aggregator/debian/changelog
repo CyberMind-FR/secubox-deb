@@ -1,3 +1,15 @@
+secubox-aggregator (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Précache des lectures en double tampon, actif par défaut (aggregator/cache.py) : chaque GET
+    /api/v1/<module>/… sert aussitôt le dernier calcul complet (X-SBX-Cache: frais|perime|absent; age=N,
+    X-SBX-Cache-Age, X-SBX-Cache-Date) et se recalcule en arrière-plan, un seul recalcul par clé, plafonné.
+    Clé = chemin + requête + condensat de l'identité (Authorization, Cookie, Host, X-Real-IP,
+    X-Forwarded-For, Accept-Language). Seules les 200 JSON remplacent l'entrée ; une écriture invalide le
+    module ; LRU borné ; TTL par contenu, surcharges et exclusions dans [cache] d'aggregator.toml ;
+    /health expose l'état du cache (ref #4037).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 12:00:00 +0100
+
 secubox-aggregator (0.5.7-1~trixie1) trixie; urgency=medium
 
   * searxng (composant de secubox-metanews) à socket dédiée : jamais monté ici, même cité dans

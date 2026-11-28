@@ -180,6 +180,9 @@ jobs:
           # Relais de l'agrégateur réservé aux admins réels (actor, radio, vault).
           - suite: secubox-aggregator-relais
             chemin: packages/secubox-aggregator/tests/test_socket_dedie_admin.py
+          # Précache des lectures en double tampon (#4037) : isolation par identité, double tampon, invalidation.
+          - suite: secubox-aggregator-cache
+            chemin: packages/secubox-aggregator/tests/test_cache_lecture_4037.py
           - suite: depot-firstboot-frontal
             chemin: scripts/tests/test_firstboot_frontal_1845.py
           # secubox-vhost-logs ne restaure que sa propre passe (#1777) : la
