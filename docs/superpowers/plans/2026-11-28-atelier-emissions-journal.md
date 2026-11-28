@@ -107,3 +107,7 @@ See LICENCE-CMSD-1.0.md for terms.
   écriture atomique 0600 — parce qu'une voix restée d'une réplique retirée pourrait finir au montage — coût si faux : nul.
 - **Task 10** — Note : testé contre un FAUX worker HTTP sur socket Unix ; le worker GPU réel (#4057, CUDA en panne sur
   gk0) n'est PAS testé : à rejouer contre lui (`rang`/`voix` nova/onyx, durée réelle, délai 120 s suffisant ?).
+- **Rejeu fin de vague 2** — tesseract (fra+eng), rsvg-convert et optipng présents sur gk0 : `test_png` et
+  `test_balayage_bloque_ip_dans_png[tesseract]` passent (plus sautés). Playwright/chromium présents dans le venv mais le
+  chemin de capture réelle n'est pas encore testé (vague 3). Seul échec de la suite ai-agents : `test_voix_4000.py::
+  test_transcription_reelle` (whisper réel, « jarvi » au lieu de « jarvis »), préexistant et hors #4058.
