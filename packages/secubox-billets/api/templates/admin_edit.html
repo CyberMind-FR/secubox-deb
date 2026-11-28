@@ -31,6 +31,9 @@
         <input name="media_files" type="file" multiple
                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/webm,audio/flac,application/pdf">
         <small class="muted">Vignettes cliquables + zoom sur le blog. EXIF supprimé automatiquement.</small></div>
+      <div class="form-group"><label>🎙️ Chronologie audio (JSON, facultatif)</label>
+        <textarea name="chronologie" rows="3" spellcheck="false" placeholder='[{"debut_s": 0, "fin_s": 4.2, "diapo": 0, "replique": "…"}]'>{{ billet.chronologie if billet and billet.chronologie else '' }}</textarea>
+        <small class="muted">Avec un audio joint : le diaporama suit la lecture. « diapo » = rang de l'image (0 = première). Vide = aucune.</small></div>
       <div class="form-group"><label>Type de lien</label>
         <div class="form-actions">
           <label class="muted"><input type="radio" name="url_kind" value="ref"

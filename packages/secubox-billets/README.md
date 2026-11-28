@@ -79,6 +79,28 @@ reste « document PDF »). Supprimé avec le média.
 publié et non échu **et** que le média est un PDF de ce billet ; sinon 404 (page pas encore rendue : 404 + rendu
 planifié). Le cache n'est pas sous `/media/` (servi en direct par nginx) : il ne sort que par cette route.
 
+## Chronologie audio (#4058)
+
+Un billet qui porte un **audio** (mp3…) et une **chronologie** montre, dans sa vue, un diaporama **synchronisé** sur la
+lecture : plus de minuteur, la diapositive suit `currentTime` de l'`<audio>` (timeupdate + seeked), la réplique en cours
+s'affiche en sous-titre (`aria-live="polite"`), et un point de navigation fait sauter l'audio au début de sa diapo. La
+carte du fil garde le minuteur. Sans chronologie (ou sans audio) : comportement inchangé.
+
+Stockage : colonne `billet.chronologie` (TEXT JSON, NULL = aucune, migration `0009`). Format :
+
+```json
+[{"debut_s": 0.0, "fin_s": 4.2, "diapo": 0, "replique": "Texte dit"}, …]
+```
+
+`diapo` = index 0-based dans l'ordre des médias **image** du billet. Validation (`models.valider_chronologie`) :
+`0 ≤ debut_s < fin_s ≤ 21600`, répliques en ordre croissant sans chevauchement, `diapo` entier 0..499, au plus 2000
+répliques et 128 Kio, réplique ≤ 500 caractères (contrôles et marques bidirectionnelles retirés), champ inconnu refusé.
+
+Écriture (gardes inchangées) : champ `chronologie` du formulaire `/admin/billets[/{id}]` (session + CSRF, JSON en texte,
+vide = effacée) et de `POST`/`PUT /admin/api/billets[/{id}]` (`billets.publish` ; au PUT : absent = inchangé, `null`/`[]`
+= effacé). À la mise à jour, chaque `diapo` doit désigner une image existante (422 sinon) ; à la création par l'API les
+images arrivent ensuite, le rendu ignore donc une réplique dont l'image manque. `GET /admin/api/billets/{id}` la rend.
+
 ## Communiqué style + embed snapshot
 
 Each billet has a `style`: **`default`** (feed look) or **`communique`** (a

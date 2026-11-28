@@ -18,7 +18,7 @@ from .services.tags import extract as tags_extract
 
 _FEED_COLUMNS = ("id,created_at,updated_at,published_at,body,ref_url,embed_url,"
                  "embed_html,embed_provider,embed_fetched_at,slug,status,"
-                 "style,embed_snapshot,view_count,bumped_at,expires_at")
+                 "style,embed_snapshot,view_count,bumped_at,expires_at,chronologie")
 
 
 # Clé de tri du fil : l'activité, et à défaut la publication (billet d'avant la migration 0006).
@@ -67,9 +67,9 @@ async def create_billet(conn: aiosqlite.Connection, data: BilletIn, *, now: str,
     expires_at = _plus_secondes(now, data.ttl_s) if (data.publish and data.ttl_s) else None
     await conn.execute(
         "INSERT INTO billet(id,created_at,updated_at,published_at,bumped_at,expires_at,body,ref_url,"
-        "embed_url,slug,status,style) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "embed_url,slug,status,style,chronologie) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (billet_id, now, now, published_at, published_at, expires_at, data.body, data.ref_url,
-         data.embed_url, slug, status, data.style),
+         data.embed_url, slug, status, data.style, chrono_json(data.chronologie)),
     )
     await conn.commit()
     await sync_tags(conn, billet_id, data.body)
@@ -224,6 +224,23 @@ async def update_billet(conn: aiosqlite.Connection, billet_id: str, *, body: str
     )
     await conn.commit()
     await sync_tags(conn, billet_id, body)   # a #tag removed from the body loses its chip
+
+
+def chrono_json(chrono: Optional[list]) -> Optional[str]:
+    import json
+    return json.dumps(chrono, ensure_ascii=False, separators=(",", ":")) if chrono else None
+
+
+async def set_chronologie(conn: aiosqlite.Connection, billet_id: str, chrono: Optional[list], *, now: str) -> None:
+    """Pose (ou efface, None) la chronologie audio d'un billet (#4058). La chronologie arrive DÉJÀ validée (models.valider_chronologie)."""
+    await conn.execute("UPDATE billet SET chronologie=?, updated_at=? WHERE id=?", (chrono_json(chrono), now, billet_id))
+    await conn.commit()
+
+
+async def nb_images(conn: aiosqlite.Connection, billet_id: str) -> int:
+    """Nombre de médias IMAGE du billet : les index `diapo` d'une chronologie s'y rapportent (#4058)."""
+    async with conn.execute("SELECT COUNT(*) FROM media WHERE billet_id=? AND mime LIKE 'image/%'", (billet_id,)) as cur:
+        return (await cur.fetchone())[0]
 
 
 async def set_embed_snapshot(conn: aiosqlite.Connection, billet_id: str,
