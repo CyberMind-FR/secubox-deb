@@ -1,3 +1,11 @@
+secubox-waf-ng (1.58.2-1~trixie1) trixie; urgency=medium
+
+  * /categories en double tampon (ref #4034) : dernier relevé servi aussitôt,
+    recalcul en arrière-plan après 30 s ; une bascule de mode invalide le
+    relevé. Sous forte charge, la page Modes restait vide (> 30 s).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 05:28:29 +0100
+
 secubox-waf-ng (1.58.1-1~trixie1) trixie; urgency=medium
 
   * Rapports IA (ref #4030) : pas de rédaction sans ban sur la période ;
