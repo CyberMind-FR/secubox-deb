@@ -34,7 +34,7 @@ class FauxSources:
         self.appels = []
 
     async def lister(self):
-        return [{"cle": "campagne/c1", "genre": "campagne", "id": "c1", "nom": "Essai", "bans_90j": 1204, "vagues": 1}]
+        return [{"cle": "campagne:c1", "genre": "campagne", "id": "c1", "nom": "Essai", "bans_90j": 1204, "vagues": 1}]
 
     async def dossier(self, genre, ident):
         self.appels.append((genre, ident))
@@ -218,6 +218,8 @@ def test_service_produire_et_lire(service):
     assert c.get(f"/{ident}/fichier/emission.mp3", headers=h).content == b"ID3"
     assert c.get(f"/{ident}/fichier/consigne.txt", headers=h).status_code == 404       # liste blanche de fichiers
     assert c.get("/sources", headers=h).json()["sujets"][0]["evolutions"] >= 1
+    # gk2 dit « campagne:c1 » ; la page renvoie la clé telle quelle à /produire, qui exige « genre/id »
+    assert c.get("/sources", headers=h).json()["sujets"][0]["cle"] == "campagne/c1"
     assert c.post("/reglages", json={"gk2_base": "https://ailleurs"}, headers=h).status_code == 422
     assert c.post("/reglages", json={"seuil": 4, "voix_gpu": False}, headers=h).json()["seuil"] == 4
     assert c.delete(f"/{ident}", headers=h).json() == {"supprime": ident}
