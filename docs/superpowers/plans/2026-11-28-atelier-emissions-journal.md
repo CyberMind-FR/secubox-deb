@@ -15,3 +15,10 @@ See LICENCE-CMSD-1.0.md for terms.
   `verifiee|hypothese` — coût si faux : nul (paramètre facultatif).
 - **Task 4** — Décision : empreinte = sha256 du JSON trié tronqué à 16 caractères, comme `rapports.signature` —
   parce que le plan dit « signature-like » — coût si faux : comparaison d'empreinte avec gk2 à adapter.
+- **Task 8** — Décision : « bans par jour » rendu par semaine (`serie_semaine`), plus un graphique « vague-N » par
+  vague (fenêtre mise en avant) — parce que le dossier de gk2 ne transmet que `serie_semaine` (`serie_jour` reste
+  dans `h`) — coût si faux : ajouter `serie_jour` au dossier côté gk2 puis un graphique.
+- **Task 8** — Décision : association par termes = graphique partageant le plus de termes (égalité : le premier) —
+  parce que « bans » est cité partout et capterait toutes les répliques — coût si faux : réglage du score.
+- **Task 8** — Note : `rsvg-convert` et `oxipng` absents de gk0 ; `png()` lève `RuntimeError` sans rsvg, son test
+  est sauté (rien installé). À installer avant la vague 3 (montage) : `librsvg2-bin`, `oxipng`.
