@@ -310,13 +310,84 @@ def verifier_phrase(phrase: str, idx: Index) -> Dict[str, Any]:
     return {"statut": "retenue", "motifs": [], "texte": phrase}
 
 
+# #4030 — trois contrôles de CONTEXTE, que l'ancrage seul ne voit pas :
+#  · « bloc 24 heures » : le bloc /24 (réseau d'adresses) lu comme une durée ;
+#  · un niveau de risque contraire à celui du dossier (acteur.level) ;
+#  · une phrase qui ne redit QUE la fenêtre d'analyse (période, date de génération, nom du sujet) : elle est juste mais
+#    n'apprend rien, et gonflait le taux de phrases retenues.
+HEURES_BLOC = re.compile(r"\bblocs?\b[^.]{0,30}?\b24\s*(?:h\b|heures?\b)|\b24\s*heures?\b[^.]{0,20}?\bblocs?\b")
+NIVEAUX = {"low": "faible", "medium": "modere", "high": "eleve", "critical": "critique"}
+SYNONYMES_NIVEAU = {"faible": "faible", "bas": "faible", "modere": "modere", "moyen": "modere", "eleve": "eleve",
+                    "fort": "eleve", "haut": "eleve", "critique": "critique"}
+RISQUE = re.compile(r"\b(?:risque|niveau|priorite|menace|danger)\b[^.]{0,40}?\b(faible|bas|modere|moyen|eleve|fort|haut|"
+                    r"critique)\b")
+
+
+DATE_TEXTE_BRUT = re.compile(r"\b(\d{1,2})(?:er)?\s+([^\W\d_]+)\b(?:\s+\d{4})?")
+
+
+class Contexte:
+    """Ce qu'un contrôle de contexte lit du dossier : jours de la fenêtre, sujet, niveau ; index sans la fenêtre."""
+
+    def __init__(self, dossier: Dict[str, Any]):
+        per = dossier.get("periode") or {}
+        self.jours_fenetre: Set[Tuple[int, int]] = set()
+        for v in (per.get("debut"), per.get("fin"), dossier.get("genere_le")):
+            m = DATE_ISO.match(v) if isinstance(v, str) else None
+            if m:
+                self.jours_fenetre.add((int(m.group(3)), int(m.group(2))))
+        self.duree = per.get("jours")
+        suj = dossier.get("sujet") or {}
+        self.sujet = [str(suj.get(k)) for k in ("id", "nom") if suj.get(k)]
+        niv = str((dossier.get("acteur") or {}).get("level") or "").lower()
+        self.niveau = NIVEAUX.get(niv)
+        self.idx_sans_fenetre = Index({k: v for k, v in dossier.items() if k not in ("periode", "genere_le", "sujet")})
+
+    def _sans_fenetre(self, phrase: str) -> str:
+        """La phrase, casse gardée (les noms propres restent repérables), sans les dates de la fenêtre, sans « 90 jours »
+        ni le nom du sujet."""
+        def blanc(m, jour, mois):
+            return " " * len(m.group(0)) if (jour, mois) in self.jours_fenetre else m.group(0)
+
+        def texte(m):
+            mois = MOIS.get(normaliser(m.group(2)))
+            return blanc(m, int(m.group(1)), mois) if mois else m.group(0)
+        t = DATE_ISO.sub(lambda m: blanc(m, int(m.group(3)), int(m.group(2))), phrase)
+        t = DATE_JM.sub(lambda m: blanc(m, int(m.group(1)), int(m.group(2))), t)
+        t = DATE_TEXTE_BRUT.sub(texte, t)
+        if isinstance(self.duree, int):
+            t = re.sub(rf"\b{self.duree}\s+jours\b", " ", t)
+        for s in self.sujet:
+            t = re.sub(re.escape(s), " ", t, flags=re.I)
+        return t
+
+    def motifs(self, phrase: str) -> List[str]:
+        n = normaliser(phrase)
+        out = []
+        if HEURES_BLOC.search(n):
+            out.append("bloc /24 lu comme une durée (« 24 heures »)")
+        m = RISQUE.search(n)
+        if m and self.niveau and SYNONYMES_NIVEAU[m.group(1)] != self.niveau:
+            out.append(f"niveau de risque contraire au dossier : « {m.group(1)} » au lieu de « {self.niveau} »")
+        if not out:
+            r = verifier_phrase(self._sans_fenetre(phrase), self.idx_sans_fenetre)
+            if r["motifs"] and all(x.startswith("phrase non adossée") for x in r["motifs"]):
+                out.append("ne redit que la fenêtre d'analyse ou le nom du sujet")
+        return out
+
+
 def verifier(texte: str, dossier: Dict[str, Any]) -> Dict[str, Any]:
     """Le rapport relu : phrases gardées (avec leur statut), phrases retirées (motifs ; texte absent si adresse),
     taux de phrases retenues en pourcentage entier."""
     idx = Index(dossier)
+    ctx = Contexte(dossier)
     gardees, retirees = [], []
     for p in phrases(texte):
         r = verifier_phrase(p, idx)
+        if r["statut"] != "retiree":
+            m = ctx.motifs(p)
+            if m:
+                r = {"statut": "retiree", "motifs": m, "texte": p}
         (retirees if r["statut"] == "retiree" else gardees).append(r)
     total = len(gardees) + len(retirees)
     return {"phrases": total, "retenues": len(gardees), "retirees_n": len(retirees),

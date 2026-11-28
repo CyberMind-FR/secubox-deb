@@ -1,3 +1,15 @@
+secubox-waf-ng (1.58.1-1~trixie1) trixie; urgency=medium
+
+  * Rapports IA (ref #4030) : pas de rédaction sans ban sur la période ;
+    consigne (blocs /24, fenêtre d analyse, niveau du dossier) ; vérificateur :
+    retire « bloc 24 heures », un niveau de risque contraire au dossier et les
+    phrases qui ne redisent que la fenêtre ou le nom du sujet.
+  * Rapports d acteurs affichés dans l onglet Attaquants suivis.
+  * Route GET /export (bouton Exporter, HTTP 404) : dernières entrées du
+    journal des menaces, administrateur seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 04:58:54 +0100
+
 secubox-waf-ng (1.58.0-1~trixie1) trixie; urgency=medium
 
   * Bibliothèque figée de motifs (ref #4020) : motifs RE2 tirés d'OWASP CRS

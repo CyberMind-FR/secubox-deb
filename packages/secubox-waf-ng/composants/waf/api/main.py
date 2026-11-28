@@ -1306,6 +1306,34 @@ def _rapport_lu(genre: str, ident: str) -> tuple:
     return releve, cle, r
 
 
+EXPORT_MAX = 5000
+
+
+def _export_journal(chemin: str = None, maximum: int = EXPORT_MAX) -> list:
+    """Les `maximum` dernières entrées du journal des menaces, lues en flux (deque bornée), lignes illisibles ignorées."""
+    from collections import deque
+    try:
+        with open(chemin or THREATS_LOG, encoding="utf-8", errors="replace") as f:
+            lignes = deque(f, maxlen=maximum)
+    except OSError:
+        return []
+    out = []
+    for l in lignes:
+        try:
+            out.append(json.loads(l))
+        except ValueError:
+            continue
+    return out
+
+
+@app.get("/export")
+async def waf_export(_user: dict = Depends(require_jwt)):
+    """Bouton « Exporter » (#4030 : la route manquait, HTTP 404) : les dernières entrées du journal des menaces, en JSON.
+    Administrateur seulement : le journal porte des adresses."""
+    entrees = await asyncio.to_thread(_export_journal)
+    return {"genere_le": int(time.time()), "entrees": len(entrees), "max": EXPORT_MAX, "menaces": entrees}
+
+
 @app.get("/rapports", dependencies=[Depends(require_lecture_ai)])
 async def waf_rapports():
     """Les sujets (campagnes, acteurs) qui ont un rapport, avec l'âge du relevé ; `{"disponible": False}` sans cache."""
