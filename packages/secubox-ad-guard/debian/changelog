@@ -1,3 +1,12 @@
+secubox-ad-guard (1.33.9-1~trixie1) trixie; urgency=medium
+
+  * regles-appliquer (ref #4040) : poses à chaud et rechargement sous le
+    verrou des listes DNS ; occupé, rien n'est posé ni noté et la minute
+    suivante refait la différence (une zone posée pendant un fast_reload qui
+    avait lu l'ancien drop-in était perdue au basculement).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 06:24:12 +0100
+
 secubox-ad-guard (1.33.8-1~trixie1) trixie; urgency=medium
 
   * Tâches de fond (ref #4036) : secubox-ad-guard-dnssensor et secubox-ad-guard-dnsdump passe(nt) dans la file FIFO à

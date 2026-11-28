@@ -1,3 +1,18 @@
+secubox-core (1.8.52-1~trixie1) trixie; urgency=medium
+
+  * Listes DNS (ref #4040) : plus de recompilation en boucle (13 en 3 h sur
+    gk2). Sources reconnues par condensat sha256 (une réécriture à l'identique
+    ne recompile rien) ; zones des vues du contexte (règles TV posées à chaud
+    par ad-guard) à part : seules, rattrapées au plus toutes les 6 h ;
+    compilation complète après stabilité des entrées (20 s) et au plus une
+    toutes les 30 min (réglables dans /etc/secubox/dns-listes.toml).
+  * Compilation hors du verrou partagé avec ad-guard, tenu seulement pour la
+    pose, unbound-checkconf et fast_reload ; second verrou contre deux
+    compilations simultanées. Unité en priorité basse (Nice 19, CPUWeight et
+    IOWeight 10).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 06:24:12 +0100
+
 secubox-core (1.8.51-1~trixie1) trixie; urgency=medium
 
   * Tâches de fond (ref #4036) : file FIFO à concurrence bornée

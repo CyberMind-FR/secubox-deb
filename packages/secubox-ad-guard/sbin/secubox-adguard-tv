@@ -347,6 +347,21 @@ def regles_appliquer() -> int:
         _contournement_au_mieux(etat)                                    # lot 4 : modes, pauses et suspensions suivis à chaque passage
     else:
         contournement_retirer()
+    # #4040 : rechargement et poses à chaud SOUS le verrou des listes DNS (secubox-dns-listes ne le tient plus que pour sa
+    # pose) : une zone posée en mémoire pendant un fast_reload qui a lu l'ancien drop-in serait perdue au basculement, et
+    # l'instantané la croirait appliquée. Occupé : rien n'est noté, la minute suivante refait la même différence.
+    with _verrou_depot(DELAI_VERROU_DEPOT_S) as libre:
+        if not libre:
+            audit("regles-appliquer", "mode=differe (rechargement des listes DNS en cours)")
+            print(json.dumps({"ok": True, "ajoutes": 0, "retires": 0, "mode": "differe"}))
+            return 0
+        return _regles_appliquer_tenu(etat, voulu, avant)
+
+
+DELAI_VERROU_DEPOT_S = 30.0
+
+
+def _regles_appliquer_tenu(etat: dict, voulu: dict, avant: dict | None) -> int:
     if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
             or set(avant.get("vues", {})) != set(voulu["vues"]) or avant.get("autorisations", {}) != voulu["autorisations"]
             or avant.get("garde") != voulu["garde"]):

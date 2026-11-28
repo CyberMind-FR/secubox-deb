@@ -14,6 +14,15 @@ Le .path surveille aussi unbound.conf.d (une vue TV ou un réseau ajouté change
 des ENTRÉES, notée avec l'état, qui évite de recompiler pour rien — y compris après les propres écritures du service, ou
 après un échec sur les mêmes entrées.
 
+ESPACEMENT (#4040, gk2 le 28/11 : 13 compilations en 3 h, ~8 min et 600 Mo chacune). Les sources entrent dans l'empreinte
+par leur CONDENSAT (sha256, recalculé seulement si taille, date ou inode changent) : une source réécrite à l'identique ne
+recompile rien. Les zones des vues du contexte (règles apprises des TV, posées À CHAUD par secubox-adguard-tv) ont leur
+propre empreinte : seules, elles ne relancent une compilation qu'après `intervalle_vues_s` (voir `listes.empreintes`).
+Toute compilation complète attend que les entrées soient stables `stabilite_s` secondes et qu'au moins `intervalle_min_s`
+se soient écoulées depuis la précédente (réglages de /etc/secubox/dns-listes.toml). La compilation se fait HORS du verrou
+`VERROU` (partagé avec les poses à chaud d'ad-guard) : il n'est tenu que pour poser, vérifier et recharger. Un second
+verrou, `VERROU_COMPILATION`, empêche deux compilations simultanées.
+
 L'ARBRE EST À ROOT, À PART (relecture #3205) : /var/lib/secubox appartient au compte partagé `secubox`, qui pourrait renommer
 un sous-dossier root et le remplacer par le sien (sources forgées compilées par root, écriture d'un générateur root à travers
 un lien). /var/lib/secubox-dns-listes est root 0755, et chaque écriture vérifie le dossier ET son parent. STDLIB SEULEMENT."""
@@ -21,6 +30,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import stat
@@ -36,11 +46,18 @@ RACINE = Path("/var/lib/secubox-dns-listes")
 SOURCES = RACINE / "sources"
 ETAT = RACINE / "etat.json"
 VERROU = RACINE / "verrou"               # 0600 dans l'arbre root : /run/lock (1777) laissait tout compte local bloquer le service
+# #4040 : VERROU n'est plus tenu que pendant la pose (écriture, unbound-checkconf, fast_reload) ; il exclut les poses à chaud
+# d'ad-guard (une zone posée en mémoire pendant un fast_reload qui a déjà lu l'ancien drop-in serait perdue au basculement).
+VERROU_COMPILATION = RACINE / "compilation.verrou"
 CONF_D = Path("/etc/unbound/unbound.conf.d")
 REGLAGES = Path("/etc/secubox/dns-listes.toml")
 MODES = ("compile", "direct")
 REESSAI_S = 3600          # un échec sur les MÊMES entrées n'est retenté qu'après ce délai (minuterie quotidienne, ou entrée nouvelle)
 PASSES_MAX = 3            # une source déposée PENDANT la compilation est reprise (systemd ne relance pas une unité active)
+# Espacement (#4040), réglable dans REGLAGES : (défaut, minimum, maximum). Le maximum de l'intervalle reste sous
+# TimeoutStartSec de l'unité (attente + stabilisation + PASSES_MAX compilations).
+ESPACEMENT = {"stabilite_s": (20, 0, 300), "stabilite_max_s": (300, 0, 900),
+              "intervalle_min_s": (1800, 0, 3600), "intervalle_vues_s": (6 * 3600, 0, 7 * 86400)}
 _CODE = (Path(listes.__file__), Path(__file__))     # une mise à jour du compilateur impose de recompiler
 
 
@@ -120,21 +137,39 @@ def retirer_source(nom: str, sources: Path = SOURCES) -> str:
     return "retire"
 
 
-def lire_mode(reglages: Path = REGLAGES) -> str:
-    """`mode = "compile"` (défaut) ou `"direct"` (sources recopiées telles quelles, sans compilation : retour arrière)."""
+def _lire_toml(reglages: Path) -> dict:
     try:
         import tomllib
         with open(reglages, "rb") as f:
-            m = tomllib.load(f).get("mode", "compile")
+            d = tomllib.load(f)
+        return d if isinstance(d, dict) else {}
     except FileNotFoundError:
-        return "compile"
+        return {}
     except (OSError, ValueError) as e:
-        print(f"secubox-dns-listes : {reglages} illisible ({e}) : mode « compile »", file=sys.stderr)
-        return "compile"
+        print(f"secubox-dns-listes : {reglages} illisible ({e}) : réglages par défaut", file=sys.stderr)
+        return {}
+
+
+def lire_mode(reglages: Path = REGLAGES) -> str:
+    """`mode = "compile"` (défaut) ou `"direct"` (sources recopiées telles quelles, sans compilation : retour arrière)."""
+    m = _lire_toml(reglages).get("mode", "compile")
     if m not in MODES:
         print(f"secubox-dns-listes : mode {m!r} inconnu : mode « compile »", file=sys.stderr)
         return "compile"
     return m
+
+
+def lire_espacement(reglages: Path = REGLAGES) -> dict:
+    """Les délais d'espacement (#4040) : un entier hors bornes, ou d'un autre type, vaut la valeur par défaut (dit)."""
+    d = _lire_toml(reglages)
+    out = {}
+    for cle, (defaut, mini, maxi) in ESPACEMENT.items():
+        v = d.get(cle, defaut)
+        if type(v) is not int or not mini <= v <= maxi:
+            print(f"secubox-dns-listes : {cle} = {v!r} hors de [{mini}, {maxi}] : {defaut}", file=sys.stderr)
+            v = defaut
+        out[cle] = v
+    return out
 
 
 def _prendre_verrou(chemin: Path) -> int:
@@ -181,21 +216,81 @@ def fichiers_contexte(conf_d: Path) -> list:
             if not p.name.startswith(".") and p.name not in listes.SOURCES_CONNUES and p.name != listes.SORTIE]
 
 
-def _entrees(sources: Path, conf_d: Path, mode: str) -> dict:
-    """Ce dont dépend le résultat : mode, code du compilateur, sources (déposées par écriture atomique : taille et date
-    suffisent), et ce que le compilateur lit du contexte."""
+def _condensat(p: Path, cache: dict) -> Optional[str]:
+    """sha256 du CONTENU d'une source (#4040 : une source réécrite à l'identique ne recompile rien). `cache` garde
+    {nom: [taille, date, inode, condensat]} : 42 Mo ne sont relus que si l'un des trois change (dépôt atomique)."""
+    try:
+        st = os.stat(p, follow_symlinks=False)
+    except OSError:
+        cache.pop(p.name, None)
+        return None
+    cle = [st.st_size, st.st_mtime_ns, st.st_ino]
+    vu = cache.get(p.name)
+    if isinstance(vu, list) and len(vu) == 4 and vu[:3] == cle and isinstance(vu[3], str):
+        return vu[3]
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for bloc_ in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloc_)
+    cache[p.name] = [*cle, h.hexdigest()]
+    return h.hexdigest()
+
+
+def _entrees(sources: Path, conf_d: Path, mode: str, cache: Optional[dict] = None) -> dict:
+    """Ce dont dépend le résultat : mode, code du compilateur, CONTENU des sources, et ce que le compilateur lit du
+    contexte — sa structure d'un côté, les zones de ses vues de l'autre (`listes.empreintes`, #4040)."""
+    cache = {} if cache is None else cache
+    structure, zones_vues = listes.empreintes(fichiers_contexte(conf_d))
     return {"mode": mode, "code": [_stat(p) for p in _CODE],
-            "sources": {n: _stat(sources / n) for n in listes.SOURCES_CONNUES},
-            "contexte": listes.empreinte(fichiers_contexte(conf_d))}
+            "sources": {n: _condensat(sources / n, cache) for n in listes.SOURCES_CONNUES},
+            "contexte": structure, "zones_vues": zones_vues}
+
+
+def _besoin(anc: Optional[dict], sig: dict) -> str:
+    """« rien » (mêmes entrées, mêmes fichiers posés), « vues » (seules les zones des vues du contexte ont bougé) ou
+    « complet »."""
+    if not isinstance(anc, dict):
+        return "complet"
+    if anc == sig:
+        return "rien"
+    ecarts = {k for k in set(anc) | set(sig) if anc.get(k) != sig.get(k)}
+    return "vues" if ecarts == {"zones_vues"} else "complet"
+
+
+def _releve(sources: Path, conf_d: Path) -> list:
+    """Taille, date et inode de chaque source et de chaque fichier de unbound.conf.d : de quoi voir une rafale finir."""
+    out = []
+    for d in (sources, conf_d):
+        with contextlib.suppress(OSError):
+            for p in sorted(d.iterdir()):
+                with contextlib.suppress(OSError):
+                    st = os.stat(p, follow_symlinks=False)
+                    out.append([str(p), st.st_size, st.st_mtime_ns, st.st_ino])
+    return out
+
+
+def _stabiliser(sources: Path, conf_d: Path, dormir, stabilite_s: int, max_s: int) -> int:
+    """Attend que les entrées n'aient pas bougé pendant `stabilite_s` (au plus `max_s` en tout) : une rafale d'écritures
+    (adblock-sync, puis webfilter, puis adult) donne UNE compilation. Rend le temps attendu."""
+    if stabilite_s <= 0:
+        return 0
+    attendu, avant = 0, _releve(sources, conf_d)
+    while True:
+        dormir(stabilite_s)
+        attendu += stabilite_s
+        apres = _releve(sources, conf_d)
+        if apres == avant or attendu >= max_s:
+            return attendu
+        avant = apres
 
 
 def _poses(conf_d: Path) -> dict:
     return {n: _stat(conf_d / n) for n in (*listes.SOURCES_CONNUES, listes.SORTIE)}
 
 
-def _signature(sources: Path, conf_d: Path, mode: str) -> dict:
+def _signature(sources: Path, conf_d: Path, mode: str, cache: Optional[dict] = None) -> dict:
     """Les entrées ET ce qui est posé : un 92 retiré à la main, ou un ancien fichier réécrit, n'est pas « à jour »."""
-    return {**_entrees(sources, conf_d, mode), "poses": _poses(conf_d)}
+    return {**_entrees(sources, conf_d, mode, cache), "poses": _poses(conf_d)}
 
 
 def _adopter(sources: Path, conf_d: Path) -> list:
@@ -222,8 +317,22 @@ def _lire_meta(meta: Optional[Path]) -> Optional[dict]:
         return None
 
 
+@contextlib.contextmanager
+def _verrou_pose(verrou: Optional[Path]):
+    """VERROU, le temps de poser, vérifier et recharger seulement (#4040) : la compilation (minutes, des centaines de Mo)
+    se fait AVANT, hors verrou, dans un tampon en mémoire ; l'ancien 92 reste posé et servi jusqu'au fast_reload."""
+    if verrou is None:
+        yield
+        return
+    fd = _prendre_verrou(Path(verrou))
+    try:
+        yield
+    finally:
+        os.close(fd)
+
+
 def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bool = False,
-           meta: Optional[Path] = None, contexte_seul: bool = False) -> tuple:
+           meta: Optional[Path] = None, contexte_seul: bool = False, verrou: Optional[Path] = None) -> tuple:
     presentes = [sources / n for n in listes.SOURCES_CONNUES if (sources / n).is_file()]
     stats: dict = {}
     changements: dict = {}
@@ -251,6 +360,7 @@ def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bo
             if r is None:
                 texte, stats = listes.compiler(presentes, fichiers_contexte(conf_d))
                 nouvelle_meta = stats.pop("retouche", None)
+                stats["compilation_complete"] = True      # même si le 92 obtenu est identique : l'espacement compte la compilation
             else:
                 texte, stats = r
             changements[conf_d / listes.SORTIE] = texte
@@ -261,59 +371,92 @@ def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bo
     if meta and mode == "direct":
         with contextlib.suppress(OSError):
             Path(meta).unlink()
-    r = poser_vues(changements, s, forcer=forcer)
+    with _verrou_pose(verrou):
+        r = poser_vues(changements, s, forcer=forcer)
     if meta and nouvelle_meta is not None:              # après une pose réussie seulement : la méta décrit le 92 en place
         ecrire_atomique(Path(meta), json.dumps(nouvelle_meta, ensure_ascii=False), 0o644, erreur=ErreurDepot)
     return r, stats, len(presentes)
 
 
 def appliquer(systeme: Optional[SystemeUnbound] = None, sources: Path = SOURCES, conf_d: Path = CONF_D, etat: Path = ETAT,
-              reglages: Path = REGLAGES, verrou: Path = VERROU, maintenant=time.time) -> dict:
+              reglages: Path = REGLAGES, verrou: Path = VERROU, maintenant=time.time, dormir=time.sleep,
+              verrou_compilation: Optional[Path] = None) -> dict:
     """Une passe complète ; ne lève pas : le résultat (et l'erreur éventuelle) est rendu ET noté dans `etat`.
 
     La signature notée est celle des entrées que la dernière passe a COMPILÉES (plus ce qui est posé) : un dépôt arrivé
     pendant la passe, que systemd ne signale plus une fois l'unité active, se voit au passage suivant. « en-cours » est
     noté avant la bascule : un processus tué (OOM, délai) laisse cette marque, et la passe suivante vérifie et recharge
-    même si les fichiers sont déjà en place."""
+    même si les fichiers sont déjà en place.
+
+    Deux verrous (#4040) : `verrou_compilation` (à côté de `verrou` par défaut) pour toute la passe — jamais deux
+    compilations à la fois — et `verrou`, partagé avec secubox-adguard-tv, pour la seule pose."""
     s = systeme or SystemeListes()
     sources, conf_d = Path(sources), Path(conf_d)
     if not conf_d.is_dir():
         return {"etat": "sans-unbound", "mode": lire_mode(reglages)}
     mode = lire_mode(reglages)
+    verrou_compilation = Path(verrou_compilation) if verrou_compilation else Path(verrou).with_name(VERROU_COMPILATION.name)
     try:
-        fd = _prendre_verrou(verrou)
+        fd = _prendre_verrou(verrou_compilation)
     except OSError as e:
         maintenant_s = int(maintenant())
-        return _noter(etat, {"etat": "erreur", "mode": mode, "erreur": f"verrou {verrou} inutilisable ({e.strerror})",
+        return _noter(etat, {"etat": "erreur", "mode": mode, "erreur": f"verrou {verrou_compilation} inutilisable ({e.strerror})",
                              "signature": None, "t": maintenant_s, "t_echec": maintenant_s})
     try:
-        return _appliquer_tenu(s, sources, conf_d, etat, mode, maintenant)
+        return _appliquer_tenu(s, sources, conf_d, etat, mode, maintenant, Path(verrou), dormir, lire_espacement(reglages))
     finally:
         os.close(fd)
 
 
-def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, mode: str, maintenant) -> dict:
+def _garde(precedent: dict) -> dict:
+    """Ce qui traverse les passes : date de la dernière compilation complète, cache des condensats."""
+    return {k: precedent[k] for k in ("t_compilation", "condensats") if k in precedent}
+
+
+def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, mode: str, maintenant,
+                    verrou: Optional[Path] = None, dormir=time.sleep, esp: Optional[dict] = None) -> dict:
+    esp = esp or {k: v[0] for k, v in ESPACEMENT.items()}
     precedent = lire_etat(etat) or {}
     interrompu = precedent.get("etat") == "en-cours"
+    cache = precedent.get("condensats") if isinstance(precedent.get("condensats"), dict) else {}
     adoptes: list = []
     avant = None
+    t_compilation = precedent.get("t_compilation") if isinstance(precedent.get("t_compilation"), int) else None
     try:
         preparer_sources(sources)
         adoptes = _adopter(sources, conf_d)
-        sig = _signature(sources, conf_d, mode)
-        if not interrompu and precedent.get("signature") == sig:
-            if precedent.get("etat") in ("applique", "inchange"):
-                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes") if k in precedent},
-                                     "etat": "inchange", "mode": mode, "adoptes": [], "signature": sig,
+        sig = _signature(sources, conf_d, mode, cache)
+        besoin = "complet" if interrompu else _besoin(precedent.get("signature"), sig)
+        if besoin == "rien":
+            if precedent.get("etat") in ("applique", "inchange", "differe"):
+                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes") if k in precedent}, **_garde(precedent),
+                                     "condensats": cache, "etat": "inchange", "mode": mode, "adoptes": [], "signature": sig,
                                      "t": int(maintenant())})
             t_echec = precedent.get("t_echec")
             if precedent.get("etat") == "erreur" and isinstance(t_echec, int) and maintenant() - t_echec < REESSAI_S:
-                return _noter(etat, {**precedent, "t": int(maintenant())})       # mêmes entrées, même échec : pas avant REESSAI_S
-        _noter(etat, {"etat": "en-cours", "mode": mode, "adoptes": adoptes, "t": int(maintenant())})
+                return _noter(etat, {**precedent, "condensats": cache, "t": int(maintenant())})   # mêmes entrées, même échec : pas avant REESSAI_S
+        if mode == "compile" and not interrompu:
+            if besoin == "vues" and t_compilation is not None and maintenant() - t_compilation < esp["intervalle_vues_s"]:
+                # Zones des vues seules (#4040) : déjà posées à chaud par ad-guard, le 92 en place reste juste (au pire il
+                # bloque trop) ; rattrapage à la première passe après `intervalle_vues_s`. La signature notée reste
+                # l'ancienne : l'écart reste visible.
+                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes", "signature") if k in precedent},
+                                     **_garde(precedent), "condensats": cache, "etat": "differe", "mode": mode,
+                                     "adoptes": adoptes, "raison": "zones des vues seules", "t": int(maintenant()),
+                                     "rattrapage_t": t_compilation + esp["intervalle_vues_s"]})
+            attente = (t_compilation + esp["intervalle_min_s"] - maintenant()) if t_compilation is not None else 0
+            if attente > 0:
+                _noter(etat, {**{k: precedent[k] for k in ("stats", "passes", "signature") if k in precedent},
+                              **_garde(precedent), "condensats": cache, "etat": "espace", "mode": mode, "adoptes": adoptes,
+                              "t": int(maintenant()), "reprise_t": int(maintenant() + attente)})
+                dormir(attente)          # le 92 en place reste servi ; systemd ne relance pas une unité active : on coalesce
+        _stabiliser(sources, conf_d, dormir, esp["stabilite_s"], esp["stabilite_max_s"])
+        _noter(etat, {**_garde(precedent), "condensats": cache, "etat": "en-cours", "mode": mode, "adoptes": adoptes,
+                      "t": int(maintenant())})
         applique, stats, nb, passes, entrees_prec = False, {}, 0, 0, None
         while True:
             passes += 1
-            avant = _entrees(sources, conf_d, mode)
+            avant = _entrees(sources, conf_d, mode, cache)
             # Passe 1 : comparée à la signature notée. Passes suivantes (le contexte a bougé PENDANT la compilation, une TV
             # a changé d'adresse) : comparée aux entrées de la passe d'avant, dont la méta décrit le 92 qu'elle vient de poser.
             anc = (precedent.get("signature") or {}) if passes == 1 else (entrees_prec or {})
@@ -322,10 +465,14 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
                     and (passes > 1 or anc.get("poses") == _poses(conf_d)))
             entrees_prec = avant
             r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu,
-                                  meta=Path(etat).with_name("retouche.json"), contexte_seul=seul)
+                                  meta=Path(etat).with_name("retouche.json"), contexte_seul=seul, verrou=verrou)
             interrompu = False
             applique = applique or r == "applique"
-            if passes >= PASSES_MAX or _entrees(sources, conf_d, mode) == avant:
+            if stats.pop("compilation_complete", False):
+                t_compilation = int(maintenant())
+            # Une passe de plus seulement si une entrée qui COMPTE a bougé pendant celle-ci : les zones des vues seules
+            # attendent leur rattrapage espacé (#4040).
+            if passes >= PASSES_MAX or _besoin(avant, _entrees(sources, conf_d, mode, cache)) != "complet":
                 break
     except (listes.ErreurListes, ErreurUnbound, s.ERREUR, OSError, ValueError) as e:
         with contextlib.suppress(Exception):
@@ -336,9 +483,11 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
                 sig_echec = {**avant, "poses": _poses(conf_d)}
         maintenant_s = int(maintenant())
         return _noter(etat, {"etat": "erreur", "mode": mode, "erreur": str(e)[:500], "adoptes": adoptes,
-                             "signature": sig_echec, "t": maintenant_s, "t_echec": maintenant_s})
+                             "signature": sig_echec, "t": maintenant_s, "t_echec": maintenant_s, "condensats": cache,
+                             **({"t_compilation": t_compilation} if t_compilation is not None else {})})
     if applique:
         s.audit("listes", f"mode={mode} sources={nb} emis={stats.get('emis', '-')} "
                           f"avant={stats.get('zones_chargees_avant', '-')} adoptes={','.join(adoptes) or '-'} passes={passes}")
     return _noter(etat, {"etat": "applique" if applique else "inchange", "mode": mode, "stats": stats, "adoptes": adoptes,
-                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant())})
+                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant()),
+                         "condensats": cache, **({"t_compilation": t_compilation} if t_compilation is not None else {})})

@@ -163,6 +163,16 @@ the same inputs is retried after one hour, a source deposited during a compilati
 `/etc/secubox/dns-listes.toml`: `mode = "compile"` (default) or `mode = "direct"` (rollback: sources copied unchanged
 under their old names, no compilation).
 
+**Spacing (1.8.51, #4040).** Sources are fingerprinted by content (sha256, cached on size/mtime/inode): a source rewritten
+identically never recompiles. `local-zone` lines of blocking or pass-through type inside context views (TV rules learned
+by ad-guard, applied hot with `view_local_zone`) have their own fingerprint: alone, they recompile at most every
+`intervalle_vues_s` (state `differe`; the stale 92 can only over-block, the view is evaluated first). Any full compilation
+waits until inputs are stable for `stabilite_s` (max `stabilite_max_s`) and at least `intervalle_min_s` after the previous
+one (state `espace`; the direct mode is never delayed). Defaults in `dns-listes.toml`: `stabilite_s = 20`,
+`stabilite_max_s = 300`, `intervalle_min_s = 1800` (≤ 3600), `intervalle_vues_s = 21600`. Compilation runs outside the
+lock shared with ad-guard (`/var/lib/secubox-dns-listes/verrou`), held only for write + unbound-checkconf + fast_reload;
+`compilation.verrou` prevents two compilations at once.
+
 **Compact source form (1.8.43, #3893).** Directives only the compiler reads (never seen by Unbound; an older core
 rejects them loudly instead of dropping an exemption):
 

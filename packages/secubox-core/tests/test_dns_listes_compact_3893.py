@@ -267,7 +267,7 @@ def test_mode_direct_plafond_depasse_rien_n_est_pose(tmp_path, monkeypatch):
     conf = tmp_path / "unbound.conf.d"
     conf.mkdir()
     lieux = {"sources": tmp_path / "srcs", "conf_d": conf, "etat": tmp_path / "etat.json",
-             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
     D.deposer_source(N96, ADULTE_3x3, lieux["sources"])
     lieux["reglages"].write_text('mode = "direct"\n')
     monkeypatch.setattr(L, "MAX_DEPLIES", 8)
@@ -349,7 +349,7 @@ def test_mode_direct_pose_la_source_depliee_et_ne_la_readopte_pas(rendus, tmp_pa
     conf.mkdir()
     (conf / "10-acl.conf").write_text(ACL)
     lieux = {"sources": tmp_path / "srcs", "conf_d": conf, "etat": tmp_path / "etat.json",
-             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
     for n in (N93, N96):
         D.deposer_source(n, (d["compact"] / n).read_text(), lieux["sources"])
     lieux["reglages"].write_text('mode = "direct"\n')
@@ -367,7 +367,7 @@ def test_mode_direct_lit_la_source_une_fois_sans_suivre_de_lien(tmp_path):
     conf = tmp_path / "unbound.conf.d"
     conf.mkdir()
     lieux = {"sources": tmp_path / "srcs", "conf_d": conf, "etat": tmp_path / "etat.json",
-             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
     lieux["sources"].mkdir(mode=0o755)
     cible = tmp_path / "ailleurs.conf"
     cible.write_text(ADULTE_3x3)

@@ -372,18 +372,39 @@ def empreinte(fichiers: Iterable[Path]) -> str:
     fichier par fichier dans l'ordre de lecture : 60-secubox-noms change plusieurs fois par jour (local-data) sans qu'il
     faille relancer deux minutes de compilation, mais une vue TV ou un réseau nouveau impose de recompiler (ses adresses ne
     porteraient aucune étiquette)."""
-    h = hashlib.sha256()
+    return _empreintes(fichiers, separer=False)[0]
+
+
+def empreintes(fichiers: Iterable[Path]) -> Tuple[str, str]:
+    """(structure, zones des vues) du CONTEXTE (#4040). Les zones `local-zone` bloquantes ou traversantes DANS UNE VUE du
+    contexte (règles apprises des TV, tri Netflix, garde) vont à part : Unbound évalue la vue AVANT le 92 pour les seuls
+    clients de la vue, donc une telle zone ajoutée agit d'elle-même (le 92 n'est pas consulté pour ce nom) ; retirée, le 92
+    périmé ne peut que bloquer TROP (le profil de la vue y était compté bloqué), jamais trop peu. Le 92 n'a donc pas à être
+    recompilé sur-le-champ pour elles : ad-guard les pose à chaud, la compilation complète les rattrape plus tard, espacée.
+    Tout le reste (vues, view-first, access-control, dérogations, zones d'un autre type) reste dans la structure."""
+    return _empreintes(fichiers, separer=True)
+
+
+def _empreintes(fichiers: Iterable[Path], separer: bool) -> Tuple[str, str]:
+    h, hv = hashlib.sha256(), hashlib.sha256()
     for f in sorted(fichiers, key=lambda p: Path(p).name):
         f = Path(f)
-        fichier_vu, section, section_vue = False, "", False
+        fichier_vu, section, section_vue, vue = False, "", False, ""
         with f.open(encoding="utf-8", errors="replace") as fh:
             for ligne in fh:
                 s = ligne.strip()
                 if not ligne[:1].isspace() and re.fullmatch(r"[a-z-]+:", s):
-                    section, section_vue = s, False
+                    section, section_vue, vue = s, False, ""
                     continue
                 if not s.startswith(_DECISIFS):
                     continue
+                if section == "view:" and s.startswith("name:"):
+                    vue = " ".join(s.split())
+                if separer and section == "view:":
+                    mm = _LZ.match(" ".join(s.split()))
+                    if mm and (mm.group(2) in BLOQUANTS or mm.group(2) in TRAVERSANTS) and mm.group(1) != ".":
+                        hv.update(f.name.encode() + b"\0" + vue.encode() + b"\0" + " ".join(s.split()).encode() + b"\n")
+                        continue
                 if not fichier_vu:                     # un fichier sans ligne décisive (que des local-data) ne compte pas
                     h.update(b"\0F" + f.name.encode())
                     fichier_vu = True
@@ -391,7 +412,7 @@ def empreinte(fichiers: Iterable[Path]) -> str:
                     h.update(b"\0S" + section.encode())
                     section_vue = True
                 h.update(b"\n" + " ".join(s.split()).encode())
-    return h.hexdigest()
+    return h.hexdigest(), hv.hexdigest()
 
 
 def _contient(petit: ipaddress._BaseNetwork, grand: ipaddress._BaseNetwork) -> bool:
