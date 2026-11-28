@@ -153,7 +153,7 @@ def creer_app(base: Optional[Path] = None, outils: Optional[production.Outils] =
         ecart = float(o.reglages()["ecart"])
         out = []
         for s in sujets:
-            cle = s.get("cle") or f"{s.get('genre')}/{s.get('id')}"
+            cle = f"{s.get('genre')}/{s.get('id')}"  # gk2 dit « genre:id » ; la chaîne et le magasin, « genre/id »
             out.append({**{k: s.get(k) for k in ("genre", "id", "nom", "bans_90j", "vagues", "recurrences")},
                         "cle": cle, "evolutions": _apercu(s, o.magasin.dernier_valide(cle), ecart)})
         return {"sujets": out}
@@ -165,7 +165,7 @@ def creer_app(base: Optional[Path] = None, outils: Optional[production.Outils] =
         ecart = float(o.reglages()["ecart"])
         out: Dict[str, List[Dict[str, Any]]] = {}
         for s in await o.sources.lister():
-            cle = s.get("cle") or f"{s.get('genre')}/{s.get('id')}"
+            cle = f"{s.get('genre')}/{s.get('id')}"  # gk2 dit « genre:id » ; la chaîne et le magasin, « genre/id »
             rep = await o.sources.dossier(s["genre"], s["id"])
             d = rep.get("dossier") if isinstance(rep.get("dossier"), dict) else rep
             out[cle] = evolutions(d, o.magasin.dernier_valide(cle), o.maintenant(), seuil_chiffre=ecart)
