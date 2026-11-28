@@ -60,3 +60,32 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 13** — Décision : liste blanche par défaut `127.0.0.1`, `localhost` (`masques.toml`, section `[hotes]`) —
   parce que l'hôte local du tunnel vers l'admin de gk2 n'est pas connu ici — coût si faux : capture refusée tant que
   l'hôte n'est pas ajouté.
+
+## Vague 2
+
+- **Task 2** — Décision : fonctions dans `api/services/media.py` (pas `api/media.py`, inexistant) et outil
+  `sbin/secubox-billets-auteur-emissions` (installé dans `/usr/sbin`) qui appelle `python -m api.manage
+  auteur-emissions` sous `secubox` — parce que le module média du paquet vit dans `services/` — coût si faux : nul.
+- **Task 2** — Décision : le jeton `billets-emissions.jeton` est un secret propre aux billets, accepté en
+  `Authorization: Bearer` par la seule écriture de `/admin/api/billets` (comparaison en temps constant), à côté de la
+  session `billets.publish` ; l'auteur `emissions` a un mot de passe aléatoire jamais montré — parce que l'API JSON
+  n'accepte qu'un JWT SecuBox qu'on ne peut pas frapper depuis gk0, et que créer un auteur sans jeton ne servait à
+  rien — coût si faux : remplacer par une capacité JWT dédiée ; la Task 17 lit le jeton d'un fichier 0600 sur gk0
+  (copie à poser par le propriétaire, jamais en clair dans le dépôt).
+- **Task 2** — Décision : garde d'espace par `UploadFile.size` AVANT `create_billet` (formulaire) et par `len(raw)`
+  à `POST /admin/api/billets/{id}/media` ; réponse 507 — parce que « rien écrit » doit couvrir le billet lui-même —
+  coût si faux : nul.
+- **Task 2** — Décision : « la minuterie existante du paquet » n'existe pas : nouvelle `secubox-billets-purge-mp4.timer`
+  (quotidienne 04:20, `Persistent`) → `api.manage purger-mp4`, qui retire aussi les lignes média dont le MP4 a disparu ;
+  la vignette JPEG d'un MP4 purgé reste (image) — coût si faux : quelques vignettes orphelines.
+- **Task 2** — Note : 52 échecs/erreurs de la suite billets sont préexistants et identiques sur `origin/master`
+  (connexion d'administration du banc, jar de cookies httpx) ; la garde est testée par une session simulée.
+- **Task 5** — Décision : « actif » = dernier ban (fin de dernière vague ou dernière semaine non nulle) à moins de 7
+  jours de la date de lecture (`genere_le` pour le précédent, `maintenant` pour le courant) ; `retour_acteur` exclut
+  `nouvelle_vague` pour la même vague — parce que le dossier ne transmet pas de « dernier ban » explicite — coût si
+  faux : un retour ou une extinction décalés de quelques jours.
+- **Task 5** — Décision : `operateur_nouveau` non marquant, `phase`/`nouvelle_vague`/`extinction`/`retour_acteur`
+  marquants, `chiffre` marquant si écart ≥ 25 % (base nulle = 100 %) ; chiffres comparés : bans, adresses, /24, jours
+  actifs, vagues — coût si faux : seuil hebdo (Task 16) atteint plus ou moins souvent.
+- **Graphiques (suite Task 8)** — Décision : compression PNG facultative, oxipng sinon `optipng -o2`, sinon rien —
+  parce qu'oxipng n'est pas dans les dépôts de gk0 — coût si faux : PNG plus lourds.
