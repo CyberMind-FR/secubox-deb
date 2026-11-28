@@ -107,7 +107,7 @@ def test_depot_retouche_sans_compiler(tmp_path, monkeypatch):
     (conf / "10-acl.conf").write_text(ACL)
     (conf / "94-tv.conf").write_text(tv(["192.168.1.95/32", "2001:db8::a/128"], ["192.168.1.96/32"], "ads.example"))
     lieux = {"sources": tmp_path / "sources", "conf_d": conf, "etat": tmp_path / "etat.json",
-             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
     D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
     vrai, appels = L.compiler, []
     monkeypatch.setattr(L, "compiler", lambda *a: appels.append(1) or vrai(*a))
@@ -132,7 +132,7 @@ def test_une_adresse_changee_pendant_la_compilation_est_retouchee(tmp_path, monk
     (conf / "10-acl.conf").write_text(ACL)
     (conf / "94-tv.conf").write_text(tv(["192.168.1.95/32"], ["192.168.1.96/32"], "ads.example"))
     lieux = {"sources": tmp_path / "sources", "conf_d": conf, "etat": tmp_path / "etat.json",
-             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
     D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
     vrai, appels = L.compiler, []
 

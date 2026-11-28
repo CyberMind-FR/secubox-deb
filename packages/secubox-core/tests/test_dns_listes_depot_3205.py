@@ -52,7 +52,7 @@ def lieux(tmp_path):
     conf.mkdir()
     (conf / "10-acl.conf").write_text(ACL)
     return {"sources": tmp_path / "sources", "conf_d": conf, "etat": tmp_path / "etat.json",
-            "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+            "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou", "dormir": lambda _s: None}
 
 
 def _appliquer(lieux, s=None):

@@ -20,10 +20,14 @@ StartLimitBurst=30
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-dns-listes appliquer
-Nice=10
+# Priorité basse (#4040) : la compilation (minutes, centaines de Mo) ne doit jamais saturer la box ; Unbound garde la main.
+Nice=19
 IOSchedulingClass=idle
-# Pire cas : 3 passes × (compilation ~2,5 min + unbound-checkconf ≤ 10 min + rechargement ≤ 2 min + attente ≤ 5 min).
-TimeoutStartSec=90min
+CPUWeight=10
+IOWeight=10
+# Pire cas : attente d'espacement ≤ 60 min + stabilisation ≤ 15 min + 3 passes × (compilation ~8 min sur gk2
+# + unbound-checkconf ≤ 10 min + rechargement ≤ 2 min + attente ≤ 5 min).
+TimeoutStartSec=160min
 # Sur SIGTERM : remise en place, second rechargement et attente d'Unbound avant de sortir (sinon SIGKILL au bout de 90 s).
 TimeoutStopSec=8min
 # Pic mesuré : 487 Mo pour la configuration de gk2 (1,9 million de zones lues), PLUS unbound-checkconf dans le même cgroup.

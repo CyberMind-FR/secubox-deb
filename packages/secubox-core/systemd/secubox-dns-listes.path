@@ -6,6 +6,10 @@
 # Un générateur dépose ou retire sa source, ou un fichier de CONTEXTE change dans unbound.conf.d (une vue TV, un réseau :
 # leurs adresses ne porteraient aucune étiquette du 92) : nouvelle passe (#3205). Le service écrit lui-même dans
 # unbound.conf.d ; la passe qui suit ses propres écritures trouve la même empreinte d'entrées et s'arrête sans compiler.
+# #4040 : ses propres écritures, faites pendant que l'unité est active, ne la relancent pas (systemd ne signale rien à une
+# unité active). Un drop-in TV réécrit chaque minute (règles apprises, posées à chaud par ad-guard) ne change que les
+# ZONES DES VUES : la passe répond « differe » en une fraction de seconde, sans compiler ; le rattrapage est espacé.
+# Une source réécrite à l'identique (même condensat) : « inchange ». Le reste attend stabilité et intervalle minimal.
 [Unit]
 Description=SecuBox — sources des listes DNS modifiées (#3205)
 
