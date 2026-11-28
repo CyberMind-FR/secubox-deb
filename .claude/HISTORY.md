@@ -11,6 +11,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-28 — rapports IA sans remplissage, rapports d'acteurs, export WAF (closes #4030)
+
+- waf-ng 1.58.1 (PR #4031) : pas de rédaction IA sans ban sur la période ; consigne (blocs /24, fenêtre, niveau) ;
+  vérificateur : « bloc 24 heures », niveau de risque contraire au dossier, phrases de fenêtre seule retirés.
+- Rapports d'acteurs montés dans l'onglet Attaquants suivis ; route GET /export (bouton Exporter en 404).
+- Déployé sur gk2 à la demande malgré une charge de 33-37 (seuil 15 levé) : couture 151×200, 4×503, 5×000 ; export 401
+  sans jeton (route présente), plages protégées 31 gardées.
+
 ## 2026-11-27 — leurres de service : premier ban à 7 j (closes #4027)
 
 - Rapport IA accès distant (telnet, 93 % de phrases retenues) : 76 retours sur 245 adresses relâchées, médiane 6 j.
