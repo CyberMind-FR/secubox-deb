@@ -781,7 +781,8 @@
         }
 
         // 5d. Inject global BOTTOM status bar with health + Smart Strip
-        if (!EMBARQUE && !document.getElementById('global-status-bar')) {
+        // Barre d'état du bas retirée à la demande du propriétaire (28/11) : SBX_BARRE_ETAT = true la remet.
+        if (window.SBX_BARRE_ETAT === true && !EMBARQUE && !document.getElementById('global-status-bar')) {
             var statusBar = document.createElement('div');
             statusBar.id = 'global-status-bar';
             statusBar.className = 'global-status-bar';

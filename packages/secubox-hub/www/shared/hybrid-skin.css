@@ -1167,12 +1167,7 @@ body.hybrid-skin .map {
     .global-status-bar { left: 0 !important; }
 }
 
-/* Adjust main content padding to account for status bar */
-.hybrid-skin .main,
-.hybrid-skin .main-content,
-.hybrid-skin main {
-    padding-bottom: 40px !important;
-}
+/* Barre d'état du bas retirée (28/11) : plus de marge réservée en bas de page. */
 
 /* ═══════════════════════════════════════════════════════════════
    SMART STRIP — 6-module indicator bar (Round UI methodology)

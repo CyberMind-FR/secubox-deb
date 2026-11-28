@@ -1,3 +1,10 @@
+secubox-hub (1.13.2-1~trixie1) trixie; urgency=medium
+
+  * Barre d état du bas retirée (CPU, MEM, DISK, Uptime) et sa marge de
+    40 px ; window.SBX_BARRE_ETAT = true la remet (ref #4045).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 06:44:11 +0100
+
 secubox-hub (1.13.1-1~trixie1) trixie; urgency=medium
 
   * Tâches de fond (ref #4036) : secubox-netstats et secubox-nft-cache passe(nt) dans la file FIFO à
