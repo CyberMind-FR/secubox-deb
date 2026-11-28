@@ -1,3 +1,12 @@
+secubox-datascope (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Tâches de fond (ref #4036) : secubox-datascope-collect passe(nt) dans la tranche basse
+    priorité secubox-taches.slice de secubox-core (CPUWeight/IOWeight 20),
+    hors file FIFO (profil AppArmor propre ou ExecStart multiples).
+    Dépend de secubox-core (>= 1.8.50~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 12:00:00 +0100
+
 secubox-datascope (0.3.1-1~trixie1) trixie; urgency=medium
 
   * Enregistreur (ref #3921) : bouton ↻, lecture en boucle. La reprise se fait

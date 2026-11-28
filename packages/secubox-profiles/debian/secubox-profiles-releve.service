@@ -12,6 +12,8 @@ Description=SecuBox — relevé de validation des modules de cette box (#3212)
 After=secubox-aggregator.service
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité ; hors file (voir README de secubox-core).
+Slice=secubox-taches.slice
 Type=oneshot
 User=secubox-profiles
 Group=secubox

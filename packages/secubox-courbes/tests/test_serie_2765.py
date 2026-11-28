@@ -124,7 +124,7 @@ def test_la_route_est_en_lecture_et_valide_ses_parametres():
 def test_unites_systemd_et_paquet():
     ici = Path(__file__).resolve().parents[1]
     s = (ici / "systemd" / "secubox-courbes-serie.service").read_text()
-    assert "User=secubox" in s and "ExecStart=/usr/bin/python3 -m secubox_courbes.serie" in s and "NoNewPrivileges=true" in s and "MemoryMax=" in s
+    assert "User=secubox" in s and "ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-courbes-serie --attente-max 60 -- /usr/bin/python3 -m secubox_courbes.serie" in s and "NoNewPrivileges=true" in s and "MemoryMax=" in s
     assert "OnUnitActiveSec=1min" in (ici / "systemd" / "secubox-courbes-serie.timer").read_text()
     assert "secubox-courbes-serie.timer" in (ici / "debian" / "rules").read_text() and "secubox-courbes-serie.timer" in (ici / "debian" / "postinst").read_text()
 

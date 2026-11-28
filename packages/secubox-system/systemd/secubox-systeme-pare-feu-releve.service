@@ -9,8 +9,11 @@ Description=SecuBox systeme : relevé du pare-feu nftables pour la posture (#378
 After=nftables.service
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
-ExecStart=/usr/sbin/secubox-pare-feu-releve
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-systeme-pare-feu-releve --attente-max 300 -- /usr/sbin/secubox-pare-feu-releve
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

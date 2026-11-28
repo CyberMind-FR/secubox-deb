@@ -9,6 +9,8 @@ Description=SecuBox DataScope — passe de collecte
 After=secubox-core.service
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité ; hors file (voir README de secubox-core).
+Slice=secubox-taches.slice
 Type=oneshot
 User=secubox-datascope
 Group=secubox

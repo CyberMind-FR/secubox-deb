@@ -3,8 +3,10 @@ Description=SecuBox SBX OS — collecte des activités (BBS, fichiers, diffusion
 After=network.target
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
 Type=oneshot
 User=secubox
 Group=secubox
-ExecStart=/usr/sbin/secubox-sbxid-activites
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-sbxid-activites --attente-max 180 -- /usr/sbin/secubox-sbxid-activites
 Nice=10

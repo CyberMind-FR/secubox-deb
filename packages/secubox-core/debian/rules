@@ -160,6 +160,11 @@ override_dh_auto_install:
 	# Create modular nginx directory (modules install their snippets here)
 	install -d debian/secubox-core/etc/nginx/secubox.d
 
+	# File FIFO des tâches de fond et tranche basse priorité (ref #4036)
+	install -D -m 0755 usr/lib/secubox/tache-fifo debian/secubox-core/usr/lib/secubox/tache-fifo
+	install -D -m 0644 systemd/secubox-taches.slice debian/secubox-core/usr/lib/systemd/system/secubox-taches.slice
+	install -D -m 0644 etc/secubox/taches.toml debian/secubox-core/etc/secubox/taches.toml
+
 	# tmpfiles.d for /run/secubox socket directory (world-writable for all services)
 	install -d debian/secubox-core/usr/lib/tmpfiles.d
 	install -m 644 tmpfiles.d/secubox.conf \

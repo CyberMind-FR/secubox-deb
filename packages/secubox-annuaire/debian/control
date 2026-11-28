@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-annuaire
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.5.24),
+ secubox-core (>= 1.8.51~),
  python3,
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,

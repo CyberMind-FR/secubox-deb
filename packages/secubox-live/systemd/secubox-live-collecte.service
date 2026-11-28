@@ -7,6 +7,9 @@ Description=SecuBox Live — collecte de l'état public du réseau (#3351)
 After=network-online.target
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
 User=secubox-live
 Group=secubox-live
@@ -14,7 +17,7 @@ Group=secubox-live
 # collecte (liste figée de secubox-live-acl, '+' : hors bac à sable, la collecte elle-même reste confinée).
 SupplementaryGroups=secubox-pilotage
 ExecStartPre=+/usr/sbin/secubox-live-acl
-ExecStart=/usr/sbin/secubox-live-collecte
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-live-collecte --attente-max 60 -- /usr/sbin/secubox-live-collecte
 UMask=0022
 NoNewPrivileges=true
 PrivateTmp=true

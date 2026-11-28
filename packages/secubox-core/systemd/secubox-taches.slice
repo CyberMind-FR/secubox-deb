@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Tranche basse priorité des tâches de fond de collecte (ref #4036). Sous charge, les webui, le WAF
+# et l'agrégateur (poids 100 par défaut) passent avant les relevés périodiques.
+[Unit]
+Description=SecuBox — tâches de fond de collecte (basse priorité)
+Before=slices.target
+
+[Slice]
+CPUWeight=20
+IOWeight=20

@@ -1,3 +1,13 @@
+secubox-metrics (1.33.2-1~trixie1) trixie; urgency=medium
+
+  * Tâches de fond (ref #4036) : secubox-metrics-memoire passe(nt) dans la file FIFO à
+    concurrence bornée de secubox-core (/usr/lib/secubox/tache-fifo, au plus
+    2 collectes à la fois, abandon propre au-delà de l'attente) et dans la
+    tranche basse priorité secubox-taches.slice (CPUWeight/IOWeight 20).
+    Dépend de secubox-core (>= 1.8.50~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 12:00:00 +0100
+
 secubox-metrics (1.33.1-1~trixie1) trixie; urgency=medium
 
   * vhosts (ref #4017) : « Autre » des navigateurs détaillé — aperçus de

@@ -6,13 +6,16 @@
 Description=SecuBox — releve des courbes de la box (CPU, memoire, reseau, connexions, disque ; remplace Grafana, #2765)
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
 User=secubox
 Group=secubox
 Nice=15
 IOSchedulingClass=idle
 StateDirectory=secubox/metrics
-ExecStart=/usr/bin/python3 -m secubox_courbes.serie
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-courbes-serie --attente-max 60 -- /usr/bin/python3 -m secubox_courbes.serie
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

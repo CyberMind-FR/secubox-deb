@@ -9,7 +9,7 @@ Homepage: https://cybermind.fr/secubox
 Package: secubox-meet
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.7.8~),
+ secubox-core (>= 1.8.51~),
  secubox-auth (>= 1.8.9~),
  python3-uvicorn | python3-pip,
  lxc,

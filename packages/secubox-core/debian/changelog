@@ -1,3 +1,17 @@
+secubox-core (1.8.51-1~trixie1) trixie; urgency=medium
+
+  * Tâches de fond (ref #4036) : file FIFO à concurrence bornée
+    /usr/lib/secubox/tache-fifo (tickets et emplacements flock sous
+    /run/secubox/taches, au plus 2 collectes à la fois par défaut, abandon
+    propre en sortie 0 au-delà de --attente-max, tickets des processus morts
+    ignorés et purgés) et tranche basse priorité secubox-taches.slice
+    (CPUWeight=20, IOWeight=20). Réglage /etc/secubox/taches.toml (section
+    [file] : actif, concurrence), relu à chaque lancement. Sur gk2, jusqu'à
+    neuf oneshots de collecte s'empilaient sous charge (systemd 48 % CPU,
+    charge 40+) et les webui comme le WAF ne répondaient plus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 12:00:00 +0100
+
 secubox-core (1.8.50-1~trixie1) trixie; urgency=medium
 
   * Dé de l accueil : face verte tournée dans le bon sens (1.8.49 la tournait

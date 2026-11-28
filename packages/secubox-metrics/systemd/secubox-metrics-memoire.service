@@ -7,6 +7,9 @@ Description=SecuBox — releve de la memoire de la box (historique, alerte de fu
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2146
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
 User=secubox
 Group=secubox
@@ -16,7 +19,7 @@ IOSchedulingClass=idle
 StateDirectory=secubox/metrics
 # #3941 : une ligne d'audit quand un conteneur ou un service reste étouffé plus de dix minutes, une à la fin.
 ReadWritePaths=-/var/log/secubox/audit.log
-ExecStart=/usr/bin/python3 -m api.memoire
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-metrics-memoire --attente-max 300 -- /usr/bin/python3 -m api.memoire
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

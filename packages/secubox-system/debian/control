@@ -13,7 +13,7 @@ Depends: ${misc:Depends},
          polkitd | policykit-1,
 # >= 1.8.40 : secubox-noeud (relais du nom de nœud, #3883), cible de /api/v1/system/noeud/relais.
 # >= 1.8.45 : secubox_core.unites refuse d'arrêter secubox-pilotage-agent (#3946).
- secubox-core (>= 1.8.45~),
+ secubox-core (>= 1.8.51~),
  jq,
  python3-psutil,
  python3-fastapi | python3-pip,

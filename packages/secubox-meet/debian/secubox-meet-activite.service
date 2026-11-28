@@ -12,8 +12,11 @@ Description=SecuBox Meet — relevé de l'activité de la visio
 Documentation=https://github.com/CyberMind-FR/secubox-deb
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
-ExecStart=/usr/sbin/meetctl activite-collecte
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-meet-activite --attente-max 150 -- /usr/sbin/meetctl activite-collecte
 Nice=10
 IOSchedulingClass=idle
 TimeoutStartSec=300

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# tache-fifo — file d'attente FIFO à concurrence bornée pour les tâches de fond (ref #4036).
+#
+# Usage : tache-fifo [--nom NOM] [--attente-max SECONDES] -- commande [arguments…]
+#
+# Sous charge, gk2 empilait jusqu'à neuf oneshots de collecte en même temps (systemd à 48 % CPU,
+# charge 40+) : les webui et le WAF ne répondaient plus. Ce lanceur, posé en tête de l'ExecStart
+# des seuls oneshots de COLLECTE, laisse passer au plus N tâches à la fois (défaut 2,
+# /etc/secubox/taches.toml) ; les autres attendent leur tour dans l'ordre d'arrivée.
+#
+# Mécanique (aucun démon) :
+#   - un ticket par tâche en attente dans <dir>/file/, nommé par l'heure d'arrivée en
+#     nanosecondes : l'ordre lexical est l'ordre d'arrivée. Le ticket est verrouillé (flock) par
+#     son porteur : un ticket qu'on peut verrouiller appartient à un processus mort, il est ignoré
+#     et effacé quand c'est possible (tmpfiles purge le reste).
+#   - seule la tête de file (aucun ticket vivant plus ancien) essaie de prendre un des N
+#     emplacements <dir>/emplacement.<i> par flock ; le verrou est hérité par la commande
+#     (exec garde le PID, donc systemd suit la vraie commande) et tombe avec elle, même tuée.
+#   - au-delà de --attente-max, la tâche est abandonnée proprement : journal, sortie 0, ticket
+#     retiré ; la minuterie la relancera à son prochain tour. La file ne s'allonge jamais.
+#
+# Sûreté : en cas de doute (file désactivée, dossier absent ou non inscriptible, flock absent),
+# la commande est lancée directement. La file ne doit jamais empêcher une tâche de tourner.
+#
+# Variables (tests) : SECUBOX_TACHES_DIR, SECUBOX_TACHES_CONF, SECUBOX_TACHES_PAS.
+#
+# Ne JAMAIS placer derrière cette file un oneshot de sécurité (bans, WAF, nft, audit,
+# sauvegardes) : voir la liste d'exclusion dans le README du paquet secubox-core.
+
+set -euo pipefail
+
+DIR="${SECUBOX_TACHES_DIR:-/run/secubox/taches}"
+CONF="${SECUBOX_TACHES_CONF:-/etc/secubox/taches.toml}"
+PAS="${SECUBOX_TACHES_PAS:-1}"
+CONCURRENCE_DEFAUT=2
+CONCURRENCE_MAX=16
+
+nom=""
+attente_max=300
+
+journal() { printf 'tache-fifo[%s]: %s\n' "${nom:-?}" "$*" >&2; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --nom) nom="${2:-}"; shift 2 ;;
+    --attente-max) attente_max="${2:-}"; shift 2 ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+
+if [[ $# -eq 0 ]]; then
+  journal "aucune commande à lancer"
+  exit 64
+fi
+[[ -n "$nom" ]] || nom="$(basename -- "$1")"
+[[ "$attente_max" =~ ^[0-9]+$ ]] || attente_max=300
+
+# Lecture robuste d'une clé de la section [file] : commentaires, guillemets et espaces tolérés ;
+# toute valeur illisible retombe sur le défaut.
+lire_cle() {
+  local cle="$1"
+  [[ -r "$CONF" ]] || return 0
+  awk -v cle="$cle" '
+    /^[[:space:]]*\[/ { section = $0; gsub(/[[:space:]\[\]]/, "", section); next }
+    section == "file" {
+      ligne = $0; sub(/#.*/, "", ligne)
+      n = index(ligne, "=")
+      if (n == 0) next
+      k = substr(ligne, 1, n - 1); v = substr(ligne, n + 1)
+      gsub(/[[:space:]"\047]/, "", k); gsub(/[[:space:]"\047]/, "", v)
+      if (k == cle) { print v; exit }
+    }' "$CONF" 2>/dev/null || true
+}
+
+actif="$(lire_cle actif)"
+concurrence="$(lire_cle concurrence)"
+case "$actif" in false|0|non|no) exec "$@" ;; esac
+if ! [[ "$concurrence" =~ ^[0-9]+$ ]] || (( concurrence < 1 )); then
+  concurrence=$CONCURRENCE_DEFAUT
+fi
+(( concurrence <= CONCURRENCE_MAX )) || concurrence=$CONCURRENCE_MAX
+
+FILE="$DIR/file"
+if ! command -v flock >/dev/null 2>&1 || [[ ! -d "$FILE" || ! -w "$FILE" || ! -w "$DIR" ]]; then
+  journal "file indisponible ($FILE), lancement direct"
+  exec "$@"
+fi
+
+# Ticket : créé sous un nom provisoire, verrouillé, PUIS renommé, pour qu'aucun voisin ne le
+# voie jamais sans verrou (il le croirait mort).
+umask 022
+arrivee="$(date +%s%N)"
+ticket="$FILE/${arrivee}-$(printf '%010d' "$$")"
+provisoire="$FILE/.prov-$$-${arrivee}"
+if ! { exec {fd_ticket}>"$provisoire"; } 2>/dev/null || ! flock -n "$fd_ticket"; then
+  journal "ticket impossible, lancement direct"
+  rm -f -- "$provisoire" 2>/dev/null || true
+  exec "$@"
+fi
+printf '%s\n' "$nom" >&"$fd_ticket"
+mv -f -- "$provisoire" "$ticket"
+trap 'rm -f -- "$ticket" "$provisoire" 2>/dev/null || true' EXIT
+trap 'exit 143' TERM INT HUP
+
+# Vrai si aucun ticket VIVANT n'est plus ancien que le nôtre.
+en_tete() {
+  local f fd
+  for f in "$FILE"/[0-9]*; do
+    [[ -e "$f" ]] || continue
+    [[ "$f" < "$ticket" ]] || continue
+    # Ouverture en lecture seule, sans création : un ticket disparu entre-temps est sauté.
+    if ! { exec {fd}<"$f"; } 2>/dev/null; then
+      continue
+    fi
+    if flock -n "$fd"; then
+      # Verrouillable = porteur mort : ignoré, effacé si les droits le permettent.
+      exec {fd}<&-
+      rm -f -- "$f" 2>/dev/null || true
+      continue
+    fi
+    exec {fd}<&-
+    return 1
+  done
+  return 0
+}
+
+# Prend un emplacement libre ; laisse son descripteur ouvert dans fd_place.
+prendre_place() {
+  local i place fd
+  for (( i = 0; i < concurrence; i++ )); do
+    place="$DIR/emplacement.$i"
+    [[ -e "$place" ]] || : >>"$place" 2>/dev/null || true
+    if ! { exec {fd}<"$place"; } 2>/dev/null; then
+      continue
+    fi
+    if flock -n "$fd"; then
+      fd_place=$fd
+      return 0
+    fi
+    exec {fd}<&-
+  done
+  return 1
+}
+
+debut=$SECONDS
+while :; do
+  if en_tete && prendre_place; then
+    attendu=$(( SECONDS - debut ))
+    rm -f -- "$ticket"
+    exec {fd_ticket}>&-
+    trap - EXIT TERM INT HUP
+    (( attendu == 0 )) || journal "départ après ${attendu}s d'attente"
+    # fd_place reste ouvert (non fermé à l'exec) : la commande hérite du verrou de l'emplacement.
+    : "$fd_place"
+    exec "$@"
+  fi
+  if (( SECONDS - debut >= attente_max )); then
+    journal "abandonnée après ${attente_max}s d'attente (file pleine, concurrence ${concurrence}) ; prochain tour à la minuterie"
+    exit 0
+  fi
+  sleep "$PAS"
+done

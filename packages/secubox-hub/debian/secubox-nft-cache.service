@@ -5,8 +5,10 @@ After=nftables.service
 ConditionPathExists=/usr/sbin/nft
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
 Type=oneshot
-ExecStart=/usr/sbin/secubox-nft-cache
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-nft-cache --attente-max 30 -- /usr/sbin/secubox-nft-cache
 # Runs as root via systemd — nft list requires CAP_NET_ADMIN
 StandardOutput=journal
 StandardError=journal

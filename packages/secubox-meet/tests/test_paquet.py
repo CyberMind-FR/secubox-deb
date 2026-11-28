@@ -136,7 +136,7 @@ def test_sudoers_accorde_les_seuls_verbes_d_activite_de_l_api():
 def test_minuterie_de_releve_toutes_les_cinq_minutes():
     svc = (RACINE / "debian" / "secubox-meet-activite.service").read_text()
     tim = (RACINE / "debian" / "secubox-meet-activite.timer").read_text()
-    assert "ExecStart=/usr/sbin/meetctl activite-collecte" in svc and "Type=oneshot" in svc
+    assert "ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-meet-activite --attente-max 150 -- /usr/sbin/meetctl activite-collecte" in svc and "Type=oneshot" in svc
     assert "OnUnitActiveSec=5min" in tim and "OnActiveSec=" in tim and "WantedBy=timers.target" in tim   # #2919
     regles = (RACINE / "debian" / "rules").read_text()
     assert "debian/*.timer" in regles
