@@ -127,3 +127,19 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 7** — Note : essai réel unique (≈300 jetons) sur Gemma par le socket, rien arrêté : 4 répliques V1/V2
   découpées, 2 retirées à juste titre (« 900 », « 90 » absents du dossier). Gemma tend à citer des chiffres hors
   dossier : prévoir à la Task 14 un affichage clair des ✗ et une consigne de réécriture.
+- **Task 11** — Décision : `replique` de la chronologie = TEXTE dit (≤ 500 caractères, blancs repliés), pas un rang
+  entier comme l'écrit le plan — parce que le modèle des billets fusionné (`api/models.py:Replique`, Task 1) type
+  `replique: str` ; `test_chronologie_acceptee_par_billets` passe la sortie au `valider_chronologie` des billets —
+  coût si faux : nul (format imposé par le consommateur).
+- **Task 11** — Décision : `diapo` = rang de l'image dans l'ordre de première apparition des ids de graphiques parmi
+  les répliques dites ; `ordre_images(repliques, diapos)` rend cet ordre : la Task 17 DOIT joindre les images au billet
+  dans cet ordre (le billet compte les seules images) — coût si faux : diapositives décalées.
+- **Task 11** — Décision : durée = durée DÉCODÉE (échantillons à 44,1 kHz), chaque voix coupée à cette durée
+  (`atrim`) puis `apad` 0,45 s (sauf la dernière) : chronologie exacte par construction — parce que ffprobe annonce
+  1,056 s pour un MP3 de 1,0 s (remplissage d'encodeur), écart de 0,16 s mesuré sur 3 répliques — coût si faux : nul.
+- **Task 11** — Décision : `loudnorm=I=-16:TP=-1.5:LRA=11` en une passe ; fichiers écrits par fichier temporaire puis
+  `os.replace`, 0600 ; `video()` = concat d'images (chaque image du début de sa réplique au début de la suivante),
+  H.264 `stillimage` + AAC 128k, `-shortest`, `faststart` ; `monter` n'écrit jamais de MP4 — coût si faux : nul.
+- **Task 11** — Note : tests sur de VRAIS MP3 produits par ffmpeg (sinus), MP4 vérifié par ffprobe ; ffmpeg 7 de gk0
+  avec libmp3lame et libx264. Suite du paquet : 62 réussis, 4 sautés (`test_voix_4000::test_transcription_reelle`
+  instable : un échec puis une réussite au rejeu, hors #4058).
