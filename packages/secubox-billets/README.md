@@ -59,7 +59,25 @@ HAProxy (TLS 1.3) → sbxwaf → nginx → the socket.
 | `BILLETS_SECRET` | — | secret override (takes precedence) |
 | `BILLETS_SITE_URL` | derived from request | absolute origin for feeds/oEmbed |
 | `BILLETS_MEDIA_DIR` | `/var/lib/secubox/billets/media` | re-encoded media + embed snapshots |
+| `BILLETS_PDFPAGES_DIR` | `/var/lib/secubox/billets/pdfpages` | pages des PDF joints rendues en JPEG (cache du diaporama, #4049) |
 | `BILLETS_SNAPSHOT_BROWSER` | `1` | set `0` to disable the headless-Chromium capture |
+
+## Diaporama des médias (#4049)
+
+La carte du fil immersif et la vue d'un billet montrent un **diaporama** de tous ses médias : images, vignettes des vidéos
+jointes, **pages des PDF joints**, instantané d'un embed non vidéo. Défilement automatique toutes les 5 s (aucun si
+`prefers-reduced-motion`), pause au survol, au focus, au toucher et hors écran ; flèches, points, clavier ← →
+(`static/diaporama.js`, `static/diaporama.css`, partiel `templates/_diaporama.html`). Un embed vidéo garde son lecteur.
+
+Les PDF sont rendus **par la box** (`pdftoppm`, paquet `poppler-utils`), jamais par le navigateur (pas de PDF.js) :
+en tâche de fond à l'envoi, ou paresseusement au premier affichage pour les PDF plus anciens. Bornes : 30 pages,
+côté long 1280 px, 2 Mio par page, 120 s au total, `nice -n 19`, sans shell. Cache :
+`$BILLETS_PDFPAGES_DIR/<id du média>/p-NNN.jpg` + marqueur `.ok` (ou `.echec` : plus de nouvel essai, la diapositive
+reste « document PDF »). Supprimé avec le média.
+
+**`GET /b/{slug}/diapo/{media_id}/{n}`** (public, même garde que le permalien) : page `n` en JPEG si le billet est
+publié et non échu **et** que le média est un PDF de ce billet ; sinon 404 (page pas encore rendue : 404 + rendu
+planifié). Le cache n'est pas sous `/media/` (servi en direct par nginx) : il ne sort que par cette route.
 
 ## Communiqué style + embed snapshot
 

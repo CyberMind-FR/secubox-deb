@@ -1,3 +1,16 @@
+secubox-billets (0.14.0-1~trixie1) trixie; urgency=medium
+
+  * Diaporama des médias d'un billet dans la carte du fil et dans la vue : images, vignettes vidéo,
+    pages des PDF joints, instantané d'un embed non vidéo ; défilement automatique (sauf
+    prefers-reduced-motion), pause au survol/toucher/focus, flèches, points, clavier (ref #4049).
+  * PDF joints rendus en JPEG par pdftoppm (Depends poppler-utils) en tâche de fond à l'envoi ou
+    au premier affichage ; 30 pages, 1280 px, 2 Mio/page, 120 s, nice 19 ; cache
+    /var/lib/secubox/billets/pdfpages servi par GET /b/{slug}/diapo/{media}/{n} sous la garde du billet.
+  * Plus de carte « sans visuel » quand un média existe : un PDF pas encore rendu montre une
+    diapositive « document PDF ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 12:00:00 +0100
+
 secubox-billets (0.13.4-1~trixie1) trixie; urgency=medium
 
   * Vhost livré sans le nom de gk2 (ref #3117) : server_name « billets.* » (billets.gk2.secubox.in reste

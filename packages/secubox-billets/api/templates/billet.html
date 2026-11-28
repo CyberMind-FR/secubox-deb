@@ -41,6 +41,8 @@
 {%- set vids = [] -%}
 {%- for m in (billet.media or []) if m.mime.startswith('video/') %}{% set _ = vids.append(m) %}{% endfor -%}
 {%- set hosted = vids[0] if (vids and not joue and not eu) else none -%}
+{#- #4049 : DIAPORAMA de tous les médias (images, vignettes vidéo, pages des PDF) quand rien ne se joue dans la scène. -#}
+{%- set dia = billet.diapos if (billet.diapos and not joue and not hosted and not billet.embed_is_video) else [] -%}
 {#- MODE SOUVERAIN (#1372).
 
     Un embed PeerTube vient de NOTRE instance : le charger d'emblee ne fait
@@ -68,14 +70,15 @@
 <article class="h-entry billet billet-full vue-billet" data-cat="{{ billet.cat }}" data-slug="{{ billet.slug }}">
 
   <!-- L'ECRAN : identique à celui des cartes du fil, en grand. -->
-  <div class="vue-stage screen{{ '' if joue or poster else ' flat' }}" id="scene"{% if hosted %} data-video="/media/{{ hosted.filename }}"{% endif %}>
+  <div class="vue-stage screen{{ '' if joue or poster or dia else ' flat' }}" id="scene"{% if hosted %} data-video="/media/{{ hosted.filename }}"{% endif %}>
     {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube · clic pour charger' }}</span>{% endif %}
-    {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
+    {% if dia %}{% set lien = true %}{% include "_diaporama.html" %}
+    {% elif poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
     {% if joue and souverain %}<div class="frame live">{{ cadre_src|safe }}</div>
     {% elif joue %}{# tiers : arme, pas charge — voir MODE SOUVERAIN plus haut #}
     <div class="frame differe" data-differe="1">{{ cadre_src|replace(' src=', ' data-src=')|safe }}</div>
     <div class="glyph"><div class="play-badge">▶</div></div>
-    {% else %}<div class="glyph"><div class="play-badge">{{ '▶' if (billet.embed_is_video or hosted) else '✎' }}</div></div>{% endif %}
+    {% elif not dia %}<div class="glyph"><div class="play-badge">{{ '▶' if (billet.embed_is_video or hosted) else '✎' }}</div></div>{% endif %}
 
     <!-- couche CRT : lignes de balayage + vignette, purement décorative -->
     <div class="crt" aria-hidden="true"><span class="sl"></span><span class="vig"></span></div>

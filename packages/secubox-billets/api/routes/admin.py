@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from .. import repo
 from ..ids import new_ulid
 from ..models import BilletIn
-from ..services import archive, eventlog, linkcard, media, revisions, snapshot
+from ..services import archive, eventlog, linkcard, media, pdfpages, revisions, snapshot
 from ..services import security as sec
 from ..services import ssrf as ssrf_mod
 
@@ -350,6 +350,9 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                 await repo.add_media(conn, billet_id, filename=fn, thumb=poster,
                                      mime=processed["mime"], width=0, height=0,
                                      alt="", now=_now(request), ulid=mid)
+                if processed["kind"] == "pdf":
+                    # #4049 : pages du PDF en images pour le diaporama, EN FOND (l'envoi ne l'attend pas)
+                    pdfpages.planifier(mid, media.media_dir() / fn)
         return skipped
 
     @app.post("/admin/billets")
@@ -462,6 +465,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         if row is not None:
             for m in await repo.list_media(conn, billet_id):
                 await asyncio.to_thread(media.delete_files, m["filename"], m["thumb"])
+                await asyncio.to_thread(pdfpages.supprimer, m["id"])
             await eventlog.append_event(conn, "billet.deleted",
                                         {"id": billet_id, "slug": row["slug"],
                                          "by": author["username"]}, ts=_now(request))
@@ -481,6 +485,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return _redirect("/admin")
         billet_id = row["billet_id"]
         await asyncio.to_thread(media.delete_files, row["filename"], row["thumb"])
+        await asyncio.to_thread(pdfpages.supprimer, row["id"])
         await repo.delete_media(conn, media_id)
         return _redirect(f"/admin/billets/{billet_id}/edit")
 
