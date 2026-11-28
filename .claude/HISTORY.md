@@ -11,6 +11,16 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-28 — atelier des émissions, vague 4 : service, panneau, hebdo, publication (ref #4058)
+- `secubox-ai-emissions` (gk0, unité utilisateur, socket Unix) : file mono-production en 7 étapes avec reprise,
+  routes `/api/v1/ai/emissions/*` relayées par `emissions_relais` (Host local, jeton local), voix par le Voice Studio
+  LOCAL `127.0.0.1:3910`, Gemma suspendu seulement si `voix_gpu = true` (défaut false, CUDA en panne).
+- Panneau `/emissions` (onglet « Émissions » après « Filtres WAF ») : ✗ visibles avec motifs, « Réécrire cette
+  réplique » (proposition vérifiée), Publier désactivé tant que le balayage n'est pas vide.
+- Hebdo lundi 06:00 (synthèse puis sujets ≥ 3 évolutions, écart 25 %), brouillons seulement ; publication sur les
+  billets après balayage final bloquant, par le jeton de l'auteur `emissions`.
+- NON installé : `sbin/installer-emissions.sh` à lancer par le propriétaire (relais en marche intouché).
+
 ## 2026-11-28 — rapports IA sans remplissage, rapports d'acteurs, export WAF (closes #4030)
 
 - waf-ng 1.58.1 (PR #4031) : pas de rédaction IA sans ban sur la période ; consigne (blocs /24, fenêtre, niveau) ;

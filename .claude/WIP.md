@@ -9,6 +9,7 @@
 *Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
+- ⬜ **Next Up (2026-11-28, #4058)** : atelier des émissions prêt (branche `feature/4058-…`, vague 4) : après fusion, `installer-emissions.sh` sur gk0, jeton `lecture-gk2` à poser, relance du relais, premier brouillon réel (voix CPU) ; captures Playwright non essayées sous l'unité.
 - ⬜ **Next Up (2026-11-23, BÊTA 2 #3878)** : arbitrage du propriétaire, pas de retour en alpha. Bêta 2 = consolidation depuis la
   bêta 1 : clore la série corrective (vérifier puis marqueur), traiter #3516 #3527 #3528 #3489 #3532, image contrôlée + VM x64
   + RPi4 LCD, notes de version. SBX Trust #3468 en parallèle (audit seul ; cahier des charges du 04/11 introuvable dans le dépôt).

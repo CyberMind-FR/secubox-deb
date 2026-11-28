@@ -191,3 +191,17 @@ See LICENCE-CMSD-1.0.md for terms.
   faux : nul. L'unité hebdo n'a que AF_UNIX, aucun chemin vers `/publier` (vérifié par le test sur le source).
 - **Task 16** — Décision : la rétention `mp4_jours` purge les MP4 LOCAUX des brouillons à chaque passage hebdo ; la
   rétention des MP4 publiés reste celle des billets sur gk2 (`secubox-billets-purge-mp4.timer`) — coût si faux : nul.
+- **Task 17** — Décision : `publier(brouillon, billets, jeton, *, client=None, ocr=None, noms_internes=None,
+  magasin=None)` ; ordre : billet `draft` → MP3 → PNG dans l'ordre de `images` (rang `diapo`) → MP4 s'il existe → `PUT`
+  chronologie + `published` ; un échec après création SUPPRIME le billet distant et laisse le brouillon `pret` ; corps =
+  `## titre` + chapeau (le lecteur audio vient du diaporama des billets, pas d'une référence dans le corps) — coût si
+  faux : nul.
+- **Task 17** — Décision : balayage final = titre, chapeau, corps, répliques DITES, textes de la chronologie, toutes les
+  images (OCR) ; s'ajoutent `non_pret`, `montage_absent`, `capture_non_validee` ; `GET {id}/controle` rend le même
+  résultat à blanc pour le panneau ; refus = 409 `{"message", "motifs"}`, aucune requête vers les billets — coût si
+  faux : nul.
+- **Task 17** — Décision : au succès, `Magasin.retenir` de CHAQUE sujet du brouillon avec les répliques dites
+  (`ia_seule` → `hypothese`) — pour une synthèse, les phrases d'un sujet sont aussi rangées sous les autres (pas
+  d'attribution par sujet) — coût si faux : lectures évolutives d'une synthèse un peu bavardes ; à affiner en attribuant
+  chaque réplique au dossier qui l'a vérifiée.
+- **Task 17** — Note : testé contre un FAUX serveur billets (httpx MockTransport) ; jamais contre billets.gk2.

@@ -96,7 +96,10 @@ def _apercu(sujet: Dict[str, Any], dernier: Optional[Dict[str, Any]], ecart: flo
 
 
 def creer_app(base: Optional[Path] = None, outils: Optional[production.Outils] = None,
-              jeton: Optional[Path] = None) -> FastAPI:
+              jeton: Optional[Path] = None, *, jeton_billets: Any = None, client_billets: Any = None,
+              publier_ocr: Any = None) -> FastAPI:
+    from .publication import JETON_DEFAUT as JETON_BILLETS
+    jeton_billets = jeton_billets or jeton_fichier(JETON_BILLETS)
     base = Path(base or reglages.etat_dir())
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     attendu = lire_jeton(Path(jeton or os.environ.get("SECUBOX_AI_EMISSIONS_JETON") or JETON_DEFAUT)).encode()
@@ -265,6 +268,34 @@ def creer_app(base: Optional[Path] = None, outils: Optional[production.Outils] =
             raise HTTPException(409, "montage non fait")
         await file.mettre(ident, "mp4")
         return {"mp4": "en file"}
+
+    @app.get("/{ident}/controle", dependencies=G)
+    async def controle(ident: str):
+        """Balayage final à blanc (le panneau n'active « Publier » que s'il est vide)."""
+        from . import publication
+        _etat(ident)
+        motifs = await asyncio.to_thread(publication.controle, production.dossier(base, ident), ocr=publier_ocr)
+        return {"motifs": motifs}
+
+    @app.post("/{ident}/publier", dependencies=G)
+    async def publier(ident: str):
+        """SEUL chemin vers les billets : le clic « Publier » du propriétaire (aucune tâche automatique ne l'appelle)."""
+        from . import publication
+        e = _etat(ident)
+        if file.en_cours == ident or ident in file.attente():
+            raise HTTPException(409, "brouillon en production")
+        if e.get("statut") == "publie":
+            raise HTTPException(409, "déjà publié")
+        try:
+            r = await publication.publier(production.dossier(base, ident), o.reglages()["billets_base"], jeton_billets,
+                                          client=client_billets, ocr=publier_ocr, magasin=o.magasin)
+        except publication.Refus as exc:
+            raise HTTPException(409, {"message": "publication refusée par le contrôle", "motifs": exc.motifs})
+        except publication.EchecBillets as exc:
+            raise HTTPException(502, str(exc))
+        except (OSError, PermissionError) as exc:
+            raise HTTPException(503, f"jeton des billets indisponible ({type(exc).__name__})")
+        return r
 
     @app.post("/{ident}/reprendre", dependencies=G)
     async def reprendre(ident: str):

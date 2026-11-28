@@ -178,3 +178,10 @@ step), comments/anti-spam, reactions, feeds/oEmbed. `pip-audit` runs in CI.
   detect a returning approved commenter (spec allows "chiffré au repos ou hashé").
 - **oEmbed discovery is same-origin only** (Mastodon/PeerTube self-hosted); an
   unknown host with no same-origin oEmbed link falls back to a local OpenGraph card.
+
+### Publication par l'atelier des émissions (#4058)
+
+L'atelier de gk0 (`secubox-ai-agents/emissions/publication.py`) publie par `POST /admin/api/billets` (brouillon),
+`POST …/{id}/media` (MP3, PNG dans l'ordre des diapositives, MP4 s'il existe) puis `PUT …/{id}` (chronologie +
+`published`), avec `Authorization: Bearer` = `/etc/secubox/secrets/billets-emissions.jeton` (copie 0600 sur gk0 :
+`~/.config/secubox-ai-jeton/billets-emissions`). Un échec en route supprime le billet créé.
