@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-nac
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.4.3), dnsmasq, nftables, nginx, ieee-data
+Depends: ${misc:Depends}, secubox-core (>= 1.8.51~), dnsmasq, nftables, nginx, ieee-data
 Replaces: secubox-hub (<< 1.9.18~)
 Breaks: secubox-hub (<< 1.9.18~), secubox-mac-guard (<< 1.2.3~), secubox-device-intel (<< 1.3.2~), secubox-iot-guard (<< 1.1.5~)
 Description: SecuBox NAC / Client Guardian

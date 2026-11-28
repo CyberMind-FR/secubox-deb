@@ -328,3 +328,35 @@ apt install secubox-core
 ## License
 
 Proprietary - CyberMind / ANSSI CSPN candidate
+
+## File des tâches de fond et tranche basse priorité (#4036)
+
+`/usr/lib/secubox/tache-fifo [--nom N] [--attente-max S] -- commande…` laisse passer au plus
+`concurrence` oneshots de collecte à la fois (défaut 2, `/etc/secubox/taches.toml`, section `[file]`,
+`actif = false` pour la couper) ; les autres attendent dans l'ordre d'arrivée et sont abandonnés
+proprement (sortie 0, ligne de journal) au-delà de `--attente-max`. Tickets et emplacements :
+`/run/secubox/taches/` (flock ; un processus tué libère son emplacement et son ticket est ignoré).
+En cas de doute (dossier absent, file coupée), la commande part directement.
+`secubox-taches.slice` (CPUWeight=20, IOWeight=20) accueille les mêmes oneshots.
+
+Une unité de collecte s'y range ainsi, dans le paquet qui la livre :
+
+```ini
+[Service]
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
+ExecStart=/usr/lib/secubox/tache-fifo --nom <unité> --attente-max <intervalle> -- <commande>
+```
+
+`--attente-max` : l'intervalle de la minuterie, borné par la moitié de `TimeoutStartSec` (l'attente
+compte dans le délai de démarrage). Une unité sous `AppArmorProfile=` ou à plusieurs `ExecStart`
+ne reçoit que la tranche.
+
+**Jamais derrière la file** (décisions de sécurité ou de survie, qui doivent partir à l'heure) :
+bans et listes (`annuaire-bans-apply`, `blacklist-sync`, `blacklist-attrib`, `escalate`,
+`actord-ingest-garde`, `soc-sade-auto`), WAF (`waf-*`, `waf-blocs-veille`, `waf-watchdog`), nft et
+gardes réseau (`gitea-ssh-garde-maj`, `wan-link-guard`, `realip`, `mobile-suivi`, `ad-guard-auto`,
+`ad-guard-tri`, `tcp-etats`, `pseudo-routeur-*sonde`), coffre et audit (`depot-coffre`,
+`masquer-jetons-journaux`), veilles de survie (`aggregator-watchdog`, `health-doctor-runner`,
+`healthbump`, `dirs-guard`, `minuteries-garde`, `p2p-mesh-liveness`, `ui-health`, `lyrion-watchdog`,
+`ytsas-conserve`, `torrent-conserve`, `garde-passage`).

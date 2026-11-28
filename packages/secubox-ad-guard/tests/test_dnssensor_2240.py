@@ -239,6 +239,6 @@ def test_sudoers_et_unite_de_collecte():
     pkg = Path(__file__).resolve().parents[1]
     assert "secubox-adguard-tv cache-dump" in (pkg / "sudoers.d" / "secubox-adguard-tv").read_text()
     u = "\n".join(l for l in (pkg / "debian" / "secubox-ad-guard-dnsdump.service").read_text().splitlines() if not l.lstrip().startswith("#"))
-    assert "User=secubox" in u and "User=root" not in u and "ExecStart=/usr/sbin/secubox-adguard-dnssensor --collecter" in u
+    assert "User=secubox" in u and "User=root" not in u and "ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-ad-guard-dnsdump --attente-max 300 -- /usr/sbin/secubox-adguard-dnssensor --collecter" in u
     rules = (pkg / "debian" / "rules").read_text()
     assert "secubox-ad-guard-dnsdump.timer" in rules and "secubox-ad-guard-dnsdump.timer" in (pkg / "debian" / "postinst").read_text()

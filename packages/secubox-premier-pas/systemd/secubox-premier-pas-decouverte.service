@@ -10,10 +10,13 @@ Description=SecuBox Premier Pas — le maître repère les box neuves (#2728)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2728
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
 User=secubox
 Group=secubox
-ExecStart=/usr/sbin/premier-pasctl decouvrir
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-premier-pas-decouverte --attente-max 45 -- /usr/sbin/premier-pasctl decouvrir
 TimeoutStartSec=90
 NoNewPrivileges=yes
 PrivateTmp=yes

@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-live
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), nginx, secubox-core, secubox-pilotage, adduser, acl
+Depends: ${misc:Depends}, python3 (>= 3.11), nginx, secubox-core (>= 1.8.51~), secubox-pilotage, adduser, acl
 Recommends: python3-geoip2
 Description: SecuBox — page publique de l'état du réseau (live.secubox.in)
  Page publique en direct du réseau SecuBox : nœuds du maillage (nom, matériel,

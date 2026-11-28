@@ -4,8 +4,11 @@
 Description=SecuBox NAC — inventaire des conteneurs LXC (noms par adresse, #2445)
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
-ExecStart=/usr/sbin/secubox-nac-lxc-names
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-nac-lxc-names --attente-max 300 -- /usr/sbin/secubox-nac-lxc-names
 UMask=0022
 NoNewPrivileges=true
 PrivateTmp=true

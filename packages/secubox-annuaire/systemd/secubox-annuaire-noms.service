@@ -4,6 +4,8 @@ After=network-online.target unbound.service avahi-daemon.service
 Wants=network-online.target
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
 Type=oneshot
-ExecStart=/usr/sbin/secubox-annuaire-noms
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-annuaire-noms --attente-max 300 -- /usr/sbin/secubox-annuaire-noms
 Nice=10

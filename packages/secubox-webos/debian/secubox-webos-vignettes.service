@@ -7,6 +7,9 @@ Description=SecuBox WebOS — capture d'une vignette de module pour la mosaïque
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/2996
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité et file FIFO à concurrence bornée.
+Slice=secubox-taches.slice
+ReadWritePaths=-/run/secubox/taches
 Type=oneshot
 User=secubox
 Group=secubox
@@ -24,5 +27,5 @@ TimeoutStartSec=300
 Nice=19
 CPUQuota=20%
 IOSchedulingClass=idle
-ExecStart=/usr/sbin/webos-vignettes
+ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-webos-vignettes --attente-max 150 -- /usr/sbin/webos-vignettes
 StandardError=journal

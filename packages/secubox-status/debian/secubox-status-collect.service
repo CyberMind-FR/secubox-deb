@@ -10,6 +10,8 @@ Description=SecuBox Status Live — collecte locale
 After=secubox-core.service
 
 [Service]
+# Tâche de fond de collecte (ref #4036) : tranche basse priorité ; hors file (voir README de secubox-core).
+Slice=secubox-taches.slice
 Type=oneshot
 User=secubox-status
 Group=secubox

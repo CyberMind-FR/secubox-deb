@@ -442,7 +442,7 @@ def test_premier_pasctl_connait_decouvrir():
 
 def test_l_unite_est_confinee_et_ne_parle_qu_aux_reseaux_prives():
     u = (PKG / "systemd" / "secubox-premier-pas-decouverte.service").read_text()
-    for ligne in ("User=secubox", "NoNewPrivileges=yes", "ProtectSystem=strict", "IPAddressDeny=any", "ExecStart=/usr/sbin/premier-pasctl decouvrir", "Type=oneshot"):
+    for ligne in ("User=secubox", "NoNewPrivileges=yes", "ProtectSystem=strict", "IPAddressDeny=any", "ExecStart=/usr/lib/secubox/tache-fifo --nom secubox-premier-pas-decouverte --attente-max 45 -- /usr/sbin/premier-pasctl decouvrir", "Type=oneshot"):
         assert ligne in u, ligne
     assert "User=root" not in u and "IPAddressAllow=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8" in u
 
