@@ -1,0 +1,29 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+   Diaporama des médias d'un billet (#4049) — dans l'écran des cartes (.screen) et de la vue (.vue-stage). */
+.diapo{position:absolute;inset:0;z-index:1;overflow:hidden;outline:none;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--tone,#22c8e8) 30%,#0a1119),#05080c 75%)}
+.diapo:focus-visible{box-shadow:inset 0 0 0 2px var(--tone,#22c8e8)}
+.dz{position:absolute;inset:0;margin:0;opacity:0;transition:opacity .6s ease;display:grid;place-items:center}
+.dz.on{opacity:1}
+.dz img{width:100%;height:100%;object-fit:cover;display:block}
+.dz-pdf img,.dz-embed img{object-fit:contain;background:#0b0f14}
+.dz-pdf figcaption{position:absolute;right:10px;top:9px;font:600 9px/1 var(--mono,monospace);letter-spacing:.12em;text-transform:uppercase;
+  color:#cfe6ef;background:rgba(6,10,15,.6);border:1px solid rgba(255,255,255,.14);padding:3px 8px;border-radius:999px}
+.dz-badge{position:absolute;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:rgba(8,12,18,.5);
+  border:1.5px solid rgba(255,255,255,.55);color:#fff;font-size:17px;padding-left:3px}
+.dz-doc{display:grid;justify-items:center;gap:4px;color:#e6eef4;font-family:var(--mono,monospace);text-transform:uppercase;letter-spacing:.14em}
+.dz-doc-ic{font-size:38px}
+.dz-doc b{font-size:13px}
+.dz-doc small{font-size:9px;opacity:.7;text-transform:none;letter-spacing:.04em}
+.dz-lien{position:absolute;left:10px;bottom:30px;font:600 10px/1 var(--mono,monospace);color:#e6eef4;text-decoration:none;
+  background:rgba(6,10,15,.65);border:1px solid rgba(255,255,255,.18);padding:5px 9px;border-radius:999px}
+.dz-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:32px;height:32px;border-radius:50%;cursor:pointer;
+  border:1px solid rgba(255,255,255,.3);background:rgba(6,10,15,.55);color:#fff;font-size:18px;line-height:1;opacity:0;transition:opacity .2s}
+.dz-nav.prev{left:8px} .dz-nav.next{right:8px}
+.diapo:hover .dz-nav,.diapo:focus-within .dz-nav{opacity:1}
+@media (hover:none){.dz-nav{opacity:.8}}
+.dz-dots{position:absolute;left:0;right:0;bottom:8px;z-index:4;display:flex;justify-content:center;gap:5px;flex-wrap:wrap;padding:0 40px}
+.dz-dots button{width:7px;height:7px;padding:0;border-radius:50%;border:0;cursor:pointer;background:rgba(255,255,255,.4)}
+.dz-dots button[aria-current="true"]{background:var(--tone,#22c8e8);transform:scale(1.25)}
+@media (prefers-reduced-motion:reduce){.dz{transition:none}}

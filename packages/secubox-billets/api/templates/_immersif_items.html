@@ -14,14 +14,18 @@
 {%- set is_yt = b.embed_is_video and ('youtube' in eu or 'youtu.be' in eu) -%}
 {%- set prov = 'pt' if is_pt else ('yt' if is_yt else '') -%}
 {%- set cover = (b.media | selectattr('thumb') | list | first) if b.media else None -%}
-{%- set poster = ('/media/' ~ cover.thumb) if cover else (b.poster or b.embed_snapshot_url) -%}
+{#- #4049 : un billet à médias (images, vidéos, PDF, instantané d'embed) montre un DIAPORAMA ; un embed vidéo garde son lecteur. -#}
+{%- set dia = b.diapos if (b.diapos and not b.embed_is_video) else [] -%}
+{%- set dia_img = dia | selectattr('src') | list -%}
+{%- set poster = (dia_img[0].src if dia_img else none) if dia else (('/media/' ~ cover.thumb) if cover else (b.poster or b.embed_snapshot_url)) -%}
 <article class="card" data-k="{{ 'communique' if b.style=='communique' else ('billet' if b.embed_is_video else 'article') }}"
          data-cat="{{ b.cat }}" data-id="{{ b.slug }}" data-prov="{{ prov }}"{% if b.expire_dans is not none %} data-ttl="{{ b.expire_dans }}"{% endif %}{% if b.embed_is_video and eu %} data-embed="{{ eu }}"{% endif %}{% if poster %} data-img="{{ poster }}"{% endif %} tabindex="0">
   <div class="screen" data-play>
     {% if prov %}<span class="provider {{ prov }}">{{ 'PeerTube · souverain' if is_pt else 'YouTube' }}</span>{% endif %}
-    {% if poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
+    {% if dia %}{% set lien = false %}{% include "_diaporama.html" %}
+    {% elif poster %}<div class="poster" style="background-image:url('{{ poster }}')"></div>{% else %}<div class="poster ph"></div>{% endif %}
     {% if is_pt %}<div class="frame"></div><div class="film"><div class="bars"></div><div class="scan"></div></div>{% endif %}
-    <div class="glyph"><div class="play-badge">{{ '▶' if b.embed_is_video else '✎' }}</div></div>
+    {% if not dia %}<div class="glyph"><div class="play-badge">{{ '▶' if b.embed_is_video else '✎' }}</div></div>{% endif %}
     {% if is_pt %}<div class="tc"></div><div class="resume">↺ reprise à <span class="rt"></span></div>
     <div class="mute">🔇 muet — clic pour le son</div>
     <div class="bar"><div class="seen"></div><div class="played"></div></div>{% endif %}

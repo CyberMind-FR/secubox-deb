@@ -1,0 +1,26 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+{#- DIAPORAMA (#4049) — tous les médias d'un billet : images, vignettes vidéo, pages des PDF rendues par la box, instantané d'un embed.
+    Partagé par la carte du fil (_immersif_items.html) et la vue (billet.html). Attend `dia` (liste de diapositives, cf. main._diapos)
+    et `lien` (True : les diapositives document/vidéo sont des liens — vue seule ; la carte entière est déjà cliquable).
+    Défilement automatique, pause, flèches, points et clavier : static/diaporama.js. Sans JS : la première diapositive reste visible. -#}
+<div class="diapo" data-diapo{% if dia|length > 1 %} data-multi tabindex="0"{% endif %} role="group" aria-roledescription="carrousel" aria-label="Médias du billet ({{ dia|length }})">
+  {%- for s in dia %}
+  <figure class="dz dz-{{ s.t }}{{ ' on' if loop.first }}" role="group" aria-roledescription="diapositive" aria-label="{{ loop.index }} / {{ dia|length }} — {{ s.alt }}"{% if not loop.first %} aria-hidden="true"{% endif %}>
+    {%- if s.src %}<img src="{{ s.src }}" alt="{{ s.alt }}" {% if not loop.first %}loading="lazy" {% endif %}decoding="async">{% endif %}
+    {%- if s.t == 'video' %}<span class="dz-badge" aria-hidden="true">▶</span>{% endif %}
+    {%- if s.t == 'doc' %}<span class="dz-doc"><span class="dz-doc-ic" aria-hidden="true">📄</span><b>PDF</b><small>pages en préparation</small></span>{% endif %}
+    {%- if s.t == 'pdf' %}<figcaption>{{ s.alt }}</figcaption>{% endif %}
+    {%- if lien and s.href and s.t in ('doc', 'video', 'pdf') %}<a class="dz-lien" href="{{ s.href }}" target="_blank" rel="noopener">{{ 'ouvrir le PDF ↗' if s.t != 'video' else 'lire la vidéo ↗' }}</a>{% endif %}
+  </figure>
+  {%- endfor %}
+  {%- if dia|length > 1 %}
+  <button class="dz-nav prev" type="button" data-dz="-1" aria-label="Diapositive précédente">‹</button>
+  <button class="dz-nav next" type="button" data-dz="1" aria-label="Diapositive suivante">›</button>
+  <div class="dz-dots">{% for s in dia %}<button type="button" data-dz-i="{{ loop.index0 }}" aria-label="Diapositive {{ loop.index }}"{% if loop.first %} aria-current="true"{% endif %}></button>{% endfor %}</div>
+  {%- endif %}
+</div>

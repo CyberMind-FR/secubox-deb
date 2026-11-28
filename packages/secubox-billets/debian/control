@@ -13,6 +13,7 @@ Depends: ${misc:Depends},
          python3 (>= 3.11),
          python3-venv,
          adduser,
+         poppler-utils,
          nginx
 Description: billets — micro-blog gateway inter-médias sociaux (SecuBox)
  Self-hosted micro-blog with an author admin, a public read feed with comments

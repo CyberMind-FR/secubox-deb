@@ -25,7 +25,7 @@ from .routes.jwt_admin import register_jwt_admin
 from .routes.service import register_service
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
-from .services import antispam, feeds, fiche, media
+from .services import antispam, feeds, fiche, media, pdfpages
 from .services import security as sec
 from .services.render import linkify_plain, render_markdown
 from secubox_core.crypto.empreinte import empreinte
@@ -278,6 +278,7 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None,
         or "peertube" in _eh or _eh.startswith("tube.") or _eh.endswith(".tv"))
     d["poster"] = _poster_for(d)
     d["cat"] = _categorie(d.get("id", ""))
+    d["diapos"] = _diapos(d)
     # Billet ÉPHÉMÈRE (#2268) : secondes restantes À L'INSTANT DU RENDU. Le client arme son propre compte à rebours à partir de ce nombre (pas d'une heure
     # absolue) : l'horloge de l'appareil n'a donc aucune importance.
     d["expire_dans"] = None
@@ -289,6 +290,40 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None,
         except ValueError:
             pass
     return d
+
+
+def _diapos(d: dict) -> list[dict]:
+    """DIAPORAMA (#4049) : tous les contenus visuels d'un billet, dans l'ordre des pièces jointes.
+
+    image → l'image ; vidéo → sa vignette (▶, lien vers le fichier) ; PDF → ses pages rendues par la box (route gardée), ou, tant qu'elles
+    ne sont pas prêtes (ou si le rendu a échoué), une diapositive « document » ; embed non vidéo avec instantané → l'instantané. Les embeds
+    VIDÉO gardent leur lecteur (survol PeerTube, clic YouTube) : ils n'entrent pas dans le diaporama. Liste vide = repli d'avant."""
+    out: list[dict] = []
+    slug = d.get("slug", "")
+    for m in d.get("media") or []:
+        mime = str(m.get("mime", ""))
+        if mime.startswith("image/"):
+            out.append({"t": "image", "src": f"/media/{m['filename']}", "alt": m.get("alt") or ""})
+        elif mime.startswith("video/"):
+            out.append({"t": "video", "src": f"/media/{m['thumb']}" if m.get("thumb") else "", "href": f"/media/{m['filename']}", "alt": "vidéo"})
+        elif mime == "application/pdf":
+            n = pdfpages.pages(m["id"])
+            if n:
+                out.extend({"t": "pdf", "src": f"/b/{slug}/diapo/{m['id']}/{i}", "alt": f"page {i}/{n}", "href": f"/media/{m['filename']}"}
+                           for i in range(1, n + 1))
+            else:
+                d.setdefault("_pdf_a_rendre", []).append(m)
+                out.append({"t": "doc", "src": "", "alt": "document PDF", "href": f"/media/{m['filename']}"})
+    if not d.get("embed_is_video") and d.get("embed_snapshot_url"):
+        out.append({"t": "embed", "src": d["embed_snapshot_url"], "alt": "contenu embarqué", "href": d.get("embed_url") or ""})
+    return out
+
+
+def _planifier_pdfs(vues: list[dict]) -> None:
+    """Rendu PARESSEUX des PDF joints avant #4049 (ou dont le rendu à l'envoi n'a pas abouti) : en tâche de fond, jamais dans la requête."""
+    for v in vues:
+        for m in v.pop("_pdf_a_rendre", []) or []:
+            pdfpages.planifier(m["id"], media.media_dir() / m["filename"])
 
 
 def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None = None,
@@ -371,10 +406,12 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # One batched lookup for the page's chips + the whole-site chip bar.
         tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
         nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
+        vues_fil = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0))
+                    for r in rows]
+        _planifier_pdfs(vues_fil)
         resp = templates.TemplateResponse(request, "feed.html", {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billets": [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0))
-                        for r in rows],
+            "billets": vues_fil,
             "next_cursor": next_cursor,
             # Repère du dernier changement vu (#2266) : /feed/maj ne rend que ce qui bouge APRÈS lui. Sur la 1re page, c'est l'activité du billet de tête.
             "depuis": ((rows[0]["bumped_at"] or rows[0]["published_at"]) if rows and not cursor else "1970-01-01T00:00:00Z"),
@@ -417,6 +454,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
         vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0))
                 for r in rows]
+        _planifier_pdfs(vues)
         html = templates.env.get_template("_immersif_items.html").render(billets=vues)
         # Pas d'en-tête CSP ici : le fragment est injecté dans le document de la
         # page, dont la CSP fait foi (un embed exotique d'une page ultérieure
@@ -445,6 +483,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
                 tag_map = await repo.tags_for_many(app.state.conn, [r["id"] for r in rows])
                 nbc = await repo.comment_counts(app.state.conn, [r["id"] for r in rows])
                 vues = [_billet_view(r, base, media_map.get(r["id"]), tag_map.get(r["id"]), nbc.get(r["id"], 0)) for r in rows]
+                _planifier_pdfs(vues)
                 html = templates.env.get_template("_immersif_items.html").render(billets=vues)
                 resp = JSONResponse({"html": html, "slugs": [r["slug"] for r in rows],
                                      "depuis": max((r["bumped_at"] or r["published_at"]) for r in rows)})
@@ -597,6 +636,24 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         resp.headers["Cache-Control"] = "no-cache"
         return resp
 
+    @app.get("/b/{slug}/diapo/{media_id}/{n}")
+    async def diapo_pdf(slug: str, media_id: str, n: int):
+        """Page `n` d'un PDF joint, rendue en JPEG (#4049). MÊME GARDE que le permalien : billet publié et non échu, et le média doit
+        appartenir à CE billet (un identifiant d'un autre billet, ou d'un brouillon, ne sort rien). Pas encore rendue → 404 et rendu en fond."""
+        row = await repo.get_by_slug(app.state.conn, slug)
+        if row is None or row["status"] != "published" or (row["expires_at"] and row["expires_at"] <= repo._maintenant()):
+            raise HTTPException(status_code=404, detail="Introuvable")
+        m = next((x for x in await repo.list_media(app.state.conn, row["id"])
+                  if x["id"] == media_id and x["mime"] == "application/pdf"), None)
+        if m is None:
+            raise HTTPException(status_code=404, detail="Introuvable")
+        f = pdfpages.page(media_id, n)
+        if f is None:
+            pdfpages.planifier(media_id, media.media_dir() / m["filename"])
+            raise HTTPException(status_code=404, detail="Page indisponible")
+        return FileResponse(f, media_type="image/jpeg",
+                            headers={"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"})
+
     @app.get("/b/{slug}", response_class=HTMLResponse)
     async def permalink(request: Request, slug: str):
         row = await repo.get_by_slug(app.state.conn, slug)
@@ -620,9 +677,11 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         permalink_url = f"{base}/b/{row['slug']}"
         media_rows = await repo.list_media(app.state.conn, row["id"])
         tmpl = "billet_communique.html" if row["style"] == "communique" else "billet.html"
+        vue_billet = _billet_view(row, base, media_rows)
+        _planifier_pdfs([vue_billet])
         resp = templates.TemplateResponse(request, tmpl, {
             "site_title": SITE_TITLE, "tagline": SITE_TAGLINE,
-            "billet": _billet_view(row, base, media_rows), "reactions": rctx,
+            "billet": vue_billet, "reactions": rctx,
             "comments": comment_views, "pcsrf": pcsrf,
             "ts_token": ts_token, "flash": request.query_params.get("c"),
             "og": {"title": feeds.billet_title(row["body"]),
