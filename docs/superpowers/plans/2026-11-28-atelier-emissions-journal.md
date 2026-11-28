@@ -89,3 +89,9 @@ See LICENCE-CMSD-1.0.md for terms.
   actifs, vagues — coût si faux : seuil hebdo (Task 16) atteint plus ou moins souvent.
 - **Graphiques (suite Task 8)** — Décision : compression PNG facultative, oxipng sinon `optipng -o2`, sinon rien —
   parce qu'oxipng n'est pas dans les dépôts de gk0 — coût si faux : PNG plus lourds.
+- **Task 6** — Décision : `lister()` rend la liste `sujets` de `GET /rapports` (vide si `disponible` est faux), pas
+  l'objet entier — parce que le plan type la sortie `list[dict]` — coût si faux : `age_s`/`complet` à relire par un
+  second accès si la page veut les montrer.
+- **Task 6** — Décision : identifiant filtré par le motif de gk2 (`[A-Za-z0-9_:.-]{1,80}`) plus refus de `..` ; jeton
+  relu à chaque appel par `jeton_fichier()`, refusé s'il n'est pas 0600 ; client httpx `trust_env=False` — parce
+  qu'un mandataire d'environnement ne doit pas voir le jeton — coût si faux : nul.
