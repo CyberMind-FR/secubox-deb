@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# See LICENCE-CMSD-1.0.md for terms.
+# Émissions hebdomadaires (#4058) : lundi 06:00 ; rattrapée au réveil de gk0 si le poste était éteint.
+[Unit]
+Description=SecuBox AI — émissions hebdomadaires (lundi 06:00)
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

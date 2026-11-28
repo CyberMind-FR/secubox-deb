@@ -184,3 +184,10 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 15** — Décision : l'onglet « Émissions » de la barre du relais = iframe `/emissions` (même origine, Host local)
   ajoutée par l'installateur, plutôt qu'une copie du panneau dans `index.html` (fichier vivant du POC, hors dépôt) —
   coût si faux : une hauteur d'iframe fixe (calc(100vh − 140px)).
+- **Task 16** — Décision : l'hebdo parle au SERVICE (socket Unix + jeton local) : `GET /reglages`, `GET /evolutions`
+  (évolutions complètes, chaque dossier relu), puis `POST /produire` par entrée du plan ; la file fait passer la synthèse
+  d'abord et une production à la fois ; sujet « changé » = au moins une évolution ; seuil = nombre d'évolutions
+  marquantes (défaut 3), écart d'un chiffre marquant = réglage `ecart` (défaut 25 %, passé à `evolutions`) — coût si
+  faux : nul. L'unité hebdo n'a que AF_UNIX, aucun chemin vers `/publier` (vérifié par le test sur le source).
+- **Task 16** — Décision : la rétention `mp4_jours` purge les MP4 LOCAUX des brouillons à chaque passage hebdo ; la
+  rétention des MP4 publiés reste celle des billets sur gk2 (`secubox-billets-purge-mp4.timer`) — coût si faux : nul.

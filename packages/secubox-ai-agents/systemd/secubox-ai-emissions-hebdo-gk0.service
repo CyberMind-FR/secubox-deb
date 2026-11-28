@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# See LICENCE-CMSD-1.0.md for terms.
+# Émissions hebdomadaires (#4058) : met en file synthèse + émissions par sujet, notifie ; NE PUBLIE JAMAIS.
+[Unit]
+Description=SecuBox AI — émissions hebdomadaires (brouillons)
+Requires=secubox-ai-emissions.service
+After=secubox-ai-emissions.service
+
+[Service]
+Type=oneshot
+Environment=SECUBOX_AI_EMISSIONS_JETON=%h/.config/secubox-ai-jeton/jeton
+Environment=SECUBOX_AI_EMISSIONS_ETAT=%S/secubox-ai-emissions
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=%h/.local/lib/secubox-ai-emissions/python -I -c "import sys; sys.path.insert(0, '%h/.local/lib/secubox-ai-emissions/src'); from emissions.hebdo import main; raise SystemExit(main())"
+TimeoutStartSec=900
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%S/secubox-ai-emissions
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
