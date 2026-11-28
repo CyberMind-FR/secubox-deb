@@ -40,7 +40,7 @@ def test_routes_et_ecritures_a_l_identique():
 
 
 def test_onglets_accessibles_et_pas_de_secret():
-    assert 'role="tablist"' in SRC and SRC.count('role="tab"') == 5 and SRC.count('role="tabpanel"') == 5
+    assert 'role="tablist"' in SRC and SRC.count('role="tab"') == 6 and SRC.count('role="tabpanel"') == 6
     assert "aria-selected" in SRC and "focus-visible" in SRC
     assert "setItem(WAKE" in SRC or "setItem(WAKE_DURATIONS_KEY" in SRC
     assert "Math.random" not in SRC
@@ -121,7 +121,7 @@ def test_zero_appli_en_ligne_est_dit_normal(navigateur):
 
 
 def test_onglets_aria_selected_et_clavier(navigateur):
-    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/streamlit/", BASE)
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/streamlit/?onglet=etat", BASE)
     p.wait_for_selector("#sante .ligne")
     assert p.get_attribute("#t-etat", "aria-selected") == "true" and p.get_attribute("#t-mosaic", "aria-selected") == "false"
     p.focus("#t-etat"); p.keyboard.press("ArrowRight")
@@ -285,9 +285,9 @@ def test_demonstration_annoncee_et_aucune_ecriture(navigateur):
 
 
 def test_telephone_sans_debordement_et_hauteur_annoncee(navigateur):
-    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/streamlit/?embed=1", BASE, taille={"width": 420, "height": 800})
+    ctx, p, err, _ = ouvre(navigateur, "http://sbx.test/streamlit/?embed=1&onglet=etat", BASE, taille={"width": 420, "height": 800})
     p.wait_for_selector("#sante .ligne")
-    for onglet in ("mosaic", "etat", "acces", "applis", "instances"):
+    for onglet in ("charge", "mosaic", "etat", "acces", "applis", "instances"):
         p.click("#t-" + onglet)
         p.wait_for_timeout(150)
         assert p.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), onglet

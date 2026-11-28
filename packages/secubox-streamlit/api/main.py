@@ -35,6 +35,8 @@ from secubox_core import screenshots as _screenshots
 # Validation des noms publics et lecture des publications (#3247) : le MÊME module que streamlitctl exécute en root
 # pour écrire — une seule règle, appliquée avant sudo ici, et de nouveau par le ctl.
 from . import publication as _pub
+# Ressources par cgroup d'unité (#4050) : lecture sysfs, relevé en fond, cache en double tampon.
+from . import ressources as _res
 
 app = FastAPI(title="secubox-streamlit", version="1.0.0", root_path="/api/v1/streamlit")
 
@@ -727,6 +729,48 @@ async def apps_audit():
         "summary": raw.get("summary", {}),
         "cache_age_seconds": age,
     }
+
+
+# RESSOURCES PAR APPLI (#4050) — CPU % (cpu.stat différencié entre deux
+# relevés), mémoire (memory.current) du cgroup de `streamlit-app@<nom>`.
+# Relevé en tâche de fond toutes les 10 s TANT QUE le panneau est lu (arrêt
+# 2 min après la dernière lecture, #1835) ; la requête lit le cache, jamais
+# de relevé dans la requête sauf le tout premier (quelques lectures sysfs).
+_collecteur = _res.Collecteur()
+_res_tache: Optional[asyncio.Task] = None
+_res_derniere_lecture = 0.0
+
+
+async def _boucle_ressources() -> None:
+    while time.time() - _res_derniere_lecture < _res.REGARD_S:
+        try:
+            await asyncio.to_thread(_collecteur.passe)
+        except Exception as e:  # noqa: BLE001 — un relevé manqué n'arrête pas le panneau
+            log.warning("relevé des ressources : %s", e)
+        await asyncio.sleep(_res.PERIODE_S)
+
+
+def _inventaire_audit() -> List[dict]:
+    try:
+        raw = json.loads(APPS_AUDIT_CACHE.read_text())
+        return raw.get("apps", []) if isinstance(raw, dict) else []
+    except (OSError, ValueError):
+        return []
+
+
+@router.get("/apps/ressources", dependencies=[Depends(require_lecture)])
+async def apps_ressources():
+    """Charge par appli : éveillées en haut (CPU décroissant), endormies estompées en bas, total en tête."""
+    global _res_tache, _res_derniere_lecture
+    _res_derniere_lecture = time.time()
+    if _res_tache is None or _res_tache.done():
+        _res_tache = asyncio.create_task(_boucle_ressources())
+    # Double tampon : dernier relevé complet en mémoire, sinon le fichier
+    # (redémarrage de l'API), sinon un premier relevé (sans CPU : il en faut deux).
+    mesures = _collecteur.dernier_complet or _res.lire_cache()
+    if mesures is None:
+        mesures = await asyncio.to_thread(_collecteur.passe)
+    return _res.construire_vue(mesures, _inventaire_audit())
 
 
 # ═══════════════════════════════════════════════════════════════════════
