@@ -147,9 +147,12 @@
       <div class="pile"><button type="button" class="bt" id="retour">← Revenir à la liste</button><article class="det" id="detail" tabindex="-1" aria-label="Détail de l’attaquant choisi"></article></div></div></section>
     <section class="pan" aria-labelledby="hRep"><h3 id="hRep">Répartitions <i>adresses suivies sur 24 h ; une gravité filtre le classement</i></h3>
       <div class="vise"><div><h4>Gravité</h4><div id="legG"></div></div><div><h4>Nature <i class="note">lue dans les règles déclenchées</i></h4><div id="nature"></div></div></div></section>
+    <section class="pan" aria-labelledby="hRapport"><h3 id="hRapport">Rapports d’acteurs <i>historique 90 jours · lecture IA relue par le code de la box · aucune adresse · export Markdown</i></h3>
+      <div id="rapport"><span class="note">Lecture des rapports…</span></div></section>
   </div>
   <div class="note">Aucun blocage sur un seul signal · actions réversibles · chaque décision est écrite dans le journal d’audit.</div>
 </div></div>
+<script src="rapport-menaces.js"></script>
 <script>
 (function(){
   "use strict";
@@ -397,5 +400,6 @@
   charge();
   setInterval(function(){if(document.visibilityState==='visible')charge();},30000);
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')charge();});
+  if(window.SbxRapport&&document.getElementById('rapport')) window.SbxRapport.monter(document,document.getElementById('rapport'),{genre:'acteur',jget:jget,jeton:jeton});   // #4030
 })();
 </script>
