@@ -22,3 +22,17 @@ See LICENCE-CMSD-1.0.md for terms.
   parce que « bans » est cité partout et capterait toutes les répliques — coût si faux : réglage du score.
 - **Task 8** — Note : `rsvg-convert` et `oxipng` absents de gk0 ; `png()` lève `RuntimeError` sans rsvg, son test
   est sauté (rien installé). À installer avant la vague 3 (montage) : `librsvg2-bin`, `oxipng`.
+- **Task 9** — Décision : arrêt et relance de Gemma par les routes locales du relais (`/moteur/arreter`,
+  `/moteur/demarrer`, fabrique `gpu.par_relais()`), pas par `systemctl --user` — parce que `poc-llama` est une unité
+  TRANSITOIRE (systemd-run par le relais) : arrêtée, elle disparaît et `systemctl start` ne la recrée pas — coût si
+  faux : fournir à `VerrouGPU` deux autres fonctions, l'interface ne change pas.
+- **Task 9** — Décision : routes gardées en 503 = chat (`/v1/chat/completions`, avec ou sans préfixe), `essai/flux`,
+  `agents/{nom}`, `documents/{id}/analyser`, `moteur/demarrer`, `jarvis/*` (relevées dans relais.py de gk0) ;
+  seule la relance portant la clé du verrou (`X-Emissions-Cle`, fichier 0600) passe — parce que le relais réveille
+  le moteur à la première requête : sans cela une conversation relancerait Gemma en pleine voix — coût si faux : une
+  route oubliée réveille le GPU (contention, pas de fuite).
+- **Task 9** — Décision : le verrou est retiré même si la relance échoue (l'erreur remonte, journalisée) — parce
+  qu'un verrou resté posé couperait le relais indéfiniment — coût si faux : Gemma reste arrêté jusqu'au prochain
+  réveil normal (le relais le relance à la demande).
+- **Task 9** — Note : `emissions_relais.py` n'est PAS copié dans `~/poc-secubox-ai/relais/` (relais en marche
+  intouché) ; branchement à faire à la Task 14.
