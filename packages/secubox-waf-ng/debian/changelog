@@ -1,3 +1,12 @@
+secubox-waf-ng (1.58.3-1~trixie1) trixie; urgency=medium
+
+  * Rapports IA (ref #4042) : un nombre lu dans une phrase de la lecture
+    n ancre que la même unité ; « blocs 24 » garde « blocs » comme unité ;
+    la fenêtre d analyse lue comme une durée (« a duré 90 jours ») est
+    retirée ; « suggérant » marque une hypothèse.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 06:24:31 +0100
+
 secubox-waf-ng (1.58.2-1~trixie1) trixie; urgency=medium
 
   * /categories en double tampon (ref #4034) : dernier relevé servi aussitôt,

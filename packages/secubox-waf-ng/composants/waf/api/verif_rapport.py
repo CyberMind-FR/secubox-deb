@@ -47,7 +47,7 @@ CAPACITE = (r"\bsait (?:deja )?(?:faire|deduire|detecter|reconnaitre)", r"\best 
             r"\b(?:la box|secubox) (?:secubox )?(?:a ete|est|etait|sait|peut|a su|detecte|bloque|protege)\b")
 # Supposition : gardée si adossée, marquée « hypothèse ».
 SUPPOSITION = (r"\bsembl", r"\bpourrai", r"\bpeut indiquer", r"\bpeuvent indiquer", r"\bprobabl", r"\bvraisemblabl",
-               r"\bhypothese", r"\bsuggere", r"\blaisse(?:nt)? penser", r"\bpossiblement\b", r"\bpeut-etre\b",
+               r"\bhypothese", r"\bsuggere", r"\bsuggerant", r"\blaisse(?:nt)? penser", r"\bpossiblement\b", r"\bpeut-etre\b",
                r"\bsans doute\b")
 TENDANCE = (r"\bhausse", r"\bbaisse", r"\baugment", r"\bdiminu", r"\brecul", r"\bexplos", r"\ben forte\b",
             r"\bs'intensifi", r"\bacceler", r"\bralenti")
@@ -126,8 +126,12 @@ class Index:
             for m in DATE_JM.finditer(t):
                 self._date(int(m.group(1)), int(m.group(2)), chemin)
             t = DATE_JM.sub(" ", t)
-            for brut in NOMBRE.findall(t):
-                self.nombres.append((float(re.sub(r"[ \u00a0\u202f]", "", brut).replace(",", ".")), chemin + "#texte"))
+            tn = normaliser(t)
+            for m in NOMBRE.finditer(tn):
+                # #4042 : l'unité lue après le nombre dans la chaîne (« 18 723 bans ») ; vide = nombre sans unité
+                u = ",".join(_unite(tn[m.end():m.end() + 30]))
+                self.nombres.append((float(re.sub(r"[ \u00a0\u202f]", "", m.group(0)).replace(",", ".")),
+                                     chemin + "#texte:" + u))
             if nom:
                 n = normaliser(x).strip()
                 if len(n) >= 4:
@@ -139,7 +143,15 @@ class Index:
         """Le nombre figure dans le dossier ; avec `cles` (unité lue dans la phrase), sous une clé qui en porte une
         (ou dans une chaîne)."""
         for v, chemin in self.nombres:
-            if abs(x - v) <= 0.5 and (not cles or chemin.endswith("#texte") or any(c in chemin for c in cles)):
+            if abs(x - v) > 0.5:
+                continue
+            if "#texte:" in chemin:
+                u = chemin.split("#texte:", 1)[1]
+                # un nombre lu dans une phrase n'ancre que la même unité (ou toute unité s'il n'en porte pas)
+                if not cles or not u or any(c in u.split(",") for c in cles):
+                    return True
+                continue
+            if not cles or any(c in chemin for c in cles):
                 return True
         return False
 
@@ -281,7 +293,8 @@ def verifier_phrase(phrase: str, idx: Index) -> Dict[str, Any]:
             motifs.append(f"date absente du dossier : {d[0]:02d}/{d[1]:02d}")
     reste = ORDINAL.sub(lambda m: " " * len(m.group(0)), reste)
     reste = _HEX.sub(lambda m: " " * len(m.group(0)), reste)
-    reste = _MASQUE.sub(lambda m: " " * len(m.group(0)), reste)      # « /24 », « blocs 24 » : une notation, pas un nombre
+    reste = _MASQUE.sub(lambda m: re.sub(r"\d", " ", m.group(0)) if m.group(0)[:1].isalpha() else " " * len(m.group(0)),
+                        reste)      # « /24 », « blocs 24 » : une notation, pas un nombre ; « blocs » reste l'unité (#4042)
     for m in NOMBRE.finditer(reste):
         brut = m.group(0)
         v = float(re.sub(r"[ \u00a0\u202f]", "", brut).replace(",", "."))
@@ -366,6 +379,10 @@ class Contexte:
         out = []
         if HEURES_BLOC.search(n):
             out.append("bloc /24 lu comme une durée (« 24 heures »)")
+        if isinstance(self.duree, int) and re.search(
+                rf"\b(?:dur\w*|pendant|poursuivi\w*|couvr\w*|etal\w*)\b[^.]{{0,40}}\b{self.duree}\s+jours\b|"
+                rf"\b{self.duree}\s+jours d'activite", n):
+            out.append(f"fenêtre d'analyse ({self.duree} jours) lue comme une durée d'activité")
         m = RISQUE.search(n)
         if m and self.niveau and SYNONYMES_NIVEAU[m.group(1)] != self.niveau:
             out.append(f"niveau de risque contraire au dossier : « {m.group(1)} » au lieu de « {self.niveau} »")
