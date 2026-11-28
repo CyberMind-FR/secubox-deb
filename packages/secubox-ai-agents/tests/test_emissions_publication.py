@@ -6,7 +6,6 @@
 """Task 17 (#4058) : publication sur les billets — balayage final bloquant, captures validées, FAUX serveur billets."""
 import asyncio
 import json
-from pathlib import Path
 
 import httpx
 import pytest
