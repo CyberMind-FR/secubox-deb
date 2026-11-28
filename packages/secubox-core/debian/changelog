@@ -1,3 +1,10 @@
+secubox-core (1.8.50-1~trixie1) trixie; urgency=medium
+
+  * Dé de l accueil : face verte tournée dans le bon sens (1.8.49 la tournait
+    dans le sens des aiguilles d une montre à l écran) (ref #3938).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 05:45:50 +0100
+
 secubox-core (1.8.49-1~trixie1) trixie; urgency=medium
 
   * Dé de l accueil : face verte tournée d un quart de tour dans le sens
