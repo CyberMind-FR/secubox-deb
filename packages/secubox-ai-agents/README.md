@@ -107,7 +107,17 @@ local posé par le relais. Panneau : onglet « Émissions » du relais (`/emissi
   `POST {id}/replique/{rang}/reecrire` (proposition vérifiée, jamais appliquée d'office), `POST {id}/capture`,
   `POST {id}/capture/{cid}/valider`, `POST {id}/mp4`, `POST {id}/publier`, `POST {id}/reprendre`, `DELETE {id}`,
   `GET {id}/fichier/<emission.mp3|emission.mp4|diapos/…png|captures/…png>`.
-- Réglages : `~/.config/secubox-ai-emissions/reglages.toml` (adresses : `voix_url`, `gk2_base`, `billets_base`) puis
+- Réglages : `~/.config/secubox-ai-emissions/reglages.toml` (adresses : `voix_url`, `gk2_base`, `gk2_aud`, `billets_base`) puis
   `<état>/reglages.json` écrit par le panneau (`voix_gpu`, `voix1`, `voix2`, `seuil`, `ecart`, `mp4_jours`).
   `voix_gpu = false` par défaut (CUDA en panne) : Gemma n'est pas suspendu ; `true` : verrou GPU + relais en 503.
-- Installation sans root : `sbin/installer-emissions.sh <paquet> [python]` (idempotent, ne redémarre rien).
+- Lecture de gk2 (#4063) : `GET {gk2_base}/rapports` et `/rapports/{genre}/{id}`, gardées sur gk2 par
+  `require_lecture_ou_compte("ai-lecture")`. Chaque GET porte un jeton EdDSA NEUF du compte de service `ai-lecture`
+  (`secubox_core.compte_service.frapper_jeton` : portée `waf-lecture`, `aud` = `gk2_aud` du TOML, défaut `gk2`,
+  `methode` GET, `chemin` = `/rapports…` tel que le voit le WAF, `jti` unique, 30 s). Clé privée de gk0 :
+  `~/.config/secubox-ai-jeton/ai-lecture.key` (0600, au compte courant, refusée sinon). Plus de jeton fixe.
+- Clé : `sbin/secubox-ai-emissions-cle` (installé dans `~/.local/lib/secubox-ai-emissions/`, sans root) crée la paire
+  si elle manque, jamais écrasée, puis affiche la clé publique, son `kid` et la commande à lancer EN ROOT sur gk2 :
+  `wafctl cle-ai-lecture ajouter <fichier.pub>` (→ `/etc/secubox-comptes-service/ai-lecture/<kid>.pub`, root 0644 ;
+  deux clés au plus, celle de gk3 comprise).
+- Installation sans root : `sbin/installer-emissions.sh <paquet> [python]` (idempotent, ne redémarre rien ; copie
+  aussi `common/secubox_core/` à côté de `emissions/`).

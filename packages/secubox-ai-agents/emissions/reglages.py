@@ -23,6 +23,7 @@ DEFAUTS: Dict[str, Any] = {
     "voix_gpu": False,                                         # CUDA en panne : voix sur CPU, Gemma non suspendu
     "voix1": "nova", "voix2": "onyx",
     "gk2_base": "https://admin.gk2.secubox.in/api/v1/waf",     # lecture seule : /rapports, /rapports/{genre}/{id}
+    "gk2_aud": "gk2",                                          # audience des jetons ai-lecture (= AUD_GK2 du relais)
     "billets_base": "https://billets.gk2.secubox.in",          # API d'administration des billets (Task 17)
     "seuil": 3,                                                # hebdo : évolutions marquantes pour une émission par sujet
     "ecart": 0.25,                                             # écart d'un chiffre jugé marquant
