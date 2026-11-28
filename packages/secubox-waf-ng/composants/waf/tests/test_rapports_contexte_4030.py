@@ -45,3 +45,24 @@ def test_pas_de_redaction_sans_ban():
     r = asyncio.run(R.rediger("acteur:ACT-0088", d, ["http://127.0.0.1:1"]))
     assert r["etat"] == "repli" and "aucun ban" in r["motif"]
 
+
+
+# #4042
+D2 = {**D, "lecture": [{"code": "x", "texte": "18 723 bans de repérage, 22 000 bans au total."}],
+      "chiffres": {**D["chiffres"], "bans_90j": 22000, "blocs24_90j": 1144}}
+
+
+def test_nombre_de_la_lecture_garde_son_unite():
+    assert not V.verifier("Au total, 22 000 blocs 24 ont été bloqués.", D2)["gardees"]
+    assert V.verifier("Au total, 22 000 bans ont été posés.", D2)["gardees"]
+    assert V.verifier("La campagne touche 1144 blocs 24.", D2)["gardees"]
+
+
+def test_fenetre_lue_comme_duree():
+    assert not statut("La phase de repérage a duré 90 jours, avec 12 bans.")
+    assert not statut("La vague compte 12 bans et 90 jours d'activité.")
+
+
+def test_suggerant_hypothese():
+    g = V.verifier("La vague du 11 octobre 2026 compte 12 bans, suggérant une activité stable.", D)["gardees"]
+    assert g and g[0]["statut"] == "hypothese"
