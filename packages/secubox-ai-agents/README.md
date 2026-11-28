@@ -90,3 +90,24 @@ avant de répondre (premier mot visible tardif).
 Sur le vrai moteur et la vraie extension Rust, avec l'interpréteur du venv livré :
 
     PYTHONPATH=<dossier où pytest est installé> /opt/secubox-ai-agents/venv/bin/python -m pytest packages/secubox-ai-agents/tests
+
+## Atelier des émissions (#4058, gk0)
+
+Service utilisateur `secubox-ai-emissions` (`emissions/app.py`, FastAPI sur `%t/secubox-ai-emissions/emissions.sock`),
+relayé par le relais du POC (`relais/emissions_relais.py`) sous `/api/v1/ai/emissions/*`, Host local seulement, jeton
+local posé par le relais. Panneau : onglet « Émissions » du relais (`/emissions`).
+
+- Chaîne en sept étapes (`emissions/production.py`) : faits (gk2, lecture seule) → évolutions → consigne → dialogue
+  (Gemma) → vérification (✓/⚠/✗) → voix (Voice Studio LOCAL `http://127.0.0.1:3910`) → montage (MP3 + chronologie).
+  Brouillon : `~/.local/state/secubox-ai-emissions/brouillons/<id>/etat.json` ; reprise à la première étape non faite.
+  Une production à la fois, la synthèse d'abord.
+- Routes (après `/api/v1/ai/emissions`) : `GET sources|evolutions|brouillons|reglages|etat`, `POST produire`
+  `{"sources": ["campagne/<id>"|"acteur/<id>"], "format": "synthese"|"sujet"}`, `POST reglages`, `GET {id}`,
+  `POST {id}/entete`, `POST {id}/replique/{rang}` (texte → revérifiée, seule sa voix refaite),
+  `POST {id}/replique/{rang}/reecrire` (proposition vérifiée, jamais appliquée d'office), `POST {id}/capture`,
+  `POST {id}/capture/{cid}/valider`, `POST {id}/mp4`, `POST {id}/publier`, `POST {id}/reprendre`, `DELETE {id}`,
+  `GET {id}/fichier/<emission.mp3|emission.mp4|diapos/…png|captures/…png>`.
+- Réglages : `~/.config/secubox-ai-emissions/reglages.toml` (adresses : `voix_url`, `gk2_base`, `billets_base`) puis
+  `<état>/reglages.json` écrit par le panneau (`voix_gpu`, `voix1`, `voix2`, `seuil`, `ecart`, `mp4_jours`).
+  `voix_gpu = false` par défaut (CUDA en panne) : Gemma n'est pas suspendu ; `true` : verrou GPU + relais en 503.
+- Installation sans root : `sbin/installer-emissions.sh <paquet> [python]` (idempotent, ne redémarre rien).

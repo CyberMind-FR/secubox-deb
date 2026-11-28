@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# See LICENCE-CMSD-1.0.md for terms.
+# secubox-ai-emissions sur gk0 (#4058) : unité UTILISATEUR, jamais root. Installée par sbin/installer-emissions.sh
+# dans ~/.config/systemd/user/secubox-ai-emissions.service ; code copié dans ~/.local/lib/secubox-ai-emissions/src,
+# interpréteur = lien ~/.local/lib/secubox-ai-emissions/python (venv qui porte fastapi, httpx, uvicorn, playwright).
+# Jeton local : ~/.config/secubox-ai-jeton/jeton (le même que secubox-ai-agents : seul le relais le pose).
+[Unit]
+Description=SecuBox AI — atelier des émissions (gk0)
+# Pas de After=poc-llama.service : unité TRANSITOIRE du relais (voir secubox-ai-agents-gk0.service).
+
+[Service]
+Type=exec
+Environment=SECUBOX_AI_EMISSIONS_JETON=%h/.config/secubox-ai-jeton/jeton
+Environment=SECUBOX_AI_EMISSIONS_ETAT=%S/secubox-ai-emissions
+Environment=SECUBOX_AI_EMISSIONS_VERROU=%t/secubox-ai-emissions/voix.verrou
+Environment=SECUBOX_AI_AGENTS_MOTEUR=%h/poc-secubox-ai/run/llama.sock
+Environment=PYTHONDONTWRITEBYTECODE=1
+StateDirectory=secubox-ai-emissions
+StateDirectoryMode=0700
+RuntimeDirectory=secubox-ai-emissions
+RuntimeDirectoryMode=0700
+# Le relais lit le verrou de voix dans %t/secubox-ai-emissions : on le garde entre deux redémarrages.
+RuntimeDirectoryPreserve=yes
+# Verrou de voix orphelin (service tué pendant une voix GPU) → Gemma relancé avant toute production.
+ExecStartPre=-%h/.local/lib/secubox-ai-emissions/python -I -c "import sys; sys.path.insert(0, '%h/.local/lib/secubox-ai-emissions/src'); import runpy; sys.argv=['emissions.app', '--reparer']; runpy.run_module('emissions.app', run_name='__main__')"
+ExecStart=%h/.local/lib/secubox-ai-emissions/python -I -m uvicorn --app-dir %h/.local/lib/secubox-ai-emissions/src --factory emissions.app:creer_app --uds %t/secubox-ai-emissions/emissions.sock --workers 1 --log-level warning --no-server-header
+Restart=on-failure
+RestartSec=5
+MemoryMax=1G
+TasksMax=64
+UMask=0077
+# Socle de durcissement (copie de secubox-ai-agents-gk0.service, RULES-CODE § 10).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%S/secubox-ai-emissions %t/secubox-ai-emissions
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @debug @cpu-emulation @obsolete
+# Réseau : socket Unix (LLM, API), boucle locale (relais 8098, Voice Studio 3910, résolveur), et les SEULES adresses
+# de admin.gk2 / billets.gk2 (drop-in reseau.conf écrit par l'installateur). Rien d'autre.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=default.target

@@ -143,3 +143,36 @@ See LICENCE-CMSD-1.0.md for terms.
 - **Task 11** — Note : tests sur de VRAIS MP3 produits par ffmpeg (sinus), MP4 vérifié par ffprobe ; ffmpeg 7 de gk0
   avec libmp3lame et libx264. Suite du paquet : 62 réussis, 4 sautés (`test_voix_4000::test_transcription_reelle`
   instable : un échec puis une réussite au rejeu, hors #4058).
+
+## Vague 4
+
+- **Task 14** — Décision : voix = Voice Studio LOCAL de gk0 (`voicestudio-worker`, `http://127.0.0.1:3910`, réglage
+  `voix_url`) et plus le tunnel 7443 vers gk3 ; clé du worker FACULTATIVE (fichier absent → aucun en-tête : le worker
+  n'exige pas de clé sur la boucle locale) — décision du propriétaire du 28/11 — coût si faux : poser
+  `~/.config/secubox-ai-jeton/voicestudio`.
+- **Task 14** — Décision : suspension de Gemma conditionnelle au réglage `voix_gpu` (défaut `false`, CUDA en panne) ;
+  `gpu.SansSuspension` (aucun verrou, relais disponible) sinon `par_relais()` ; mécanisme gardé intact — coût si faux :
+  contention GPU si quelqu'un passe la voix sur CUDA sans basculer le réglage.
+- **Task 14** — Décision : réseau de l'unité = boucle locale + adresses de `admin.gk2.secubox.in` et
+  `billets.gk2.secubox.in` résolues à l'installation (drop-in `reseau.conf`), pas « 127.0.0.1 seul » comme le plan —
+  parce qu'il n'existe pas de tunnel vers l'API de gk2 : le relais lui-même lit gk2 en HTTPS public — coût si faux :
+  relancer l'installateur si l'adresse publique de gk2 change (sinon gk2 injoignable, rien d'autre).
+- **Task 14** — Décision : le service tourne sur le venv du dépôt (celui du relais : fastapi, httpx, uvicorn,
+  playwright), code copié par `installer-emissions.sh` dans `~/.local/lib/secubox-ai-emissions/src` — parce que
+  `/opt/secubox-ai-agents/venv` est à root et n'a pas playwright (pas de sudo) ; `secubox-ai-agents-construire` copie
+  aussi `emissions/` pour la suite — coût si faux : nul.
+- **Task 14** — Décision : jeton local = le même que `secubox-ai-agents` (`~/.config/secubox-ai-jeton/jeton`), garde
+  recopiée (pas d'import de `agents/`) — coût si faux : nul.
+- **Task 14** — Décision : synthèse à plusieurs sujets → chaque réplique garde le MEILLEUR verdict contre l'un des
+  dossiers ; graphiques préfixés `s<k>-` ; titre/chapeau automatiques, modifiables (`POST {id}/entete`, route ajoutée) ;
+  `POST {id}/replique/{rang}/reecrire` ajoutée (Gemma invente des chiffres : proposition vérifiée, appliquée seulement
+  par le propriétaire) ; captures validées posées sur une réplique (`rang`) → elles entrent au diaporama, seul le montage
+  est refait.
+- **Task 14** — Décision : « client non local » → c'est le `local` du relais qui répond (404 dans le relais réel, 403
+  dans le test qui le simule) ; le relais ne touche ni au relais en marche ni à poc-llama : branchement par
+  `installer-emissions.sh` (2 lignes en fin de relais.py, onglet « Émissions » après « Filtres WAF » dans
+  `index.html` = entrée `['emissions', 'Émissions']` dans `ONGLETS` + `<section data-o="emissions">` contenant une
+  iframe `/emissions`, sauvegardes `.avant-emissions`) — NON exécuté, à lancer par le propriétaire.
+- **Task 14** — Note : `lecture-gk2` (jeton de lecture des dossiers) ABSENT de `~/.config/secubox-ai-jeton/` sur gk0 :
+  sans lui, `GET sources` répond 502. Chromium par Playwright sous le durcissement de l'unité (ProtectHome=read-only,
+  sans PrivateUsers) non essayé.

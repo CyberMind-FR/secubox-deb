@@ -131,3 +131,22 @@ def par_relais(fichier: Path = VERROU, base: str = RELAIS) -> VerrouGPU:
         await _poster("/moteur/demarrer")
 
     return VerrouGPU(fichier, arreter, relancer)
+
+
+class SansSuspension:
+    """Voix sur CPU (réglage `voix_gpu = false`, défaut tant que CUDA est en panne sur gk0) : Gemma n'est PAS
+    suspendu, aucun verrou n'est posé, le relais reste disponible. Même interface que `VerrouGPU`."""
+
+    fichier = None
+
+    @contextlib.asynccontextmanager
+    async def voix(self) -> AsyncIterator[None]:
+        yield
+
+    async def reparer(self) -> bool:
+        return False
+
+
+def selon_reglage(voix_gpu: bool, fichier: Path = VERROU, base: str = RELAIS):
+    """Le mécanisme de suspension seulement si la voix occupe le GPU ; sinon `SansSuspension`."""
+    return par_relais(fichier, base) if voix_gpu else SansSuspension()

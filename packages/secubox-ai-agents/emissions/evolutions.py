@@ -60,7 +60,8 @@ def _fait(genre: str, texte: str, marquant: bool) -> Dict[str, Any]:
     return {"genre": genre, "texte": _sans_adresse(texte), "marquant": bool(marquant)}
 
 
-def evolutions(courant: Dict[str, Any], precedent: Optional[Dict[str, Any]], maintenant: float) -> List[Dict[str, Any]]:
+def evolutions(courant: Dict[str, Any], precedent: Optional[Dict[str, Any]], maintenant: float, *,
+               seuil_chiffre: float = SEUIL_CHIFFRE) -> List[Dict[str, Any]]:
     nom = str((courant.get("sujet") or {}).get("nom") or "ce sujet")
     if precedent is None:
         return [_fait("premiere_lecture", f"Première lecture de {nom} : aucun dossier validé auparavant.", True)]
@@ -98,5 +99,5 @@ def evolutions(courant: Dict[str, Any], precedent: Optional[Dict[str, Any]], mai
         ecart = abs(b - a) / a if a else 1.0
         sens = "hausse" if b > a else "baisse"
         faits.append(_fait("chiffre", f"{libelle.capitalize()} : {int(a)} → {int(b)} ({sens} de {round(ecart * 100)} %).",
-                           ecart >= SEUIL_CHIFFRE))
+                           ecart >= seuil_chiffre))
     return faits

@@ -10,8 +10,10 @@ jamais refait : une réplique modifiée change d'empreinte et seule sa voix est 
 répliques `retiree` ne sont jamais dites. Les voix manquantes sont toutes faites en UN passage sous `verrou.voix()`
 (Gemma suspendu) ; rien à faire → le GPU n'est pas touché.
 
-Le worker Voice Studio (#4057) est joint par le tunnel `127.0.0.1:7443`, contrat OpenAI `POST /v1/audio/speech`, comme
-`secubox-voicestudio/api/moteur.py` (aucun import croisé : processus séparé). Clé : `~/.config/secubox-ai-jeton/voicestudio`.
+Le Voice Studio LOCAL de gk0 (service utilisateur `voicestudio-worker`, décision du 28/11) est joint sur
+`http://127.0.0.1:3910` (réglage `voix_url`), contrat OpenAI `POST /v1/audio/speech` (aucun import croisé : processus
+séparé). Sur la boucle locale il n'exige pas de clé ; si `~/.config/secubox-ai-jeton/voicestudio` existe (0600), elle
+est posée en `Authorization: Bearer`.
 """
 from __future__ import annotations
 
@@ -25,14 +27,17 @@ import httpx
 
 from .gpu import VerrouGPU, par_relais
 
-WORKER = os.environ.get("SECUBOX_AI_EMISSIONS_VOIX", "http://127.0.0.1:7443")
+WORKER = os.environ.get("SECUBOX_AI_EMISSIONS_VOIX", "http://127.0.0.1:3910")
 CLE_DEFAUT = Path.home() / ".config/secubox-ai-jeton/voicestudio"
 VOIX_DEFAUT = {1: "nova", 2: "onyx"}
 TEXTE_MAX = 2000
 
 
-def cle_fichier(chemin: Path = CLE_DEFAUT) -> Callable[[], str]:
+def cle_fichier(chemin: Path = CLE_DEFAUT, facultative: bool = True) -> Callable[[], str]:
+    """Lecteur de la clé du worker ; fichier absent et clé facultative → "" (aucun en-tête)."""
     def lire() -> str:
+        if facultative and not Path(chemin).exists():
+            return ""
         if stat.S_IMODE(os.stat(chemin).st_mode) & 0o077:
             raise PermissionError(f"{chemin} doit être en 0600")
         return Path(chemin).read_text(encoding="ascii").strip()
@@ -48,11 +53,12 @@ class MoteurVoix:
     async def dire(self, texte: str, voix: str, format_: str = "mp3", delai_s: float = 120) -> bytes:
         charge = {"model": "tts-1", "input": texte, "voice": voix, "response_format": format_}
         transport = httpx.AsyncHTTPTransport(uds=self.uds) if self.uds else None
+        cle = self._cle()
+        entetes = {"Authorization": f"Bearer {cle}"} if cle else {}
         try:
             async with httpx.AsyncClient(trust_env=False, transport=transport,
                                          timeout=httpx.Timeout(delai_s, connect=10.0)) as c:
-                r = await c.post(self.url + "/v1/audio/speech", json=charge,
-                                 headers={"Authorization": f"Bearer {self._cle()}"})
+                r = await c.post(self.url + "/v1/audio/speech", json=charge, headers=entetes)
         except (httpx.HTTPError, OSError) as e:
             raise RuntimeError(f"worker de voix injoignable ({type(e).__name__})") from e
         if r.status_code >= 400:
