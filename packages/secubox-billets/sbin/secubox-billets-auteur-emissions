@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# #4058 — crée l'auteur `emissions` des billets et son jeton d'API (0600, secubox:secubox).
+# Idempotent : un auteur ou un jeton existant est gardé tel quel. À lancer en root.
+set -eu
+PREFIX=/usr/lib/secubox/billets
+JETON=/etc/secubox/secrets/billets-emissions.jeton
+[ "$(id -u)" -eq 0 ] || { echo "à lancer en root" >&2; exit 1; }
+if [ ! -s "$JETON" ]; then
+  ( umask 077; head -c 48 /dev/urandom | base64 | tr -d '\n=+/' > "$JETON" )
+fi
+chown secubox:secubox "$JETON"
+chmod 0600 "$JETON"
+cd "$PREFIX"
+exec runuser -u secubox -- env BILLETS_DB=/var/lib/secubox/billets/billets.db \
+  "$PREFIX/venv/bin/python" -m api.manage auteur-emissions --jeton "$JETON"

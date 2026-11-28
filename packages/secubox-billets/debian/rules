@@ -15,3 +15,8 @@ override_dh_auto_install:
 	cp menu.d/*.json debian/secubox-billets/usr/share/secubox/menu.d/
 	install -d debian/secubox-billets/usr/share/secubox/www/billets
 	cp -r www/billets/. debian/secubox-billets/usr/share/secubox/www/billets/
+	install -d debian/secubox-billets/usr/sbin
+	install -m 0755 sbin/secubox-billets-auteur-emissions debian/secubox-billets/usr/sbin/
+	install -d debian/secubox-billets/lib/systemd/system
+	install -m 0644 debian/secubox-billets-purge-mp4.service debian/secubox-billets/lib/systemd/system/
+	install -m 0644 debian/secubox-billets-purge-mp4.timer debian/secubox-billets/lib/systemd/system/

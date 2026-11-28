@@ -32,6 +32,7 @@ from ..services import feeds, media
 
 try:
     from secubox_core.auth import require_jwt
+    from secubox_core.auth import _bearer, require_session
     try:
         from secubox_core.capacites import require_capability
     except ImportError:          # secubox-core antérieur à #1438
@@ -112,6 +113,25 @@ def _chrono_vue(raw: Optional[str]):
         return None
 
 
+def _jeton_emissions_ok(request: Request) -> bool:
+    """#4058 : `Authorization: Bearer <jeton>` égal au contenu de /etc/secubox/secrets/billets-emissions.jeton."""
+    import hmac
+    entete = request.headers.get("authorization", "")
+    if not entete.lower().startswith("bearer "):
+        return False
+    try:
+        with open(os.environ.get("BILLETS_EMISSIONS_JETON", JETON_EMISSIONS), encoding="ascii") as f:
+            attendu = f.read().strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+    if len(attendu) < 32:
+        return False
+    return hmac.compare_digest(entete[7:].strip().encode(), attendu.encode())
+
+
+JETON_EMISSIONS = "/etc/secubox/secrets/billets-emissions.jeton"
+
+
 def register_jwt_admin(app: FastAPI) -> None:
     """Register the /admin/api/* JSON surface. No-op if secubox_core is absent."""
     if require_jwt is None:
@@ -120,7 +140,18 @@ def register_jwt_admin(app: FastAPI) -> None:
     # Toute session (appareil guest compris) créait, modifiait, supprimait des
     # billets. Lire reste ouvert à une session ; écrire et modérer exigent
     # billets.publish (l'exploitant système l'a d'office).
-    _ecrire = require_capability("billets.publish") if require_capability else require_jwt
+    _garde_ecrire = require_capability("billets.publish") if require_capability else None
+
+    async def _ecrire(request: Request):
+        """Écrire : jeton de l'auteur `emissions` (#4058, fichier 0600) OU session portant billets.publish.
+
+        Le jeton est comparé en temps constant ; il n'ouvre que l'écriture des billets, rien d'autre."""
+        if _jeton_emissions_ok(request):
+            return {"sub": "emissions", "auteur": "emissions"}
+        creds = await _bearer(request)
+        if _garde_ecrire is not None:
+            return await _garde_ecrire(creds=await require_session(request, creds))
+        return await require_jwt(request, creds)
 
     async def _enrichir(request: Request, billet_id: str, data: BilletIn) -> None:
         """MEME enrichissement que le formulaire d'administration (#1268).
@@ -235,6 +266,8 @@ def register_jwt_admin(app: FastAPI) -> None:
         raw = await file.read()
         if not raw:
             raise HTTPException(400, "empty file")
+        if not media.espace_suffisant(len(raw)):
+            raise HTTPException(507, "espace disque insuffisant sur le volume des billets")
         try:
             processed = await asyncio.to_thread(media.process_upload, raw, file.content_type or "")
         except media.MediaError as exc:

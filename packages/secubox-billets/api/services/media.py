@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
+import time
+import tomllib
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -251,3 +254,44 @@ def store_raw(media_id: str, ext: str, data: bytes, directory: Path | None = Non
     filename = f"{media_id}.{ext}"
     (d / filename).write_bytes(data)
     return filename
+
+
+# ── #4058 : garde d'espace et rétention des MP4 (atelier des émissions) ──────
+MARGE_ESPACE = 512 * 1024**2
+RETENTION_MP4_DEFAUT = 14
+
+
+def espace_suffisant(octets: int, marge: int = MARGE_ESPACE) -> bool:
+    """Vrai si le volume de media_dir() garde `marge` octets libres après l'écriture de `octets`."""
+    d = media_dir()
+    cible = d if d.exists() else d.parent
+    return shutil.disk_usage(cible).free - max(0, int(octets)) >= marge
+
+
+def retention_mp4_jours() -> int:
+    """`retention_mp4_jours` de /etc/secubox/billets.toml ; absent ou absurde → 14."""
+    try:
+        with open(os.environ.get("BILLETS_TOML", "/etc/secubox/billets.toml"), "rb") as f:
+            v = tomllib.load(f).get("retention_mp4_jours", RETENTION_MP4_DEFAUT)
+    except (OSError, tomllib.TOMLDecodeError):
+        return RETENTION_MP4_DEFAUT
+    return v if isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 3650 else RETENTION_MP4_DEFAUT
+
+
+def purger_mp4(jours: int) -> int:
+    """Supprime les MP4 de media_dir() plus vieux que `jours` (st_mtime) ; MP3 et images intouchés. Rend le nombre purgé."""
+    if not isinstance(jours, int) or jours < 1:
+        raise ValueError("jours doit être un entier ≥ 1")
+    limite = time.time() - jours * 86400
+    n = 0
+    d = media_dir()
+    if not d.is_dir():
+        return 0
+    for p in sorted(d.iterdir(), key=lambda q: q.stat().st_mtime):
+        if p.suffix.lower() != ".mp4" or not p.is_file() or p.is_symlink():
+            continue
+        if p.stat().st_mtime >= limite:
+            break
+        p.unlink(missing_ok=True)
+        n += 1
+    return n

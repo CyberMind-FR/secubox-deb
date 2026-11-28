@@ -191,6 +191,16 @@ async def _maybe_capture_snapshot(request: Request, billet_id: str, embed_url: s
         pass
 
 
+def _taille_envois(files) -> int:
+    """#4058 : volume annoncé des fichiers envoyés (UploadFile.size), pour la garde d'espace AVANT toute écriture."""
+    return sum(int(getattr(up, "size", 0) or 0) for up in (files or []) if up is not None)
+
+
+def _espace_refuse(files) -> bool:
+    n = _taille_envois(files)
+    return n > 0 and not media.espace_suffisant(n)
+
+
 async def chrono_diapos_ok(conn, billet_id: str, chrono) -> bool:
     """#4058 : chaque `diapo` d'une chronologie désigne une image EXISTANTE du billet (index 0-based dans l'ordre des médias image)."""
     if not chrono:
@@ -372,6 +382,9 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             return _redirect("/admin/login")
         if not sec.csrf_ok(request.cookies.get(CSRF_COOKIE), csrf):
             return _redirect("/admin/login?error=csrf")
+        if _espace_refuse(media_files):
+            # #4058 : volume des billets presque plein → rien n'est écrit, ni billet ni média
+            return HTMLResponse("Espace disque insuffisant sur le volume des billets.", status_code=507)
         ref_url, embed_url = _urls(url, url_kind)
         try:
             data = BilletIn(body=body, ref_url=ref_url, embed_url=embed_url,
@@ -426,6 +439,8 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         row = await repo.get_by_id(conn, billet_id)
         if row is None:
             return _redirect("/admin")
+        if _espace_refuse(media_files):
+            return HTMLResponse("Espace disque insuffisant sur le volume des billets.", status_code=507)
         prev_embed_url = row["embed_url"]
         prev_snapshot = row["embed_snapshot"]
         ref_url, embed_url = _urls(url, url_kind)
