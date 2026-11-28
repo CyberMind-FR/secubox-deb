@@ -24,6 +24,7 @@ import contextlib
 import gzip
 import ipaddress
 import json
+import time
 import logging
 import os
 import re
@@ -166,10 +167,49 @@ def lire_categories() -> dict:
             "source": source}
 
 
+# #4034 — double tampon : la page reçoit TOUT DE SUITE le dernier relevé complet ; s'il a plus de CAT_FRAIS s, un fil
+# le recalcule en arrière-plan (un seul à la fois). Sous forte charge, `cvectl waf-modes lister` dépassait 30 s et la
+# page restait vide. Une écriture (bascule de mode) invalide le relevé : la lecture suivante attend le calcul.
+CAT_FRAIS = 30.0
+_cat = {"releve": None, "quand": 0.0, "calcul": False}
+_cat_verrou = threading.Lock()
+
+
+def _recalculer_categories() -> dict:
+    try:
+        r = lire_categories()
+    finally:
+        with _cat_verrou:
+            _cat["calcul"] = False
+    if r.get("source") == "box" or _cat["releve"] is None:   # un repli « paquet » n'écrase jamais un relevé de la box
+        with _cat_verrou:
+            _cat["releve"], _cat["quand"] = r, time.monotonic()
+    return r
+
+
+def categories_tampon() -> dict:
+    with _cat_verrou:
+        releve, age, calcul = _cat["releve"], time.monotonic() - _cat["quand"], _cat["calcul"]
+        if releve is not None and age >= CAT_FRAIS and not calcul:
+            _cat["calcul"] = True
+            threading.Thread(target=_recalculer_categories, name="waf-categories", daemon=True).start()
+        elif releve is None:
+            _cat["calcul"] = True
+    if releve is None:
+        return {**_recalculer_categories(), "age_s": 0}
+    return {**releve, "age_s": int(age)}
+
+
+def _invalider_categories() -> None:
+    with _cat_verrou:
+        _cat["releve"], _cat["quand"] = None, 0.0
+
+
 @router.get("/categories", dependencies=[Depends(require_lecture)])
 async def categories():
-    """Catégories : mode, seuil et durée de ban, motifs + structurels (vrai total), verrouillage."""
-    return await asyncio.to_thread(lire_categories)
+    """Catégories : mode, seuil et durée de ban, motifs + structurels (vrai total), verrouillage. Dernier relevé
+    servi aussitôt (`age_s`), rafraîchi en arrière-plan (#4034)."""
+    return await asyncio.to_thread(categories_tampon)
 
 
 class Changement(BaseModel):
@@ -196,7 +236,10 @@ def _appliquer(lot: List[Changement], user: dict) -> dict:
     entree = {"acteur": _acteur(user), "changements": [c.model_dump(exclude_none=True) for c in lot]}
     detail = " ".join(f"{c.categorie}={c.mode}" + (f"/{c.ban_seuil}" if c.ban_seuil else "")
                       + (f"/{c.ban_duree}" if c.ban_duree else "") for c in lot)
-    return _ecrire([CVECTL, "waf-modes", "appliquer", "--apply", "--json"], entree, "waf-modes", detail, user)
+    try:
+        return _ecrire([CVECTL, "waf-modes", "appliquer", "--apply", "--json"], entree, "waf-modes", detail, user)
+    finally:
+        _invalider_categories()
 
 
 @router.post("/categories/modes")

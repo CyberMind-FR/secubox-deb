@@ -34,6 +34,7 @@ def c(monkeypatch, tmp_path):
     from secubox_core.auth import require_jwt, require_lecture
     ctl = FauxCtl()
     monkeypatch.setattr(m, "_executer", ctl)
+    m._invalider_categories()   # #4034 : relevé en double tampon, jamais hérité d'un autre test
     monkeypatch.setattr(m, "STATS7J_CACHE", tmp_path / "cache.json")
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     client = TestClient(waf.app)
