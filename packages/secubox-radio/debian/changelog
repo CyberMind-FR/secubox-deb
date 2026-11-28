@@ -1,3 +1,13 @@
+secubox-radio (0.2.5-1~trixie1) trixie; urgency=medium
+
+  * Préchargement du titre des propositions (#4055) : un refus « cookies » de la
+    passerelle ytsas n'est plus ignoré puis redemandé à chaque tour de 20 s. La
+    proposition est mise de côté jusqu'au prochain dépôt de cookies (date du
+    coffre). Sur gk2, deux propositions sans titre lançaient deux sondes
+    yt-dlp + deno par minute depuis le 26/11.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 28 Nov 2026 10:05:00 +0100
+
 secubox-radio (0.2.4-1~trixie1) trixie; urgency=medium
 
   * Vhost public livré sans le nom de gk2 (ref #3117) : server_name « radio.* ». Recopié dans sites-enabled

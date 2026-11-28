@@ -157,6 +157,13 @@ def _item_file(row) -> str:
 
 
 # ---------------------------------------------------------------------- routes
+def _refus_auth(e):
+    """401 d'un refus d'authentification : même message, et l'appelant sait qu'il doit attendre de NOUVEAUX
+    cookies — réessayer avant n'y changera rien et ne relance d'ailleurs plus yt-dlp (cache négatif, #4055)."""
+    return JSONResponse({"error": str(e), "auth_required": True, "cookies_a_renouveler": True},
+                        status_code=401)
+
+
 @app.get(API + "/health")
 async def health():
     return {"status": "ok", "module": "ytsas"}
@@ -183,13 +190,13 @@ async def add(request: Request):
         try:
             return await engine.add_playlist(url, limit=PLAYLIST_ADD_MAX, tor=tor)
         except AuthRequired as e:
-            return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
+            return _refus_auth(e)
         except EngineError as e:
             return JSONResponse({"error": str(e)}, status_code=502)
     try:
         return await engine.add(url, tor=tor)
     except AuthRequired as e:
-        return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
+        return _refus_auth(e)
     except EngineError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -208,7 +215,7 @@ async def retry(id: str, request: Request):
     try:
         return await engine.add(row["url"], tor=b.get("tor") is True)
     except AuthRequired as e:
-        return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
+        return _refus_auth(e)
     except EngineError as e:
         return JSONResponse({"error": str(e)}, status_code=502)
 
@@ -711,6 +718,7 @@ async def upload_cookies(request: Request):
         return JSONResponse({"error": "vault write failed: " + e.strerror},
                             status_code=500)
     engine.cookies_stale = False
+    engine.oublie_refus()            # de nouveaux cookies lèvent le cache négatif aussitôt (#4055)
     return {"status": "stored"}
 
 
