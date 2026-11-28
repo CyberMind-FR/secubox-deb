@@ -48,3 +48,15 @@ See LICENCE-CMSD-1.0.md for terms.
   pas exister au premier lancement — coût si faux : un nom interne non listé passe (à ajouter au fichier).
 - **Task 12** — Décision : toute suite ≥ 32 caractères base64/hex est un `jeton`, empreintes sha256 comprises —
   parce que la consigne est stricte — coût si faux : faux positif, l'auteur reformule.
+- **Task 13** — Décision : `capturer(url, zone, sortie, *, navigateur=None, ocr=None, masques=None,
+  noms_internes=None)` — prise de vue et OCR remplaçables, défaut chromium headless par Playwright — parce que ni
+  Playwright ni chromium ne sont sur gk0 (rien installé) — coût si faux : aucun sur l'interface (arguments nommés
+  facultatifs). Les tests utilisent un faux navigateur (masquage simulé) et un faux OCR ; le chemin Playwright réel
+  n'est PAS testé : à rejouer après installation (`playwright` dans le venv + `playwright install chromium`).
+- **Task 13** — Décision : registre des captures = `<brouillon>/captures.json` (`enregistrer_capture`,
+  `valider_capture(brouillon, id, accord)` → `validee`/`rejetee`, `captures_validees`) ; une capture `refusee` ne se
+  valide jamais (ValueError) — parce que le plan ne fixe pas le format du brouillon — coût si faux : la Task 14
+  adapte l'emplacement du registre.
+- **Task 13** — Décision : liste blanche par défaut `127.0.0.1`, `localhost` (`masques.toml`, section `[hotes]`) —
+  parce que l'hôte local du tunnel vers l'admin de gk2 n'est pas connu ici — coût si faux : capture refusée tant que
+  l'hôte n'est pas ajouté.

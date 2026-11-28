@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Capture d'admin (#4058, Task 13) : ce qui est masqué (flou 12 px puis aplat) avant la prise de vue, et les seuls
+# hôtes dont une page peut être capturée (pages d'admin joignables par le tunnel de gk0). Le contrôle OCR qui suit
+# reste bloquant : un sélecteur oublié ne laisse rien passer, il fait refuser la capture.
+
+[hotes]
+autorises = ["127.0.0.1", "localhost"]   # ajouter ici l'hôte local du tunnel vers l'admin de gk2
+
+[masques]
+selecteurs = [
+  # tableaux d'adresses
+  "[data-ip]", "[data-adresse]", ".ip", ".adresse", ".adresses", "td.ip", "td.addr", ".ip-list", ".bans-table",
+  # journaux
+  "pre", "code", ".journal", ".log", ".logs", ".audit", ".terminal",
+  # noms d'hôtes et identités
+  "[data-hote]", ".hostname", ".hote", ".host", ".node-name", ".mac", ".token", ".jeton",
+]
